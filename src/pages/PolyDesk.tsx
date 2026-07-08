@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Activity,
   ArrowLeft,
+  BarChart3,
   Bell,
   Bot,
   ChevronRight,
   CircleDollarSign,
   ExternalLink,
   LineChart,
+  Newspaper,
   Radio,
   Search,
-  ShieldCheck,
   Trophy,
   Wallet,
 } from 'lucide-react'
@@ -20,35 +20,44 @@ import { hashPayLinkBaseUrl } from '../lib/config'
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
 type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores'
 
-const lanes: Array<{
-  id: PolyDeskLane
+const introPrompts = [
+  'I am Desk Agent.',
+  'Tap to launch me.',
+  'I can help with portfolio alerts.',
+  'I can read World Cup markets.',
+  'I can guide LP Scout access.',
+  'I can help fund Polymarket.',
+]
+
+const menuCards: Array<{
+  id: PolyDeskServiceView
   title: string
-  eyebrow: string
   description: string
   icon: typeof Wallet
 }> = [
   {
     id: 'portfolio',
     title: 'Portfolio',
-    eyebrow: 'Wallet + positions',
-    description: 'Monitor pUSD, deposit-wallet readiness, positions, alerts, funding, withdrawals, and user-confirmed exits.',
+    description: 'View pUSD trading cash, fund your account, withdraw as USDC, and track positions.',
     icon: Wallet,
   },
   {
     id: 'worldcup',
     title: 'World Cup',
-    eyebrow: 'Live match markets',
-    description: 'Track upcoming fixtures, matched Polymarket markets, price movement, news context, and score-aware trading surfaces.',
+    description: 'Track live fixtures, upcoming markets, news, and score-aware trading opportunities.',
     icon: Trophy,
   },
   {
     id: 'lp-scout',
     title: 'LP Scout',
-    eyebrow: 'Reward intelligence',
-    description: 'Find Polymarket LP reward opportunities, summarize conditions, and package the service for OKX.AI ASP delivery.',
+    description: 'Scan LP rewards, market depth, spreads, and operator opportunities.',
     icon: Search,
   },
 ]
+
+function normalizeLane(value: string | null): PolyDeskLane | '' {
+  return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' ? value : ''
+}
 
 function normalizeServiceView(value: string | null): PolyDeskServiceView {
   return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' || value === 'worldcup-news' || value === 'worldcup-scores'
@@ -56,9 +65,9 @@ function normalizeServiceView(value: string | null): PolyDeskServiceView {
     : ''
 }
 
-function PolymarketMark() {
+function PolymarketMark({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="brand-mark" fill="none">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none">
       <path
         d="M6.25 5.8 18.4 2.75a1 1 0 0 1 1.24.97v16.56a1 1 0 0 1-1.24.97L6.25 18.2a1 1 0 0 1-.75-.97V6.77a1 1 0 0 1 .75-.97Z"
         stroke="currentColor"
@@ -70,65 +79,129 @@ function PolymarketMark() {
   )
 }
 
-function LaneCard({
-  lane,
-  onOpen,
-}: {
-  lane: (typeof lanes)[number]
-  onOpen: (view: PolyDeskServiceView) => void
-}) {
-  const Icon = lane.icon
+function PolyDeskLiveAgentIcon({ isStatic = false }: { isStatic?: boolean }) {
   return (
-    <button type="button" className="lane-card" onClick={() => onOpen(lane.id)}>
-      <span className="lane-icon">
-        <Icon size={20} />
+    <span className={`live-agent-icon${isStatic ? ' live-agent-icon--static' : ''}`} aria-hidden="true">
+      <PolymarketMark className="live-agent-icon__mark" />
+      <span className="live-agent-icon__bubble">
+        <span />
+        <span />
+        <span />
       </span>
-      <span className="lane-copy">
-        <span className="lane-eyebrow">{lane.eyebrow}</span>
-        <span className="lane-title">{lane.title}</span>
-        <span className="lane-description">{lane.description}</span>
+    </span>
+  )
+}
+
+function MenuCard({
+  title,
+  description,
+  icon: Icon,
+  onClick,
+}: {
+  title: string
+  description: string
+  icon: typeof Wallet
+  onClick: () => void
+}) {
+  return (
+    <button type="button" className="menu-card" onClick={onClick}>
+      <span className="menu-card__icon">
+        <Icon size={21} />
       </span>
-      <ChevronRight className="lane-arrow" size={18} />
+      <span className="menu-card__copy">
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </span>
+      <ChevronRight className="menu-card__arrow" size={18} />
     </button>
   )
 }
 
-function AgentPanel({ onOpen }: { onOpen: (view: PolyDeskServiceView) => void }) {
+function BackButton({ onClick }: { onClick: () => void }) {
   return (
-    <section className="agent-panel">
-      <div className="panel-heading">
-        <span className="panel-icon">
-          <Bot size={18} />
-        </span>
-        <div>
-          <p className="panel-kicker">Desk Agent</p>
-          <h2>Choose an operating lane</h2>
-        </div>
-      </div>
-      <div className="agent-grid">
-        {lanes.map(lane => (
-          <LaneCard key={lane.id} lane={lane} onOpen={onOpen} />
-        ))}
-      </div>
-    </section>
+    <button type="button" onClick={onClick} className="inline-back">
+      <span className="back-chevron" aria-hidden="true">
+        <ArrowLeft size={16} />
+      </span>
+      Back
+    </button>
   )
 }
 
-function PortfolioStub({ onBack, onOpenLpScout, onOpenWorldCup }: { onBack: () => void; onOpenLpScout: () => void; onOpenWorldCup: () => void }) {
+function DeskAgentStub({ lane, onLaneChange }: { lane: PolyDeskLane | ''; onLaneChange: (lane: PolyDeskLane | '') => void }) {
   return (
-    <section className="workspace">
-      <WorkspaceHeader title="Portfolio" kicker="Main wallet" icon={Wallet} onBack={onBack} />
-      <div className="metric-grid">
-        <Metric label="pUSD trading cash" value="Remote API" detail="Phase 2 will read the live Hash PayLink portfolio endpoint." />
-        <Metric label="Positions" value="Stubbed" detail="Real position cards move after the frontend extraction gate." />
-        <Metric label="Approvals" value="Protected" detail="Sell approval must preserve the verified neg-risk adapter spender." />
+    <div className="desk-agent-body">
+      <div className="desk-agent-thread">
+        <div className="agent-message">
+          <span className="agent-avatar">
+            <Bot size={17} />
+          </span>
+          <p>
+            Welcome back. Choose Portfolio, World Cup, or LP Scout. In Phase 2 this panel becomes the extracted `TelegramHelperPanel`
+            with the current PolyDesk agent flow.
+          </p>
+        </div>
+      </div>
+      <div className="agent-mode-grid">
+        {menuCards.map(card => (
+          <button
+            type="button"
+            key={card.id}
+            className={`agent-mode${lane === card.id ? ' agent-mode--active' : ''}`}
+            onClick={() => onLaneChange(card.id as PolyDeskLane)}
+          >
+            <card.icon size={17} />
+            <span>{card.title}</span>
+          </button>
+        ))}
+      </div>
+      <div className="agent-input">
+        <span>{lane ? `Ask about ${lane.replace('-', ' ')}...` : 'Ask Desk Agent...'}</span>
+      </div>
+    </div>
+  )
+}
+
+function PortfolioStub({
+  onBack,
+  onOpenLpScout,
+  onOpenWorldCup,
+}: {
+  onBack: () => void
+  onOpenLpScout: () => void
+  onOpenWorldCup: () => void
+}) {
+  return (
+    <section className="service-panel">
+      <PanelHeader title="Main Wallet" kicker="Balance" icon={Wallet} onBack={onBack} />
+      <p className="panel-lede">View pUSD trading cash, fund your account, withdraw as USDC, and track positions.</p>
+      <div className="wallet-strip">
+        <div>
+          <span>Owner wallet</span>
+          <strong>Connect Privy</strong>
+        </div>
+        <div>
+          <span>Polymarket wallet</span>
+          <strong>Deposit wallet</strong>
+        </div>
+      </div>
+      <div className="portfolio-grid">
+        <Metric label="pUSD trading cash" value="$--" detail="Live balance moves in Phase 2." />
+        <Metric label="Portfolio value" value="$--" detail="Positions stay stubbed until extraction." />
+        <Metric label="Claimable" value="$--" detail="Redeemable position logic not moved yet." />
+      </div>
+      <div className="tab-strip">
+        <button type="button">Balance</button>
+        <button type="button">Fund</button>
+        <button type="button">Withdraw</button>
+        <button type="button">Positions</button>
       </div>
       <div className="action-row">
         <a className="primary-action" href={`${hashPayLinkBaseUrl}/polydesk?service=portfolio&portfolio=trading`} target="_blank" rel="noreferrer">
-          Open current live portfolio <ExternalLink size={16} />
+          Open current live portfolio <ExternalLink size={15} />
         </a>
         <button type="button" className="secondary-action" onClick={onOpenWorldCup}>
-          View World Cup
+          World Cup
         </button>
         <button type="button" className="secondary-action" onClick={onOpenLpScout}>
           LP Scout
@@ -150,12 +223,19 @@ function WorldCupStub({
   onOpenPortfolio: () => void
 }) {
   return (
-    <section className="workspace">
-      <WorkspaceHeader title="World Cup" kicker="Market command" icon={Trophy} onBack={onBack} />
-      <div className="split-grid">
-        <FeatureTile icon={Radio} title="Scores + fixtures" body="Phase 2 extracts the live match list and prevents the France-only regression." onClick={onOpenScores} />
-        <FeatureTile icon={Bell} title="News context" body="News and market context move from the verified World Cup panel range." onClick={onOpenNews} />
-        <FeatureTile icon={Wallet} title="Trading wallet" body="Funding and portfolio actions stay user-confirmed and route through stable APIs." onClick={onOpenPortfolio} />
+    <section className="service-panel">
+      <PanelHeader title="World Cup" kicker="Market hub" icon={Trophy} onBack={onBack} />
+      <div className="match-card">
+        <div>
+          <span>Next extraction target</span>
+          <strong>Live fixture and market list</strong>
+        </div>
+        <p>Phase 2 replaces this with the verified World Cup hub so the app is not stuck on a single France market.</p>
+      </div>
+      <div className="service-grid">
+        <FeatureTile icon={Radio} title="Scores" body="Live match data and market matching." onClick={onOpenScores} />
+        <FeatureTile icon={Newspaper} title="News" body="Context feed for market decisions." onClick={onOpenNews} />
+        <FeatureTile icon={Wallet} title="Portfolio" body="Return to trading wallet state." onClick={onOpenPortfolio} />
       </div>
     </section>
   )
@@ -163,15 +243,11 @@ function WorldCupStub({
 
 function NewsStub({ onBack, onOpenScores }: { onBack: () => void; onOpenScores: () => void }) {
   return (
-    <section className="workspace">
-      <WorkspaceHeader title="World Cup News" kicker="Signal feed" icon={Bell} onBack={onBack} />
-      <EmptyState
-        icon={Activity}
-        title="News extraction starts in Phase 2"
-        body="This panel will call `/api/poly-worldcup-news` after the frontend module is moved and verified."
-      />
+    <section className="service-panel">
+      <PanelHeader title="World Cup News" kicker="News" icon={Newspaper} onBack={onBack} />
+      <EmptyState icon={Bell} title="News feed pending extraction" body="This will become the current PolyDesk news panel, not a new marketing surface." />
       <button type="button" className="primary-action" onClick={onOpenScores}>
-        Open scores stub
+        Open scores
       </button>
     </section>
   )
@@ -179,15 +255,11 @@ function NewsStub({ onBack, onOpenScores }: { onBack: () => void; onOpenScores: 
 
 function ScoresStub({ onBack, onOpenNews }: { onBack: () => void; onOpenNews: () => void }) {
   return (
-    <section className="workspace">
-      <WorkspaceHeader title="Scores + Markets" kicker="Live fixtures" icon={Radio} onBack={onBack} />
-      <EmptyState
-        icon={LineChart}
-        title="Live market stream is isolated next"
-        body="The real PolyStream module will be extracted with fixture coverage checks so Morocco, France, and future matches can render from live data."
-      />
+    <section className="service-panel">
+      <PanelHeader title="Scores" kicker="Live" icon={Radio} onBack={onBack} />
+      <EmptyState icon={LineChart} title="PolyStream pending extraction" body="This surface will use the current live/upcoming match data flow." />
       <button type="button" className="primary-action" onClick={onOpenNews}>
-        Open news stub
+        Open news
       </button>
     </section>
   )
@@ -195,46 +267,46 @@ function ScoresStub({ onBack, onOpenNews }: { onBack: () => void; onOpenNews: ()
 
 function LpScoutStub({ onBack }: { onBack: () => void }) {
   return (
-    <section className="workspace">
-      <WorkspaceHeader title="LP Scout" kicker="OKX.AI-ready service" icon={Search} onBack={onBack} />
-      <div className="split-grid">
-        <FeatureTile icon={CircleDollarSign} title="Revenue path" body="Can become a fixed-price A2MCP call or negotiated A2A scout task." />
-        <FeatureTile icon={ShieldCheck} title="Service boundary" body="x402 and OKX.AI billing stay behind the documented service boundary until cutover." />
-        <FeatureTile icon={LineChart} title="Market intelligence" body="Scans reward terms, spreads, volume, and fulfillment risk for LP candidates." />
+    <section className="service-panel">
+      <PanelHeader title="LP Scout" kicker="Scout" icon={Search} onBack={onBack} />
+      <div className="service-grid">
+        <FeatureTile icon={CircleDollarSign} title="Rewards" body="Reward opportunity scoring." />
+        <FeatureTile icon={BarChart3} title="Depth" body="Market spread and liquidity checks." />
+        <FeatureTile icon={LineChart} title="Brief" body="Operator-ready LP summary." />
       </div>
     </section>
   )
 }
 
-function WorkspaceHeader({ title, kicker, icon: Icon, onBack }: { title: string; kicker: string; icon: typeof Wallet; onBack: () => void }) {
+function PanelHeader({ title, kicker, icon: Icon, onBack }: { title: string; kicker: string; icon: typeof Wallet; onBack: () => void }) {
   return (
-    <div className="workspace-header">
-      <button type="button" className="back-button" onClick={onBack} aria-label="Back">
-        <ArrowLeft size={18} />
-      </button>
-      <span className="workspace-icon">
-        <Icon size={20} />
-      </span>
-      <div>
-        <p>{kicker}</p>
-        <h2>{title}</h2>
+    <header className="panel-header">
+      <BackButton onClick={onBack} />
+      <div className="panel-title-row">
+        <span className="panel-header__icon">
+          <Icon size={21} />
+        </span>
+        <div>
+          <p>{kicker}</p>
+          <h2>{title}</h2>
+        </div>
       </div>
-    </div>
+    </header>
   )
 }
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <div className="metric">
-      <p>{label}</p>
+      <span>{label}</span>
       <strong>{value}</strong>
-      <span>{detail}</span>
+      <p>{detail}</p>
     </div>
   )
 }
 
 function FeatureTile({ icon: Icon, title, body, onClick }: { icon: typeof Wallet; title: string; body: string; onClick?: () => void }) {
-  const content = (
+  const children = (
     <>
       <span className="feature-icon">
         <Icon size={18} />
@@ -243,19 +315,20 @@ function FeatureTile({ icon: Icon, title, body, onClick }: { icon: typeof Wallet
       <span>{body}</span>
     </>
   )
+
   return onClick ? (
     <button type="button" className="feature-tile feature-tile--button" onClick={onClick}>
-      {content}
+      {children}
     </button>
   ) : (
-    <div className="feature-tile">{content}</div>
+    <div className="feature-tile">{children}</div>
   )
 }
 
 function EmptyState({ icon: Icon, title, body }: { icon: typeof Wallet; title: string; body: string }) {
   return (
     <div className="empty-state">
-      <Icon size={24} />
+      <Icon size={22} />
       <strong>{title}</strong>
       <span>{body}</span>
     </div>
@@ -263,30 +336,60 @@ function EmptyState({ icon: Icon, title, body }: { icon: typeof Wallet; title: s
 }
 
 export default function PolyDesk() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const activeLane = normalizeLane(searchParams.get('lane'))
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
+  const agentRouteOpen = searchParams.get('agent') === '1'
+  const [isAgentOpen, setIsAgentOpen] = useState(Boolean(activeLane || agentRouteOpen))
+  const [agentLane, setAgentLane] = useState<PolyDeskLane | ''>(activeLane)
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView)
-  const prompts = useMemo(
-    () => ['I monitor Polymarket wallets.', 'I can read World Cup markets.', 'I can prepare user-confirmed trades.', 'I can package LP Scout for OKX.AI.'],
-    [],
-  )
   const [promptIndex, setPromptIndex] = useState(0)
+
+  const ownerKey = useMemo(() => {
+    const email = searchParams.get('email')?.trim().toLowerCase()
+    const wallet = searchParams.get('wallet')?.trim().toLowerCase()
+    return email ? `email:${email}` : wallet ? `wallet:${wallet}` : 'polydesk-web'
+  }, [searchParams])
+
+  useEffect(() => {
+    if (isAgentOpen) return undefined
+    const timer = window.setTimeout(() => setPromptIndex(index => (index + 1) % introPrompts.length), 4200)
+    return () => window.clearTimeout(timer)
+  }, [isAgentOpen, promptIndex])
+
+  useEffect(() => {
+    setIsAgentOpen(Boolean(activeLane || agentRouteOpen))
+    setAgentLane(activeLane)
+  }, [activeLane, agentRouteOpen])
 
   useEffect(() => {
     setServiceView(activeServiceView)
+    if (activeServiceView) {
+      setIsAgentOpen(false)
+      setAgentLane('')
+    }
   }, [activeServiceView])
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setPromptIndex(index => (index + 1) % prompts.length), 4200)
-    return () => window.clearTimeout(timer)
-  }, [promptIndex, prompts.length])
 
   function openServiceView(view: PolyDeskServiceView) {
     const next = new URLSearchParams(searchParams)
+    next.delete('agent')
+    next.delete('lane')
     if (view) next.set('service', view)
     else next.delete('service')
     setSearchParams(next, { replace: false })
     setServiceView(view)
+    setIsAgentOpen(false)
+    setAgentLane('')
+  }
+
+  function launchAgent() {
+    const next = new URLSearchParams(searchParams)
+    next.set('agent', '1')
+    next.delete('service')
+    setSearchParams(next, { replace: false })
+    setServiceView('')
+    setIsAgentOpen(true)
   }
 
   function closeServiceView() {
@@ -296,63 +399,127 @@ export default function PolyDesk() {
     setServiceView('')
   }
 
+  function resetLane() {
+    if (serviceView) {
+      closeServiceView()
+      return
+    }
+    if (activeLane || agentLane) {
+      const next = new URLSearchParams(searchParams)
+      next.set('agent', '1')
+      next.delete('lane')
+      setAgentLane('')
+      if (activeLane) setSearchParams(next, { replace: false })
+      return
+    }
+    if (agentRouteOpen || isAgentOpen) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('agent')
+      next.delete('lane')
+      setSearchParams(next, { replace: true })
+      setIsAgentOpen(false)
+      return
+    }
+    navigate(-1)
+  }
+
   return (
-    <main className="app-shell">
-      <section className="hero">
-        <nav className="topbar">
-          <Link className="brand" to="/">
-            <PolymarketMark />
+    <main className="polydesk-app">
+      <div className="polydesk-shell">
+        <header className="app-header">
+          <Link className="app-brand" to="/">
+            <PolymarketMark className="app-brand__mark" />
             <span>PolyDesk</span>
           </Link>
-          <a className="topbar-link" href={`${hashPayLinkBaseUrl}/polydesk`} target="_blank" rel="noreferrer">
-            Live Hash PayLink build <ExternalLink size={14} />
-          </a>
-        </nav>
+          <nav className="app-nav" aria-label="PolyDesk">
+            <button type="button" onClick={() => openServiceView('portfolio')} className={serviceView === 'portfolio' ? 'is-active' : ''}>
+              Portfolio
+            </button>
+            <button type="button" onClick={() => openServiceView('worldcup')} className={serviceView === 'worldcup' ? 'is-active' : ''}>
+              World Cup
+            </button>
+            <button type="button" onClick={() => openServiceView('lp-scout')} className={serviceView === 'lp-scout' ? 'is-active' : ''}>
+              LP Scout
+            </button>
+          </nav>
+        </header>
 
-        <div className="hero-grid">
-          <div className="hero-copy">
-            <p className="hero-kicker">Agentic Polymarket desk</p>
-            <h1>Desk Agent for markets, funding, portfolio, and LP intelligence.</h1>
-            <p className="hero-body">
-              Phase 1 shell extracted from Hash PayLink with strict boundaries. Trading logic, checkout rails, and production APIs stay remote until each module is
-              moved and verified.
-            </p>
-            <div className="status-strip">
-              <span>Frontend shell</span>
-              <span>Hash PayLink API boundary</span>
-              <span>No core payment secrets</span>
-            </div>
-          </div>
-          <div className="agent-card">
-            <div className="agent-orb">
-              <Bot size={28} />
-            </div>
-            <p>Desk Agent</p>
-            <strong key={promptIndex}>{prompts[promptIndex]}</strong>
-          </div>
-        </div>
-      </section>
+        {isAgentOpen && <BackButton onClick={resetLane} />}
 
-      <section className="content-shell">
-        {!serviceView ? (
-          <AgentPanel onOpen={openServiceView} />
-        ) : serviceView === 'portfolio' ? (
-          <PortfolioStub onBack={closeServiceView} onOpenLpScout={() => openServiceView('lp-scout')} onOpenWorldCup={() => openServiceView('worldcup')} />
-        ) : serviceView === 'worldcup' ? (
-          <WorldCupStub
-            onBack={closeServiceView}
-            onOpenNews={() => openServiceView('worldcup-news')}
-            onOpenScores={() => openServiceView('worldcup-scores')}
-            onOpenPortfolio={() => openServiceView('portfolio')}
-          />
-        ) : serviceView === 'worldcup-news' ? (
-          <NewsStub onBack={() => openServiceView('worldcup')} onOpenScores={() => openServiceView('worldcup-scores')} />
-        ) : serviceView === 'worldcup-scores' ? (
-          <ScoresStub onBack={() => openServiceView('worldcup')} onOpenNews={() => openServiceView('worldcup-news')} />
-        ) : (
-          <LpScoutStub onBack={closeServiceView} />
+        {!isAgentOpen && !serviceView && (
+          <section className="hub-heading">
+            <div className="service-hub-icon">
+              <PolymarketMark className="service-hub-icon__mark" />
+            </div>
+            <p>Service Hub</p>
+            <h1>What do you want to do today?</h1>
+          </section>
         )}
-      </section>
+
+        {!serviceView && (
+          <button type="button" onClick={launchAgent} className={`desk-agent-card${isAgentOpen ? ' desk-agent-card--open' : ''}`}>
+            <div className="desk-agent-card__inner">
+              <PolyDeskLiveAgentIcon isStatic={isAgentOpen} />
+              <div className="desk-agent-card__copy">
+                {isAgentOpen ? (
+                  <strong>Desk Agent</strong>
+                ) : (
+                  <>
+                    <span>Desk Agent</span>
+                    <strong>Hello There</strong>
+                    <p key={promptIndex}>{introPrompts[promptIndex]}</p>
+                  </>
+                )}
+              </div>
+              {!isAgentOpen && <ChevronRight className="desk-agent-card__arrow" size={18} />}
+            </div>
+          </button>
+        )}
+
+        {isAgentOpen && (
+          <section className="desk-agent-panel">
+            <DeskAgentStub lane={agentLane} onLaneChange={setAgentLane} />
+          </section>
+        )}
+
+        {!isAgentOpen && !serviceView && (
+          <section className="menu-list">
+            {menuCards.map(card => (
+              <MenuCard key={card.id} {...card} onClick={() => openServiceView(card.id)} />
+            ))}
+          </section>
+        )}
+
+        {serviceView && !isAgentOpen && (
+          <section data-polydesk-service-view="true">
+            {serviceView === 'portfolio' ? (
+              <PortfolioStub onBack={closeServiceView} onOpenLpScout={() => openServiceView('lp-scout')} onOpenWorldCup={() => openServiceView('worldcup')} />
+            ) : serviceView === 'worldcup' ? (
+              <WorldCupStub
+                onBack={closeServiceView}
+                onOpenNews={() => openServiceView('worldcup-news')}
+                onOpenScores={() => openServiceView('worldcup-scores')}
+                onOpenPortfolio={() => openServiceView('portfolio')}
+              />
+            ) : serviceView === 'worldcup-news' ? (
+              <NewsStub onBack={() => openServiceView('worldcup')} onOpenScores={() => openServiceView('worldcup-scores')} />
+            ) : serviceView === 'worldcup-scores' ? (
+              <ScoresStub onBack={() => openServiceView('worldcup')} onOpenNews={() => openServiceView('worldcup-news')} />
+            ) : (
+              <LpScoutStub onBack={closeServiceView} />
+            )}
+          </section>
+        )}
+
+        <footer className="app-footer">
+          <span>Powered by</span>
+          <a href={hashPayLinkBaseUrl} target="_blank" rel="noreferrer">
+            Hash PayLink
+          </a>
+          <Link to="/about">About</Link>
+          <span className="owner-key">{ownerKey}</span>
+        </footer>
+      </div>
     </main>
   )
 }

@@ -10,6 +10,7 @@ Included:
 
 - Vite + React + TypeScript app scaffold.
 - `PolyDesk` route at `/` and `/polydesk`.
+- Separate pitch/landing route at `/about`.
 - Privy provider wiring when `VITE_PRIVY_APP_ID` is present.
 - Privy login methods configured with both `email` and `wallet`.
 - Standalone shell inspired by the verified Hash PayLink `src/pages/PolyDesk.tsx` lane model.
@@ -56,3 +57,14 @@ No forced audit fix was applied because npm recommends a breaking downgrade of `
 - Delay shipping wallet login in the standalone repo until the dependency tree is cleaner.
 
 This does not affect the current shell behavior because no live wallet trading is enabled in Phase 1.
+
+## Product Shape Decision
+
+The main app must not be a marketing landing page.
+
+Rules:
+
+- `/` and `/polydesk` are the operational PolyDesk app.
+- The first screen should follow the current PolyDesk Service Hub flow: compact header, Desk Agent card, Portfolio, World Cup, and LP Scout entry points.
+- New marketing/pitch invention belongs only on `/about` or a later dedicated landing route.
+- Phase 2 should replace stubs with the extracted production panels instead of redesigning the app shell.
