@@ -28,16 +28,18 @@ Goal: create a standalone PolyDesk app shell without moving trading logic yet.
 Tasks:
 
 - Scaffold Vite + React + TypeScript.
-- Add PolyDesk product shell and routing.
+- Add PolyDesk product shell and routing from `src/pages/PolyDesk.tsx`.
 - Add Privy config.
 - Add API client pointed at Hash PayLink staging/production.
 - Add placeholder pages: Desk Agent, Portfolio, World Cup, LP Scout.
+- Keep `TelegramPaymentLinks.tsx` panel extraction out of this phase unless required for compile-time stubs.
 
 Acceptance gate:
 
 - App runs locally.
 - No Hash PayLink core UI copied.
 - No trading/order code copied yet.
+- Required env is limited to `VITE_PRIVY_APP_ID`, `VITE_PUBLIC_PAYLINK_ORIGIN`, and `HASH_PAYLINK_BASE_URL`.
 
 ## Phase 2: Frontend Extraction
 
@@ -51,6 +53,8 @@ Tasks:
 - Extract LP Scout UI.
 - Replace Hash PayLink-specific layout/state with PolyDesk local state.
 - Keep backend calls pointed at existing Hash PayLink APIs.
+- Preserve verified sell spender behavior for neg-risk positions.
+- Replace native browser confirmations with first-class PolyDesk confirmation UI.
 
 Acceptance gate:
 
@@ -71,6 +75,8 @@ Tasks:
 - Move World Cup/PolyStream APIs.
 - Move LP Scout/ZeroScout APIs.
 - Add Hash PayLink funding-link client.
+- Keep hosted checkout creation in Hash PayLink behind a scoped service token.
+- Do not move POS, bank, Circle, paymaster, generic receipt, or treasury secrets.
 
 Acceptance gate:
 
