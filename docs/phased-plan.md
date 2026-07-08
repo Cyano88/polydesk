@@ -36,10 +36,10 @@ Tasks:
 
 Acceptance gate:
 
-- App runs locally.
-- No Hash PayLink core UI copied.
-- No trading/order code copied yet.
-- Required env is limited to `VITE_PRIVY_APP_ID`, `VITE_PUBLIC_PAYLINK_ORIGIN`, and `HASH_PAYLINK_BASE_URL`.
+- App runs locally. Status: passed on `http://127.0.0.1:5174`.
+- No Hash PayLink core UI copied. Status: passed.
+- No trading/order code copied yet. Status: passed.
+- Required env is limited to `VITE_PRIVY_APP_ID`, `VITE_PUBLIC_PAYLINK_ORIGIN`, and `HASH_PAYLINK_BASE_URL`. Status: passed.
 
 ## Phase 2: Frontend Extraction
 

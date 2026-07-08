@@ -1,0 +1,58 @@
+# Phase 1 Frontend Shell
+
+Date: 2026-07-08
+
+## Scope
+
+This phase creates a runnable standalone PolyDesk app without moving production trading logic.
+
+Included:
+
+- Vite + React + TypeScript app scaffold.
+- `PolyDesk` route at `/` and `/polydesk`.
+- Privy provider wiring when `VITE_PRIVY_APP_ID` is present.
+- Privy login methods configured with both `email` and `wallet`.
+- Standalone shell inspired by the verified Hash PayLink `src/pages/PolyDesk.tsx` lane model.
+- Stubbed Desk Agent, Portfolio, World Cup, World Cup News/Scores, and LP Scout surfaces.
+- Link back to the current live Hash PayLink PolyDesk build for production behavior.
+
+Excluded:
+
+- Real buy/sell order creation.
+- Polymarket browser-submit helpers.
+- Deposit-wallet activation.
+- Portfolio database reads.
+- Funding checkout creation.
+- World Cup live data calls.
+- LP Scout x402 billing.
+- Hash PayLink POS, bank, Circle, paymaster, receipt, treasury, or payout code.
+
+## Verification
+
+Commands run:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+Results:
+
+- TypeScript passed.
+- Production build passed.
+- Local dev server returned `200` for `/`.
+- Local dev server returned `200` for `/polydesk?service=portfolio`.
+
+Browser screenshot verification was attempted through the Codex in-app browser, but no browser backend was available in this session. The dev server remains the verification path for manual UI inspection.
+
+## Dependency Risk
+
+`npm audit --omit=dev` reports vulnerabilities from the Privy wallet stack, primarily transitive `ws`, `uuid`, WalletConnect, MetaMask, wagmi, viem, and x402 packages.
+
+No forced audit fix was applied because npm recommends a breaking downgrade of `@privy-io/react-auth`. Before production deployment, choose one of:
+
+- Wait for upstream Privy/WalletConnect patched releases and upgrade.
+- Pin safe transitive overrides after testing wallet connect behavior.
+- Delay shipping wallet login in the standalone repo until the dependency tree is cleaner.
+
+This does not affect the current shell behavior because no live wallet trading is enabled in Phase 1.
