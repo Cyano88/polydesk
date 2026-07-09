@@ -71,3 +71,10 @@ Rules:
 - `src/layouts/PolyDeskLayout.tsx` carries the PolyDesk-only header, desktop nav, mobile nav, history button, theme toggle, main wrapper, and footer extracted from the Hash PayLink `src/Layout.tsx` PolyDesk branch.
 - Navigation and footer changes belong in the layout wrapper, not inside the copied `PolyDesk.tsx` page.
 - Phase 2 should replace the `TelegramPaymentLinks.tsx` stubs with the extracted production panels instead of redesigning the app shell.
+
+## Phase 2 Extraction Notes
+
+- `PolyPortfolioPanel` now uses the real PolyDesk portfolio API contract for profile loading, deposit-wallet activation, pUSD balance, funding link creation, and positions.
+- Live order submission, CLOB approvals, and withdrawal execution remain gated until the standalone repo receives the audited Polymarket SDK and relayer dependencies.
+- `VITE_POLYDESK_API_ORIGIN` may point the standalone frontend to a separate API deployment. If omitted, the app calls same-origin `/api/polymarket-portfolio` and `/api/polymarket-bridge`.
+- Funding links still target the configured Hash PayLink payment origin through `VITE_PUBLIC_PAYLINK_ORIGIN`, preserving the current funding flow while the portfolio frontend is separated.
