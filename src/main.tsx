@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { PrivyProvider } from '@privy-io/react-auth'
 import App from './App'
+import { PrivyLoginProvider } from './lib/PrivyLoginProvider'
 import './styles.css'
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined
@@ -21,6 +22,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       appId={privyAppId}
       config={{
         loginMethods: ['email', 'wallet'],
+        loginMethodsAndOrder: {
+          primary: ['email', 'wallet'] as never,
+        },
+        allowOAuthInEmbeddedBrowsers: true,
         embeddedWallets: {
           ethereum: {
             createOnLogin: 'off',
@@ -28,13 +33,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         },
         appearance: {
           theme: 'dark',
-          accentColor: '#0ea5e9',
-          landingHeader: 'PolyDesk',
-          loginMessage: 'Connect the wallet that controls your PolyDesk Polymarket wallet.',
+          accentColor: '#0071E3',
+          logo: 'https://hashpaylink.com/privy-mark-logo.png',
+          landingHeader: 'Hash PayLink',
+          loginMessage: 'Staff will never ask for this code.',
+          emailDomain: 'Hash PayLink',
         },
       }}
     >
-      {app}
+      <PrivyLoginProvider>{app}</PrivyLoginProvider>
     </PrivyProvider>
   ) : (
     app

@@ -14,13 +14,23 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@circle-fin/unified-balance-kit": "^1.1.0",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@polymarket/builder-relayer-client": "^0.0.10",
+    "@polymarket/builder-signing-sdk": "^1.0.0",
+    "@polymarket/clob-client-v2": "^1.0.8",
     "@privy-io/react-auth": "^3.28.0",
+    "@privy-io/wagmi": "^4.0.10",
+    "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.414.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.26.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "viem": "^2.51.2",
+    "vite-plugin-node-polyfills": "^0.26.0",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

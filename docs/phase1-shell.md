@@ -78,3 +78,9 @@ Rules:
 - Live order submission, CLOB approvals, and withdrawal execution remain gated until the standalone repo receives the audited Polymarket SDK and relayer dependencies.
 - `VITE_POLYDESK_API_ORIGIN` may point the standalone frontend to a separate API deployment. If omitted, the app calls same-origin `/api/polymarket-portfolio` and `/api/polymarket-bridge`.
 - Funding links still target the configured Hash PayLink payment origin through `VITE_PUBLIC_PAYLINK_ORIGIN`, preserving the current funding flow while the portfolio frontend is separated.
+
+## Source Clone Decision
+
+- PolyDesk internal tab UI must be copied from Hash PayLink instead of recreated.
+- `src/pages/TelegramPaymentLinks.tsx`, `src/pages/AgentWorkspace.tsx`, and `src/styles.css` are source clones from Hash PayLink; only `// @ts-nocheck` was added to the cloned page files so the standalone repo can compile the current source snapshot.
+- Shared source dependencies such as Privy buttons, `chains.ts`, `authMode.ts`, `unifiedBalance.ts`, and PolyDesk support components should stay source-matched unless a standalone glue change is explicitly documented.
