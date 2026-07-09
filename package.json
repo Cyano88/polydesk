@@ -13,7 +13,9 @@
     "preview": "vite preview",
     "start": "tsx server.ts",
     "typecheck": "tsc --noEmit",
-    "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
+    "env:check": "node scripts/validate-env.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.8",

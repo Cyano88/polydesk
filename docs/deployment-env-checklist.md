@@ -236,8 +236,22 @@ Run locally with production-like env:
 ```bash
 npm run typecheck
 npm run typecheck:server
+npm run env:check
 npm run build
 npm run start
+```
+
+After the server is running:
+
+```bash
+npm run smoke
+```
+
+For a non-default local port or deployed URL:
+
+```bash
+npm run smoke -- http://127.0.0.1:3012
+POLYDESK_SMOKE_URL=https://your-polydesk-domain.example npm run smoke
 ```
 
 Smoke routes:
@@ -257,4 +271,3 @@ Manual product checks:
 - Funding success routes back to the originating surface.
 - Buy and sell use PolyDesk confirmation UI.
 - World Cup tab shows all available live/upcoming markets.
-
