@@ -2,6 +2,10 @@
 
 PolyDesk must not inherit all Hash PayLink secrets. Each environment variable must have a clear owner.
 
+## Current Deployment Checklist
+
+Use `docs/deployment-env-checklist.md` as the live deployment checklist. This file remains the ownership boundary: what PolyDesk may own, what Hash PayLink must keep, and what can only be bridged by a scoped service token.
+
 ## PolyDesk-Owned Candidates
 
 These belong in the new PolyDesk repo after the relevant APIs move:
@@ -78,7 +82,7 @@ These should move with the World Cup market discovery and news APIs.
 
 ## PolyDesk LP Scout / x402 Env
 
-Verified in `api/x402-polymarket-scout.ts` and related agent wallet references:
+Verified in `api/x402-polymarket-scout.ts`, `api/x402-receipt.ts`, and related agent wallet references:
 
 ```env
 X402_SELLER_ADDRESS=
@@ -87,6 +91,10 @@ X402_POLYMARKET_SCOUT_MAX_AMOUNT=
 X402_FACILITATOR_URL=
 X402_ACCEPT_NETWORKS=
 X402_POLYMARKET_SCOUT_URL=
+CIRCLE_GATEWAY_API_BASE=
+CIRCLE_X402_RECEIPT_API_KEY=
+CIRCLE_GATEWAY_API_KEY=
+CIRCLE_API_KEY=
 ```
 
 Decision needed:
@@ -147,6 +155,7 @@ Rules:
 - PolyDesk should not hold POS/bank payout keys.
 - PolyDesk should not directly control generic Hash PayLink receipt/checkout infrastructure.
 - If PolyDesk needs payment creation, it calls a Hash PayLink API with a scoped service token.
+- `RELAYER_PRIVATE_KEY` is supported by copied 0G archive code as a fallback, but must not be used in PolyDesk production if it controls unrelated Hash PayLink infrastructure. Prefer a PolyDesk-specific `OG_STORAGE_KEY`.
 
 ## Future Service Token
 

@@ -80,9 +80,9 @@ Tasks:
 
 Acceptance gate:
 
-- PolyDesk backend can run without Hash PayLink source code.
-- Hash PayLink dependency is only through stable HTTP APIs.
-- No Circle/POS/bank secrets in PolyDesk.
+- PolyDesk backend can run without Hash PayLink source code. Status: passed for extracted Polymarket, World Cup, Desk Agent, LP Scout, x402, and receipt routes.
+- Hash PayLink dependency is only through stable HTTP APIs. Status: pending for funding checkout until the scoped service-token bridge is verified.
+- No Circle/POS/bank secrets in PolyDesk. Status: passed for POS/bank; x402 receipt lookup may use Circle Gateway API keys only.
 
 ## Phase 4: Database Split
 
@@ -106,6 +106,7 @@ Goal: isolate runtime risk.
 
 Tasks:
 
+- Complete `docs/deployment-env-checklist.md`.
 - Deploy PolyDesk separately.
 - Use separate env group.
 - Use separate DB.

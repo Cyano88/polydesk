@@ -68,6 +68,7 @@ Hash PayLink remains the system of record for:
 - `docs/extraction-audit.md` - current known-good state and audit checklist
 - `docs/dependency-map.md` - file/API/env classification before extraction
 - `docs/env-boundary.md` - environment variable ownership and secret boundaries
+- `docs/deployment-env-checklist.md` - production env and smoke-test checklist
 - `docs/phased-plan.md` - extraction phases and acceptance gates
 - `docs/phase1-shell.md` - standalone shell verification notes
 - `docs/api-surface.md` - backend route, source file, env, and migration checklist
