@@ -34,6 +34,16 @@ services:
         sync: false
       - key: POLYMARKET_RPC_URL
         sync: false
+      - key: PRIVATE_RPC_URL
+        sync: false
+      - key: PRIVATE_RPC_URL_BASE_SEPOLIA
+        sync: false
+      - key: PRIVATE_RPC_URL_ARB
+        sync: false
+      - key: PRIVATE_RPC_URL_ARC
+        sync: false
+      - key: SOLANA_RPC_URL
+        sync: false
       - key: POLYMARKET_BUILDER_CODE
         sync: false
       - key: POLYMARKET_BUILDER_API_KEY
@@ -82,6 +92,12 @@ services:
       - key: AGENT_WALLET_SERVICE_SECRET
         sync: false
       - key: AGENT_WALLET_ALLOWED_SERVICE_URLS
+        sync: false
+      - key: AGENT_PROFILE_STORE
+        sync: false
+      - key: AGENT_PROFILE_STORE_KEY
+        sync: false
+      - key: PRIVY_CIRCLE_LINK_STORE
         sync: false
 
       - key: X402_SELLER_ADDRESS

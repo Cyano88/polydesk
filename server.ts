@@ -9,6 +9,7 @@ import agentAskHandler from './api/agent-ask.js'
 import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
+import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
@@ -20,7 +21,9 @@ import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
+import privyCircleLinkHandler from './api/privy-circle-link.js'
 import { rateLimit } from './api/rate-limit.js'
+import solanaBalanceHandler from './api/solana-balance.js'
 import telegramRequestHandler from './api/telegram-request.js'
 import x402PolymarketScoutHandler from './api/x402-polymarket-scout.js'
 import x402ReceiptHandler from './api/x402-receipt.js'
@@ -108,6 +111,9 @@ app.post('/api/agent-ask', strictLimiter, agentAskHandler)
 app.all('/api/agent-wallet', strictLimiter, agentWalletHandler)
 app.all('/api/agent-profile', strictLimiter, agentProfileHandler)
 app.all('/api/helper-profile', readLimiter, helperProfileHandler)
+app.post('/api/privy-circle-link', strictLimiter, privyCircleLinkHandler)
+app.post('/api/evm-balance', readLimiter, evmBalanceHandler)
+app.post('/api/solana-balance', readLimiter, solanaBalanceHandler)
 app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', strictLimiter, zeroScoutPolymarketBriefHandler)
