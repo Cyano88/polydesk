@@ -6,9 +6,9 @@ PolyDesk is being separated from the core Hash PayLink platform so Polymarket-sp
 
 ## Extraction Status
 
-Current phase: Phase 1 - standalone frontend shell.
+Current phase: Phase 2 - source-cloned frontend plus standalone P0 PolyDesk backend shell.
 
-Production trading code has not been copied into this repo yet. The current app is a runnable shell with stubbed Desk Agent, Portfolio, World Cup, World Cup News/Scores, and LP Scout lanes. Real trading, funding, portfolio, and market modules move in later phases according to `docs/dependency-map.md`.
+The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server now mounts the P0 Polymarket portfolio, bridge, order, builder, relayer-builder, submit-order fallback, World Cup stream, and World Cup news APIs. Desk Agent and LP Scout x402 backend routes remain in the migration queue according to `docs/api-surface.md`.
 
 ## Local Development
 
@@ -23,10 +23,24 @@ Default local URL:
 http://127.0.0.1:5174
 ```
 
+Standalone production-style server:
+
+```bash
+npm run build
+npm run start
+```
+
+Default server URL:
+
+```text
+http://127.0.0.1:3000
+```
+
 Verification commands:
 
 ```bash
 npm run typecheck
+npm run typecheck:server
 npm run build
 ```
 
@@ -56,3 +70,4 @@ Hash PayLink remains the system of record for:
 - `docs/env-boundary.md` - environment variable ownership and secret boundaries
 - `docs/phased-plan.md` - extraction phases and acceptance gates
 - `docs/phase1-shell.md` - standalone shell verification notes
+- `docs/api-surface.md` - backend route, source file, env, and migration checklist

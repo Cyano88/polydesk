@@ -6,7 +6,30 @@ Date: 2026-07-09
 
 The standalone PolyDesk frontend is now source-cloned from Hash PayLink for the operational app surface. Backend extraction must follow the same rule: move only the APIs called by the cloned PolyDesk pages, and do not import unrelated Hash PayLink payment, POS, bank, creator, treasury, or payout services unless a cloned PolyDesk call requires them.
 
-During migration, local development can continue to proxy `/api` to the Hash PayLink backend on `127.0.0.1:3000`. Production should move these APIs into a PolyDesk-owned backend before PolyDesk is pitched as independent infrastructure.
+During migration, Vite local development can continue to proxy `/api` to the Hash PayLink backend on `127.0.0.1:3000`. The standalone PolyDesk server now mounts the P0 Polymarket and World Cup APIs directly; Desk Agent and LP Scout x402 APIs are still pending extraction.
+
+## Extracted In Standalone Server
+
+Mounted in `server.ts`:
+
+- `/api/polymarket-bridge`
+- `/api/polymarket-builder-handoff`
+- `/api/polymarket-builder-signer`
+- `/api/polymarket-order`
+- `/api/polymarket-portfolio`
+- `/api/polymarket-relayer-builder-signer`
+- `/api/polymarket-submit-order`
+- `/api/poly-worldcup-news`
+- `/api/poly-stream`
+- `/api/health`
+
+Support files copied:
+
+- `api/rate-limit.ts`
+- `api/polymarket-builder-session.ts`
+- `api/email-provider.ts`
+
+Small standalone-only type guards were added in copied backend files so the extracted server can pass `tsconfig.server.json` without changing runtime behavior.
 
 ## Frontend Call Sites
 
@@ -208,4 +231,3 @@ app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
 - Sell flow approves conditional tokens only through the verified POLY_1271/builder route.
 - LP Scout x402 payment and receipt work from the standalone domain.
 - Privy modal still shows both email and wallet login methods.
-

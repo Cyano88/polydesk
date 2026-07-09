@@ -1,0 +1,931 @@
+import type { Request, Response } from 'express'
+import pg from 'pg'
+import { isAddress } from 'viem'
+import { PrivyClient } from '@privy-io/server-auth'
+import { sendTransactionalEmail } from './email-provider.js'
+
+const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
+const REQUEST_TIMEOUT_MS = 10_000
+const ALERT_FROM_EMAIL = process.env.POLYMARKET_ALERT_FROM_EMAIL
+  ?? process.env.ALERT_FROM_EMAIL
+  ?? process.env.AGENTIC_STREAMING_FROM_EMAIL
+  ?? process.env.STREAM_INVITE_FROM_EMAIL
+const ALERT_FROM_NAME = process.env.POLYMARKET_ALERT_FROM_NAME ?? 'Hash PayLink Polymarket'
+const POLYMARKET_RELAYER_URL = (process.env.POLYMARKET_RELAYER_URL ?? process.env.RELAYER_URL ?? '').trim()
+const POLYMARKET_CHAIN_ID = Number(process.env.POLYMARKET_CHAIN_ID ?? 137)
+const POLYMARKET_RPC_URL = (process.env.POLYMARKET_RPC_URL ?? process.env.POLYGON_RPC_URL ?? '').trim()
+const POLYMARKET_BUILDER_API_KEY = (process.env.POLYMARKET_BUILDER_API_KEY ?? process.env.BUILDER_API_KEY ?? '').trim()
+const POLYMARKET_BUILDER_SECRET = (process.env.POLYMARKET_BUILDER_SECRET ?? process.env.BUILDER_SECRET ?? '').trim()
+const POLYMARKET_BUILDER_PASS_PHRASE = (
+  process.env.POLYMARKET_BUILDER_PASS_PHRASE
+  ?? process.env.POLYMARKET_BUILDER_PASSPHRASE
+  ?? process.env.BUILDER_PASS_PHRASE
+  ?? process.env.BUILDER_PASSPHRASE
+  ?? ''
+).trim()
+
+const { Pool } = pg
+const DATABASE_URL = (process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? '').trim()
+const pool = DATABASE_URL
+  ? new Pool({
+      connectionString: DATABASE_URL,
+      ssl: DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1')
+        ? false
+        : { rejectUnauthorized: false },
+    })
+  : null
+
+let schemaReady: Promise<void> | null = null
+
+function requirePool() {
+  if (!pool) {
+    const err = new Error('Polymarket portfolio storage is not configured. Add DATABASE_URL on Render.')
+    ;(err as Error & { status?: number }).status = 503
+    throw err
+  }
+  return pool
+}
+
+function ensureSchema() {
+  if (!schemaReady) {
+    schemaReady = requirePool().query(`
+      create table if not exists polymarket_profiles (
+        privy_user_id text primary key,
+        polymarket_address text not null,
+        watched_address text,
+        trading_address text,
+        preferred_funding_network text not null default 'base',
+        telegram_owner text,
+        telegram_id text,
+        last_synced_at timestamptz,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      create table if not exists polymarket_alert_settings (
+        privy_user_id text primary key references polymarket_profiles(privy_user_id) on delete cascade,
+        loss_threshold_percent integer not null default 20,
+        resolved_alerts_enabled boolean not null default true,
+        claimable_alerts_enabled boolean not null default true,
+        movement_alerts_enabled boolean not null default false,
+        alert_email text,
+        updated_at timestamptz not null default now()
+      );
+
+      alter table polymarket_profiles
+        add column if not exists watched_address text,
+        add column if not exists trading_address text,
+        add column if not exists deposit_wallet_address text,
+        add column if not exists deposit_wallet_status text,
+        add column if not exists deposit_wallet_tx_id text,
+        add column if not exists deposit_wallet_tx_hash text,
+        add column if not exists telegram_owner text,
+        add column if not exists telegram_id text;
+
+      alter table polymarket_alert_settings
+        add column if not exists alert_email text;
+
+      create table if not exists polymarket_watchlist (
+        id serial primary key,
+        privy_user_id text not null,
+        market_id text not null,
+        market_slug text,
+        market_url text,
+        label text,
+        created_at timestamptz not null default now(),
+        unique (privy_user_id, market_id)
+      );
+
+      create table if not exists polymarket_funding_attempts (
+        id serial primary key,
+        privy_user_id text not null,
+        polymarket_address text not null,
+        request_id text,
+        network text not null,
+        amount text not null,
+        status text not null,
+        tx_hash text,
+        deposit_address text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      create table if not exists polymarket_alert_history (
+        id serial primary key,
+        privy_user_id text not null,
+        alert_type text not null,
+        market_id text,
+        title text not null,
+        body text,
+        severity text not null default 'info',
+        source_snapshot jsonb,
+        created_at timestamptz not null default now(),
+        read_at timestamptz
+      );
+
+      create index if not exists polymarket_funding_attempts_user_idx
+        on polymarket_funding_attempts (privy_user_id, created_at desc);
+      create index if not exists polymarket_alert_history_user_idx
+        on polymarket_alert_history (privy_user_id, created_at desc);
+      create index if not exists polymarket_watchlist_user_idx
+        on polymarket_watchlist (privy_user_id);
+    `).then(() => undefined)
+  }
+  return schemaReady
+}
+
+function bearerToken(req: Request): string | undefined {
+  const auth = req.headers.authorization ?? ''
+  const match = auth.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]
+}
+
+async function verifiedPrivyUserId(req: Request): Promise<string> {
+  const privyAppId = process.env.PRIVY_APP_ID ?? process.env.VITE_PRIVY_APP_ID
+  const privyAppSecret = process.env.PRIVY_APP_SECRET
+  if (!privyAppId || !privyAppSecret) {
+    const err = new Error('Privy is not configured. Set PRIVY_APP_ID and PRIVY_APP_SECRET on the server.')
+    ;(err as Error & { status?: number }).status = 503
+    throw err
+  }
+  const token = bearerToken(req)
+  if (!token) {
+    const err = new Error('Missing Privy access token.')
+    ;(err as Error & { status?: number }).status = 401
+    throw err
+  }
+  const client = new PrivyClient(privyAppId, privyAppSecret)
+  const claims = await client.verifyAuthToken(token)
+  return claims.userId
+}
+
+function cleanString(value: unknown, max = 96) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
+function cleanAmount(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (!/^\d+(?:\.\d{1,6})?$/.test(raw)) return ''
+  return raw
+}
+
+function cleanEmail(value: unknown) {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (!raw) return null
+  if (raw.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return ''
+  return raw
+}
+
+const SUPPORTED_NETWORKS = new Set(['base', 'arbitrum', 'solana'])
+
+function hasPolymarketRelayerConfig() {
+  return Boolean(
+    POLYMARKET_RELAYER_URL
+    && POLYMARKET_BUILDER_API_KEY
+    && POLYMARKET_BUILDER_SECRET
+    && POLYMARKET_BUILDER_PASS_PHRASE,
+  )
+}
+
+async function createDepositWalletClient(ownerAddress: string) {
+  if (!hasPolymarketRelayerConfig()) {
+    const err = new Error('Polymarket deposit wallet relayer is not configured.')
+    ;(err as Error & { status?: number }).status = 503
+    throw err
+  }
+  const [{ RelayClient }, { BuilderConfig }, { createWalletClient, http }, { polygon }] = await Promise.all([
+    import('@polymarket/builder-relayer-client'),
+    import('@polymarket/builder-signing-sdk'),
+    import('viem'),
+    import('viem/chains'),
+  ])
+  const walletClient = createWalletClient({
+    account: { address: ownerAddress as `0x${string}`, type: 'json-rpc' },
+    chain: polygon,
+    transport: http(POLYMARKET_RPC_URL || undefined),
+  })
+  const builderConfig = new BuilderConfig({
+    localBuilderCreds: {
+      key: POLYMARKET_BUILDER_API_KEY,
+      secret: POLYMARKET_BUILDER_SECRET,
+      passphrase: POLYMARKET_BUILDER_PASS_PHRASE,
+    },
+  })
+  return new RelayClient(POLYMARKET_RELAYER_URL, POLYMARKET_CHAIN_ID, walletClient, builderConfig as never, undefined, { chain: polygon })
+}
+
+async function ensurePolymarketDepositWallet(ownerAddress: string) {
+  const client = await createDepositWalletClient(ownerAddress)
+  const depositWalletAddress = await client.deriveDepositWalletAddress()
+  let deployed = false
+  try {
+    deployed = await client.getDeployed(depositWalletAddress, 'WALLET')
+  } catch {
+    deployed = false
+  }
+  if (deployed) {
+    return {
+      depositWalletAddress,
+      depositWalletStatus: 'ready',
+      depositWalletTxId: null as string | null,
+      depositWalletTxHash: null as string | null,
+    }
+  }
+  const response = await client.deployDepositWallet()
+  return {
+    depositWalletAddress,
+    depositWalletStatus: response.state || 'pending',
+    depositWalletTxId: response.transactionID || null,
+    depositWalletTxHash: response.transactionHash || null,
+  }
+}
+
+async function dataApiFetch<T>(path: string): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${DATA_API_ORIGIN}${path}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    })
+    const text = await response.text()
+    let data: unknown = null
+    try { data = text ? JSON.parse(text) : null } catch { data = null }
+    if (!response.ok) {
+      const message = typeof data === 'object' && data && 'error' in data
+        ? String((data as { error?: unknown }).error)
+        : text.slice(0, 160)
+      throw new Error(message || `Polymarket data-api HTTP ${response.status}`)
+    }
+    return data as T
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+type PolymarketPosition = {
+  conditionId?: string
+  asset?: string
+  market?: string
+  eventSlug?: string
+  slug?: string
+  title?: string
+  icon?: string
+  outcome?: string
+  size?: number
+  avgPrice?: number
+  currentValue?: number
+  cashPnl?: number
+  percentPnl?: number
+  redeemable?: boolean
+  endDate?: string
+  curPrice?: number
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+async function sendPolymarketAlertEmail(input: {
+  to: string | null
+  title: string
+  body: string
+  severity: string
+  address: string
+}) {
+  if (!input.to) return
+  const subject = input.severity === 'warning'
+    ? `Polymarket alert: ${input.title}`
+    : `Polymarket update: ${input.title}`
+  const text = [
+    input.title,
+    '',
+    input.body,
+    '',
+    `Profile: ${input.address}`,
+    '',
+    'Open Hash PayLink from Telegram to review your portfolio, alerts, and LP Scout context.',
+    '',
+    'Hash PayLink',
+  ].join('\n')
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:620px">
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b7280">Hash PayLink for Polymarket</p>
+      <h2 style="margin:0 0 10px;font-size:20px">${escapeHtml(input.title)}</h2>
+      <p style="margin:0 0 14px;color:#4b5563">${escapeHtml(input.body)}</p>
+      <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin:14px 0;background:#f9fafb">
+        <div style="font-size:12px;color:#6b7280">Profile</div>
+        <div style="font-family:monospace;font-size:13px;color:#111827">${escapeHtml(input.address)}</div>
+      </div>
+      <p style="margin:0;color:#6b7280;font-size:13px">Open Hash PayLink from Telegram to review your portfolio, alerts, and LP Scout context.</p>
+    </div>
+  `
+  try {
+    await sendTransactionalEmail({
+      to: input.to,
+      fromEmail: ALERT_FROM_EMAIL,
+      fromName: ALERT_FROM_NAME,
+      subject,
+      text,
+      html,
+      context: 'Polymarket alert',
+    })
+  } catch (err) {
+    console.warn('[polymarket-alert] email skipped:', err instanceof Error ? err.message : err)
+  }
+}
+
+async function loadProfileBundle(privyUserId: string) {
+  await ensureSchema()
+  const profile = (await requirePool().query(
+    'select * from polymarket_profiles where privy_user_id = $1 limit 1',
+    [privyUserId],
+  )).rows[0]
+  if (!profile) {
+    return { profile: null, settings: null, watchlist: [], fundingAttempts: [], alerts: [] }
+  }
+  const [settingsRes, watchRes, fundRes, alertsRes] = await Promise.all([
+    requirePool().query('select * from polymarket_alert_settings where privy_user_id = $1 limit 1', [privyUserId]),
+    requirePool().query('select * from polymarket_watchlist where privy_user_id = $1 order by created_at desc', [privyUserId]),
+    requirePool().query('select * from polymarket_funding_attempts where privy_user_id = $1 order by created_at desc limit 25', [privyUserId]),
+    requirePool().query('select * from polymarket_alert_history where privy_user_id = $1 order by created_at desc limit 50', [privyUserId]),
+  ])
+  return {
+    profile: {
+      polymarketAddress: profile.polymarket_address as string,
+      watchedAddress: profile.watched_address
+        ? String(profile.watched_address)
+        : profile.trading_address
+          ? null
+          : String(profile.polymarket_address),
+      tradingAddress: profile.trading_address ? String(profile.trading_address) : null,
+      depositWalletAddress: profile.deposit_wallet_address ? String(profile.deposit_wallet_address) : null,
+      depositWalletStatus: profile.deposit_wallet_status ? String(profile.deposit_wallet_status) : null,
+      depositWalletTxId: profile.deposit_wallet_tx_id ? String(profile.deposit_wallet_tx_id) : null,
+      depositWalletTxHash: profile.deposit_wallet_tx_hash ? String(profile.deposit_wallet_tx_hash) : null,
+      // Clamp to a known network so a stale/corrupt value doesn't reach the
+      // bridge call with a confusing 502.
+      preferredFundingNetwork: SUPPORTED_NETWORKS.has(String(profile.preferred_funding_network))
+        ? String(profile.preferred_funding_network)
+        : 'base',
+      telegramOwner: profile.telegram_owner ? String(profile.telegram_owner) : null,
+      telegramId: profile.telegram_id ? String(profile.telegram_id) : null,
+      lastSyncedAt: profile.last_synced_at instanceof Date ? profile.last_synced_at.toISOString() : null,
+      createdAt: profile.created_at instanceof Date ? profile.created_at.toISOString() : null,
+    },
+    settings: settingsRes.rows[0]
+      ? {
+          lossThresholdPercent: Number(settingsRes.rows[0].loss_threshold_percent),
+          resolvedAlertsEnabled: Boolean(settingsRes.rows[0].resolved_alerts_enabled),
+          claimableAlertsEnabled: Boolean(settingsRes.rows[0].claimable_alerts_enabled),
+          movementAlertsEnabled: Boolean(settingsRes.rows[0].movement_alerts_enabled),
+          alertEmail: settingsRes.rows[0].alert_email ? String(settingsRes.rows[0].alert_email) : '',
+        }
+      : { lossThresholdPercent: 20, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, movementAlertsEnabled: false, alertEmail: '' },
+    watchlist: watchRes.rows.map(row => ({
+      id: Number(row.id),
+      marketId: String(row.market_id),
+      marketSlug: row.market_slug ? String(row.market_slug) : null,
+      marketUrl: row.market_url ? String(row.market_url) : null,
+      label: row.label ? String(row.label) : null,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : null,
+    })),
+    fundingAttempts: fundRes.rows.map(row => ({
+      id: Number(row.id),
+      requestId: row.request_id ? String(row.request_id) : null,
+      network: String(row.network),
+      amount: String(row.amount),
+      status: String(row.status),
+      txHash: row.tx_hash ? String(row.tx_hash) : null,
+      depositAddress: row.deposit_address ? String(row.deposit_address) : null,
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : null,
+    })),
+    alerts: alertsRes.rows.map(row => ({
+      id: Number(row.id),
+      alertType: String(row.alert_type),
+      marketId: row.market_id ? String(row.market_id) : null,
+      title: String(row.title),
+      body: row.body ? String(row.body) : null,
+      severity: String(row.severity),
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : null,
+      readAt: row.read_at instanceof Date ? row.read_at.toISOString() : null,
+    })),
+  }
+}
+
+async function evaluateAlerts(privyUserId: string, address: string) {
+  await ensureSchema()
+  const settingsRow = (await requirePool().query(
+    'select * from polymarket_alert_settings where privy_user_id = $1 limit 1',
+    [privyUserId],
+  )).rows[0]
+  if (!settingsRow) return 0
+  const lossThreshold = Number(settingsRow.loss_threshold_percent)
+  const claimableEnabled = Boolean(settingsRow.claimable_alerts_enabled)
+  const resolvedEnabled = Boolean(settingsRow.resolved_alerts_enabled)
+  const alertEmail = settingsRow.alert_email ? String(settingsRow.alert_email) : null
+  // Treat threshold = 0 as "loss alerts disabled" so users have an off switch
+  // without needing a separate flag column.
+  const lossAlertsEnabled = Number.isFinite(lossThreshold) && lossThreshold > 0
+
+  let positions: PolymarketPosition[] = []
+  try {
+    positions = await dataApiFetch<PolymarketPosition[]>(`/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`)
+    if (!Array.isArray(positions)) positions = []
+  } catch {
+    return 0
+  }
+
+  let inserted = 0
+  for (const position of positions) {
+    const marketId = cleanString(position.conditionId ?? position.market ?? position.asset, 96)
+    if (!marketId) continue
+    const title = cleanString(position.title ?? position.slug ?? 'Polymarket position', 160)
+
+    const currentValue = typeof position.currentValue === 'number' ? position.currentValue : Number(position.currentValue)
+    if (claimableEnabled && position.redeemable && Number.isFinite(currentValue) && currentValue > 0) {
+      const alertTitle = `Claimable: ${title}`
+      const alertBody = `This position is redeemable on Polymarket.`
+      const insert = await requirePool().query(
+        `insert into polymarket_alert_history (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot)
+         select $1,'claimable',$2,$3,$4,'success',$5::jsonb
+         where not exists (
+           select 1 from polymarket_alert_history
+           where privy_user_id = $1 and alert_type = 'claimable' and market_id = $2 and read_at is null
+         )
+         returning id`,
+        [privyUserId, marketId, alertTitle, alertBody, JSON.stringify(position)],
+      )
+      inserted += insert.rowCount ?? 0
+      if ((insert.rowCount ?? 0) > 0) {
+        await sendPolymarketAlertEmail({ to: alertEmail, title: alertTitle, body: alertBody, severity: 'success', address })
+      }
+    }
+
+    const percentPnl = typeof position.percentPnl === 'number' ? position.percentPnl : null
+    if (lossAlertsEnabled && percentPnl !== null && percentPnl <= -Math.abs(lossThreshold)) {
+      const alertTitle = `Down ${Math.round(percentPnl)}%: ${title}`
+      const alertBody = `Position dropped below your ${lossThreshold}% loss threshold.`
+      const insert = await requirePool().query(
+        `insert into polymarket_alert_history (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot)
+         select $1,'loss-threshold',$2,$3,$4,'warning',$5::jsonb
+         where not exists (
+           select 1 from polymarket_alert_history
+           where privy_user_id = $1 and alert_type = 'loss-threshold' and market_id = $2
+           and created_at > now() - interval '24 hours'
+         )
+         returning id`,
+        [privyUserId, marketId, alertTitle, alertBody, JSON.stringify(position)],
+      )
+      inserted += insert.rowCount ?? 0
+      if ((insert.rowCount ?? 0) > 0) {
+        await sendPolymarketAlertEmail({ to: alertEmail, title: alertTitle, body: alertBody, severity: 'warning', address })
+      }
+    }
+
+    if (resolvedEnabled && typeof position.endDate === 'string' && position.endDate) {
+      const ended = new Date(position.endDate).getTime()
+      if (Number.isFinite(ended) && ended < Date.now() && !position.redeemable) {
+        const alertTitle = `Market resolved: ${title}`
+        const alertBody = `This market closed and your position is no longer redeemable.`
+        const insert = await requirePool().query(
+          `insert into polymarket_alert_history (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot)
+           select $1,'resolved',$2,$3,$4,'info',$5::jsonb
+           where not exists (
+             select 1 from polymarket_alert_history
+             where privy_user_id = $1 and alert_type = 'resolved' and market_id = $2
+           )
+           returning id`,
+          [privyUserId, marketId, alertTitle, alertBody, JSON.stringify(position)],
+        )
+        inserted += insert.rowCount ?? 0
+        if ((insert.rowCount ?? 0) > 0) {
+          await sendPolymarketAlertEmail({ to: alertEmail, title: alertTitle, body: alertBody, severity: 'info', address })
+        }
+      }
+    }
+  }
+
+  await requirePool().query(
+    'update polymarket_profiles set last_synced_at = now(), updated_at = now() where privy_user_id = $1',
+    [privyUserId],
+  )
+  return inserted
+}
+
+export default async function handler(req: Request, res: Response) {
+  try {
+    const queryAction = cleanString(req.query.action, 32).toLowerCase()
+    const bodyAction = req.method === 'POST' ? cleanString((req.body ?? {}).action, 32).toLowerCase() : ''
+    const action = bodyAction || queryAction
+
+    // Public proxy actions — no auth required, used for live read.
+    if (req.method === 'GET' && action === 'value') {
+      const address = cleanString(req.query.address, 64)
+      if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
+      const data = await dataApiFetch<unknown>(`/value?user=${encodeURIComponent(address)}`)
+      return res.json({ ok: true, value: data })
+    }
+    if (req.method === 'GET' && action === 'positions') {
+      const address = cleanString(req.query.address, 64)
+      if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
+      const sizeThreshold = cleanString(req.query.sizeThreshold, 12) || '1'
+      const limit = cleanString(req.query.limit, 6) || '50'
+      const url = `/positions?user=${encodeURIComponent(address)}&sizeThreshold=${encodeURIComponent(sizeThreshold)}&limit=${encodeURIComponent(limit)}`
+      const data = await dataApiFetch<unknown>(url)
+      return res.json({ ok: true, positions: Array.isArray(data) ? data : [] })
+    }
+
+    // All persistence actions require Privy auth.
+    let privyUserId: string
+    try {
+      privyUserId = await verifiedPrivyUserId(req)
+    } catch (err) {
+      const e = err as Error & { status?: number }
+      return res.status(e.status ?? 401).json({ ok: false, error: e.message || 'Privy auth failed.' })
+    }
+
+    await ensureSchema()
+
+    if (req.method === 'GET' && (action === 'profile' || action === '')) {
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (req.method === 'GET' && action === 'funding-attempts') {
+      const rows = (await requirePool().query(
+        'select * from polymarket_funding_attempts where privy_user_id = $1 order by created_at desc limit 50',
+        [privyUserId],
+      )).rows
+      return res.json({ ok: true, fundingAttempts: rows })
+    }
+
+    if (req.method === 'GET' && action === 'alert-history') {
+      const rows = (await requirePool().query(
+        'select * from polymarket_alert_history where privy_user_id = $1 order by created_at desc limit 100',
+        [privyUserId],
+      )).rows
+      return res.json({ ok: true, alerts: rows })
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ ok: false, error: 'Method not allowed' })
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>
+
+    if (action === 'save-profile') {
+      const address = cleanString(body.address, 64)
+      const network = cleanString(body.fundingNetwork, 12) || 'base'
+      const mode = cleanString(body.mode, 16) || 'watch'
+      const telegramOwner = cleanString(body.telegramOwner, 96) || null
+      const telegramId = cleanString(body.telegramId, 48) || null
+      if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
+      if (!SUPPORTED_NETWORKS.has(network)) return res.status(400).json({ ok: false, error: 'Unsupported funding network.' })
+      const watchedAddress = mode === 'trading' ? null : address
+      const tradingAddress = mode === 'trading' ? address : null
+      await requirePool().query(
+        `insert into polymarket_profiles (privy_user_id, polymarket_address, watched_address, trading_address, preferred_funding_network, telegram_owner, telegram_id)
+         values ($1,$2,$3,$4,$5,$6,$7)
+         on conflict (privy_user_id) do update set
+           polymarket_address = case
+             when $8 = 'trading' and coalesce(polymarket_profiles.watched_address, '') <> '' then polymarket_profiles.polymarket_address
+             else excluded.polymarket_address
+           end,
+           watched_address = coalesce(excluded.watched_address, polymarket_profiles.watched_address),
+           trading_address = coalesce(excluded.trading_address, polymarket_profiles.trading_address),
+           preferred_funding_network = excluded.preferred_funding_network,
+           telegram_owner = coalesce(excluded.telegram_owner, polymarket_profiles.telegram_owner),
+           telegram_id = coalesce(excluded.telegram_id, polymarket_profiles.telegram_id),
+           updated_at = now()`,
+        [privyUserId, address, watchedAddress, tradingAddress, network, telegramOwner, telegramId, mode],
+      )
+      await requirePool().query(
+        `insert into polymarket_alert_settings (privy_user_id) values ($1)
+         on conflict (privy_user_id) do nothing`,
+        [privyUserId],
+      )
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (action === 'ensure-deposit-wallet') {
+      const ownerAddress = cleanString(body.ownerAddress, 64)
+      if (!isAddress(ownerAddress)) return res.status(400).json({ ok: false, error: 'Provide a valid owner wallet address.' })
+      const profileRow = (await requirePool().query(
+        'select trading_address, deposit_wallet_address, deposit_wallet_status from polymarket_profiles where privy_user_id = $1',
+        [privyUserId],
+      )).rows[0]
+      if (profileRow?.trading_address && String(profileRow.trading_address).toLowerCase() !== ownerAddress.toLowerCase()) {
+        return res.status(409).json({ ok: false, error: 'Connect the saved Main Wallet before activating Polymarket wallet.' })
+      }
+      const wallet = await ensurePolymarketDepositWallet(ownerAddress)
+      await requirePool().query(
+        `insert into polymarket_profiles
+          (privy_user_id, polymarket_address, trading_address, deposit_wallet_address, deposit_wallet_status, deposit_wallet_tx_id, deposit_wallet_tx_hash)
+         values ($1,$2,$3,$4,$5,$6,$7)
+         on conflict (privy_user_id) do update set
+           trading_address = coalesce(polymarket_profiles.trading_address, excluded.trading_address),
+           deposit_wallet_address = excluded.deposit_wallet_address,
+           deposit_wallet_status = excluded.deposit_wallet_status,
+           deposit_wallet_tx_id = excluded.deposit_wallet_tx_id,
+           deposit_wallet_tx_hash = excluded.deposit_wallet_tx_hash,
+           updated_at = now()`,
+        [
+          privyUserId,
+          ownerAddress,
+          ownerAddress,
+          wallet.depositWalletAddress,
+          wallet.depositWalletStatus,
+          wallet.depositWalletTxId,
+          wallet.depositWalletTxHash,
+        ],
+      )
+      await requirePool().query(
+        `insert into polymarket_alert_settings (privy_user_id) values ($1)
+         on conflict (privy_user_id) do nothing`,
+        [privyUserId],
+      )
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (action === 'verify-deposit-wallet') {
+      const ownerAddress = cleanString(body.ownerAddress, 64)
+      const depositWalletAddress = cleanString(body.depositWalletAddress, 64)
+      if (!isAddress(ownerAddress) || !isAddress(depositWalletAddress)) {
+        return res.status(400).json({ ok: false, error: 'Provide valid owner and Polymarket wallet addresses.' })
+      }
+      const profileRow = (await requirePool().query(
+        'select trading_address, deposit_wallet_address, deposit_wallet_status from polymarket_profiles where privy_user_id = $1',
+        [privyUserId],
+      )).rows[0]
+      if (!profileRow?.trading_address || String(profileRow.trading_address).toLowerCase() !== ownerAddress.toLowerCase()) {
+        return res.status(409).json({ ok: false, error: 'Connect the saved Main Wallet before trading.' })
+      }
+      const wallet = await ensurePolymarketDepositWallet(ownerAddress)
+      await requirePool().query(
+        `update polymarket_profiles
+            set deposit_wallet_address = $2,
+                deposit_wallet_status = $3,
+                deposit_wallet_tx_id = $4,
+                deposit_wallet_tx_hash = $5,
+                updated_at = now()
+          where privy_user_id = $1`,
+        [
+          privyUserId,
+          wallet.depositWalletAddress,
+          wallet.depositWalletStatus,
+          wallet.depositWalletTxId,
+          wallet.depositWalletTxHash,
+        ],
+      )
+      if (wallet.depositWalletAddress.toLowerCase() !== depositWalletAddress.toLowerCase()) {
+        return res.status(409).json({
+          ok: false,
+          error: 'Your saved Polymarket wallet was stale and has been refreshed. Try the trade again.',
+          profile: (await loadProfileBundle(privyUserId)).profile,
+        })
+      }
+      if (String(wallet.depositWalletStatus || '').toLowerCase() !== 'ready') {
+        return res.status(409).json({ ok: false, error: 'Polymarket wallet is not deployed yet. Wait for activation, then retry.' })
+      }
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (action === 'disconnect') {
+      await requirePool().query('delete from polymarket_watchlist where privy_user_id = $1', [privyUserId])
+      await requirePool().query('delete from polymarket_funding_attempts where privy_user_id = $1', [privyUserId])
+      await requirePool().query('delete from polymarket_alert_history where privy_user_id = $1', [privyUserId])
+      await requirePool().query('delete from polymarket_profiles where privy_user_id = $1', [privyUserId])
+      return res.json({ ok: true, profile: null, settings: null, watchlist: [], fundingAttempts: [], alerts: [] })
+    }
+
+    if (action === 'disconnect-watch') {
+      await requirePool().query(
+        `update polymarket_profiles
+            set watched_address = null,
+                polymarket_address = coalesce(trading_address, polymarket_address),
+                updated_at = now()
+          where privy_user_id = $1`,
+        [privyUserId],
+      )
+      await requirePool().query('delete from polymarket_alert_history where privy_user_id = $1', [privyUserId])
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (action === 'disconnect-trading') {
+      await requirePool().query(
+        `update polymarket_profiles
+            set trading_address = null,
+                deposit_wallet_address = null,
+                deposit_wallet_status = null,
+                deposit_wallet_tx_id = null,
+                deposit_wallet_tx_hash = null,
+                updated_at = now()
+          where privy_user_id = $1`,
+        [privyUserId],
+      )
+      const bundle = await loadProfileBundle(privyUserId)
+      return res.json({ ok: true, ...bundle })
+    }
+
+    if (action === 'save-alert-settings') {
+      // 0 means "loss alerts disabled" — see evaluateAlerts. 95 is the
+      // generous upper bound (anything beyond is effectively the same as off).
+      const loss = Math.max(0, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
+      const resolved = Boolean(body.resolvedAlertsEnabled)
+      const claimable = Boolean(body.claimableAlertsEnabled)
+      const movement = Boolean(body.movementAlertsEnabled)
+      const alertEmail = cleanEmail(body.alertEmail)
+      if (alertEmail === '') return res.status(400).json({ ok: false, error: 'Enter a valid alert email or leave it blank.' })
+      const profileExists = (await requirePool().query('select 1 from polymarket_profiles where privy_user_id = $1 and coalesce(watched_address, polymarket_address) is not null', [privyUserId])).rowCount
+      if (!profileExists) return res.status(409).json({ ok: false, error: 'Save a watched Polymarket account first.' })
+      await requirePool().query(
+        `insert into polymarket_alert_settings
+          (privy_user_id, loss_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, movement_alerts_enabled, alert_email)
+         values ($1,$2,$3,$4,$5,$6)
+         on conflict (privy_user_id) do update set
+           loss_threshold_percent = excluded.loss_threshold_percent,
+           resolved_alerts_enabled = excluded.resolved_alerts_enabled,
+           claimable_alerts_enabled = excluded.claimable_alerts_enabled,
+           movement_alerts_enabled = excluded.movement_alerts_enabled,
+           alert_email = excluded.alert_email,
+           updated_at = now()`,
+        [privyUserId, loss, resolved, claimable, movement, alertEmail],
+      )
+      return res.json({
+        ok: true,
+        settings: {
+          lossThresholdPercent: loss,
+          resolvedAlertsEnabled: resolved,
+          claimableAlertsEnabled: claimable,
+          movementAlertsEnabled: movement,
+          alertEmail: alertEmail ?? '',
+        },
+      })
+    }
+
+    if (action === 'add-watch') {
+      const marketId = cleanString(body.marketId, 96)
+      if (!marketId) return res.status(400).json({ ok: false, error: 'marketId is required.' })
+      const profileExists = (await requirePool().query('select 1 from polymarket_profiles where privy_user_id = $1 and coalesce(watched_address, polymarket_address) is not null', [privyUserId])).rowCount
+      if (!profileExists) return res.status(409).json({ ok: false, error: 'Save a watched Polymarket account first.' })
+      const marketSlug = cleanString(body.marketSlug, 160) || null
+      const marketUrl = cleanString(body.marketUrl, 280) || null
+      const label = cleanString(body.label, 80) || null
+      await requirePool().query(
+        `insert into polymarket_watchlist (privy_user_id, market_id, market_slug, market_url, label)
+         values ($1,$2,$3,$4,$5)
+         on conflict (privy_user_id, market_id) do update set
+           market_slug = excluded.market_slug,
+           market_url = excluded.market_url,
+           label = excluded.label`,
+        [privyUserId, marketId, marketSlug, marketUrl, label],
+      )
+      const rows = (await requirePool().query(
+        'select * from polymarket_watchlist where privy_user_id = $1 order by created_at desc',
+        [privyUserId],
+      )).rows
+      return res.json({ ok: true, watchlist: rows })
+    }
+
+    if (action === 'remove-watch') {
+      const marketId = cleanString(body.marketId, 96)
+      if (!marketId) return res.status(400).json({ ok: false, error: 'marketId is required.' })
+      await requirePool().query(
+        'delete from polymarket_watchlist where privy_user_id = $1 and market_id = $2',
+        [privyUserId, marketId],
+      )
+      const rows = (await requirePool().query(
+        'select * from polymarket_watchlist where privy_user_id = $1 order by created_at desc',
+        [privyUserId],
+      )).rows
+      return res.json({ ok: true, watchlist: rows })
+    }
+
+    if (action === 'log-funding') {
+      const network = cleanString(body.network, 12)
+      if (!SUPPORTED_NETWORKS.has(network)) return res.status(400).json({ ok: false, error: 'Unsupported funding network.' })
+      const amount = cleanAmount(body.amount)
+      if (!amount) return res.status(400).json({ ok: false, error: 'Provide a valid funding amount.' })
+      const status = cleanString(body.status, 24) || 'pending'
+      const requestId = cleanString(body.requestId, 64) || null
+      const txHash = cleanString(body.txHash, 96) || null
+      const depositAddress = cleanString(body.depositAddress, 96) || null
+      const polymarketWallet = cleanString(body.polymarketWallet, 64)
+      if (!isAddress(polymarketWallet)) return res.status(400).json({ ok: false, error: 'Provide the funded Polymarket wallet.' })
+      const profileRow = (await requirePool().query(
+        'select trading_address, deposit_wallet_address from polymarket_profiles where privy_user_id = $1',
+        [privyUserId],
+      )).rows[0]
+      const fundedWallet = profileRow?.deposit_wallet_address ? String(profileRow.deposit_wallet_address) : ''
+      if (!profileRow?.trading_address || !fundedWallet || fundedWallet.toLowerCase() !== polymarketWallet.toLowerCase()) {
+        return res.status(409).json({ ok: false, error: 'Activate this Polymarket wallet before funding.' })
+      }
+      const inserted = await requirePool().query(
+        `insert into polymarket_funding_attempts
+          (privy_user_id, polymarket_address, request_id, network, amount, status, tx_hash, deposit_address)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
+        [privyUserId, polymarketWallet, requestId, network, amount, status, txHash, depositAddress],
+      )
+      return res.json({ ok: true, fundingAttempt: inserted.rows[0] })
+    }
+
+    if (action === 'complete-funding') {
+      const network = cleanString(body.network, 12)
+      if (!SUPPORTED_NETWORKS.has(network)) return res.status(400).json({ ok: false, error: 'Unsupported funding network.' })
+      const amount = cleanAmount(body.amount)
+      if (!amount) return res.status(400).json({ ok: false, error: 'Provide a valid funding amount.' })
+      const requestId = cleanString(body.requestId, 64) || null
+      const txHash = cleanString(body.txHash, 96)
+      if (!txHash) return res.status(400).json({ ok: false, error: 'txHash is required.' })
+      const depositAddress = cleanString(body.depositAddress, 96) || null
+      const polymarketWallet = cleanString(body.polymarketWallet, 64)
+      if (!isAddress(polymarketWallet)) return res.status(400).json({ ok: false, error: 'Provide the funded Polymarket wallet.' })
+      const bridgeStatus = cleanString(body.bridgeStatus, 32)
+      const status = bridgeStatus === 'complete' ? 'bridge_complete' : 'confirmed'
+      const profileRow = (await requirePool().query(
+        'select trading_address, deposit_wallet_address from polymarket_profiles where privy_user_id = $1',
+        [privyUserId],
+      )).rows[0]
+      const fundedWallet = profileRow?.deposit_wallet_address ? String(profileRow.deposit_wallet_address) : ''
+      if (!profileRow?.trading_address || !fundedWallet || fundedWallet.toLowerCase() !== polymarketWallet.toLowerCase()) {
+        return res.status(409).json({ ok: false, error: 'Activate this Polymarket wallet before funding.' })
+      }
+
+      let updated
+      if (requestId) {
+        updated = await requirePool().query(
+          `update polymarket_funding_attempts
+             set status = $1, tx_hash = $2, deposit_address = coalesce($3, deposit_address), updated_at = now()
+           where privy_user_id = $4 and request_id = $5 and lower(polymarket_address) = lower($6)
+           returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
+          [status, txHash, depositAddress, privyUserId, requestId, polymarketWallet],
+        )
+      }
+      if (!updated?.rowCount && depositAddress) {
+        updated = await requirePool().query(
+          `update polymarket_funding_attempts
+             set status = $1, tx_hash = $2, updated_at = now()
+           where id = (
+             select id from polymarket_funding_attempts
+              where privy_user_id = $3 and deposit_address = $4 and lower(polymarket_address) = lower($5)
+              order by created_at desc
+              limit 1
+           )
+           returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
+          [status, txHash, privyUserId, depositAddress, polymarketWallet],
+        )
+      }
+      if (updated?.rowCount) return res.json({ ok: true, fundingAttempt: updated.rows[0] })
+
+      const inserted = await requirePool().query(
+        `insert into polymarket_funding_attempts
+          (privy_user_id, polymarket_address, request_id, network, amount, status, tx_hash, deposit_address)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
+        [privyUserId, polymarketWallet, requestId, network, amount, status, txHash, depositAddress],
+      )
+      return res.json({ ok: true, fundingAttempt: inserted.rows[0] })
+    }
+
+    if (action === 'mark-alert-read') {
+      const alertId = Number(body.alertId)
+      if (!Number.isInteger(alertId) || alertId <= 0) return res.status(400).json({ ok: false, error: 'alertId is required.' })
+      await requirePool().query(
+        'update polymarket_alert_history set read_at = now() where id = $1 and privy_user_id = $2',
+        [alertId, privyUserId],
+      )
+      return res.json({ ok: true })
+    }
+
+    if (action === 'evaluate-alerts') {
+      const profileRow = (await requirePool().query(
+        'select coalesce(watched_address, polymarket_address) as polymarket_address from polymarket_profiles where privy_user_id = $1',
+        [privyUserId],
+      )).rows[0]
+      if (!profileRow?.polymarket_address) return res.status(409).json({ ok: false, error: 'Save a watched Polymarket account first.' })
+      const inserted = await evaluateAlerts(privyUserId, String(profileRow.polymarket_address))
+      const rows = (await requirePool().query(
+        'select * from polymarket_alert_history where privy_user_id = $1 order by created_at desc limit 50',
+        [privyUserId],
+      )).rows
+      return res.json({ ok: true, insertedCount: inserted, alerts: rows })
+    }
+
+    return res.status(400).json({ ok: false, error: `Unknown action: ${action}` })
+  } catch (err) {
+    const e = err as Error & { status?: number }
+    return res.status(e.status ?? 500).json({ ok: false, error: e.message || 'Polymarket portfolio request failed' })
+  }
+}
