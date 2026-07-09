@@ -9,7 +9,6 @@ import { arcChain, baseMainnet } from './lib/chains'
 import './styles.css'
 
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID as string | undefined
-const privyLogoUrl = `${window.location.origin}/brand/polydesk-privy-logo.png`
 
 const app = (
   <React.StrictMode>
@@ -35,14 +34,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           ethereum: {
             createOnLogin: 'off',
           },
-        },
-        appearance: {
-          theme: 'dark',
-          accentColor: '#696FFD',
-          logo: privyLogoUrl,
-          landingHeader: 'PolyDesk',
-          loginMessage: 'Team will never ask for this code',
-          emailDomain: 'PolyDesk',
         },
       }}
     >
