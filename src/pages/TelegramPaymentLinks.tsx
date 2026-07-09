@@ -6723,6 +6723,7 @@ export function PolyPortfolioPanel({
 }) {
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
+  const openPolyDeskLogin = () => login({ loginMethods: ['email', 'wallet'] })
 
   const [privyWaitExpired, setPrivyWaitExpired] = useState(false)
   const [bundle, setBundle] = useState<PolymarketPortfolioBundle | null>(null)
@@ -7970,7 +7971,7 @@ export function PolyPortfolioPanel({
                     type="button"
                     onClick={() => {
                       setAddressInput(unsignedWatchAddress.trim())
-                      void login()
+                      void openPolyDeskLogin()
                     }}
                     disabled={!/^0x[a-fA-F0-9]{40}$/.test(unsignedWatchAddress.trim())}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
@@ -7992,7 +7993,7 @@ export function PolyPortfolioPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={() => login()}
+                    onClick={() => openPolyDeskLogin()}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                   >
                     <Wallet className="h-4 w-4" /> Connect wallet

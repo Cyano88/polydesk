@@ -12,6 +12,10 @@ type PrivyConnectButtonProps = {
   children: ReactNode
 }
 
+const DEFAULT_LOGIN_OPTIONS: LoginModalOptions = {
+  loginMethods: ['email', 'wallet'],
+}
+
 export function PrivyConnectButton({
   className,
   disabled,
@@ -43,7 +47,7 @@ export function PrivyConnectButton({
       await logout()
       return
     }
-    launcher?.requestLogin({ debugLabel, loginOptions: loginOptions ?? undefined, onBeforeLogin })
+    launcher?.requestLogin({ debugLabel, loginOptions: loginOptions ?? DEFAULT_LOGIN_OPTIONS, onBeforeLogin })
   }
 
   return (

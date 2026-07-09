@@ -35,6 +35,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             createOnLogin: 'off',
           },
         },
+        appearance: {
+          landingHeader: 'PolyDesk',
+          loginMessage: 'Team will never ask for this code',
+        },
       }}
     >
       <PrivyLoginProvider>{app}</PrivyLoginProvider>

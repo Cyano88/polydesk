@@ -13,6 +13,10 @@ type PrivyLoginContextValue = {
 
 const PrivyLoginContext = createContext<PrivyLoginContextValue | null>(null)
 
+const DEFAULT_LOGIN_OPTIONS: LoginModalOptions = {
+  loginMethods: ['email', 'wallet'],
+}
+
 export function PrivyLoginProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready } = usePrivy()
   const { isOpen } = useModalStatus()
@@ -42,7 +46,7 @@ export function PrivyLoginProvider({ children }: { children: ReactNode }) {
         modalOpen: isOpen,
       })
     }
-    login(request?.loginOptions)
+    login(request?.loginOptions ?? DEFAULT_LOGIN_OPTIONS)
   }, [authenticated, isOpen, login, ready])
 
   return (
