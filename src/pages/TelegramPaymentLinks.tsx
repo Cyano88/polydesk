@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bell,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Copy,
   Download,
@@ -1121,12 +1122,60 @@ export function PolyWorldCupHubPanel({
   onOpenScores: () => void
   onOpenPortfolio: () => void
 }) {
+  const { authenticated, getAccessToken } = usePrivy()
+  const [hasProfile, setHasProfile] = useState<boolean>(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function probe() {
+      if (!authenticated) return
+      try {
+        const token = await getAccessToken()
+        if (!token) return
+        const res = await fetch(apiPath('/api/polymarket-portfolio?action=profile'), {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json() as { ok?: boolean; profile?: PolymarketProfile | null }
+        if (!cancelled && res.ok && data.ok) setHasProfile(Boolean(data.profile?.polymarketAddress))
+      } catch { /* silent */ }
+    }
+    void probe()
+    return () => { cancelled = true }
+  }, [authenticated, getAccessToken])
+
   return (
-    <div className="space-y-3">
-      <PanelTop icon={Trophy} kicker="World Cup" title="Market hub" onBack={onBack} />
-      <ServiceButton label="Scores" icon={Radio} onClick={onOpenScores} />
-      <ServiceButton label="News" icon={Newspaper} onClick={onOpenNews} />
-      <ServiceButton label="Portfolio" icon={Wallet} onClick={onOpenPortfolio} />
+    <div className="mt-4 space-y-4">
+      {onBack && <PolyDeskBackButton onClick={onBack} />}
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
+          <Radio className="h-4 w-4 text-gray-500" />
+        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk World Cup</p>
+      </div>
+      <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Live scores, market odds, direct trade routes.</h2>
+      <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+        Live scores come from the matchday feed. Market odds and trade routes come from Polymarket. No stale fallbacks.
+      </p>
+
+      <div className="space-y-2">
+        <PolyDeskMenuCard
+          title="World Cup markets"
+          body="Live match centre with exact Polymarket fixture routing."
+          onClick={onOpenScores}
+        />
+        <PolyDeskMenuCard
+          title="World Cup news"
+          body="Headlines that move Polymarket prices and LP risk."
+          onClick={onOpenNews}
+        />
+        {hasProfile && (
+          <PolyDeskMenuCard
+            title="Portfolio exposure"
+            body="Check watched positions and market exposure before opening a trade."
+            onClick={onOpenPortfolio}
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -1188,9 +1237,34 @@ function PolyDeskBackButton({ onClick }: { onClick?: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-white/10 dark:bg-[#111114] dark:text-gray-200 dark:hover:bg-white/[0.04]"
+      className="inline-flex w-fit items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
     >
+      <span className="back-btn" aria-hidden="true">
+        <span className="arrow-container">
+          <span className="chevron c1" />
+          <span className="chevron c2" />
+          <span className="chevron c3" />
+        </span>
+      </span>
       Back
+    </button>
+  )
+}
+
+function PolyDeskMenuCard({ title, body, onClick }: { title: string; body: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-md active:scale-[0.99] dark:border-white/10 dark:bg-[#111216] dark:hover:border-white/20"
+    >
+      <span className="min-w-0">
+        <span className="block text-[14px] font-black text-gray-950 dark:text-white">{title}</span>
+        <span className="mt-1 block text-[12px] leading-5 text-gray-500 dark:text-gray-400">{body}</span>
+      </span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-950 text-white transition-transform group-hover:translate-x-0.5 dark:bg-white dark:text-gray-950">
+        <ChevronDown className="-rotate-90 h-4 w-4" />
+      </span>
     </button>
   )
 }
