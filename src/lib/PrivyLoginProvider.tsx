@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from 'react'
 import { useLogin, useModalStatus, usePrivy, type LoginModalOptions } from '@privy-io/react-auth'
+import { POLYDESK_LOGIN_OPTIONS } from './privyLoginOptions'
 
 type PrivyLoginRequest = {
   debugLabel?: string
@@ -12,10 +13,6 @@ type PrivyLoginContextValue = {
 }
 
 const PrivyLoginContext = createContext<PrivyLoginContextValue | null>(null)
-
-const DEFAULT_LOGIN_OPTIONS: LoginModalOptions = {
-  loginMethods: ['email', 'wallet'],
-}
 
 export function PrivyLoginProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready } = usePrivy()
@@ -46,7 +43,7 @@ export function PrivyLoginProvider({ children }: { children: ReactNode }) {
         modalOpen: isOpen,
       })
     }
-    login(request?.loginOptions ?? DEFAULT_LOGIN_OPTIONS)
+    login(request?.loginOptions ?? POLYDESK_LOGIN_OPTIONS)
   }, [authenticated, isOpen, login, ready])
 
   return (

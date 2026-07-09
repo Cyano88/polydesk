@@ -43,6 +43,7 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyWalletConnectButton } from '../lib/PrivyWalletConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
+import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_AGENT_URL || 'https://t.me/HashPayLinkBot'
 const PUBLIC_PAYLINK_ORIGIN = (import.meta.env.VITE_PUBLIC_PAYLINK_ORIGIN || 'https://hashpaylink.com').replace(/\/+$/, '')
@@ -6723,7 +6724,7 @@ export function PolyPortfolioPanel({
 }) {
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
-  const openPolyDeskLogin = () => login({ loginMethods: ['email', 'wallet'] })
+  const openPolyDeskLogin = () => login(POLYDESK_LOGIN_OPTIONS)
 
   const [privyWaitExpired, setPrivyWaitExpired] = useState(false)
   const [bundle, setBundle] = useState<PolymarketPortfolioBundle | null>(null)

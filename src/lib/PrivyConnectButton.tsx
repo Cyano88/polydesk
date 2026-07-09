@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useModalStatus, usePrivy, type LoginModalOptions } from '@privy-io/react-auth'
 import { usePrivyLoginLauncher } from './PrivyLoginProvider'
+import { POLYDESK_LOGIN_OPTIONS } from './privyLoginOptions'
 
 type PrivyConnectButtonProps = {
   className?: string
@@ -10,10 +11,6 @@ type PrivyConnectButtonProps = {
   logoutOnAuthenticated?: boolean
   onBeforeLogin?: () => void
   children: ReactNode
-}
-
-const DEFAULT_LOGIN_OPTIONS: LoginModalOptions = {
-  loginMethods: ['email', 'wallet'],
 }
 
 export function PrivyConnectButton({
@@ -47,7 +44,7 @@ export function PrivyConnectButton({
       await logout()
       return
     }
-    launcher?.requestLogin({ debugLabel, loginOptions: loginOptions ?? DEFAULT_LOGIN_OPTIONS, onBeforeLogin })
+    launcher?.requestLogin({ debugLabel, loginOptions: loginOptions ?? POLYDESK_LOGIN_OPTIONS, onBeforeLogin })
   }
 
   return (
