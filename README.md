@@ -69,6 +69,7 @@ Hash PayLink remains the system of record for:
 - `docs/dependency-map.md` - file/API/env classification before extraction
 - `docs/env-boundary.md` - environment variable ownership and secret boundaries
 - `docs/deployment-env-checklist.md` - production env and smoke-test checklist
+- `docs/render-env-audit.md` - Hash PayLink Render env audit and standalone PolyDesk env set
 - `docs/phased-plan.md` - extraction phases and acceptance gates
 - `docs/phase1-shell.md` - standalone shell verification notes
 - `docs/api-surface.md` - backend route, source file, env, and migration checklist

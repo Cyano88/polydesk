@@ -6,6 +6,8 @@ Date: 2026-07-09
 
 Deploy PolyDesk as a standalone runtime without copying unrelated Hash PayLink secrets. This checklist is based on the current standalone files in `api/`, `server.ts`, and `src/`.
 
+For the Render-specific source audit from Hash PayLink, see `docs/render-env-audit.md`. That audit confirms `POLYMARKET_MATCH_URLS` already exists as a dashboard-managed Render key in the source deployment, while `POLYMARKET_RELAYER_URL` and a production Polygon RPC URL must be supplied separately for standalone PolyDesk.
+
 ## Runtime Commands
 
 Use these commands for a production-style deployment:
