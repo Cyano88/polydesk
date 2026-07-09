@@ -35,7 +35,7 @@ PRIVY_APP_SECRET=
 DATABASE_URL=
 POLYMARKET_CHAIN_ID=137
 POLYMARKET_RPC_URL=
-POLYGON_RPC_URL=
+# or POLYGON_RPC_URL=
 POLYMARKET_RELAYER_URL=
 POLYMARKET_BUILDER_CODE=
 POLYMARKET_BUILDER_API_KEY=
@@ -48,6 +48,7 @@ HASH_PAYLINK_BASE_URL=https://hashpaylink.com
 Notes:
 
 - `POSTGRES_URL` can be used instead of `DATABASE_URL`, but production should standardize on one.
+- `POLYGON_RPC_URL` can be used instead of `POLYMARKET_RPC_URL`; both point the backend to Polygon.
 - Use a PolyDesk-owned database, not the Hash PayLink core database, once migration is complete.
 - Use a PolyDesk-owned Privy app after cutover. During transition, a shared Privy app is acceptable only if callback domains are explicitly configured.
 
@@ -99,7 +100,7 @@ POLYMARKET_RELAYER_URL=
 RELAYER_URL=
 POLYMARKET_CHAIN_ID=137
 POLYMARKET_RPC_URL=
-POLYGON_RPC_URL=
+# or POLYGON_RPC_URL=
 POLYMARKET_ALERT_FROM_EMAIL=
 POLYMARKET_ALERT_FROM_NAME=
 RESEND_API_KEY=
@@ -138,6 +139,10 @@ X402_POLYMARKET_SCOUT_URL=
 ZEROSCOUT_API_URL=
 ZEROSCOUT_INTELLIGENCE_PATH=
 ZEROSCOUT_INTEGRATION_SECRET=
+CIRCLE_GATEWAY_API_BASE=
+CIRCLE_X402_RECEIPT_API_KEY=
+# or CIRCLE_GATEWAY_API_KEY=
+# or CIRCLE_API_KEY=
 ```
 
 Optional operational limits:

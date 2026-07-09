@@ -11,8 +11,6 @@ const groups = [
       'PRIVY_APP_ID',
       'PRIVY_APP_SECRET',
       'POLYMARKET_CHAIN_ID',
-      'POLYMARKET_RPC_URL',
-      'POLYGON_RPC_URL',
       'POLYMARKET_RELAYER_URL',
       'POLYMARKET_BUILDER_CODE',
       'POLYMARKET_BUILDER_API_KEY',
@@ -23,6 +21,9 @@ const groups = [
     alternatives: [
       ['DATABASE_URL', 'POSTGRES_URL'],
       ['POLYMARKET_BUILDER_PASSPHRASE', 'POLYMARKET_BUILDER_PASS_PHRASE'],
+    ],
+    recommendedAlternatives: [
+      ['POLYMARKET_RPC_URL', 'POLYGON_RPC_URL'],
     ],
   },
   {
@@ -50,9 +51,11 @@ const groups = [
   },
   {
     name: 'x402 receipt lookup',
+    alternatives: [
+      ['CIRCLE_X402_RECEIPT_API_KEY', 'CIRCLE_GATEWAY_API_KEY', 'CIRCLE_API_KEY'],
+    ],
     recommended: [
       'CIRCLE_GATEWAY_API_BASE',
-      'CIRCLE_X402_RECEIPT_API_KEY',
     ],
   },
   {
@@ -73,9 +76,10 @@ function hasValue(name) {
 function checkGroup(group) {
   const missingRequired = (group.required ?? []).filter(name => !hasValue(name))
   const missingAlternatives = (group.alternatives ?? []).filter(names => !names.some(hasValue))
+  const missingRecommendedAlternatives = (group.recommendedAlternatives ?? []).filter(names => !names.some(hasValue))
   const missingRecommended = (group.recommended ?? []).filter(name => !hasValue(name))
   const missingOptional = (group.optional ?? []).filter(name => !hasValue(name))
-  return { missingRequired, missingAlternatives, missingRecommended, missingOptional }
+  return { missingRequired, missingAlternatives, missingRecommendedAlternatives, missingRecommended, missingOptional }
 }
 
 let failed = false
@@ -94,6 +98,10 @@ for (const group of groups) {
     console.log(`missing one of: ${names.join(' or ')}`)
   }
 
+  for (const names of result.missingRecommendedAlternatives) {
+    console.log(`missing recommended one of: ${names.join(' or ')}`)
+  }
+
   if (result.missingRecommended.length) {
     console.log(`missing recommended: ${result.missingRecommended.join(', ')}`)
   }
@@ -105,6 +113,7 @@ for (const group of groups) {
   if (
     !result.missingRequired.length
     && !result.missingAlternatives.length
+    && !result.missingRecommendedAlternatives.length
     && !result.missingRecommended.length
     && !result.missingOptional.length
   ) {
