@@ -18,6 +18,13 @@ npm run build
 npm run start
 ```
 
+Render can use the committed `render.yaml` blueprint:
+
+- Build command: `npm install && npm run build`
+- Start command: `npm run start`
+- Health route: `/api/health`
+- Fill every `sync: false` value in Render before live smoke testing.
+
 Expected server:
 
 - `PORT` defaults to `3000`.

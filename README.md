@@ -44,6 +44,12 @@ npm run typecheck:server
 npm run build
 ```
 
+## Render Deployment
+
+`render.yaml` defines the standalone PolyDesk web service. It includes only safe fixed defaults; secrets and deployment-specific URLs are marked `sync: false` and must be filled in the Render dashboard.
+
+Before the first live smoke test, configure the required `sync: false` values from `docs/render-env-audit.md`, especially `DATABASE_URL`, `POLYMARKET_RELAYER_URL`, `POLYMARKET_RPC_URL`, Privy server/browser keys, Polymarket builder credentials, `POLYMARKET_MATCH_URLS`, and LP Scout x402 keys.
+
 ## Intended Scope
 
 PolyDesk owns:

@@ -66,6 +66,8 @@ These are required or strongly recommended by the standalone PolyDesk backend bu
 
 For standalone PolyDesk, configure this minimal env group first:
 
+The repo also contains `render.yaml` with these same deployment boundaries. Fixed non-secret defaults are committed there; every secret, dashboard-managed URL, and account-specific value is marked `sync: false`.
+
 ```env
 PORT=3000
 VITE_AUTH_BRIDGE=hybrid
@@ -163,4 +165,3 @@ Then manually test:
 - Funding from Portfolio and Desk Agent.
 - Buy/sell wallet signing.
 - LP Scout unpaid 402 response and paid x402 flow.
-
