@@ -55,12 +55,12 @@ These are required or strongly recommended by the standalone PolyDesk backend bu
 | `AGENT_WALLET_SERVICE_SECRET` | Recommended | Protects agent wallet service operations. |
 | `X402_SELLER_ADDRESS` or `TREASURY_ADDRESS` | Required for LP Scout x402 | Seller address for x402 paid LP Scout. |
 | `X402_POLYMARKET_SCOUT_PRICE` | Required for LP Scout x402 | Paid scout price, for example `$0.01`. |
-| `X402_FACILITATOR_URL` | Recommended/required for selected x402 network | Circle facilitator endpoint. |
+| `X402_FACILITATOR_URL` | Optional unless a selected x402 network requires it | Circle facilitator endpoint. The current LP Scout code only passes it when configured. |
 | `X402_ACCEPT_NETWORKS` | Recommended | Network allowlist for x402 payments. |
 | `X402_POLYMARKET_SCOUT_URL` | Recommended | Exact x402 LP Scout service URL for agent allowlists. |
-| `CIRCLE_GATEWAY_API_BASE` | Recommended | x402 receipt verification endpoint base. |
+| `CIRCLE_GATEWAY_API_BASE` | Optional | x402 receipt verification endpoint base. The receipt route defaults to Circle testnet gateway when blank. |
 | `CIRCLE_X402_RECEIPT_API_KEY` or `CIRCLE_GATEWAY_API_KEY` or `CIRCLE_API_KEY` | Recommended | x402 receipt verification. Existing Hash PayLink Render has `CIRCLE_API_KEY`, but standalone PolyDesk should prefer a narrower key if available. |
-| `POLY_STREAM_BASE_URL` | Recommended | Current validator warns on it; copied feed can still use configured/default source paths, but production should explicitly set feed origin if required. |
+| `POLY_STREAM_BASE_URL` | Optional | The feed route defaults to SportMonks when blank; configure only if the provider gives a custom base URL. |
 
 ## Deploy Env Set
 

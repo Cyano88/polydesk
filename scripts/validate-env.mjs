@@ -29,11 +29,13 @@ const groups = [
   {
     name: 'world cup feed',
     recommended: [
-      'POLY_STREAM_BASE_URL',
       'POLY_STREAM_LEAGUE_ID',
       'POLY_STREAM_SEASON',
       'POLYMARKET_MATCH_URLS',
       'POLYMARKET_MARKET_LOOKUP',
+    ],
+    optional: [
+      'POLY_STREAM_BASE_URL',
     ],
   },
   {
@@ -44,9 +46,11 @@ const groups = [
       'AGENT_WALLET_SERVICE_SECRET',
       'X402_SELLER_ADDRESS',
       'X402_POLYMARKET_SCOUT_PRICE',
-      'X402_FACILITATOR_URL',
       'ZEROSCOUT_API_URL',
       'ZEROSCOUT_INTEGRATION_SECRET',
+    ],
+    optional: [
+      'X402_FACILITATOR_URL',
     ],
   },
   {
@@ -54,7 +58,7 @@ const groups = [
     alternatives: [
       ['CIRCLE_X402_RECEIPT_API_KEY', 'CIRCLE_GATEWAY_API_KEY', 'CIRCLE_API_KEY'],
     ],
-    recommended: [
+    optional: [
       'CIRCLE_GATEWAY_API_BASE',
     ],
   },

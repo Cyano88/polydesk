@@ -176,6 +176,11 @@ Validation:
 - `/api/zeroscout/polymarket-brief` accepts a saved scout activity and returns a ZeroScout proof.
 - `/api/x402/receipt?id=...` returns agent activity receipts.
 
+Notes:
+
+- `X402_FACILITATOR_URL` is optional unless the selected x402 network/provider gives a required facilitator endpoint.
+- `CIRCLE_GATEWAY_API_BASE` is optional for the first testnet smoke; the receipt route defaults to Circle's testnet gateway when blank.
+
 ## P1 0G Archive
 
 Required only if PolyDesk should archive agent/x402 receipts to 0G.
