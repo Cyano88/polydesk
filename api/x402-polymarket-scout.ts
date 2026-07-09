@@ -667,7 +667,7 @@ export default async function handler(req: Request, res: Response, next?: NextFu
     return middleware(req, res, async () => res.json(await scoutResponse(req as PaidRequest)))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'x402 scout unavailable'
-    if (next) return next(err)
-    return res.status(500).json({ ok: false, error: message })
+    const status = /X402_SELLER_ADDRESS|TREASURY_ADDRESS/i.test(message) ? 503 : 500
+    return res.status(status).json({ ok: false, error: message })
   }
 }
