@@ -16,6 +16,7 @@ import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
+import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
 import { rateLimit } from './api/rate-limit.js'
@@ -97,6 +98,7 @@ app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
 app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
+app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)

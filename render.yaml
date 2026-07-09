@@ -25,6 +25,8 @@ services:
         value: https://hashpaylink.com
       - key: HASH_PAYLINK_BASE_URL
         value: https://hashpaylink.com
+      - key: HASH_PAYLINK_POLYDESK_SERVICE_TOKEN
+        sync: false
 
       - key: POLYMARKET_CHAIN_ID
         value: "137"
