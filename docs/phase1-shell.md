@@ -78,6 +78,7 @@ Rules:
 - Live order submission, CLOB approvals, and withdrawal execution remain gated until the standalone repo receives the audited Polymarket SDK and relayer dependencies.
 - `VITE_POLYDESK_API_ORIGIN` may point the standalone frontend to a separate API deployment. If omitted, the app calls same-origin `/api/polymarket-portfolio` and `/api/polymarket-bridge`.
 - Funding links still target the configured Hash PayLink payment origin through `VITE_PUBLIC_PAYLINK_ORIGIN`, preserving the current funding flow while the portfolio frontend is separated.
+- The backend migration surface is documented in `docs/api-surface.md`; it lists the exact source API files, route registrations, environment variables, and verification checklist required before the standalone app can stop proxying to Hash PayLink.
 
 ## Source Clone Decision
 
