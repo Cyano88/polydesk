@@ -112,6 +112,9 @@ app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', strictLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
+app.get('/api/x402-polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
+app.post('/api/zeroscout-polymarket-brief', strictLimiter, zeroScoutPolymarketBriefHandler)
+app.get('/api/x402-receipt', readLimiter, x402ReceiptHandler)
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'polydesk', ts: Date.now() }))
 
 app.use('/api', (req, res) => {
