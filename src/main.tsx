@@ -34,6 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           },
         },
         appearance: {
+          theme: 'dark',
           landingHeader: 'PolyDesk',
           loginMessage: 'Team will never ask for this code',
           walletList: [...POLYDESK_WALLET_LIST],
