@@ -1,0 +1,99 @@
+import type { Request, Response } from 'express'
+import { ensureAgentActivityArchived, findAgentActivity } from './agent-activity.js'
+import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
+import { findCheckpointReceipt, findCreatorUnlockReceipt, updateCreatorUnlockOgProof } from './polydesk-streampay-receipts.js'
+
+const CIRCLE_GATEWAY_API_BASE = (process.env.CIRCLE_GATEWAY_API_BASE ?? 'https://gateway-api-testnet.circle.com').replace(/\/+$/, '')
+const CIRCLE_API_KEY = String(
+  process.env.CIRCLE_X402_RECEIPT_API_KEY
+  ?? process.env.CIRCLE_GATEWAY_API_KEY
+  ?? process.env.CIRCLE_API_KEY
+  ?? '',
+).trim()
+
+async function verifyCircleTransfer(transaction: string) {
+  if (!transaction) return { ok: false, status: 'missing_transaction', error: 'No Circle transaction reference is stored on this receipt.' }
+  const response = await fetch(`${CIRCLE_GATEWAY_API_BASE}/v1/transfer/${encodeURIComponent(transaction)}`, {
+    headers: {
+      Accept: 'application/json',
+      ...(CIRCLE_API_KEY ? { Authorization: `Bearer ${CIRCLE_API_KEY}` } : {}),
+    },
+    signal: AbortSignal.timeout(12_000),
+  })
+  const body = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: 'circle_lookup_failed',
+      httpStatus: response.status,
+      error: body?.message ?? body?.error ?? 'Circle x402 transfer lookup failed.',
+      body,
+    }
+  }
+  return { ok: true, status: 'verified', transfer: body }
+}
+
+export default async function handler(req: Request, res: Response) {
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  const id = String(req.query.id ?? req.query.activityId ?? '').trim()
+  if (!id) return res.status(400).json({ ok: false, error: 'Missing receipt id.' })
+
+  try {
+    const initialActivity = await findAgentActivity(id)
+    if (!initialActivity?.proof) {
+      const creatorReceipt = await findCreatorUnlockReceipt(id)
+      if (creatorReceipt) {
+        return res.json({
+          ok: true,
+          receipt: {
+            ...creatorReceipt,
+            legal: getAgentLegalProfile(creatorReceipt.proof.seller),
+            governance: getAgentGovernanceProfile(),
+          },
+        })
+      }
+      const checkpointReceipt = await findCheckpointReceipt(id)
+      if (checkpointReceipt) {
+        return res.json({
+          ok: true,
+          receipt: {
+            ...checkpointReceipt,
+            legal: getAgentLegalProfile(checkpointReceipt.proof.seller),
+            governance: getAgentGovernanceProfile(),
+          },
+        })
+      }
+      return res.status(404).json({ ok: false, error: 'x402 receipt not found.' })
+    }
+    const activity = initialActivity.og ? initialActivity : await ensureAgentActivityArchived(id) ?? initialActivity
+    const proof = activity.proof
+    if (!proof) return res.status(404).json({ ok: false, error: 'x402 receipt not found.' })
+    if (activity.og) await updateCreatorUnlockOgProof(activity.id, activity.og).catch(() => {})
+    const shouldVerify = String(req.query.verify ?? '') === '1'
+    const circle = shouldVerify
+      ? await verifyCircleTransfer(proof.transaction ?? '')
+      : undefined
+    return res.json({
+      ok: true,
+      receipt: {
+        type: 'circle_gateway_x402_receipt',
+        activityId: activity.id,
+        agentSlug: activity.agentSlug,
+        title: activity.title,
+        amount: activity.amount ? `${activity.direction === 'out' ? '-' : activity.direction === 'in' ? '+' : ''}${activity.amount} ${activity.asset ?? 'USDC'}` : undefined,
+        detail: activity.detail,
+        createdAt: activity.createdAt,
+        legal: proof.legal ?? getAgentLegalProfile(proof.sellerAgent),
+        governance: proof.governance ?? getAgentGovernanceProfile(),
+        proof,
+        og: activity.og,
+      },
+      circle,
+    })
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error instanceof Error ? error.message : 'Receipt lookup failed.',
+    })
+  }
+}

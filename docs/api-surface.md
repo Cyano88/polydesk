@@ -6,7 +6,7 @@ Date: 2026-07-09
 
 The standalone PolyDesk frontend is now source-cloned from Hash PayLink for the operational app surface. Backend extraction must follow the same rule: move only the APIs called by the cloned PolyDesk pages, and do not import unrelated Hash PayLink payment, POS, bank, creator, treasury, or payout services unless a cloned PolyDesk call requires them.
 
-During migration, Vite local development can continue to proxy `/api` to the Hash PayLink backend on `127.0.0.1:3000`. The standalone PolyDesk server now mounts the P0 Polymarket and World Cup APIs directly; Desk Agent and LP Scout x402 APIs are still pending extraction.
+During migration, Vite local development can continue to proxy `/api` to the Hash PayLink backend on `127.0.0.1:3000`. The standalone PolyDesk server now mounts the Polymarket, World Cup, Desk Agent, agent wallet/profile/verify, ZeroScout brief, LP Scout x402, and x402 receipt APIs directly.
 
 ## Extracted In Standalone Server
 
@@ -21,6 +21,13 @@ Mounted in `server.ts`:
 - `/api/polymarket-submit-order`
 - `/api/poly-worldcup-news`
 - `/api/poly-stream`
+- `/api/agent-verify`
+- `/api/agent-ask`
+- `/api/agent-wallet`
+- `/api/agent-profile`
+- `/api/x402/polymarket-scout`
+- `/api/zeroscout/polymarket-brief`
+- `/api/x402/receipt`
 - `/api/health`
 
 Support files copied:
@@ -28,8 +35,18 @@ Support files copied:
 - `api/rate-limit.ts`
 - `api/polymarket-builder-session.ts`
 - `api/email-provider.ts`
+- `api/agent-activity.ts`
+- `api/agent-legal.ts`
+- `api/render-durable-store.ts`
+- `api/zeroscout-intelligence.ts`
+- `api/zeroscout-sponsored-action.ts`
+- `api/og-storage.ts`
+- `api/polydesk-hashpaystream-context.ts`
+- `api/polydesk-streampay-receipts.ts`
 
 Small standalone-only type guards were added in copied backend files so the extracted server can pass `tsconfig.server.json` without changing runtime behavior.
+
+The `polydesk-hashpaystream-context` and `polydesk-streampay-receipts` adapters are intentional boundary files. They keep the PolyDesk agent and x402 receipt routes mounted without importing Hash PayLink's Streampay creator/checkpoint content module.
 
 ## Frontend Call Sites
 

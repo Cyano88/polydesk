@@ -6,9 +6,9 @@ PolyDesk is being separated from the core Hash PayLink platform so Polymarket-sp
 
 ## Extraction Status
 
-Current phase: Phase 2 - source-cloned frontend plus standalone P0 PolyDesk backend shell.
+Current phase: Phase 2 - source-cloned frontend plus standalone PolyDesk backend shell.
 
-The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server now mounts the P0 Polymarket portfolio, bridge, order, builder, relayer-builder, submit-order fallback, World Cup stream, and World Cup news APIs. Desk Agent and LP Scout x402 backend routes remain in the migration queue according to `docs/api-surface.md`.
+The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server now mounts the Polymarket portfolio, bridge, order, builder, relayer-builder, submit-order fallback, World Cup stream/news, Desk Agent, agent wallet/profile/verify, ZeroScout brief, LP Scout x402, and x402 receipt APIs. Streampay creator/checkpoint receipt fallbacks remain intentionally outside the PolyDesk backend boundary.
 
 ## Local Development
 

@@ -16,7 +16,9 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@0gfoundation/0g-ts-sdk": "^1.2.8",
     "@circle-fin/unified-balance-kit": "^1.1.0",
+    "@circle-fin/x402-batching": "^3.0.4",
     "@coral-xyz/anchor": "^0.32.1",
     "@polymarket/builder-relayer-client": "^0.0.10",
     "@polymarket/builder-signing-sdk": "^1.0.0",
@@ -30,6 +32,7 @@
     "@types/pg": "^8.20.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "ethers": "^6.13.1",
     "express": "^4.19.2",
     "lucide-react": "^0.414.0",
     "pg": "^8.22.0",
