@@ -9,6 +9,7 @@ import agentAskHandler from './api/agent-ask.js'
 import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
+import helperProfileHandler from './api/helper-profile.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -20,6 +21,7 @@ import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
 import { rateLimit } from './api/rate-limit.js'
+import telegramRequestHandler from './api/telegram-request.js'
 import x402PolymarketScoutHandler from './api/x402-polymarket-scout.js'
 import x402ReceiptHandler from './api/x402-receipt.js'
 import zeroScoutPolymarketBriefHandler from './api/zeroscout-polymarket-brief.js'
@@ -105,6 +107,8 @@ app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)
 app.post('/api/agent-ask', strictLimiter, agentAskHandler)
 app.all('/api/agent-wallet', strictLimiter, agentWalletHandler)
 app.all('/api/agent-profile', strictLimiter, agentProfileHandler)
+app.all('/api/helper-profile', readLimiter, helperProfileHandler)
+app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', strictLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
