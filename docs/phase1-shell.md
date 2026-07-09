@@ -68,4 +68,6 @@ Rules:
 - The first screen must be the current PolyDesk Service Hub flow: compact wrapper, Desk Agent card, Portfolio, World Cup, and LP Scout entry points.
 - New marketing/pitch invention belongs only on `/about` or a later dedicated landing route.
 - `src/pages/PolyDesk.tsx` is copied exactly from the current Hash PayLink app and should stay source-matched until the extraction is complete.
+- `src/layouts/PolyDeskLayout.tsx` carries the PolyDesk-only header, desktop nav, mobile nav, history button, theme toggle, main wrapper, and footer extracted from the Hash PayLink `src/Layout.tsx` PolyDesk branch.
+- Navigation and footer changes belong in the layout wrapper, not inside the copied `PolyDesk.tsx` page.
 - Phase 2 should replace the `TelegramPaymentLinks.tsx` stubs with the extracted production panels instead of redesigning the app shell.
