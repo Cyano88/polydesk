@@ -46,6 +46,18 @@ function requirePool() {
   return pool
 }
 
+function collectErrorText(value: unknown, depth = 0): string {
+  if (depth > 3 || value == null) return ''
+  if (typeof value === 'string') return value
+  if (value instanceof Error) return `${value.message} ${collectErrorText(value.cause, depth + 1)}`.trim()
+  if (typeof value !== 'object') return String(value)
+  const record = value as Record<string, unknown>
+  return ['message', 'error', 'errorMsg', 'statusText', 'data', 'response', 'body']
+    .map(key => collectErrorText(record[key], depth + 1))
+    .filter(Boolean)
+    .join(' ')
+}
+
 function ensureSchema() {
   if (!schemaReady) {
     schemaReady = requirePool().query(`
@@ -218,6 +230,12 @@ async function createDepositWalletClient(ownerAddress: string) {
 async function ensurePolymarketDepositWallet(ownerAddress: string) {
   const client = await createDepositWalletClient(ownerAddress)
   const depositWalletAddress = await client.deriveDepositWalletAddress()
+  const readyWallet = () => ({
+    depositWalletAddress,
+    depositWalletStatus: 'ready',
+    depositWalletTxId: null as string | null,
+    depositWalletTxHash: null as string | null,
+  })
   let deployed = false
   try {
     deployed = await client.getDeployed(depositWalletAddress, 'WALLET')
@@ -225,14 +243,23 @@ async function ensurePolymarketDepositWallet(ownerAddress: string) {
     deployed = false
   }
   if (deployed) {
-    return {
-      depositWalletAddress,
-      depositWalletStatus: 'ready',
-      depositWalletTxId: null as string | null,
-      depositWalletTxHash: null as string | null,
-    }
+    return readyWallet()
   }
-  const response = await client.deployDepositWallet()
+  let response: Awaited<ReturnType<typeof client.deployDepositWallet>>
+  try {
+    response = await client.deployDepositWallet()
+  } catch (err) {
+    const message = collectErrorText(err)
+    if (message.toLowerCase().includes('wallet already deployed')) {
+      try {
+        deployed = await client.getDeployed(depositWalletAddress, 'WALLET')
+      } catch {
+        deployed = true
+      }
+      if (deployed) return readyWallet()
+    }
+    throw err
+  }
   return {
     depositWalletAddress,
     depositWalletStatus: response.state || 'pending',
