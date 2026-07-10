@@ -1345,12 +1345,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     || latestZeroScout?.proof?.storageTxHash
     || latestZeroScout?.id
   )
-  useEffect(() => {
-    if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
-    if (zeroScoutAutoKey.current === latestScoutActivity.id) return
-    zeroScoutAutoKey.current = latestScoutActivity.id
-    generateZeroScoutBrief().catch(() => undefined)
-  }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy])
   const scoutPrice = (value: number | undefined) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : 'n/a'
   const scoutCents = (value: number | undefined) => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}c` : 'n/a'
   const selectedAgentNetworkLabel = AGENT_TREASURY_NETWORKS.find(network => network.key === agentNetwork)?.label ?? CHAIN_META[agentNetwork].label
@@ -1383,6 +1377,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const displayAgentImage = displayAgentProfile ? resolveAgentProfileImage(displayAgentProfile) : null
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
   const agentWalletAccessConnected = Boolean(currentAgentWallet && agentWalletSessionConnected)
+  useEffect(() => {
+    if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
+    if (zeroScoutAutoKey.current === latestScoutActivity.id) return
+    zeroScoutAutoKey.current = latestScoutActivity.id
+    generateZeroScoutBrief().catch(() => undefined)
+  }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy])
   const connectedWalletNeedsAccess = Boolean(currentAgentWallet && !agentWalletAccessConnected)
   const showAgentWalletAccessPanel = Boolean(!agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
   const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected)
