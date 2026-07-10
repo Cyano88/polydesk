@@ -46,18 +46,11 @@ function publicEnv(...names: string[]) {
 function runtimePublicConfigScript() {
   const privyAppId = publicEnv('VITE_PRIVY_APP_ID', 'PRIVY_APP_ID')
   const authBridge = publicEnv('VITE_AUTH_BRIDGE', 'AUTH_BRIDGE') || 'hybrid'
-  const checkpointFactoryAddress = publicEnv(
-    'VITE_CHECKPOINT_FACTORY_ADDRESS',
-    'CHECKPOINT_FACTORY_ADDRESS',
-  )
   const payload = JSON.stringify({
     auth: {
       authBridge,
       privyAppId,
       privyEnabled: Boolean(privyAppId && authBridge !== 'legacy'),
-    },
-    streampay: {
-      checkpointFactoryAddress,
     },
   }).replace(/</g, '\\u003c')
   return `<script>window.__HASH_PAYLINK_CONFIG__=${payload};</script>`

@@ -93,7 +93,7 @@ function polymarketFundingRequestId() {
   return `pmf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-type TelegramSectionId = 'payment-links' | 'agent-wallets' | 'market-tools' | 'streampay'
+type TelegramSectionId = 'payment-links' | 'agent-wallets' | 'market-tools'
 type TelegramServiceId =
   | 'request-usdc'
   | 'fund-polymarket'
@@ -107,7 +107,6 @@ type TelegramServiceId =
   | 'lp-scout'
   | 'poly-worldcup-news'
   | 'poly-stream'
-  | 'streampay-creator'
 
 type TelegramService = {
   id: TelegramServiceId
@@ -182,23 +181,12 @@ const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
       active: true,
     },
   ],
-  streampay: [
-    {
-      id: 'streampay-creator',
-      title: 'Creator tools',
-      body: 'Creator streaming is not part of standalone PolyDesk.',
-      icon: Pencil,
-      status: 'Unavailable',
-      active: false,
-    },
-  ],
 }
 
 const sectionDescriptions: Record<TelegramSectionId, string> = {
   'payment-links': 'Create normal USDC requests and share them into Telegram.',
   'agent-wallets': 'Manage Circle wallet balance, x402 service balance, and receipts.',
   'market-tools': 'PolyDesk for Polymarket funding, portfolio alerts, LP Scout, and live market context.',
-  streampay: 'Creator streaming is not part of standalone PolyDesk.',
 }
 
 const telegramSections: Array<{ id: TelegramSectionId; title: string; icon: typeof Coins }> = [
