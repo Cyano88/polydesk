@@ -6081,7 +6081,7 @@ function buildPolymarketPayLink({
   }
   if (helperOwner) params.set('helperOwner', helperOwner)
   if (funding) params.set('funding', funding)
-  return `${window.location.origin}/pay?${params.toString()}`
+  return `${PUBLIC_PAYLINK_ORIGIN}/pay?${params.toString()}`
 }
 
 function buildRequestPayLink(request: SavedRequest) {
@@ -7269,6 +7269,7 @@ export function PolyPortfolioPanel({
       })
       void fetchBundle()
       void loadTradingPusdBalance(polymarketDepositWallet)
+      window.location.assign(payUrl)
     } catch (err) {
       setFundError(err instanceof Error ? err.message : 'Could not prepare funding.')
     } finally {
@@ -7391,6 +7392,7 @@ export function PolyPortfolioPanel({
       })
       void fetchBundle()
       void loadTradingPusdBalance(polymarketDepositWallet)
+      window.location.assign(payUrl)
     } catch (err) {
       setFundError(err instanceof Error ? err.message : 'Could not prepare Naira funding.')
     } finally {
