@@ -3742,101 +3742,108 @@ export function LpScoutPanel({
   return (
     <div className="mt-4 space-y-4">
       <PolyDeskBackButton onClick={backFromPath} />
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-              <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
-            </span>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">LP Scout x402</p>
-          </div>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Run LP Scout with x402</h2>
-          <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Choose the Polymarket research category first. Next, continue in the embedded PolyDesk x402 wallet flow. If balance is low, fund the wallet and activate x402 before checkout continues.
-          </p>
-        </div>
-      </div>
 
-      <div className="grid gap-2">
-        {lpScoutOptions.map(option => {
-          const Icon = option.icon
-          const selected = option.id === mode
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => selectOption(option)}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
-                selected
-                  ? 'border-gray-950 ring-2 ring-gray-950/10 dark:border-white dark:ring-white/15'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.08]',
-              )}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-700 shadow-sm dark:bg-white/[0.08] dark:text-gray-200">
-                <Icon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center justify-between gap-3">
-                  <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{option.title}</span>
-                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                    max {option.amount} USDC
-                  </span>
+      {step !== 'agent' && (
+        <>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
+                  <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
                 </span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">{option.body}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-        {prefillNotice && (
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-400/20 dark:bg-emerald-400/10">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-200">News context loaded</p>
-            <p className="mt-0.5 truncate text-xs font-medium text-emerald-800/80 dark:text-emerald-100/80">{prefillNotice}</p>
+                <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Choose a scout, set a max spend, then pay with x402.</h2>
+              </div>
+            </div>
           </div>
-        )}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Selected service</p>
-          <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{selectedOption.title}</p>
-        </div>
-        {selectedOption.inputLabel && (
-          <InputBlock
-            label={selectedOption.inputLabel}
-            value={query}
-            onChange={value => {
-              setQuery(value)
-              if (prefillNotice) setPrefillNotice('')
-            }}
-            placeholder={selectedOption.inputPlaceholder ?? 'Add context'}
-          />
-        )}
-        <InputBlock
-          label="Max x402 spend"
-          value={maxSpend}
-          onChange={setMaxSpend}
-          placeholder="1"
-        />
-        <InputBlock
-          label="Optional budget"
-          value={budget}
-          onChange={setBudget}
-          placeholder="Example: 100 USDC"
-        />
-        <button
-          type="button"
-          onClick={() => setStep('agent')}
-          disabled={!canChooseAgent}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
-        >
-          <Wallet className="h-4 w-4" />
-          Continue to LP Scout checkout
-        </button>
-      </div>
+
+          <div className="grid gap-2">
+            {lpScoutOptions.map(option => {
+              const Icon = option.icon
+              const selected = option.id === mode
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => selectOption(option)}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
+                    selected
+                      ? 'border-gray-950 ring-2 ring-gray-950/10 dark:border-white dark:ring-white/15'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.08]',
+                  )}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-700 shadow-sm dark:bg-white/[0.08] dark:text-gray-200">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{option.title}</span>
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                        max {option.amount} USDC
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">{option.body}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+            {prefillNotice && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-200">News context loaded</p>
+                <p className="mt-0.5 truncate text-xs font-medium text-emerald-800/80 dark:text-emerald-100/80">{prefillNotice}</p>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-white">{selectedOption.title}</p>
+              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.08] dark:text-gray-300">
+                max {maxSpend || selectedOption.amount} USDC
+              </span>
+            </div>
+            {selectedOption.inputLabel && (
+              <InputBlock
+                label={selectedOption.inputLabel}
+                value={query}
+                onChange={value => {
+                  setQuery(value)
+                  if (prefillNotice) setPrefillNotice('')
+                }}
+                placeholder={selectedOption.inputPlaceholder ?? 'Add context'}
+              />
+            )}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <InputBlock
+                label="Max spend"
+                value={maxSpend}
+                onChange={setMaxSpend}
+                placeholder="1"
+              />
+              <InputBlock
+                label="Budget"
+                value={budget}
+                onChange={setBudget}
+                placeholder="Optional"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep('agent')}
+              disabled={!canChooseAgent}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+            >
+              <Wallet className="h-4 w-4" />
+              Continue to LP Scout checkout
+            </button>
+          </div>
+        </>
+      )}
 
       {step === 'agent' && (
-        <AgentWorkspace embedded forceProfile requestParams={buildWalletScoutParams()} />
+        <div className="animate-slide-up">
+          <AgentWorkspace embedded forceProfile requestParams={buildWalletScoutParams()} />
+        </div>
       )}
     </div>
   )

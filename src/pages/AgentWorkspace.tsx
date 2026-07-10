@@ -1367,10 +1367,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const x402ActivationBlocked = Boolean(!x402Amount || x402AmountInvalid || x402AmountBelowMinimum || treasuryEmpty || x402AmountExceedsTreasury)
   const displayAgentProfile = agentProfile ?? (agentSlug === PLATFORM_AGENT_SLUG || (!agentSlug && !embeddedWalletManager) ? PLATFORM_AGENT_PROFILE : null)
   const displayAgentName = embeddedWalletManager
-    ? 'x402 Wallet Manager'
+    ? hasPendingLpScoutRequest ? 'Pocket Wallet' : 'x402 Wallet Manager'
     : displayAgentProfile?.name || agentSlug || 'Your agent wallet'
   const displayAgentPurpose = hasPendingLpScoutRequest
-    ? 'Selected wallet for LP Scout x402 access.'
+    ? agentWalletAccessConnected ? 'Ready for x402 LP Scout payments.' : 'Sign in to use x402.'
     : embedded
     ? 'Fund USDC on Arc, activate x402, and use this wallet for PolyDesk LP Scout.'
     : displayAgentProfile?.purpose || 'Sign in, link a Circle wallet, fund USDC, and activate x402 from the dashboard.'
@@ -1433,8 +1433,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Activating x402</>
     : x402Refreshing || lpScoutWalletBalanceChecking
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking wallet</>
-    : !agentWalletAccessConnected
+    : !privyAuthenticated
     ? <><Mail className="h-4 w-4" /> Sign in</>
+    : !agentWalletAccessConnected
+    ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsFunding
     ? <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> <span>Add USDC</span></>
     : lpScoutNeedsActivation
@@ -1488,6 +1490,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         <div
           className="relative w-full min-w-0 overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-card transition-all dark:border-white/10 dark:bg-[#111114]"
         >
+          {!hasPendingLpScoutRequest && (
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3 sm:gap-4">
               <div
@@ -1554,9 +1557,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
               </button>
             )}
           </div>
+          )}
 
           <div className={cn(
-            'mt-4',
+            !hasPendingLpScoutRequest && 'mt-4',
             !hasPendingLpScoutRequest && 'rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]',
           )}>
             {!hasPendingLpScoutRequest && savedLpScoutIntent && (
@@ -1688,51 +1692,50 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
               </p>
             )}
             {hasPendingLpScoutRequest && (
-              <div className="w-full min-w-0 space-y-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 dark:border-white/10 dark:bg-white/[0.05]">
-                <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
+              <div className="w-full min-w-0 space-y-2.5 rounded-xl border border-gray-100 bg-white px-3 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">LP Scout x402</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{scoutModeLabel(pendingScoutMode)}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                      Pay per call from Pocket Wallet. OG Labs verifies the LP answer before PolyDesk reveals it.
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">Arc x402 checkout</p>
+                    <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                      {scoutModeLabel(pendingScoutMode)}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-gray-500 shadow-sm dark:bg-white/[0.08] dark:text-gray-300">
+                  <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-500 shadow-sm dark:bg-white/[0.08] dark:text-gray-300">
                     Max {pendingScoutMaxAmount || '0.01'} USDC
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-3 gap-1.5">
                   {[
-                    { label: 'Pocket Wallet', value: lpScoutWalletStatus, active: agentWalletAccessConnected },
-                    { label: 'USDC funds', value: lpScoutFundingStatus, active: agentWalletAccessConnected && !treasuryEmpty },
-                    { label: 'x402 balance', value: lpScoutX402Status, active: lpScoutX402Ready },
-                    { label: 'OG Labs', value: lpScoutVerificationStatus, active: lpScoutVerified },
+                    { label: 'Wallet', value: lpScoutWalletStatus, active: agentWalletAccessConnected },
+                    { label: 'Funds', value: lpScoutFundingStatus, active: agentWalletAccessConnected && !treasuryEmpty },
+                    { label: 'x402', value: lpScoutX402Status, active: lpScoutX402Ready },
                   ].map(item => (
                     <div
                       key={item.label}
                       className={cn(
-                        'min-w-0 rounded-lg border px-2.5 py-2',
+                        'min-w-0 rounded-lg border px-2 py-1.5 text-center',
                         item.active
                           ? 'border-emerald-100 bg-white text-emerald-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-emerald-200'
                           : 'border-gray-100 bg-white text-gray-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300',
                       )}
                     >
-                      <p className="truncate text-[10px] font-bold uppercase tracking-wider opacity-70">{item.label}</p>
-                      <p className="mt-1 truncate text-xs font-semibold">{item.value}</p>
+                      <p className="truncate text-[9px] font-bold uppercase tracking-wider opacity-70">{item.label}</p>
+                      <p className="mt-0.5 truncate text-[11px] font-semibold">{item.value}</p>
                     </div>
                   ))}
                 </div>
                 {(pendingScoutContext || pendingScoutBudget) && (
-                  <div className="grid gap-1 rounded-lg bg-white px-2.5 py-2 text-[11px] text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
+                  <div className="flex flex-wrap gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
                     {pendingScoutContext && (
-                      <p
-                        className="overflow-hidden leading-snug"
-                        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
-                      >
-                        <span className="font-semibold">Context:</span> {pendingScoutContext}
-                      </p>
+                      <span className="max-w-full truncate rounded-full bg-white px-2 py-1 dark:bg-white/[0.06]">
+                        {pendingScoutContext}
+                      </span>
                     )}
-                    {pendingScoutBudget && <p className="truncate"><span className="font-semibold">Budget:</span> {pendingScoutBudget}</p>}
+                    {pendingScoutBudget && (
+                      <span className="rounded-full bg-white px-2 py-1 dark:bg-white/[0.06]">
+                        Budget {pendingScoutBudget}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -1803,35 +1806,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                   </details>
                 )}
 
-                {!lpScoutAuthorizationOpen && (
+                {!lpScoutAuthorizationOpen && lpScoutHasResult && (
                   <div className="space-y-2">
-                    <div className="ml-auto max-w-[88%] break-words rounded-2xl rounded-br-md bg-gray-900 px-3 py-2 text-xs leading-relaxed text-white dark:bg-white dark:text-gray-950">
-                      {agentWalletAccessConnected
-                        ? `Use x402 for ${scoutModeLabel(pendingScoutMode).toLowerCase()}.`
-                        : `Authorize ${displayAgentProfile?.name ?? agentSlug ?? 'this agent'} for LP Scout.`}
-                    </div>
-                    {pendingScoutContext && (
-                      <div className="ml-auto max-w-[88%] break-words rounded-2xl rounded-br-md border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300">
-                        <p
-                          className="overflow-hidden"
-                          style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}
-                        >
-                          <span className="font-semibold text-gray-900 dark:text-white">Context:</span> {pendingScoutContext}
-                        </p>
-                      </div>
-                    )}
-                    <div className="max-w-[92%] break-words rounded-2xl rounded-bl-md border border-gray-100 bg-white px-3 py-2 text-xs leading-relaxed text-gray-600 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300">
-                      {!agentWalletAccessConnected
-                        ? embeddedWalletManager ? 'One secure wallet session is needed. Then x402 pays and the LP result returns here.' : 'One secure agent session is needed. Then x402 pays and the LP result returns here.'
-                        : lpScoutBusy
-                        ? 'Working... LP Alpha paid for. Checking live rewards, spread, depth, time left, and volatility.'
-                        : lpScoutHasResult
-                        ? lpScoutVerified
-                          ? 'LP Alpha verified and delivered.'
-                          : 'LP Alpha source returned. OG Labs verification is running before delivery.'
-                        : 'Ready. I will pay with x402 and return one clear LP Scout result for human review.'}
-                    </div>
-                  {lpScoutHasResult && (
                     <div className="max-w-[96%] rounded-2xl rounded-bl-md border border-emerald-100 bg-white px-3 py-3 text-xs leading-relaxed text-gray-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-gray-200">
                       {!lpScoutVerified ? (
                         <div className="rounded-xl border border-purple-100 bg-purple-50/80 px-3 py-3 text-purple-800 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-100">
@@ -2001,7 +1977,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       </>
                       )}
                     </div>
-                  )}
                   </div>
                 )}
 
@@ -2082,10 +2057,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     </button>
                     {agentWalletAccessConnected && lpScoutHasResult && (
                       <p className="text-center text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Runs a fresh paid scout with live Polymarket data and OG Labs verification - max {pendingScoutMaxAmount || '0.01'} USDC.
+                        Runs a fresh paid scout with live Polymarket data - max {pendingScoutMaxAmount || '0.01'} USDC.
                       </p>
                     )}
-                    {!agentWalletAccessConnected && (
+                    {!agentWalletAccessConnected && !hasPendingLpScoutRequest && (
                       <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                         {embeddedWalletManager
                           ? 'This only authorizes the LP Scout wallet for x402 service access. It does not change your Polymarket trading wallet.'
@@ -2099,12 +2074,17 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
           </div>
 
           {showAgentWalletAccessPanel && (
-            <div className="mt-4 w-full min-w-0 space-y-2 overflow-hidden rounded-xl border border-gray-200 bg-gray-50/70 p-3 transition-all dark:border-white/10 dark:bg-white/[0.04]">
+            <div className={cn(
+              'w-full min-w-0 space-y-2 overflow-hidden rounded-xl border p-3 transition-all',
+              hasPendingLpScoutRequest
+                ? 'mt-3 border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]'
+                : 'mt-4 border-gray-200 bg-gray-50/70 dark:border-white/10 dark:bg-white/[0.04]',
+            )}>
               {!(PRIVY_AUTH_ENABLED && !currentAgentWallet && !privyAuthenticated) && (
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">
                     {hasPendingLpScoutRequest
-                      ? embeddedWalletManager ? 'Authorize wallet' : 'Authorize paying agent'
+                      ? 'Pocket Wallet'
                       : currentAgentWallet
                       ? 'Wallet access'
                       : agentEmailConnected
@@ -2113,7 +2093,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {hasPendingLpScoutRequest
-                      ? embeddedWalletManager ? 'Confirm this wallet before x402 services run.' : 'Confirm this agent before it pays PolyDesk through x402.'
+                      ? currentAgentWallet ? 'Confirm Arc x402 access.' : 'Use your email wallet for Arc x402.'
                       : currentAgentWallet
                       ? embeddedWalletManager ? 'Confirm the Circle email for this wallet to view balances and receipts.' : 'Confirm the Circle email for this agent to view balances and receipts.'
                       : agentEmailConnected
@@ -2202,7 +2182,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                              {walletMode === 'create' ? 'Create Circle wallet' : 'Link existing wallet'}
+                              {hasPendingLpScoutRequest ? 'Email wallet' : walletMode === 'create' ? 'Create Circle wallet' : 'Link existing wallet'}
                             </p>
                             <p className="mt-0.5 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                               {privyEmail || 'Email session active'}
@@ -2261,11 +2241,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><img src="/hash-logo-transparent.png" alt="" className="h-5 w-5 object-contain invert mix-blend-screen dark:invert-0 dark:mix-blend-multiply" /> {walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : <><img src="/hash-logo-transparent.png" alt="" className="h-5 w-5 object-contain invert mix-blend-screen dark:invert-0 dark:mix-blend-multiply" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
-                      <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                        Circle will email a one-time code.
-                      </p>
+                      {!hasPendingLpScoutRequest && (
+                        <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
+                          Circle will email a one-time code.
+                        </p>
+                      )}
                     </>
                   )}
 
