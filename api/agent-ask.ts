@@ -44,7 +44,7 @@ const MAX_PAYER_LENGTH = 128
 const MAX_QUESTION_LENGTH = 4_000
 const MAX_MEMORY_LENGTH = 2_600
 const HELPER_FREE_ACCESS_MODE = 'helper-free'
-const HELPER_MODES = new Set(['payments', 'daily', 'services', 'polydesk', 'support', 'streampay'])
+const HELPER_MODES = new Set(['payments', 'daily', 'services', 'polydesk', 'support'])
 const HELPER_SIMPLE_DAILY_PROMPT_LIMIT = Math.max(1, parseInt(process.env.HELPER_SIMPLE_DAILY_PROMPT_LIMIT ?? process.env.HELPER_DAILY_PROMPT_LIMIT ?? '100', 10) || 100)
 const HELPER_DEEP_DAILY_PROMPT_LIMIT = Math.max(1, parseInt(process.env.HELPER_DEEP_DAILY_PROMPT_LIMIT ?? '2', 10) || 2)
 const HELPER_USAGE_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -868,7 +868,7 @@ function fallbackHelperAnswer(question: string) {
     return 'Tell me the payer, amount, network, purpose, and receive wallet. I can then prepare a clean PayLink for sharing.'
   }
   if (/\b(what can you do|help me|how can you help|what do you help with)\b/i.test(question)) {
-    return 'I can help with PayLinks, payment receipts, wallet funding, x402 activation, PolyDesk, HashpayStream, setup questions, and everyday planning.'
+    return 'I can help with PolyDesk, Polymarket funding, portfolio checks, World Cup markets, LP Scout x402, wallet setup, and support questions.'
   }
   if (isPersonalContextQuestion(question)) {
     return personalContextFallback(question)
@@ -931,7 +931,6 @@ function classifyHelperRequest(question: string, helperMode = ''): { helperInten
   if (isNameQuestion(question)) return { helperIntent: 'personal-memory', qualityMode: 'fast' }
   if (isGreetingQuestion(question)) return { helperIntent: 'greeting', qualityMode: 'fast' }
   if (helperMode === 'polydesk') return { helperIntent: 'polydesk', qualityMode: 'deep' }
-  if (helperMode === 'streampay') return { helperIntent: 'hashpaystream-creator', qualityMode: 'standard' }
   if (helperMode === 'daily') return { helperIntent: 'daily-assistant', qualityMode: 'fast' }
   if (helperMode === 'services') return { helperIntent: 'hashpaylink-services', qualityMode: 'standard' }
   if (helperMode === 'support') return { helperIntent: 'support', qualityMode: 'standard' }
@@ -1149,7 +1148,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
 
   const newName = introducedName(question)
   if (newName) {
-    return `Got it, ${newName}. I will use your name naturally when it helps this HashpayStream workflow.`
+    return `Got it, ${newName}. I will use your name naturally when it helps this PolyDesk workflow.`
   }
 
   if (isGreetingQuestion(question)) {
@@ -1157,7 +1156,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
     if (helperMode === 'streampay') {
       return `Hey${knownName ? ` ${knownName}` : ''}. I am Agent Hash for HashpayStream. I can help with creator posts, HashWatch, books, World Cup news, live scores, x402 unlocks, pay-as-you-read/watch checkpoints, receipts, earnings, and unlocked-content summaries.`
     }
-    return `Hey${knownName ? ` ${knownName}` : ''}. I can help you create a PayLink, check a receipt, set up wallets, use HashpayStream, or research PolyDesk and Polymarket flows.`
+    return `Hey${knownName ? ` ${knownName}` : ''}. I can help with PolyDesk funding, portfolio checks, World Cup markets, LP Scout x402, wallet setup, and Polymarket workflows.`
   }
 
   if (isHashpayStreamMediaInspection && zeroScoutAnswer && !isUnusableHashpayStreamMediaGuidance(zeroScoutAnswer, zeroScoutGuidance)) return zeroScoutAnswer
@@ -1177,7 +1176,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
   if (fallbackAnswer) return fallbackAnswer
 
   if (helperMode === 'services') {
-    return 'I can help with Hash PayLink services. Tell me if you mean PayLinks, HashpayStream, Agent Wallets, x402, Circle wallet setup, or PolyDesk.'
+    return 'I can help with PolyDesk services. Tell me if you mean Polymarket funding, Portfolio, World Cup markets, LP Scout x402, Circle wallet setup, or support.'
   }
 
   if (helperMode === 'streampay') {
@@ -1265,7 +1264,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({
         error: usageTier === 'deep'
           ? 'Deep research limit reached for today. Upgrade to Agent Hash Pro to continue deeper Ask Hash research.'
-          : 'Daily Ask Hash chat limit reached. Payment Links, HashpayStream, and other manual tools remain available.',
+          : 'Daily PolyDesk chat limit reached. Portfolio, funding, World Cup markets, and LP Scout tools remain available.',
         cooldown: true,
         upgradeRequired: usageTier === 'deep',
         upgradeAmount: usageTier === 'deep' ? '10' : undefined,
@@ -1446,7 +1445,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({
         error: usageTier === 'deep'
           ? 'Deep research limit reached for today. Upgrade to Agent Hash Pro to continue deeper Ask Hash research.'
-          : 'Daily Ask Hash chat limit reached. Payment Links, HashpayStream, and other manual tools remain available.',
+          : 'Daily PolyDesk chat limit reached. Portfolio, funding, World Cup markets, and LP Scout tools remain available.',
         cooldown: true,
         upgradeRequired: usageTier === 'deep',
         upgradeAmount: usageTier === 'deep' ? '10' : undefined,

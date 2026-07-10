@@ -279,7 +279,7 @@ function helperRefinementLane(input: ZeroScoutHelperGuidanceInput): HelperRefine
   if (shouldUseDeepHelperReview(input)) return 'multi-stack'
   if (input.request.qualityMode === 'fast') return 'og-compute'
   const helperMode = String(input.request.helperMode ?? '').trim().toLowerCase()
-  if (helperMode === 'payments' || helperMode === 'daily' || helperMode === 'services' || helperMode === 'support' || helperMode === 'streampay') return 'og-compute'
+  if (helperMode === 'payments' || helperMode === 'daily' || helperMode === 'services' || helperMode === 'support') return 'og-compute'
   if (helperMode === 'polydesk') return 'multi-stack'
   const forcedLane = forcedSimpleHelperLane()
   if (forcedLane) return forcedLane
@@ -314,7 +314,7 @@ function helperModeInstructions(input: ZeroScoutHelperGuidanceInput) {
   if (mode === 'daily') {
     return [
       'Daily mode is an everyday companion mode for normal conversation, emotions, planning, ideas, and personal support.',
-      'Do not mention payments, PayLinks, wallets, HashpayStream, PolyDesk, LP Scout, or Hash PayLink services unless the user asks about them.',
+      'Do not mention payments, wallets, PolyDesk, LP Scout, or x402 services unless the user asks about them.',
       'For greetings, reply warmly in one short sentence and ask a simple open question.',
       'For mood or personal support, respond empathetically and naturally without turning it into a product menu.',
     ]
@@ -327,29 +327,7 @@ function helperModeInstructions(input: ZeroScoutHelperGuidanceInput) {
   }
   if (mode === 'services') {
     return [
-      'Services mode should explain Hash PayLink services only when the user asks about product capabilities or setup.',
-    ]
-  }
-  if (mode === 'streampay') {
-    return [
-      'HashpayStream mode is only for creator monetization and reader access on HashpayStream.',
-      'Focus on paid posts, creator publishing, pay-as-you-read checkpoints, fixed x402 unlocks, comments/reactions, receipts, and creator earnings.',
-      'When hashpayStreamContext is supplied, use it as the verified source for trending content, highest views, likes, comments, unlock URLs, ebooks, World Cup news, live scores, x402 activation help, and creator earnings.',
-      'For latest HashWatch video questions, use hashpayStreamContext.latestHashWatch first, then hashpayStreamContext.hashWatch, and include the gateLink when present.',
-      'For latest book or ebook questions, use hashpayStreamContext.latestBooks first, then hashpayStreamContext.bestEbooks, and summarize from description/summary metadata unless unlocked book text is supplied.',
-      'For "what is this video/book/post about" questions, use the content card summary, description, category, type, author, and social stats. Do not claim to have watched private video media or read locked content unless supplied context explicitly includes that unlocked content.',
-      'When hashpayStreamContext.activeContent.status is "unlocked", the reader already has access. Do not ask them to unlock again; answer from activeContent.unlockedContent plus metadata.',
-      'When hashpayStreamContext.activeContent.status is "locked", give public preview/metadata only and say the full private summary needs the original unlocked reader wallet/session.',
-      'When the user asks ZeroScout/0G compute to inspect, scan, analyze, or break down a HashWatch video URL, only use hashpayStreamContext.activeContent.unlockedContent.videoUrl if activeContent.status is "unlocked". If it is locked or missing, do not request or infer the private media URL.',
-      'If the user asks for deeper, frame-by-frame, or actual video/media analysis after an unlocked HashWatch explanation, treat that as a ZeroScout/0G media inspection request. Do not say HashpayStream does not offer video analysis; say the unlocked media can be routed through ZeroScout/0G when mediaInspection.allowed is true, or clearly report that the compute layer/media fetch is unavailable.',
-      'For unlocked HashWatch media inspection, explain what can be verified from the media URL and metadata. If the compute layer cannot fetch or inspect the media URL, say that clearly and still summarize the verified metadata.',
-      'For creator earnings questions, use hashpayStreamContext.creatorEarnings when present; report fixed unlocks, reading/checkpoint earnings, total earned, wallet, and claim/release status if available.',
-      'If the user asks for a content recommendation, include 2-5 matching content titles and mention that they can unlock from the shown card or HashpayStream gate link.',
-      'If top scorers or other sports stats are not marked available in hashpayStreamContext.statsCapabilities, say that exact stat is not currently verified instead of guessing.',
-      'Do not suggest Payroll, Arena, PolyDesk, Polymarket, LP Scout, or external market tooling.',
-      'If the user asks something unrelated to HashpayStream creator or reader workflows, be honest that this Agent Hash mode is scoped to HashpayStream. Answer only the part that touches HashpayStream, Hash PayLink affiliation, ZeroScout intelligence, creator content, reader access, wallet funding, receipts, or earnings.',
-      'When asked what to build next, prefer simple creator-facing actions that fit the current HashpayStream UI.',
-      'For unlocked content, help summarize, explain, or suggest follow-up questions without pretending to access private content unless content context is supplied.',
+      'Services mode should explain PolyDesk services only when the user asks about product capabilities or setup.',
     ]
   }
   if (mode === 'polydesk') {
