@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,10 +40,9 @@ import AgentWorkspace from './AgentWorkspace'
 import ZeroScoutPowerBadge from '../components/ZeroScoutPowerBadge'
 import PayLinkShareSheet from '../components/PayLinkShareSheet'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
-import { PrivyWalletConnectButton } from '../lib/PrivyWalletConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
-import { POLYDESK_LOGIN_OPTIONS, POLYDESK_WALLET_LIST } from '../lib/privyLoginOptions'
+import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_AGENT_URL || 'https://t.me/HashPayLinkBot'
 const PUBLIC_PAYLINK_ORIGIN = (import.meta.env.VITE_PUBLIC_PAYLINK_ORIGIN || 'https://hashpaylink.com').replace(/\/+$/, '')
@@ -6702,6 +6701,12 @@ export function PolyPortfolioPanel({
 }) {
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
+  const { createWallet } = useCreateWallet({
+    onError: error => {
+      const message = typeof error === 'string' ? error : 'Could not create your PolyDesk wallet.'
+      setWalletConnectError(message)
+    },
+  })
   const openPolyDeskLogin = () => login(POLYDESK_LOGIN_OPTIONS)
 
   const [privyWaitExpired, setPrivyWaitExpired] = useState(false)
@@ -6787,6 +6792,7 @@ export function PolyPortfolioPanel({
   const [tradingWalletNetwork, setTradingWalletNetwork] = useState<PolymarketBridgeNetwork>('base')
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
   const [positionStatusTab, setPositionStatusTab] = useState<PolymarketPositionStatus>('live')
+  const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
   const profile = bundle?.profile ?? null
   const settings = bundle?.settings ?? null
@@ -6813,15 +6819,28 @@ export function PolyPortfolioPanel({
       ? formatUsd(tradingPusdValue)
       : '--'
   const mainWalletCopy = 'View pUSD trading cash, fund your account, withdraw as USDC, and track positions.'
-  const ownerWalletConnectOptions = {
-    walletList: [...POLYDESK_WALLET_LIST],
-    walletChainType: 'ethereum-only',
-    description: 'Connect the owner EVM wallet that controls your PolyDesk Polymarket wallet.',
-  }
 
   useEffect(() => {
     if (signingWalletAddress) setWalletConnectError('')
   }, [signingWalletAddress])
+
+  async function createPolyDeskEmbeddedWallet() {
+    if (embeddedWalletBusy) return
+    setEmbeddedWalletBusy(true)
+    setWalletConnectError('')
+    try {
+      const wallet = await createWallet()
+      const walletAddress = wallet?.address || ''
+      if (/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+        const saved = await saveProfile(walletAddress)
+        if (saved?.profile?.tradingAddress) void activatePolymarketWallet(saved.profile.tradingAddress)
+      }
+    } catch (err) {
+      setWalletConnectError(err instanceof Error ? err.message : 'Could not create your PolyDesk wallet.')
+    } finally {
+      setEmbeddedWalletBusy(false)
+    }
+  }
 
   const claimablePositions = useMemo(
     () => livePositions.filter(isClaimablePosition),
@@ -8519,16 +8538,17 @@ export function PolyPortfolioPanel({
               </button>
             ) : (
               <>
-                <PrivyWalletConnectButton
-                  options={ownerWalletConnectOptions}
-                  onError={setWalletConnectError}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                <button
+                  type="button"
+                  onClick={() => void createPolyDeskEmbeddedWallet()}
+                  disabled={embeddedWalletBusy}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                 >
-                  <Wallet className="h-4 w-4" />
-                  Connect owner wallet
-                </PrivyWalletConnectButton>
+                  {embeddedWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                  Create PolyDesk wallet
+                </button>
                 <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
-                  Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+                  Email is active. Create the embedded wallet PolyDesk uses to derive your Polymarket account.
                 </p>
                 {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
               </>
@@ -8699,16 +8719,17 @@ export function PolyPortfolioPanel({
                 </button>
               ) : (
                 <>
-                  <PrivyWalletConnectButton
-                    options={ownerWalletConnectOptions}
-                    onError={setWalletConnectError}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                  <button
+                    type="button"
+                    onClick={() => void createPolyDeskEmbeddedWallet()}
+                    disabled={embeddedWalletBusy}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                   >
-                    <Wallet className="h-4 w-4" />
-                    Connect owner wallet
-                  </PrivyWalletConnectButton>
+                    {embeddedWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                    Create PolyDesk wallet
+                  </button>
                   <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
-                    Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+                    Email is active. Create the embedded wallet PolyDesk uses to derive your Polymarket account.
                   </p>
                   {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
                 </>
@@ -9179,16 +9200,17 @@ export function PolyPortfolioPanel({
           </div>
         ) : !signingWalletAddress ? (
           <div className="mt-3">
-            <PrivyWalletConnectButton
-              options={ownerWalletConnectOptions}
-              onError={setWalletConnectError}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-black active:scale-[0.98] dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+            <button
+              type="button"
+              onClick={() => void createPolyDeskEmbeddedWallet()}
+              disabled={embeddedWalletBusy}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-black active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
             >
-              <Wallet className="h-4 w-4" />
-              Connect owner wallet
-            </PrivyWalletConnectButton>
+              {embeddedWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+              Create PolyDesk wallet
+            </button>
             <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
-              Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+              Email is active. Create the embedded wallet PolyDesk uses to derive your Polymarket account.
             </p>
             {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
           </div>

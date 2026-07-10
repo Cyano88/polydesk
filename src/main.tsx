@@ -61,7 +61,7 @@ function AppProviders() {
     supportedChains: [baseMainnet, arcChain, arbitrum, polygon],
     embeddedWallets: {
       ethereum: {
-        createOnLogin: 'off',
+        createOnLogin: 'users-without-wallets',
       },
     },
     appearance: {
