@@ -1365,6 +1365,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? `Minimum x402 top up is ${MIN_X402_ACTIVATION_USDC} USDC.`
     : ''
   const x402ActivationBlocked = Boolean(!x402Amount || x402AmountInvalid || x402AmountBelowMinimum || treasuryEmpty || x402AmountExceedsTreasury)
+  const agentWalletAccessConnected = Boolean(currentAgentWallet && agentWalletSessionConnected)
   const displayAgentProfile = agentProfile ?? (agentSlug === PLATFORM_AGENT_SLUG || (!agentSlug && !embeddedWalletManager) ? PLATFORM_AGENT_PROFILE : null)
   const displayAgentName = embeddedWalletManager
     ? hasPendingLpScoutRequest ? 'Pocket Wallet' : 'x402 Wallet Manager'
@@ -1376,7 +1377,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : displayAgentProfile?.purpose || 'Sign in, link a Circle wallet, fund USDC, and activate x402 from the dashboard.'
   const displayAgentImage = displayAgentProfile ? resolveAgentProfileImage(displayAgentProfile) : null
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
-  const agentWalletAccessConnected = Boolean(currentAgentWallet && agentWalletSessionConnected)
   useEffect(() => {
     if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
     if (zeroScoutAutoKey.current === latestScoutActivity.id) return
