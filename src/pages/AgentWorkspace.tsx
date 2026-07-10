@@ -429,7 +429,8 @@ function mergedAgentRequestParams(requestParams?: AgentWorkspaceProps['requestPa
 }
 
 export default function AgentWorkspace({ embedded = false, forceProfile = false, requestParams }: AgentWorkspaceProps = {}) {
-  const { onNetworkSelect } = useOutletContext<LayoutOutletContext>()
+  const outletContext = useOutletContext<Partial<LayoutOutletContext> | undefined>()
+  const onNetworkSelect = outletContext?.onNetworkSelect ?? (() => undefined)
   const navigate = useNavigate()
   const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout: logoutPrivy, getAccessToken } = usePrivy()
   const privyEmail = emailFromPrivyUser(privyUser).trim().toLowerCase()
