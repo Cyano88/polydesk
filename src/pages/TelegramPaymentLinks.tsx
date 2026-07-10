@@ -6073,7 +6073,10 @@ function buildPolymarketPayLink({
   params.set('pmw', polymarketWallet)
   if (requestId) params.set('pmr', requestId)
   if (returnToAgentHash) params.set('return', 'agent-hash-polydesk-portfolio')
-  if (returnToStandalonePortfolio) params.set('return', 'polydesk-portfolio')
+  if (returnToStandalonePortfolio) {
+    params.set('return', 'polydesk-portfolio')
+    params.set('polyOrigin', window.location.origin)
+  }
   if (returnToPortfolio) params.set('return', 'poly-portfolio')
   if (returnToTradingWallet) {
     params.set('portfolio', 'trading')
@@ -7289,7 +7292,10 @@ export function PolyPortfolioPanel({
     url.searchParams.set('pmw', input.polymarketWallet)
     url.searchParams.set('pmr', input.requestId)
     url.searchParams.set('funding', input.funding)
-    if (surface === 'standalone') url.searchParams.set('return', 'polydesk-portfolio')
+    if (surface === 'standalone') {
+      url.searchParams.set('return', 'polydesk-portfolio')
+      url.searchParams.set('polyOrigin', window.location.origin)
+    }
     else url.searchParams.set('return', 'poly-portfolio')
     url.searchParams.set('portfolio', 'trading')
     url.searchParams.set('wallet', 'balance')
