@@ -410,14 +410,30 @@ function nextHelperMemorySummary(existing: string, displayName: string, question
 type AgentWorkspaceProps = {
   embedded?: boolean
   forceProfile?: boolean
+  requestParams?: URLSearchParams | Record<string, string | undefined>
 }
 
-export default function AgentWorkspace({ embedded = false, forceProfile = false }: AgentWorkspaceProps = {}) {
+function mergedAgentRequestParams(requestParams?: AgentWorkspaceProps['requestParams']) {
+  const params = new URLSearchParams(window.location.search)
+  if (!requestParams) return params
+  if (requestParams instanceof URLSearchParams) {
+    requestParams.forEach((value, key) => {
+      if (value) params.set(key, value)
+    })
+    return params
+  }
+  Object.entries(requestParams).forEach(([key, value]) => {
+    if (value) params.set(key, value)
+  })
+  return params
+}
+
+export default function AgentWorkspace({ embedded = false, forceProfile = false, requestParams }: AgentWorkspaceProps = {}) {
   const { onNetworkSelect } = useOutletContext<LayoutOutletContext>()
   const navigate = useNavigate()
   const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout: logoutPrivy, getAccessToken } = usePrivy()
   const privyEmail = emailFromPrivyUser(privyUser).trim().toLowerCase()
-  const params = new URLSearchParams(window.location.search)
+  const params = mergedAgentRequestParams(requestParams)
   const agentSlug = params.get('agent') ?? ''
   const shouldOpenWalletLinkPanel = params.get('linkWallet') === '1'
   const pendingRun = params.get('run') ?? ''

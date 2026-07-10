@@ -348,9 +348,6 @@ export default function PolyDesk() {
               <LpScoutPanel
                 prefill={lpScoutPrefill}
                 onPrefillConsumed={() => setLpScoutPrefill(null)}
-                onOpenWalletManager={() => {
-                  navigate('/agent?profile=agent&walletManager=service&src=lp-scout')
-                }}
                 onBack={closeServiceView}
               />
             )}

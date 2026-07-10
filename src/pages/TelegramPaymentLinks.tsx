@@ -1457,10 +1457,6 @@ export default function TelegramPaymentLinks() {
             <LpScoutPanel
               prefill={lpScoutPrefill}
               onPrefillConsumed={() => setLpScoutPrefill(null)}
-              onOpenWalletManager={() => {
-                setActiveSection('agent-wallets')
-                setActiveService('agent-dashboard')
-              }}
               onBack={() => setActiveService('')}
             />
           ) : activeService === 'poly-worldcup-news' ? (
@@ -3645,12 +3641,10 @@ const lpScoutOptions: LpScoutOption[] = [
 export function LpScoutPanel({
   prefill,
   onPrefillConsumed,
-  onOpenWalletManager,
   onBack,
 }: {
   prefill: LpScoutPrefill | null
   onPrefillConsumed: () => void
-  onOpenWalletManager: () => void
   onBack: () => void
 }) {
   const [path, setPath] = useState<LpScoutPath>('')
@@ -3700,19 +3694,19 @@ export function LpScoutPanel({
     setPath('')
   }
 
-  function buildWalletScoutUrl() {
-    const params = new URLSearchParams()
-    params.set('profile', 'agent')
-    params.set('walletManager', 'service')
-    params.set('src', 'lp-scout')
-    params.set('run', 'polymarket-scout')
-    params.set('scoutMode', selectedOption.id)
-    params.set('maxAmount', maxSpend.trim())
-    params.set('serviceUrl', '/api/x402/polymarket-scout')
-    params.set('n', 'arc')
-    if (query.trim()) params.set('context', query.trim())
-    if (budget.trim()) params.set('budget', budget.trim())
-    return `/agent?${params.toString()}`
+  function buildWalletScoutParams() {
+    return {
+      profile: 'agent',
+      walletManager: 'service',
+      src: 'lp-scout',
+      run: 'polymarket-scout',
+      scoutMode: selectedOption.id,
+      maxAmount: maxSpend.trim(),
+      serviceUrl: '/api/x402/polymarket-scout',
+      n: 'arc',
+      context: query.trim() || undefined,
+      budget: budget.trim() || undefined,
+    }
   }
 
   if (!path) {
@@ -3758,7 +3752,7 @@ export function LpScoutPanel({
           </div>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Run LP Scout with x402</h2>
           <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Choose the Polymarket research category first. Next, open the PolyDesk x402 wallet flow. If balance is low, fund the wallet and activate x402 before checkout continues.
+            Choose the Polymarket research category first. Next, continue in the embedded PolyDesk x402 wallet flow. If balance is low, fund the wallet and activate x402 before checkout continues.
           </p>
         </div>
       </div>
@@ -3837,43 +3831,12 @@ export function LpScoutPanel({
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
         >
           <Wallet className="h-4 w-4" />
-          Continue to x402 wallet
+          Continue to LP Scout checkout
         </button>
       </div>
 
       {step === 'agent' && (
-        <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.05]">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">x402 wallet</p>
-            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">Use PolyDesk x402 wallet</p>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Your email session opens the wallet flow, your payment wallet is confirmed, and LP Scout only runs after x402 payment succeeds.
-            </p>
-          </div>
-          <a
-            href={buildWalletScoutUrl()}
-            className="flex w-full items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 text-left transition-all hover:border-gray-200 hover:bg-white active:scale-[0.99] dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-gray-800 shadow-sm dark:bg-white/[0.08] dark:text-gray-100">
-              <Wallet className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">Open PolyDesk x402 wallet</span>
-              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                Pay max {maxSpend || selectedOption.amount} USDC for {selectedOption.title}. Low balance prompts wallet funding and x402 activation.
-              </span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-gray-400" />
-          </a>
-
-          <button
-            type="button"
-            onClick={onOpenWalletManager}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200 dark:hover:bg-white/[0.08]"
-          >
-            Manage x402 wallet first
-          </button>
-        </div>
+        <AgentWorkspace embedded forceProfile requestParams={buildWalletScoutParams()} />
       )}
     </div>
   )
