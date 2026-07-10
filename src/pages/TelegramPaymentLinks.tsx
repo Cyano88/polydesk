@@ -5184,7 +5184,7 @@ export function PolyStreamPanel({
       )
       const liveNegRisk = rawLiveNegRisk === true || String(rawLiveNegRisk).toLowerCase() === 'true'
       const contractConfig = getContractConfig(137)
-      const exchangeAddress = liveNegRisk ? contractConfig.negRiskAdapter : contractConfig.exchangeV2
+      const exchangeAddress = liveNegRisk ? contractConfig.negRiskExchangeV2 : contractConfig.exchangeV2
       const amountUnits = parseUnits(amount, 6)
       setTradeNotice('Checking pUSD balance and exchange approval...')
       tradeStage = 'balance-allowance'
@@ -7272,7 +7272,6 @@ export function PolyPortfolioPanel({
       })
       void fetchBundle()
       void loadTradingPusdBalance(polymarketDepositWallet)
-      window.location.assign(payUrl)
     } catch (err) {
       setFundError(err instanceof Error ? err.message : 'Could not prepare funding.')
     } finally {
@@ -7398,7 +7397,6 @@ export function PolyPortfolioPanel({
       })
       void fetchBundle()
       void loadTradingPusdBalance(polymarketDepositWallet)
-      window.location.assign(payUrl)
     } catch (err) {
       setFundError(err instanceof Error ? err.message : 'Could not prepare Naira funding.')
     } finally {
