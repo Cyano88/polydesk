@@ -156,7 +156,7 @@ export default async function zeroScoutPolymarketBriefHandler(req: Request, res:
           context: request.context,
           budget: request.budget,
         },
-        source: 'Hash PayLink LP Scout using Polymarket Gamma, CLOB rewards, and order book APIs.',
+        source: 'PolyDesk LP Scout using Polymarket Gamma, CLOB rewards, and order book APIs.',
         scout,
         x402ProofHash: paidScout.proof.proofHash,
         disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',

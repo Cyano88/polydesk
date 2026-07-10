@@ -186,11 +186,11 @@ const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
   streampay: [
     {
       id: 'streampay-creator',
-      title: 'HashpayStream Creator',
-      body: 'Publish paid posts, unlock content, and track creator earnings.',
+      title: 'Creator tools',
+      body: 'Creator streaming is not part of standalone PolyDesk.',
       icon: Pencil,
-      status: 'Open',
-      active: true,
+      status: 'Unavailable',
+      active: false,
     },
   ],
 }
@@ -199,14 +199,13 @@ const sectionDescriptions: Record<TelegramSectionId, string> = {
   'payment-links': 'Create normal USDC requests and share them into Telegram.',
   'agent-wallets': 'Manage Circle wallet balance, x402 service balance, and receipts.',
   'market-tools': 'PolyDesk for Polymarket funding, portfolio alerts, LP Scout, and live market context.',
-  streampay: 'Creator publishing, paid access, reader comments, and earnings on HashpayStream.',
+  streampay: 'Creator streaming is not part of standalone PolyDesk.',
 }
 
 const telegramSections: Array<{ id: TelegramSectionId; title: string; icon: typeof Coins }> = [
   { id: 'payment-links', title: 'Payment Links', icon: Coins },
   { id: 'agent-wallets', title: 'Agent Wallets', icon: Bot },
   { id: 'market-tools', title: 'PolyDesk', icon: LineChart },
-  { id: 'streampay', title: 'HashpayStream', icon: Radio },
 ]
 
 type RequestMode = 'person' | 'group'
@@ -578,7 +577,7 @@ const helperModes: Array<{ id: HelperMode; label: string; intro: string }> = [
   {
     id: 'services',
     label: 'Services',
-    intro: 'Services mode is ready. I can help with HashpayStream, Agent Wallets, x402, Circle wallet setup, PolyDesk, and Hash PayLink features. What are you trying to use?',
+    intro: 'Services mode is ready. I can help with PolyDesk, Agent Wallets, x402, Circle wallet setup, and Polymarket workflows. What are you trying to use?',
   },
   {
     id: 'polydesk',
@@ -608,7 +607,7 @@ const polyDeskSubModes: Array<{ id: PolyDeskSubMode; label: string; intro: strin
   {
     id: 'lp-scout',
     label: 'LP Scout',
-    intro: 'LP Scout mode is ready. I can help you choose paid LP Scout access through x402 or a normal USDC access payment.',
+    intro: 'LP Scout mode is ready. I can help you choose paid LP Scout access through x402.',
     icon: LineChart,
   },
 ]
@@ -905,7 +904,7 @@ export default function TelegramPaymentLinks() {
   const initialSection: TelegramSectionId =
     startPayload === 'polymarket' || startPayload === 'poly'
       ? 'market-tools'
-      : initialSectionParam === 'agent-wallets' || initialSectionParam === 'market-tools' || initialSectionParam === 'streampay'
+      : initialSectionParam === 'agent-wallets' || initialSectionParam === 'market-tools'
       ? initialSectionParam
       : 'payment-links'
   const initialServiceParam = searchParams.get('service')
@@ -1147,10 +1146,6 @@ export default function TelegramPaymentLinks() {
     }
     if (service.id === 'agent-dashboard' || service.id === 'fund-agent-wallet') {
       setActiveService('agent-dashboard')
-      return
-    }
-    if (service.id === 'streampay-creator') {
-      window.location.href = '/creator?app=streampay&src=telegram'
       return
     }
     if (service.id === 'poly-portfolio') {
@@ -2545,7 +2540,7 @@ export function TelegramHelperPanel({
     params.set('scoutMode', /\b(url|market|slug|theme|specific|this)\b/i.test(context) ? 'theme' : 'best')
     params.set('maxAmount', lpScoutOptions[0]?.amount ?? '0.01')
     params.set('serviceUrl', '/api/x402/polymarket-scout')
-    params.set('n', 'base')
+    params.set('n', 'arc')
     if (context.trim()) params.set('context', context.trim().slice(0, 180))
     return `${shareOrigin()}/agent?${params.toString()}`
   }
@@ -2902,8 +2897,8 @@ export function TelegramHelperPanel({
     finishHelperMessage(nextQuestion, {
       answer: [
         'LP Scout is paid access.',
-        'Choose x402 access for strict LP Scout proof, or pay normal USDC access below.',
-        'Normal USDC access is not LP Scout x402 proof.',
+        'Choose x402 access for strict LP Scout proof.',
+        'OG Labs verifies the paid LP Scout answer before delivery.',
       ].join('\n'),
       actionLink: { label: 'x402 access', url: x402Url },
       paylink: treasuryRequest,
@@ -3163,7 +3158,7 @@ export function TelegramHelperPanel({
       finishHelperMessage(nextQuestion, { answer: data.answer!, proof: data.proof, zeroscoutSponsorship: data.zeroscoutSponsorship })
       void saveProfile({ question: nextQuestion, answer: data.answer } as Partial<HelperProfile>)
       if (!memoryDraft.trim()) {
-        setMemoryDraft(`User is known as ${helperName || payer}. They use Hash PayLink Agent Helper from Telegram and may ask about payments, Polymarket, HashpayStream, agents, research, planning, and daily questions.`)
+        setMemoryDraft(`User is known as ${helperName || payer}. They use PolyDesk Agent and may ask about Polymarket funding, LP Scout, x402, agents, research, planning, and daily questions.`)
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
@@ -3191,7 +3186,7 @@ export function TelegramHelperPanel({
               >
                 <div className="max-w-[82%] break-words rounded-[18px] rounded-bl-md bg-[#f0f0f0] px-3.5 py-2.5 text-sm leading-relaxed text-gray-900 shadow-sm dark:bg-white/[0.08] dark:text-gray-100">
                   <p>
-                    {welcomeText ?? `Welcome back, ${helperName || cleanTelegramName || 'there'}. Ask me about payments, Polymarket funding, HashpayStream, agent setup, research, planning, or daily questions.`}
+                    {welcomeText ?? `Welcome back, ${helperName || cleanTelegramName || 'there'}. Ask me about PolyDesk, Polymarket funding, LP Scout, x402, agent setup, research, planning, or daily questions.`}
                   </p>
                   <div className="mt-2">
                     <ZeroScoutPowerBadge compact />
@@ -3582,7 +3577,7 @@ function TelegramX402WalletPanel({
   )
 }
 
-type LpScoutPath = '' | 'access' | 'daily'
+type LpScoutPath = '' | 'access'
 type LpScoutStep = 'service' | 'agent'
 
 function PolyDeskBackButton({ onClick }: { onClick: () => void }) {
@@ -3710,15 +3705,7 @@ export function LpScoutPanel({
     setStep('service')
   }
 
-  function startDailyFlow() {
-    setPath('daily')
-  }
-
   function backFromPath() {
-    if (path === 'daily') {
-      setPath('')
-      return
-    }
     if (step === 'agent') {
       setStep('service')
       return
@@ -3735,14 +3722,10 @@ export function LpScoutPanel({
     params.set('scoutMode', selectedOption.id)
     params.set('maxAmount', maxSpend.trim())
     params.set('serviceUrl', '/api/x402/polymarket-scout')
-    params.set('n', 'base')
+    params.set('n', 'arc')
     if (query.trim()) params.set('context', query.trim())
     if (budget.trim()) params.set('budget', budget.trim())
     return `/agent?${params.toString()}`
-  }
-
-  if (path === 'daily') {
-    return <AgenticLpResearchPanel onBack={backFromPath} />
   }
 
   if (!path) {
@@ -3757,23 +3740,18 @@ export function LpScoutPanel({
               </span>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk LP Scout</p>
             </div>
-            <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Choose how LP Scout should work</h2>
+            <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Run PolyDesk LP Scout</h2>
             <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-              Use the x402 wallet manager for one-time Polymarket scout access, or stream daily LP intelligence by email.
+              Use x402 to pay per call for live Polymarket LP research.
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
           <PolyDeskMenuCard
-            title="Tip for LP Scout access"
-            body="Pick a Polymarket scout category, then use your x402 Wallet Manager to pay Hash PayLink through Circle Gateway."
+            title="Run LP Scout with x402"
+            body="Pay per call for live Polymarket reward, spread, depth, and risk analysis."
             onClick={startAccessFlow}
-          />
-          <PolyDeskMenuCard
-            title="Stream daily LP intelligence"
-            body="Stream USDC to Hash PayLink for daily Polymarket LP research delivered to your email."
-            onClick={startDailyFlow}
           />
         </div>
       </div>
@@ -3793,7 +3771,7 @@ export function LpScoutPanel({
           </div>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Run LP Scout with x402</h2>
           <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Choose the Polymarket research category first. Next, sign in to the x402 Wallet Manager. If x402 balance is low, fund Circle wallet balance and activate x402 before checkout continues.
+            Choose the Polymarket research category first. Next, open the PolyDesk x402 wallet flow. If balance is low, fund the wallet and activate x402 before checkout continues.
           </p>
         </div>
       </div>
@@ -3880,9 +3858,9 @@ export function LpScoutPanel({
         <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.05]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">x402 wallet</p>
-            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">Use email session and Circle wallet</p>
+            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">Use PolyDesk x402 wallet</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Your email session opens the wallet manager, your 0x Circle wallet is confirmed, and LP Scout only runs after x402 payment succeeds.
+              Your email session opens the wallet flow, your payment wallet is confirmed, and LP Scout only runs after x402 payment succeeds.
             </p>
           </div>
           <a
@@ -3893,7 +3871,7 @@ export function LpScoutPanel({
               <Wallet className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">Open x402 Wallet Manager</span>
+              <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">Open PolyDesk x402 wallet</span>
               <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                 Pay max {maxSpend || selectedOption.amount} USDC for {selectedOption.title}. Low balance prompts wallet funding and x402 activation.
               </span>
@@ -3906,7 +3884,7 @@ export function LpScoutPanel({
             onClick={onOpenWalletManager}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200 dark:hover:bg-white/[0.08]"
           >
-            Manage wallet first
+            Manage x402 wallet first
           </button>
         </div>
       )}

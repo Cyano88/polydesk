@@ -1,12 +1,9 @@
 // @ts-nocheck
 /**
- * /agent — Payment-Gated AI Demo
+ * /agent - PolyDesk x402 wallet flow.
  *
- * Demonstrates the Hash PayLink agentic economy primitive:
- * 1. Enter an event ID + your payer name
- * 2. Verification checks 0G Mainnet for your payment proof
- * 3. If verified → chat with the AI, get on-chain proof per response
- * 4. If not verified → pay first via Hash PayLink, then retry
+ * Handles Arc wallet access, x402 activation, LP Scout payment, OG Labs
+ * verification, and receipt history for the standalone PolyDesk app.
  */
 
 import { useState, useRef, useEffect } from 'react'
@@ -35,7 +32,7 @@ async function readAgentWalletJson<T>(response: Response): Promise<T> {
   if (!contentType.includes('application/json')) {
     const looksLikeHtml = /^\s*</.test(text)
     throw new Error(looksLikeHtml
-      ? 'Hash PayLink is still finishing the latest deploy. Wait a few seconds, then run LP Alpha again.'
+      ? 'PolyDesk is still finishing the latest deploy. Wait a few seconds, then run LP Alpha again.'
       : text.slice(0, 180) || 'Agent wallet API returned an unexpected response.')
   }
   try {
@@ -311,30 +308,28 @@ function PulsingDots() {
 }
 
 // ─── Demo credentials (pre-filled for judges) ─────────────────────────────────
-const PLATFORM_AGENT_SLUG = 'hashpaylink-agent'
-const AGENT_WALLET_LOGIN_INTENT_KEY = 'hashpaylink-agent-wallet-login-intent'
+const PLATFORM_AGENT_SLUG = 'polydesk-agent'
+const AGENT_WALLET_LOGIN_INTENT_KEY = 'polydesk-agent-wallet-login-intent'
 const MIN_X402_ACTIVATION_USDC = 0.5
-const LP_SCOUT_INTENT_KEY = 'hashpaylink:lp-scout-intent'
+const LP_SCOUT_INTENT_KEY = 'polydesk:lp-scout-intent'
 const LP_SCOUT_INTENT_TTL_MS = 30 * 60 * 1000
 const PLATFORM_AGENT_PROFILE: AgentProfileSummary = {
   slug: PLATFORM_AGENT_SLUG,
-  name: 'Hash PayLink Agent',
-  purpose: 'Owner-managed platform agent for treasury, x402, LP Scout, and HashpayStream services.',
+  name: 'PolyDesk Agent',
+  purpose: 'Owner-managed PolyDesk agent for Polymarket trading context, x402, and LP Scout services.',
   profileImage: {
-    initials: 'HP',
-    hue: agentAvatarHue(`${PLATFORM_AGENT_SLUG}:Hash PayLink Agent`),
-    accentHue: (agentAvatarHue(`${PLATFORM_AGENT_SLUG}:Hash PayLink Agent`) + 44) % 360,
+    initials: 'PD',
+    hue: agentAvatarHue(`${PLATFORM_AGENT_SLUG}:PolyDesk Agent`),
+    accentHue: (agentAvatarHue(`${PLATFORM_AGENT_SLUG}:PolyDesk Agent`) + 44) % 360,
   },
 }
-type AgentTreasuryNetwork = Extract<ChainKey, 'base' | 'arbitrum' | 'arc'>
+type AgentTreasuryNetwork = Extract<ChainKey, 'arc'>
 const AGENT_TREASURY_NETWORKS: Array<{ key: AgentTreasuryNetwork; label: string }> = [
-  { key: 'base', label: 'Base' },
-  { key: 'arbitrum', label: 'Arbitrum' },
   { key: 'arc', label: 'Arc Testnet' },
 ]
 
 function isAgentTreasuryNetwork(value: string): value is AgentTreasuryNetwork {
-  return value === 'base' || value === 'arbitrum' || value === 'arc'
+  return value === 'arc'
 }
 
 function readableTreasuryBalanceError(error: unknown, networkLabel: string) {
@@ -393,14 +388,13 @@ function compactMemoryText(value: string, max = 180) {
 
 function nextHelperMemorySummary(existing: string, displayName: string, question: string, answer: string) {
   const base = existing.trim()
-    || `Prefers to be called ${displayName}. Uses Hash PayLink Agent Helper for payments, Polymarket funding, HashpayStream, planning, and agent setup.`
+    || `Prefers to be called ${displayName}. Uses PolyDesk Agent for Polymarket funding, LP Scout, x402, planning, and agent setup.`
   const lowerQuestion = question.toLowerCase()
   const topics = [
     lowerQuestion.includes('polymarket') && 'Polymarket',
-    lowerQuestion.includes('stream') && 'HashpayStream',
+    lowerQuestion.includes('lp scout') && 'LP Scout',
     lowerQuestion.includes('agent') && 'agent setup',
     lowerQuestion.includes('wallet') && 'wallets',
-    lowerQuestion.includes('base') && 'Base',
     lowerQuestion.includes('arc') && 'Arc',
     lowerQuestion.includes('circle') && 'Circle',
     lowerQuestion.includes('0g') && '0G proofs',
@@ -425,8 +419,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const privyEmail = emailFromPrivyUser(privyUser).trim().toLowerCase()
   const params = new URLSearchParams(window.location.search)
   const agentSlug = params.get('agent') ?? ''
-  const agentStreamPrice = params.get('streamPrice') ?? ''
-  const agentStreamDuration = params.get('streamDuration') ?? ''
   const shouldOpenWalletLinkPanel = params.get('linkWallet') === '1'
   const pendingRun = params.get('run') ?? ''
   const pendingScoutMode = params.get('scoutMode') ?? 'best'
@@ -446,8 +438,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const agentWallet = urlAgentWallet || (shouldOpenWalletLinkPanel ? expectedAgentWallet : '')
   const intendedAgentWallet = urlAgentWallet || expectedAgentWallet
   const [ignoreUrlAgentWallet, setIgnoreUrlAgentWallet] = useState(false)
-  const urlAgentNetwork = params.get('n') ?? 'base'
-  const initialAgentNetwork = isAgentTreasuryNetwork(urlAgentNetwork) ? urlAgentNetwork : 'base'
+  const urlAgentNetwork = params.get('n') ?? 'arc'
+  const initialAgentNetwork = isAgentTreasuryNetwork(urlAgentNetwork) ? urlAgentNetwork : 'arc'
   const [agentNetwork, setAgentNetwork] = useState<AgentTreasuryNetwork>(initialAgentNetwork)
   const showHelperDemo = params.get('helper') === 'live' || params.get('helper') === 'demo' || params.get('demo') === 'ai'
   const showAgentProfile = !showHelperDemo && (forceProfile || embeddedWalletManager || params.get('profile') === 'agent' || Boolean(agentSlug || agentWallet))
@@ -456,7 +448,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     const next = new URLSearchParams({
       open: '1',
       section: 'agent-wallets',
-      service: 'hashpaylink-agent',
+      service: 'polydesk-agent',
     })
     const eventIdParam = params.get('eventId')
     const payerParam = params.get('payer')
@@ -567,6 +559,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const helperVerifyRequestRef = useRef(0)
   const bottomRef    = useRef<HTMLDivElement>(null)
   const autoRan      = useRef(false)
+  const zeroScoutAutoKey = useRef('')
   const agentPrivyRestoreKey = useRef('')
   const helperCheckpointKey = useRef('')
   useEffect(() => {
@@ -600,7 +593,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     try {
       const memorySummary = memorySummaryOverride.trim()
         || helperProfile?.memorySummary
-        || `Prefers to be called ${displayName}. Uses Hash PayLink Agent Helper for payments, Polymarket funding, HashpayStream, planning, and agent setup.`
+        || `Prefers to be called ${displayName}. Uses PolyDesk Agent for Polymarket funding, LP Scout, x402, planning, and agent setup.`
       const res = await fetch('/api/helper-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -781,7 +774,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     try {
       const slug = normalizedAgentSlug
       if (!slug) throw new Error('Sign in with email before checking x402 balance.')
-      const gatewayChain = agentNetwork === 'arc' ? '&gatewayChain=arc' : ''
+      const gatewayChain = '&gatewayChain=arc'
       const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}&x402=1${gatewayChain}`)
       const data = await res.json() as {
         ok?: boolean
@@ -932,7 +925,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
 
   function buildAgentFundUrl() {
     const activeSlug = normalizedAgentSlug || 'x402-wallet'
-    const displayName = agentProfile?.name || agentSlug || (embeddedWalletManager ? 'x402 wallet' : 'Hash PayLink Agent')
+    const displayName = agentProfile?.name || agentSlug || (embeddedWalletManager ? 'x402 wallet' : 'PolyDesk Agent')
     const fundingId = `agent-${activeSlug}-fund-${Date.now().toString(36)}`
     const returnUrl = new URL('/agent', window.location.origin)
     returnUrl.searchParams.set('profile', 'agent')
@@ -974,20 +967,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     }
     navigate(intent.href, { replace: true })
     return true
-  }
-
-  function buildAgentStreamUrl() {
-    if (!currentAgentWallet || !agentStreamPrice || !agentStreamDuration) return ''
-    const displayName = agentProfile?.name || agentSlug || 'Hash PayLink Agent'
-    const p = new URLSearchParams()
-    p.set('app', 'streampay')
-    p.set('amount', agentStreamPrice)
-    p.set('recipient', currentAgentWallet)
-    p.set('duration', agentStreamDuration)
-    p.set('reason', `Agent retainer: ${displayName}`)
-    p.set('src', 'agent')
-    p.set('wallet', 'circle')
-    return `/?${p.toString()}`
   }
 
   async function callAgentWallet(action: 'init' | 'complete', mode?: 'create' | 'login') {
@@ -1204,14 +1183,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
       const amount = Number(x402Amount)
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a valid x402 amount.')
       if (amount < MIN_X402_ACTIVATION_USDC) throw new Error(`Minimum x402 top up is ${MIN_X402_ACTIVATION_USDC} USDC.`)
-      const activationBody = agentNetwork === 'arc'
-        ? { action: 'gateway-deposit-arc', agentSlug: payerAgentSlug, amount: String(amount) }
-        : {
-            action: 'gateway-deposit',
-            agentSlug: payerAgentSlug,
-            amount: String(amount),
-            chain: agentNetwork === 'arbitrum' ? 'ARBITRUM' : 'BASE',
-          }
+      const activationBody = { action: 'gateway-deposit-arc', agentSlug: payerAgentSlug, amount: String(amount) }
       const res = await fetch('/api/agent-wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1269,6 +1241,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
       const data = await readAgentWalletJson<LpScoutRunResult & { ok?: boolean; error?: string }>(res)
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'LP Scout x402 request failed')
       setLpScoutResult(data)
+      setZeroScoutResult(null)
+      setZeroScoutError('')
       setReceiptsOpen(true)
       clearLpScoutIntent()
       await refreshX402Balance()
@@ -1316,7 +1290,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     }
   }
 
-  const agentStreamUrl = buildAgentStreamUrl()
   const activityAmount = (item: AgentActivity) => {
     if (!item.amount) return item.direction === 'result' ? 'Result' : item.direction === 'system' ? 'Setup' : ''
     const prefix = item.direction === 'out' ? '-' : item.direction === 'in' ? '+' : ''
@@ -1349,6 +1322,18 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const latestScoutSignals = latestScoutOutput?.signals ?? latestScoutOutput?.highlights ?? []
   const latestPrimaryOpportunity = latestScoutOutput?.opportunities?.[0]
   const lpScoutHasResult = Boolean(latestScoutOutput?.summary || latestScoutSignals.length)
+  const lpScoutVerified = Boolean(
+    latestZeroScout?.proof?.storageRoot
+    || latestZeroScout?.proof?.contentHash
+    || latestZeroScout?.proof?.storageTxHash
+    || latestZeroScout?.id
+  )
+  useEffect(() => {
+    if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
+    if (zeroScoutAutoKey.current === latestScoutActivity.id) return
+    zeroScoutAutoKey.current = latestScoutActivity.id
+    generateZeroScoutBrief().catch(() => undefined)
+  }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy])
   const scoutPrice = (value: number | undefined) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : 'n/a'
   const scoutCents = (value: number | undefined) => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}c` : 'n/a'
   const selectedAgentNetworkLabel = AGENT_TREASURY_NETWORKS.find(network => network.key === agentNetwork)?.label ?? CHAIN_META[agentNetwork].label
@@ -1376,7 +1361,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const displayAgentPurpose = hasPendingLpScoutRequest
     ? 'Selected wallet for LP Scout x402 access.'
     : embedded
-    ? 'Fund USDC, activate x402, and use this wallet across Hash PayLink services.'
+    ? 'Fund USDC on Arc, activate x402, and use this wallet for PolyDesk LP Scout.'
     : displayAgentProfile?.purpose || 'Sign in, link a Circle wallet, fund USDC, and activate x402 from the dashboard.'
   const displayAgentImage = displayAgentProfile ? resolveAgentProfileImage(displayAgentProfile) : null
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
@@ -1386,6 +1371,34 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
   const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected)
   const x402Refreshing = Boolean(agentWalletAccessConnected && !x402BalanceChecked)
   const balancesRefreshing = Boolean(agentWalletAccessConnected && (!treasuryBalanceChecked || x402Refreshing || activityBusy))
+  const pendingScoutMaxAmountNumber = Number(pendingScoutMaxAmount || '0.01')
+  const x402BalanceNumber = x402Balance !== null ? Number(x402Balance) : null
+  const lpScoutX402Ready = Boolean(
+    agentWalletAccessConnected &&
+    x402BalanceNumber !== null &&
+    Number.isFinite(x402BalanceNumber) &&
+    x402BalanceNumber >= (Number.isFinite(pendingScoutMaxAmountNumber) ? pendingScoutMaxAmountNumber : 0.01),
+  )
+  const lpScoutWalletStatus = agentWalletAccessConnected ? 'Ready' : 'Email required'
+  const lpScoutFundingStatus = !agentWalletAccessConnected
+    ? 'Locked'
+    : treasuryEmpty
+    ? 'Fund Arc'
+    : treasuryBalanceKnown
+    ? 'Ready'
+    : 'Checking'
+  const lpScoutX402Status = !agentWalletAccessConnected
+    ? 'Locked'
+    : lpScoutX402Ready
+    ? 'Ready'
+    : x402Refreshing
+    ? 'Checking'
+    : 'Activate'
+  const lpScoutVerificationStatus = lpScoutVerified
+    ? 'Verified'
+    : lpScoutHasResult
+    ? 'Running'
+    : 'After payment'
   const walletErrorMessage = walletError
     ? /invalid or expired request id/i.test(walletError)
       ? 'OTP expired. Resend OTP and use the newest code.'
@@ -1403,7 +1416,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
     return (
       <div className="mx-auto max-w-md animate-slide-up">
         <div className="rounded-xl border border-gray-100 bg-white p-4 text-sm text-gray-500 shadow-card dark:border-white/10 dark:bg-[#111114] dark:text-gray-400">
-          Opening Hash PayLink Agent Helper in Telegram...
+          Opening PolyDesk Agent...
         </div>
       </div>
     )
@@ -1631,24 +1644,40 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                 {treasuryBalanceError}
               </p>
             )}
-            {!hasPendingLpScoutRequest && agentStreamPrice && agentStreamDuration && (
-              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                HashpayStream retainer: {agentStreamPrice} USDC / {agentStreamDuration}
-              </p>
-            )}
             {hasPendingLpScoutRequest && (
               <div className="w-full min-w-0 space-y-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 dark:border-white/10 dark:bg-white/[0.05]">
                 <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">LP Scout</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">LP Scout x402</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{scoutModeLabel(pendingScoutMode)}</p>
                     <p className="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                      Pays Hash PayLink services with x402.
+                      Pay per call from your Arc wallet. OG Labs verifies the LP answer before PolyDesk reveals it.
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-gray-500 shadow-sm dark:bg-white/[0.08] dark:text-gray-300">
                     Max {pendingScoutMaxAmount || '0.01'} USDC
                   </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    { label: 'Arc wallet', value: lpScoutWalletStatus, active: agentWalletAccessConnected },
+                    { label: 'Wallet funds', value: lpScoutFundingStatus, active: agentWalletAccessConnected && !treasuryEmpty },
+                    { label: 'x402 balance', value: lpScoutX402Status, active: lpScoutX402Ready },
+                    { label: 'OG Labs', value: lpScoutVerificationStatus, active: lpScoutVerified },
+                  ].map(item => (
+                    <div
+                      key={item.label}
+                      className={cn(
+                        'min-w-0 rounded-lg border px-2.5 py-2',
+                        item.active
+                          ? 'border-emerald-100 bg-white text-emerald-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-emerald-200'
+                          : 'border-gray-100 bg-white text-gray-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300',
+                      )}
+                    >
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wider opacity-70">{item.label}</p>
+                      <p className="mt-1 truncate text-xs font-semibold">{item.value}</p>
+                    </div>
+                  ))}
                 </div>
                 {(pendingScoutContext || pendingScoutBudget) && (
                   <div className="grid gap-1 rounded-lg bg-white px-2.5 py-2 text-[11px] text-gray-500 dark:bg-white/[0.06] dark:text-gray-400">
@@ -1665,29 +1694,69 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                 )}
 
                 {agentWalletAccessConnected && (
-                  <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">x402 service balance</p>
-                      <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
-                        {x402Balance !== null
-                          ? `${Number(x402Balance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
-                          : x402BalanceError || x402BalanceChecked
-                          ? 'Unavailable'
-                          : 'Checking...'}
-                      </p>
+                  <div className="space-y-2 rounded-xl border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white">Arc x402 wallet</p>
+                        <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                          Fund Arc USDC, then activate x402 service balance for this LP Scout call.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshAgentBalances()}
+                        disabled={balancesRefreshing || x402Busy}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
+                        aria-label="Refresh LP Scout balances"
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5', balancesRefreshing && 'animate-spin')} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setX402BalanceError('')
-                        setX402ActivationSuccess('')
-                        setX402ModalOpen(open => !open)
-                      }}
-                      disabled={x402Busy || treasuryEmpty}
-                      className="inline-flex w-full shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 sm:w-auto"
-                    >
-                      Activate x402
-                    </button>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-black/10">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Arc wallet balance</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white" title={treasuryBalanceError || undefined}>
+                          {treasuryBalance !== null
+                            ? `${Number(treasuryBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
+                            : treasuryBalanceError || treasuryBalanceChecked
+                            ? 'Unavailable'
+                            : 'Checking...'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-black/10">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402 service balance</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
+                          {x402Balance !== null
+                            ? `${Number(x402Balance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
+                            : x402BalanceError || x402BalanceChecked
+                            ? 'Unavailable'
+                            : 'Checking...'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Link
+                        to={buildAgentFundUrl()}
+                        onClick={handleFundAgent}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
+                      >
+                        <Wallet className="h-3.5 w-3.5" />
+                        Fund Arc wallet
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setX402BalanceError('')
+                          setX402ActivationSuccess('')
+                          setX402ModalOpen(open => !open)
+                        }}
+                        disabled={x402Busy || treasuryEmpty}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                        Activate x402
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1714,11 +1783,39 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                         : lpScoutBusy
                         ? 'Working... LP Alpha paid for. Checking live rewards, spread, depth, time left, and volatility.'
                         : lpScoutHasResult
-                        ? 'LP Alpha delivered.'
+                        ? lpScoutVerified
+                          ? 'LP Alpha verified and delivered.'
+                          : 'LP Alpha source returned. OG Labs verification is running before delivery.'
                         : 'Ready. I will pay with x402 and return one clear LP Scout result for human review.'}
                     </div>
                   {lpScoutHasResult && (
                     <div className="max-w-[96%] rounded-2xl rounded-bl-md border border-emerald-100 bg-white px-3 py-3 text-xs leading-relaxed text-gray-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-gray-200">
+                      {!lpScoutVerified ? (
+                        <div className="rounded-xl border border-purple-100 bg-purple-50/80 px-3 py-3 text-purple-800 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-100">
+                          <div className="flex items-center gap-2">
+                            {zeroScoutBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                            <p className="text-[11px] font-bold uppercase tracking-widest">OG Labs verification</p>
+                          </div>
+                          <p className="mt-2 text-xs leading-relaxed">
+                            The paid Polymarket scout source is saved. PolyDesk is waiting for the OG Labs verification layer before showing the LP answer.
+                          </p>
+                          {zeroScoutError && (
+                            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+                              {zeroScoutError}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={generateZeroScoutBrief}
+                            disabled={zeroScoutBusy || !latestScoutActivity?.id}
+                            className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-purple-950 px-3 py-2 text-[11px] font-semibold text-white transition-all hover:bg-purple-900 active:scale-[0.98] disabled:opacity-50 dark:bg-purple-100 dark:text-purple-950 dark:hover:bg-white"
+                          >
+                            {zeroScoutBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            Verify with OG Labs
+                          </button>
+                        </div>
+                      ) : (
+                      <>
                       <p className="font-semibold text-gray-900 dark:text-white">{latestScoutOutput?.summary ?? 'LP Scout returned live Polymarket data.'}</p>
                       {latestScoutSignals.length ? (
                         <div className="mt-2 space-y-1.5">
@@ -1771,7 +1868,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                         <p className="mt-2 text-[11px] font-medium text-gray-500 dark:text-gray-400">{latestScoutOutput.nextAction}</p>
                       )}
                       <p className="mt-2 text-[10px] leading-relaxed text-gray-400 dark:text-gray-500">
-                        This is research for a human LP. Hash PayLink does not place, cancel, or manage Polymarket orders for you.
+                        This is research for a human LP. PolyDesk does not place, cancel, or manage Polymarket LP orders for you.
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
                         {latestX402Spend?.proof?.proofHash && (
@@ -1845,7 +1942,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                           <details className="w-full min-w-0 pt-1">
                             <summary className="cursor-pointer text-[10px] text-purple-700/70 dark:text-purple-100/70">Details</summary>
                             <p className="mt-1 text-[10px] leading-relaxed font-medium text-purple-800/75 dark:text-purple-100/75">
-                              {latestZeroScout.summary ?? 'Stored LP intelligence signal generated from supplied Hash PayLink data.'}
+                              {latestZeroScout.summary ?? 'Stored LP intelligence signal generated from supplied PolyDesk data.'}
                             </p>
                             {latestZeroScout.riskFlags?.length ? (
                               <p className="mt-1 text-[10px] leading-relaxed font-medium text-purple-800/65 dark:text-purple-100/65">
@@ -1857,6 +1954,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                             </p>
                           </details>
                         </div>
+                      )}
+                      </>
                       )}
                     </div>
                   )}
@@ -1921,25 +2020,25 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                       className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                     >
                       {lpScoutBusy ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Working</>
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Running LP Scout</>
                       ) : agentWalletAccessConnected && lpScoutHasResult ? (
-                        <><RefreshCw className="h-4 w-4" /> Refresh LP Alpha</>
+                        <><RefreshCw className="h-4 w-4" /> Run LP Scout again</>
                       ) : agentWalletAccessConnected ? (
-                        <><Send className="h-4 w-4" /> Get LP Alpha</>
+                        <><Send className="h-4 w-4" /> Pay and run LP Scout</>
                       ) : (
-                        <><Wallet className="h-4 w-4" /> {embeddedWalletManager ? 'Connect wallet access' : 'Connect agent session'}</>
+                        <><Wallet className="h-4 w-4" /> Continue with email</>
                       )}
                     </button>
                     {agentWalletAccessConnected && lpScoutHasResult && (
                       <p className="text-center text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Fresh paid scout with live Polymarket data - {pendingScoutMaxAmount || '0.01'} USDC.
+                        Runs a fresh paid scout with live Polymarket data and OG Labs verification - max {pendingScoutMaxAmount || '0.01'} USDC.
                       </p>
                     )}
                     {!agentWalletAccessConnected && (
                       <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                         {embeddedWalletManager
-                          ? 'This only authorizes your Circle wallet for x402 service access. You are not signing into the Hash PayLink platform wallet.'
-                          : 'This only authorizes the selected paying agent. You are not signing into the Hash PayLink platform wallet.'}
+                          ? 'This only authorizes the LP Scout wallet for x402 service access. It does not change your Polymarket trading wallet.'
+                          : 'This only authorizes the selected paying agent for PolyDesk x402 access.'}
                       </p>
                     )}
                   </>
@@ -1963,7 +2062,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {hasPendingLpScoutRequest
-                      ? embeddedWalletManager ? 'Confirm this wallet before x402 services run.' : 'Confirm this agent before it tips Hash PayLink through x402.'
+                      ? embeddedWalletManager ? 'Confirm this wallet before x402 services run.' : 'Confirm this agent before it pays PolyDesk through x402.'
                       : currentAgentWallet
                       ? embeddedWalletManager ? 'Confirm the Circle email for this wallet to view balances and receipts.' : 'Confirm the Circle email for this agent to view balances and receipts.'
                       : agentEmailConnected
@@ -2303,15 +2402,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                 )}
               </div>
 
-              {agentStreamUrl && (
-                <a
-                  href={agentStreamUrl}
-                  className="inline-flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-100"
-                >
-                  HashpayStream
-                </a>
-              )}
-
               <div className="rounded-lg border border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-white/[0.04]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -2453,7 +2543,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
               Fund wallet balance and activate x402.
             </h1>
             <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-              Sign in with email, fund Circle wallet balance, activate x402 service balance, and use paid Hash PayLink services.
+              Sign in with email, fund the Arc wallet balance, activate x402 service balance, and use PolyDesk LP Scout.
             </p>
           </div>
           <div className="space-y-2">
@@ -2530,7 +2620,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600 dark:bg-emerald-300/15 dark:text-emerald-200">Open</span>
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                  A pocket AI helper for payments, Polymarket funding, HashpayStream, research, planning, and daily questions.
+                  A pocket AI helper for PolyDesk, Polymarket funding, LP Scout, x402, research, planning, and daily questions.
                 </p>
               </div>
             </div>
@@ -2631,7 +2721,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
                     {messages.length === 0 && !isAsking && (
                       <div className="rounded-2xl rounded-tl-md bg-gray-50 px-3 py-2.5 dark:bg-white/[0.05]">
                         <p className="text-sm text-gray-700 dark:text-gray-200">
-                          {helperName ? `Welcome back, ${helperName}.` : 'Welcome.'} Ask me about payments, Polymarket funding, HashpayStream, agent setup, research, planning, or daily questions.
+                          {helperName ? `Welcome back, ${helperName}.` : 'Welcome.'} Ask me about PolyDesk, Polymarket funding, LP Scout, x402, agent setup, research, planning, or daily questions.
                         </p>
                         <div className="mt-2">
                           <ZeroScoutPowerBadge compact />
@@ -2703,241 +2793,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false 
           )}
         </div>
       )}
-
-      {false && !showAgentProfile && showHelperDemo && (
-        <>
-      <div className="rounded-2xl border border-purple-100 bg-white p-6 shadow-sm dark:bg-[#1c1c20] dark:border-purple-900/30">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-900/20">
-            <ShieldCheck className="h-5 w-5 text-purple-500" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold text-gray-900 dark:text-white">
-              Payment-Gated AI Assistant
-            </h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Access is granted only to verified payers. Payment proof is read directly
-              from{' '}
-              <a href="https://chainscan.0g.ai/address/0x79a804C49e1E5EBC279A228Ab73a7570A0D0819a#events"
-                target="_blank" rel="noopener noreferrer"
-                className="font-medium text-purple-500 hover:underline underline-offset-2">
-                0G Mainnet
-              </a>
-              {' '}— no central server involved.
-            </p>
-          </div>
-        </div>
-
-        {/* Demo shortcut */}
-        <button
-          onClick={() => undefined}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-purple-200 dark:border-purple-800 px-3 py-1.5 text-xs font-medium text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-        >
-          <Zap className="h-3 w-3" /> Continue
-        </button>
-      </div>
-
-      {/* ── Step 1 — Verify ───────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:bg-[#1c1c20] dark:border-white/10 space-y-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-          Step 1 — Verify your payment
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-              Event ID
-            </label>
-            <input
-              value={eventId}
-              onChange={e => setEventId(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleVerify()}
-              placeholder="e.g. test-0g-1778114523394"
-              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 font-mono text-xs text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-              Your name / payer handle
-            </label>
-            <input
-              value={payer}
-              onChange={e => setPayer(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleVerify()}
-              placeholder="The name you entered when paying"
-              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800"
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={handleVerify}
-          disabled={verifying || !eventId.trim() || !payer.trim()}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-purple-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {verifying
-            ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying on 0G…</>
-            : <><ShieldCheck className="h-4 w-4" /> Verify Payment on 0G</>}
-        </button>
-
-        {/* Verification result */}
-        {verified?.verified === false && (
-          <div className="rounded-xl border border-red-100 bg-red-50 dark:bg-red-900/10 dark:border-red-900/20 px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-              <p className="text-sm font-semibold text-red-700 dark:text-red-400">No payment found</p>
-            </div>
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {verified?.error ?? 'No verified payment found on 0G Storage for this payer.'}
-            </p>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 underline underline-offset-2"
-            >
-              Create a payment link →
-            </Link>
-          </div>
-        )}
-
-        {verified?.verified && verified?.payment && verified?.proof && (
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 dark:bg-emerald-900/10 dark:border-emerald-900/20 px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Payment verified on 0G</p>
-            </div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">
-              {verified?.payment?.payer} · {verified?.payment?.amount} · {verified?.payment?.chain}
-            </p>
-            <a
-              href={verified?.proof?.ogExplorer ?? '#'}
-              target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 underline underline-offset-2"
-            >
-              View on-chain proof <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* ── Step 2 — Chat ─────────────────────────────────────────────────── */}
-      {verified?.verified && (
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:bg-[#1c1c20] dark:border-white/10 overflow-hidden">
-          <div className="border-b border-gray-100 dark:border-white/10 px-5 py-3.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Step 2 — Ask anything
-            </p>
-            <p className="mt-0.5 text-xs text-gray-400">
-              Access granted · responses include verifiable 0G proof
-            </p>
-          </div>
-
-          {/* Messages */}
-          <div className="min-h-[200px] max-h-[400px] overflow-y-auto p-5 space-y-5">
-            {messages.length === 0 && !isAsking && (
-              <p className="text-center text-sm text-gray-300 dark:text-gray-600 pt-8">
-                Your payment is verified. Ask anything below.
-              </p>
-            )}
-
-            {messages.map((m, i) => (
-              <div key={i} className="space-y-3">
-                {/* Question */}
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-purple-600 px-4 py-2.5 text-sm text-white">
-                    {m.question}
-                  </div>
-                </div>
-                {/* Answer */}
-                <div className="space-y-2">
-                  <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                    {m.answer}
-                  </div>
-                  {/* 0G proof per message */}
-                  <a
-                    href={m.proof.ogExplorer}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <span className="px-1 py-0.5 rounded border bg-purple-50 text-purple-500 border-purple-100 dark:bg-purple-900/20 dark:border-purple-900/30 font-bold leading-none text-[8px]">
-                      0G
-                    </span>
-                    Payment proof verified on 0G Mainnet <ExternalLink className="h-2.5 w-2.5" />
-                  </a>
-                </div>
-              </div>
-            ))}
-
-            {isAsking && (
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating response…
-              </div>
-            )}
-
-            {askError && (
-              <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 dark:bg-red-900/10 px-3 py-2">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
-                <p className="text-xs text-red-600">{askError}</p>
-              </div>
-            )}
-
-            <div ref={bottomRef} />
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-gray-100 dark:border-white/10 p-4">
-            <div className="flex items-center gap-2">
-              <input
-                value={question}
-                onChange={e => setQuestion(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAsk()}
-                placeholder="Ask anything…"
-                disabled={isAsking}
-                className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800 disabled:opacity-50"
-              />
-              <button
-                onClick={handleAsk}
-                disabled={isAsking || !question.trim()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white transition-all hover:bg-purple-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── How it works ──────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:bg-[#1c1c20] dark:border-white/10 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">How this works</p>
-        <div className="space-y-1.5 text-xs text-gray-500 dark:text-gray-400">
-          {[
-            'You pay via Hash PayLink — any chain, zero gas',
-            'Payment record is uploaded to 0G decentralized storage',
-            'Root hash anchored on PayLinkArchive contract (0G Mainnet)',
-            'This page queries 0G Mainnet directly — no Hash PayLink server involved',
-            'Payment verified → AI responds + returns on-chain proof per message',
-          ].map((step, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-purple-50 dark:bg-purple-900/20 text-[9px] font-bold text-purple-500">
-                {i + 1}
-              </span>
-              <span>{step}</span>
-            </div>
-          ))}
-        </div>
-        <a
-          href="https://chainscan.0g.ai/address/0x79a804C49e1E5EBC279A228Ab73a7570A0D0819a#events"
-          target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-purple-500 hover:underline underline-offset-2 pt-1"
-        >
-          View all archived payments on 0G Explorer <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
-
-        </>
-      )}
-
     </div>
   )
 }

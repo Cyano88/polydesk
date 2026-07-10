@@ -90,7 +90,7 @@ async function getGatewayMiddleware() {
       sellerAddress: SELLER_ADDRESS,
       ...(FACILITATOR_URL ? { facilitatorUrl: FACILITATOR_URL } : {}),
       ...(ACCEPT_NETWORKS?.length ? { networks: ACCEPT_NETWORKS } : {}),
-      description: 'Hash PayLink Polymarket LP Scout x402 API',
+      description: 'PolyDesk Polymarket LP Scout x402 API',
     })
     gatewayMiddleware = gateway.require(PRICE)
   }
@@ -118,7 +118,7 @@ async function fetchPolymarketJson(url: string) {
       const response = await fetchWithTimeout(url, {
         headers: {
           accept: 'application/json',
-          'user-agent': 'HashPayLinkX402Scout/0.1',
+          'user-agent': 'PolyDeskX402Scout/0.1',
         },
       })
       if (!response.ok) return null
@@ -640,7 +640,7 @@ async function scoutResponse(req: PaidRequest) {
   })
   return {
     ok: true,
-    service: 'Hash PayLink x402 Polymarket LP Scout',
+    service: 'PolyDesk x402 Polymarket LP Scout',
     paid: true,
     payment: payment
       ? {

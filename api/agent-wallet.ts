@@ -5,7 +5,6 @@ import { dirname, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import crypto from 'node:crypto'
 import { createPublicClient, defineChain, formatUnits, http } from 'viem'
-import { arbitrum, base, baseSepolia } from 'viem/chains'
 import { appendAgentActivity, listAgentActivity } from './agent-activity.js'
 import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
@@ -19,10 +18,11 @@ const CIRCLE_SESSION_ROOT = process.env.AGENT_WALLET_CIRCLE_SESSION_PATH
   ?? (DATA_PATH ? `${DATA_PATH}/circle-web-sessions` : './data/circle-web-sessions')
 const CIRCLE_CLI_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.CIRCLE_CLI_ENABLED ?? '').toLowerCase())
 const SERVICE_SECRET = process.env.AGENT_WALLET_SERVICE_SECRET
-const DEFAULT_AGENT_SLUG = normalizeSlug(process.env.DEFAULT_AGENT_SLUG || 'hashpaylink-agent')
+const DEFAULT_AGENT_SLUG = normalizeSlug(process.env.DEFAULT_AGENT_SLUG || 'polydesk-agent')
 const DEFAULT_AGENT_WALLET_ADDRESS = normalizeExpectedWallet(process.env.DEFAULT_AGENT_WALLET_ADDRESS)
-const DEFAULT_AGENT_WALLET_CHAIN = normalizeBalanceChain(process.env.DEFAULT_AGENT_WALLET_CHAIN ?? process.env.DEFAULT_AGENT_CHAIN, 'BASE')
-const DEFAULT_SCOUT_URL = `${(process.env.HASH_PAYLINK_BASE_URL ?? 'https://hashpaylink.com').replace(/\/+$/, '')}/api/x402/polymarket-scout`
+const DEFAULT_AGENT_WALLET_CHAIN = normalizeBalanceChain(process.env.DEFAULT_AGENT_WALLET_CHAIN ?? process.env.DEFAULT_AGENT_CHAIN, 'ARC-TESTNET')
+const DEFAULT_SCOUT_ORIGIN = (process.env.POLYDESK_BASE_URL ?? process.env.PUBLIC_POLYDESK_ORIGIN ?? 'https://polydesk-i96m.onrender.com').replace(/\/+$/, '')
+const DEFAULT_SCOUT_URL = `${DEFAULT_SCOUT_ORIGIN}/api/x402/polymarket-scout`
 const ALLOWED_SERVICE_URLS = new Set(
   (process.env.AGENT_WALLET_ALLOWED_SERVICE_URLS ?? process.env.X402_POLYMARKET_SCOUT_URL ?? DEFAULT_SCOUT_URL)
     .split(',')
@@ -31,8 +31,7 @@ const ALLOWED_SERVICE_URLS = new Set(
 )
 const MAX_SERVICE_AMOUNT = Number(process.env.AGENT_WALLET_MAX_SERVICE_AMOUNT ?? process.env.X402_POLYMARKET_SCOUT_MAX_AMOUNT ?? '0.01')
 const MAX_GATEWAY_DEPOSIT_AMOUNT = Number(process.env.AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT ?? '5')
-const GATEWAY_BALANCE_CHAIN = process.env.AGENT_WALLET_GATEWAY_BALANCE_CHAIN ?? 'MATIC'
-const GATEWAY_DEPOSIT_CHAIN = process.env.AGENT_WALLET_GATEWAY_DEPOSIT_CHAIN ?? 'BASE'
+const GATEWAY_BALANCE_CHAIN = process.env.AGENT_WALLET_GATEWAY_BALANCE_CHAIN ?? 'ARC-TESTNET'
 const ARC_TESTNET_GATEWAY_CHAIN = 'ARC-TESTNET'
 const GATEWAY_DEPOSIT_VERIFY_ATTEMPTS = Math.max(1, Number(process.env.AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_ATTEMPTS ?? '6') || 6)
 const GATEWAY_DEPOSIT_VERIFY_DELAY_MS = Math.max(500, Number(process.env.AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_DELAY_MS ?? '5000') || 5000)
@@ -57,24 +56,6 @@ const USDC_BALANCE_ABI = [{
 }] as const
 
 const USDC_CHAIN_CONFIG = {
-  BASE: {
-    chain: base,
-    token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    rpcEnv: 'PRIVATE_RPC_URL',
-    fallbackRpc: 'https://mainnet.base.org',
-  },
-  'BASE-SEPOLIA': {
-    chain: baseSepolia,
-    token: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    rpcEnv: 'PRIVATE_RPC_URL_BASE_SEPOLIA',
-    fallbackRpc: 'https://sepolia.base.org',
-  },
-  ARBITRUM: {
-    chain: arbitrum,
-    token: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
-    rpcEnv: 'PRIVATE_RPC_URL_ARB',
-    fallbackRpc: 'https://arb1.arbitrum.io/rpc',
-  },
   'ARC-TESTNET': {
     chain: ARC_TESTNET,
     token: '0x3600000000000000000000000000000000000000',
@@ -166,7 +147,7 @@ export async function payAgentX402Service(params: {
       '--address',
       record.walletAddress,
       '--chain',
-      params.paymentChain ?? 'BASE',
+      params.paymentChain ?? ARC_TESTNET_GATEWAY_CHAIN,
       '--max-amount',
       String(params.maxAmount),
     ], serviceKey)
@@ -257,7 +238,7 @@ export async function getAgentWalletRecord(agentSlug: string) {
 }
 
 function withServiceParams(serviceUrl: string, params: Record<string, string | undefined>) {
-  const base = process.env.HASH_PAYLINK_BASE_URL ?? 'https://hashpaylink.com'
+  const base = process.env.POLYDESK_BASE_URL ?? process.env.PUBLIC_POLYDESK_ORIGIN ?? DEFAULT_SCOUT_ORIGIN
   const url = new URL(serviceUrl, base)
   for (const [key, value] of Object.entries(params)) {
     const clean = String(value ?? '').trim()
@@ -298,37 +279,20 @@ function clampAmount(value: unknown, max: number) {
   return Math.min(amount, max)
 }
 
-function normalizeBalanceChain(value: unknown, fallback = 'BASE') {
+function normalizeBalanceChain(value: unknown) {
   const key = String(value ?? '').trim().toLowerCase()
-  if (key === 'base') return 'BASE'
-  if (key === 'base-sepolia' || key === 'base_sepolia' || key === 'basesepolia') return 'BASE-SEPOLIA'
-  if (key === 'arbitrum' || key === 'arb') return 'ARBITRUM'
   if (key === 'arc' || key === 'arc-testnet' || key === 'arc_testnet') return 'ARC-TESTNET'
   const upper = key.toUpperCase()
-  if (upper === 'BASE' || upper === 'BASE-SEPOLIA' || upper === 'ARBITRUM' || upper === 'ARC-TESTNET') return upper
-  return fallback
-}
-
-function normalizeGatewayDepositChain(value: unknown) {
-  const key = String(value ?? '').trim().toLowerCase()
-  if (key === 'base-sepolia' || key === 'base_sepolia' || key === 'basesepolia') return 'BASE-SEPOLIA'
-  if (key === 'base') return 'BASE'
-  if (key === 'arbitrum' || key === 'arb') return 'ARBITRUM'
-  const fallback = GATEWAY_DEPOSIT_CHAIN.toUpperCase()
-  if (fallback === 'BASE-SEPOLIA' || fallback === 'BASE_SEPOLIA' || fallback === 'BASESEPOLIA') return 'BASE-SEPOLIA'
-  return fallback === 'ARBITRUM' ? 'ARBITRUM' : 'BASE'
+  if (upper === 'ARC-TESTNET') return upper
+  return 'ARC-TESTNET'
 }
 
 function normalizeGatewayBalanceChain(value: unknown) {
   const key = String(value ?? '').trim().toLowerCase()
   if (key === 'arc' || key === 'arc-testnet' || key === 'arc_testnet') return 'ARC-TESTNET'
-  if (key === 'base') return 'BASE'
-  if (key === 'arbitrum' || key === 'arb') return 'ARBITRUM'
   const fallback = String(value || GATEWAY_BALANCE_CHAIN).trim().toUpperCase()
   if (fallback === 'ARC-TESTNET' || fallback === 'ARC_TESTNET' || fallback === 'ARC') return 'ARC-TESTNET'
-  if (fallback === 'ARBITRUM' || fallback === 'ARB') return 'ARBITRUM'
-  if (fallback === 'BASE') return 'BASE'
-  return fallback || 'MATIC'
+  return 'ARC-TESTNET'
 }
 
 async function queryUsdcWalletBalance(address: string, chain: string) {
@@ -375,7 +339,7 @@ function buildX402Proof(input: {
   const proof = {
     kind: 'circle_gateway_x402' as const,
     provider: input.response?.receipt?.provider ?? 'Circle Gateway x402',
-    service: input.response?.service ?? 'Hash PayLink x402 service',
+    service: input.response?.service ?? 'PolyDesk x402 service',
     buyerAgent: input.buyerAgent,
     sellerAgent: input.sellerAgent,
     payer: input.response?.payment?.payer ?? input.buyerWallet,
@@ -632,7 +596,7 @@ export default async function handler(req: Request, res: Response) {
     if (!agentSlug) return res.status(400).json({ ok: false, error: 'Missing agent name.' })
     const store = await readStore()
     const record = resolveAgentRecord(store, agentSlug)
-    const balanceChain = normalizeBalanceChain(req.query.chain, record?.chain ?? 'BASE')
+    const balanceChain = normalizeBalanceChain(req.query.chain ?? record?.chain)
     const gatewayBalanceChain = normalizeGatewayBalanceChain(req.query.gatewayChain ?? req.query.x402Chain ?? req.query.chain)
     let balance: string | undefined
     let balanceError: string | undefined
@@ -731,7 +695,7 @@ export default async function handler(req: Request, res: Response) {
   const action = String(req.body?.action ?? '').trim().toLowerCase()
   const agentSlug = normalizeSlug(req.body?.agentSlug)
   const email = normalizeEmail(req.body?.email)
-  const testnet = req.body?.testnet !== false
+  const testnet = true
   if (!agentSlug) return res.status(400).json({ ok: false, error: 'Missing agent name.' })
 
   const id = email ? sessionId(agentSlug, email) : ''
@@ -763,8 +727,8 @@ export default async function handler(req: Request, res: Response) {
         return res.status(400).json({ ok: false, error: 'Circle did not return a request id. Use the CLI fallback.' })
       }
 
-      await runCircle(['wallet', 'login', '--request', pending.requestId, '--otp', otp, ...(pending.testnet ? ['--testnet'] : [])], key)
-      const chain = pending.testnet ? 'ARC-TESTNET' : 'BASE'
+      await runCircle(['wallet', 'login', '--request', pending.requestId, '--otp', otp, '--testnet'], key)
+      const chain = 'ARC-TESTNET'
       let listOutput = ''
       try {
         listOutput = await runCircle(['wallet', 'list', '--type', 'agent', '--chain', chain, '--output', 'json'], key)
@@ -798,7 +762,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(409).json({
           ok: false,
           code: 'multiple_agent_wallets',
-          error: 'Circle returned multiple agent wallets. Enter the funded agent wallet address so Hash PayLink does not pick the wrong wallet.',
+          error: 'Circle returned multiple agent wallets. Enter the funded agent wallet address so PolyDesk does not pick the wrong wallet.',
           existingWallet: existing?.walletAddress,
           availableWallets: await walletChoicesWithBalances(wallets, key, chain),
         })
@@ -810,7 +774,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(409).json({
           ok: false,
           code: 'platform_agent_locked',
-          error: 'This agent wallet is pinned by Hash PayLink and cannot be replaced from this flow.',
+          error: 'This agent wallet is pinned by PolyDesk and cannot be replaced from this flow.',
           existingWallet: envRecord.walletAddress,
           newWallet: walletAddress,
         })
@@ -838,7 +802,7 @@ export default async function handler(req: Request, res: Response) {
         direction: 'system',
         network: chain,
         wallet: walletAddress,
-        detail: pending.testnet ? 'Testnet session connected' : 'Mainnet session connected',
+        detail: 'Arc Testnet session connected',
       })
       return res.json({ ok: true, walletAddress, chain, agentSlug })
     }
@@ -848,7 +812,7 @@ export default async function handler(req: Request, res: Response) {
         return res.status(409).json({
           ok: false,
           code: 'platform_agent_locked',
-          error: 'This agent wallet is pinned by Hash PayLink env config and cannot be disconnected from this flow.',
+          error: 'This agent wallet is pinned by PolyDesk env config and cannot be disconnected from this flow.',
         })
       }
       const store = await readStore()
@@ -992,105 +956,10 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'gateway-deposit') {
-      const amount = clampAmount(req.body?.amount, MAX_GATEWAY_DEPOSIT_AMOUNT)
-      if (!amount) return res.status(400).json({ ok: false, error: 'Invalid x402 activation amount.' })
-      const depositChain = normalizeGatewayDepositChain(req.body?.chain)
-
-      const store = await readStore()
-      const record = resolveAgentRecord(store, agentSlug)
-      if (!record?.walletAddress || !record.sessionId) {
-        return res.status(404).json({ ok: false, error: 'Agent wallet session not found. Login on the web dashboard first.' })
-      }
-
-      const serviceKey = `${agentSlug}_${record.sessionId}`
-      let output = ''
-      try {
-        output = await runCircle([
-          'gateway',
-          'deposit',
-          '--amount',
-          String(amount),
-          '--address',
-          record.walletAddress,
-          '--chain',
-          depositChain,
-          '--method',
-          'eco',
-        ], serviceKey, 120_000)
-      } catch (err) {
-        if (isCircleLoginExpired(err)) {
-          return res.status(409).json({
-            ok: false,
-            code: 'circle_session_expired',
-            error: 'Circle Agent Wallet is connected, but the secure session expired. Reconnect the wallet, then retry x402 activation.',
-          })
-        }
-        throw err
-      }
-
-      let balanceOutput = ''
-      let gatewayBalance: string | undefined
-      let balanceError: unknown
-      for (let attempt = 1; attempt <= GATEWAY_DEPOSIT_VERIFY_ATTEMPTS; attempt += 1) {
-        try {
-          try {
-            balanceOutput = await runCircle(['gateway', 'balance', '--address', record.walletAddress, '--chain', depositChain, '--output', 'json'], serviceKey, 30_000)
-          } catch {
-            balanceOutput = await runCircle(['gateway', 'balance', '--address', record.walletAddress, '--chain', depositChain], serviceKey, 30_000)
-          }
-          gatewayBalance = parseBalance(balanceOutput)
-          balanceError = undefined
-          if (Number(gatewayBalance ?? '0') >= Number(amount)) break
-        } catch (err) {
-          balanceError = err
-        }
-        if (attempt < GATEWAY_DEPOSIT_VERIFY_ATTEMPTS) await delay(GATEWAY_DEPOSIT_VERIFY_DELAY_MS)
-      }
-
-      if (balanceError && !balanceOutput) {
-        return res.status(502).json({
-          ok: false,
-          code: 'gateway_balance_verify_failed',
-          error: balanceError instanceof Error ? balanceError.message.slice(0, 240) : 'Gateway balance verification failed after deposit.',
-          depositChain,
-          raw: output.slice(0, 3000),
-        })
-      }
-
-      if (Number(gatewayBalance ?? '0') < Number(amount)) {
-        return res.status(202).json({
-          ok: false,
-          code: 'gateway_deposit_pending',
-          error: `Gateway deposit was submitted, but Circle Gateway has not made ${amount} USDC available on ${depositChain} yet. Wait a moment, then check activation again.`,
-          gatewayBalance: gatewayBalance ?? '0',
-          gatewayBalanceChain: depositChain,
-          raw: output.slice(0, 3000),
-          balanceRaw: balanceOutput.slice(0, 1200),
-        })
-      }
-
-      await appendAgentActivity({
-        agentSlug,
-        type: 'gateway_activated',
-        title: 'Activated x402 Gateway balance',
-        amount: String(amount),
-        asset: 'USDC',
-        direction: 'in',
-        network: depositChain,
-        wallet: record.walletAddress,
-        detail: `Deposited from ${depositChain}`,
-      })
-
-      return res.json({
-        ok: true,
-        agentSlug,
-        walletAddress: record.walletAddress,
-        amount: String(amount),
-        depositChain,
-        gatewayBalanceChain: depositChain,
-        gatewayBalance,
-        response: extractJsonFromCliOutput(output),
-        raw: output.slice(0, 3000),
+      return res.status(410).json({
+        ok: false,
+        code: 'polydesk_arc_only',
+        error: 'PolyDesk LP x402 activation uses Arc only. Reconnect on Arc and retry activation.',
       })
     }
 

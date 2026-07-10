@@ -6,8 +6,8 @@ import { readDurableJson, writeDurableJson } from './render-durable-store.js'
 
 const STORE_PATH = process.env.AGENT_PROFILE_STORE
   ?? (process.env.DATA_PATH ? `${process.env.DATA_PATH}/agent-profiles.json` : './data/agent-profiles.json')
-const AGENT_PROFILE_STORE_KEY = (process.env.AGENT_PROFILE_STORE_KEY ?? 'hashpaylink:agent-profiles').trim()
-const PLATFORM_AGENT_SLUG = (process.env.DEFAULT_AGENT_SLUG ?? '').trim().toLowerCase() || 'hashpaylink-agent'
+const AGENT_PROFILE_STORE_KEY = (process.env.AGENT_PROFILE_STORE_KEY ?? 'polydesk:agent-profiles').trim()
+const PLATFORM_AGENT_SLUG = (process.env.DEFAULT_AGENT_SLUG ?? '').trim().toLowerCase() || 'polydesk-agent'
 const PLATFORM_AGENT_WALLET_ADDRESS = (process.env.DEFAULT_AGENT_WALLET_ADDRESS ?? '').trim()
 const MAX_OWNER_AGENTS = 3
 
@@ -73,11 +73,11 @@ function publicAgent(agent: AgentProfile) {
 function platformAgentProfile(): AgentProfile {
   return {
     slug: PLATFORM_AGENT_SLUG,
-    name: 'Hash PayLink Agent',
-    purpose: 'Owner-managed platform agent for treasury, x402, LP Scout, and HashpayStream services.',
+    name: 'PolyDesk Agent',
+    purpose: 'Owner-managed PolyDesk agent for Polymarket trading context, x402, and LP Scout services.',
     ownerKey: 'platform',
     walletAddress: PLATFORM_AGENT_WALLET_ADDRESS || undefined,
-    profileImage: agentProfileImage(PLATFORM_AGENT_SLUG, 'Hash PayLink Agent'),
+    profileImage: agentProfileImage(PLATFORM_AGENT_SLUG, 'PolyDesk Agent'),
     createdAt: 0,
     updatedAt: 0,
   }

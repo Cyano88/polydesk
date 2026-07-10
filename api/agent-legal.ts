@@ -24,14 +24,14 @@ function clean(value: unknown) {
 }
 
 function baseUrl() {
-  return clean(process.env.HASH_PAYLINK_BASE_URL) || 'https://hashpaylink.com'
+  return clean(process.env.POLYDESK_BASE_URL) || clean(process.env.PUBLIC_POLYDESK_ORIGIN) || 'https://polydesk-i96m.onrender.com'
 }
 
-export function getAgentLegalProfile(agentSlug = 'hashpaylink-agent'): AgentLegalProfile {
+export function getAgentLegalProfile(agentSlug = 'polydesk-agent'): AgentLegalProfile {
   const termsUrl = clean(process.env.AGENT_LEGAL_TERMS_URL) || `${baseUrl().replace(/\/+$/, '')}/agent-terms`
   return {
-    entityName: clean(process.env.AGENT_LEGAL_ENTITY_NAME) || 'Hash PayLink Agent',
-    entityType: clean(process.env.AGENT_LEGAL_ENTITY_TYPE) || 'Software agent operated by Hash PayLink',
+    entityName: clean(process.env.AGENT_LEGAL_ENTITY_NAME) || 'PolyDesk Agent',
+    entityType: clean(process.env.AGENT_LEGAL_ENTITY_TYPE) || 'Software agent operated by PolyDesk',
     jurisdiction: clean(process.env.AGENT_LEGAL_JURISDICTION) || 'Not configured',
     entityId: clean(process.env.AGENT_LEGAL_ENTITY_ID) || undefined,
     einLast4: clean(process.env.AGENT_LEGAL_EIN_LAST4) || undefined,
