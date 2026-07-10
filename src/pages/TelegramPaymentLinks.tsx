@@ -43,7 +43,7 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyWalletConnectButton } from '../lib/PrivyWalletConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
-import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
+import { POLYDESK_LOGIN_OPTIONS, POLYDESK_WALLET_LIST } from '../lib/privyLoginOptions'
 
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_AGENT_URL || 'https://t.me/HashPayLinkBot'
 const PUBLIC_PAYLINK_ORIGIN = (import.meta.env.VITE_PUBLIC_PAYLINK_ORIGIN || 'https://hashpaylink.com').replace(/\/+$/, '')
@@ -6713,6 +6713,7 @@ export function PolyPortfolioPanel({
   const [networkInput, setNetworkInput] = useState<PolymarketBridgeNetwork>('base')
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
+  const [walletConnectError, setWalletConnectError] = useState('')
   const [depositWalletBusy, setDepositWalletBusy] = useState(false)
   const [depositWalletError, setDepositWalletError] = useState('')
   const depositWalletAutoKey = useRef('')
@@ -6812,6 +6813,15 @@ export function PolyPortfolioPanel({
       ? formatUsd(tradingPusdValue)
       : '--'
   const mainWalletCopy = 'View pUSD trading cash, fund your account, withdraw as USDC, and track positions.'
+  const ownerWalletConnectOptions = {
+    walletList: [...POLYDESK_WALLET_LIST],
+    walletChainType: 'ethereum-only',
+    description: 'Connect the owner EVM wallet that controls your PolyDesk Polymarket wallet.',
+  }
+
+  useEffect(() => {
+    if (signingWalletAddress) setWalletConnectError('')
+  }, [signingWalletAddress])
 
   const claimablePositions = useMemo(
     () => livePositions.filter(isClaimablePosition),
@@ -8481,7 +8491,7 @@ export function PolyPortfolioPanel({
           <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">pUSD trading cash</p>
             <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">$0</p>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Connect to load live Polymarket balances.</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Connect the owner wallet that controls your PolyDesk Polymarket wallet.</p>
           </div>
           <div className="mt-3">
             {!authenticated ? (
@@ -8509,11 +8519,18 @@ export function PolyPortfolioPanel({
               </button>
             ) : (
               <>
-                <PrivyWalletConnectButton className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                <PrivyWalletConnectButton
+                  options={ownerWalletConnectOptions}
+                  onError={setWalletConnectError}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                >
                   <Wallet className="h-4 w-4" />
-                  Attach wallet
+                  Connect owner wallet
                 </PrivyWalletConnectButton>
-                <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">Privy session active</p>
+                <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
+                  Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+                </p>
+                {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
               </>
             )}
           </div>
@@ -8682,11 +8699,18 @@ export function PolyPortfolioPanel({
                 </button>
               ) : (
                 <>
-                  <PrivyWalletConnectButton className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                  <PrivyWalletConnectButton
+                    options={ownerWalletConnectOptions}
+                    onError={setWalletConnectError}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                  >
                     <Wallet className="h-4 w-4" />
-                    Attach wallet
+                    Connect owner wallet
                   </PrivyWalletConnectButton>
-                  <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">Privy session active</p>
+                  <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
+                    Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+                  </p>
+                  {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
                 </>
               )}
             </div>
@@ -9155,11 +9179,18 @@ export function PolyPortfolioPanel({
           </div>
         ) : !signingWalletAddress ? (
           <div className="mt-3">
-            <PrivyWalletConnectButton className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-black active:scale-[0.98] dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100">
+            <PrivyWalletConnectButton
+              options={ownerWalletConnectOptions}
+              onError={setWalletConnectError}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-black active:scale-[0.98] dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+            >
               <Wallet className="h-4 w-4" />
-              Attach wallet
+              Connect owner wallet
             </PrivyWalletConnectButton>
-            <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">Privy session active</p>
+            <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">
+              Email is active. Connect the same EVM wallet used for your existing PolyDesk trading wallet.
+            </p>
+            {walletConnectError && <p className="mt-2 text-center text-xs font-medium text-red-500 dark:text-red-300">{walletConnectError}</p>}
           </div>
         ) : null}
 
