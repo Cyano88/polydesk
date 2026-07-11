@@ -2939,6 +2939,26 @@ export function TelegramHelperPanel({
           })
           .filter(Boolean)
           .slice(0, 4)
+        const opportunityLines = opportunities
+          .slice(0, 3)
+          .map((item, index) => {
+            const title = String(item?.title || item?.market || item?.question || `Market ${index + 1}`)
+            const days = typeof item?.daysToResolve === 'number' ? `${item.daysToResolve}d left` : 'duration unknown'
+            const reward = typeof item?.dailyReward === 'number' ? `${item.dailyReward} USDC/day` : 'reward unknown'
+            const spread = typeof item?.liveSpread === 'number' ? `${(item.liveSpread * 100).toFixed(1)}c spread` : 'spread unknown'
+            const depth = typeof item?.depthAtTwoCents === 'number' ? `${Math.round(item.depthAtTwoCents).toLocaleString()} depth within 2c` : 'depth unknown'
+            const yes = typeof item?.suggestedYesBid === 'number' ? item.suggestedYesBid.toFixed(3) : ''
+            const no = typeof item?.suggestedNoBid === 'number' ? item.suggestedNoBid.toFixed(3) : ''
+            const entry = yes || no
+              ? `Entry: place maker quotes only. Consider YES near ${yes || 'n/a'} or NO near ${no || 'n/a'} after refreshing the live book.`
+              : 'Entry: wait until the live bid/ask and midpoint are visible before quoting.'
+            return [
+              `${index + 1}. ${title}`,
+              `${reward} | ${spread} | ${depth} | ${days}`,
+              entry,
+              'Exit/risk: cancel stale quotes quickly; do not market order into a moving book.',
+            ].join('\n')
+          })
         const createdAt = Number(scout.createdAt || 0)
         const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
         const answerLines = [
@@ -2946,6 +2966,7 @@ export function TelegramHelperPanel({
             ? `LP Scout result is ready and 0G-verified (${ageText}).`
             : `LP Scout payment is verified and the paid result is saved (${ageText}). 0G verification is still finalizing.`,
           String(result.summary || zeroScout?.summary || scout.detail || 'Agent Hash prepared the paid Polymarket LP Scout result.'),
+          opportunityLines.length ? `Quote guide:\n\n${opportunityLines.join('\n\n')}` : '',
           result.nextAction ? `Next: ${result.nextAction}` : '',
           zeroScout?.proof?.storageRoot || zeroScout?.proof?.contentHash || zeroScout?.proof?.storageTxHash
             ? 'Proof: ZeroScout / 0G verification is attached to this scout.'

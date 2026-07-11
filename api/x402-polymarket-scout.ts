@@ -370,10 +370,11 @@ function daysUntil(rawDate: string | undefined) {
 function conservativeDurationScore(days: number | undefined) {
   if (typeof days !== 'number') return -8
   if (days < 7) return -85
-  if (days <= 21) return 42
-  if (days <= 45) return 30
-  if (days <= 90) return 12
-  return -10
+  if (days <= 13) return 18
+  if (days <= 45) return 46
+  if (days <= 90) return 34
+  if (days <= 180) return 12
+  return -8
 }
 
 function conservativeDepthScore(depth: number | undefined) {
@@ -392,12 +393,12 @@ function conservativePriceScore(midpoint: number | undefined) {
 }
 
 function isHeadlineSensitiveMarket(title: string) {
-  return /\b(war|ceasefire|peace deal|nuclear|iran|russia|ukraine|israel|gaza|tariff|fed|rate cut|election|president|trump|biden|supreme court|hurricane|earthquake)\b/i.test(title)
+  return /\b(war|ceasefire|peace deal|nuclear|iran|russia|ukraine|israel|gaza|tariff|fed|rate cut|election|president|trump|biden|supreme court|hurricane|earthquake|oil|crude|wti|brent|hormuz|opec|middle east)\b/i.test(title)
 }
 
 function isConservativeCandidate(opportunity: PolymarketLpOpportunity) {
   const longEnough = typeof opportunity.daysToResolve !== 'number' || opportunity.daysToResolve >= 7
-  const notTooFar = typeof opportunity.daysToResolve !== 'number' || opportunity.daysToResolve <= 90
+  const notTooFar = typeof opportunity.daysToResolve !== 'number' || opportunity.daysToResolve <= 180
   const confirmedSpread = typeof opportunity.spread === 'number' && opportunity.spread <= Math.min(opportunity.maxSpread ?? 0.03, 0.025)
   const confirmedDepth = typeof opportunity.depthAtTwoCents === 'number' && opportunity.depthAtTwoCents >= 5_000
   const tradableMid = typeof opportunity.midpoint === 'number' && opportunity.midpoint >= 0.15 && opportunity.midpoint <= 0.85
