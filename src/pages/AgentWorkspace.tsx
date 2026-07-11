@@ -1457,16 +1457,16 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : agentWalletRestorePending || x402Refreshing || lpScoutWalletBalanceChecking
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking wallet</>
     : !privyAuthenticated
-    ? <><Mail className="h-4 w-4" /> Sign in</>
+    ? <><ArrowRight className="h-4 w-4" /> Sign in</>
     : sessionReconnectNeeded
     ? <><Wallet className="h-4 w-4" /> Reconnect wallet</>
     : !agentWalletAccessConnected
-    ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
+    ? <><ArrowRight className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsSetup
-    ? <><Mail className="h-4 w-4" /> Sign in to continue</>
+    ? <><ArrowRight className="h-4 w-4" /> Sign in to continue</>
     : lpScoutHasResult
     ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
-    : <><span className="mx-auto">Proceed to LP Scout</span><ShieldCheck className="absolute right-4 h-4 w-4" strokeWidth={2} /></>
+    : <><ArrowRight className="h-4 w-4" /> Continue to LP Scout</>
   const walletErrorMessage = walletError
     ? /invalid or expired request id/i.test(walletError)
       ? 'OTP expired. Resend OTP and use the newest code.'
@@ -2050,7 +2050,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       }}
                       disabled={lpScoutPrimaryDisabled}
                       className={cn(
-                        'relative inline-flex w-full items-center justify-center gap-2 rounded-xl font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
+                        'relative inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
                         lpScoutPrimaryDisabled
                           ? 'bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400'
                           : lpScoutHasResult
