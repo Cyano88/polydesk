@@ -13,7 +13,6 @@ import { cn }                           from '../lib/utils'
 import type { LayoutOutletContext }     from '../Layout'
 import { CHAIN_META, EVM_TREASURY }     from '../lib/chains'
 import type { ChainKey }                from '../lib/chains'
-import { queryBalances }                from '../lib/unifiedBalance'
 import { PRIVY_AUTH_ENABLED }           from '../lib/authMode'
 import { resolvePrivyCircleLink, savePrivyCircleLink } from '../lib/privyCircleLink'
 import { PrivyConnectButton }           from '../lib/PrivyConnectButton'
@@ -751,18 +750,19 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setTreasuryBalanceError(`${CHAIN_META[agentNetwork].label} balance is taking longer than expected. Switch network or try again.`)
       setTreasuryBalanceChecked(true)
     }, 22_000)
-    queryBalances({
-      evmAddress: currentAgentWallet,
-      chains: [agentNetwork],
-    })
+    fetch(`/api/agent-wallet?agent=${encodeURIComponent(normalizedAgentSlug)}&balance=1&chain=${encodeURIComponent(agentNetwork)}`)
       .then(result => {
         if (cancelled) return
-        const row = result.rows.find(item => item.key === agentNetwork)
-        if (!row || row.status === 'error') {
-          setTreasuryBalanceError(readableTreasuryBalanceError(row?.error || 'Balance unavailable', row?.label || CHAIN_META[agentNetwork].label))
+        if (!result.ok) throw new Error('Balance unavailable')
+        return result.json() as Promise<{ ok?: boolean; balance?: string; balanceError?: string }>
+      })
+      .then(data => {
+        if (cancelled || !data) return
+        if (!data.ok || data.balanceError) {
+          setTreasuryBalanceError(readableTreasuryBalanceError(data.balanceError || 'Balance unavailable', CHAIN_META[agentNetwork].label))
           return
         }
-        setTreasuryBalance(String(row.balance))
+        setTreasuryBalance(data.balance ?? '0')
       })
       .catch(error => {
         if (!cancelled) setTreasuryBalanceError(readableTreasuryBalanceError(error, CHAIN_META[agentNetwork].label))
@@ -776,7 +776,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       cancelled = true
       window.clearTimeout(watchdog)
     }
-  }, [agentNetwork, currentAgentWallet, showAgentProfile, balanceRefreshNonce, agentWalletSessionConnected])
+  }, [agentNetwork, currentAgentWallet, showAgentProfile, balanceRefreshNonce, agentWalletSessionConnected, normalizedAgentSlug])
 
   async function refreshX402Balance() {
     if (!showAgentProfile || !currentAgentWallet || !agentWalletSessionConnected) {
@@ -1399,6 +1399,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const lpScoutWalletStatus = agentWalletAccessConnected ? 'Ready' : 'Email required'
   const lpScoutFundingStatus = !agentWalletAccessConnected
     ? 'Locked'
+    : lpScoutX402Ready
+    ? 'Ready'
     : treasuryEmpty
     ? 'Add USDC'
     : treasuryBalanceKnown
@@ -1418,14 +1420,14 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : 'After payment'
   const lpScoutWalletBalanceReady = Boolean(agentWalletAccessConnected && treasuryBalanceKnown && !treasuryEmpty)
   const lpScoutWalletBalanceChecking = Boolean(agentWalletAccessConnected && !treasuryBalanceChecked)
-  const lpScoutNeedsFunding = Boolean(agentWalletAccessConnected && treasuryBalanceChecked && (!treasuryBalanceKnown || treasuryEmpty))
-  const lpScoutNeedsActivation = Boolean(agentWalletAccessConnected && lpScoutWalletBalanceReady && x402BalanceChecked && !lpScoutX402Ready)
+  const lpScoutNeedsFunding = Boolean(agentWalletAccessConnected && x402BalanceChecked && !lpScoutX402Ready && treasuryBalanceChecked && (!treasuryBalanceKnown || treasuryEmpty))
+  const lpScoutNeedsActivation = Boolean(agentWalletAccessConnected && !lpScoutX402Ready && lpScoutWalletBalanceReady && x402BalanceChecked)
   const lpScoutPrimaryDisabled = Boolean(
     lpScoutBusy ||
     x402Busy ||
     x402Refreshing ||
-    lpScoutWalletBalanceChecking ||
-    (agentWalletAccessConnected && !lpScoutWalletBalanceReady && !lpScoutNeedsFunding),
+    (!lpScoutX402Ready && lpScoutWalletBalanceChecking) ||
+    (agentWalletAccessConnected && !lpScoutX402Ready && !lpScoutWalletBalanceReady && !lpScoutNeedsFunding),
   )
   const lpScoutPrimaryContent = lpScoutBusy
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Running LP Scout</>
@@ -1438,7 +1440,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : !agentWalletAccessConnected
     ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsFunding
-    ? <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> <span>Add USDC</span></>
+    ? <span>Add USDC</span>
     : lpScoutNeedsActivation
     ? <><ArrowRight className="h-4 w-4" /> Activate x402</>
     : lpScoutHasResult
@@ -1789,7 +1791,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           onClick={handleFundAgent}
                           className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
                         >
-                          <img src="/pocket-circle.png" alt="" className="h-5 w-5 object-contain" />
                           Add USDC
                         </Link>
                         <button
@@ -2241,7 +2242,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><img src="/hash-logo-transparent.png" alt="" className="h-5 w-5 object-contain invert mix-blend-screen dark:invert-0 dark:mix-blend-multiply" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : <><ArrowRight className="h-4 w-4" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
                       {!hasPendingLpScoutRequest && (
                         <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
