@@ -1463,7 +1463,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : !agentWalletAccessConnected
     ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsSetup
-    ? <><Wallet className="h-4 w-4" /> Fund x402 balance</>
+    ? <><Mail className="h-4 w-4" /> Sign in to continue</>
     : lpScoutHasResult
     ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
     : <><span className="mx-auto">Proceed to LP Scout</span><ShieldCheck className="absolute right-4 h-4 w-4" strokeWidth={2} /></>
@@ -1753,7 +1753,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       },
                       {
                         label: 'x402 balance',
-                        value: x402Refreshing || lpScoutWalletBalanceChecking ? 'Checking' : lpScoutX402Ready ? 'Ready' : 'Needs funding',
+                        value: x402Refreshing || lpScoutWalletBalanceChecking ? 'Checking' : lpScoutX402Ready ? 'Ready' : 'Sign in',
                         done: lpScoutX402Ready,
                         busy: x402Refreshing || lpScoutWalletBalanceChecking,
                       },
@@ -1788,7 +1788,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     ))}
                     {!lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking && (
                       <p className="px-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Use Fund x402 balance to open the wallet manager, then return here to run the scout.
+                        Sign in to refresh x402 gateway access, then continue.
                       </p>
                     )}
                   </div>
@@ -2037,7 +2037,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           return
                         }
                         if (!lpScoutX402Ready) {
-                          navigate('/?service=lp-scout&lpScoutPath=fund')
+                          setAgentWalletSessionConnected(false)
+                          setShowWalletAccessPanel(true)
+                          setWalletMode('login')
+                          setWalletStep('idle')
+                          setWalletOtp('')
+                          setWalletOtpContext(null)
+                          setWalletError(null)
                           return
                         }
                         runLpScoutRequest()
