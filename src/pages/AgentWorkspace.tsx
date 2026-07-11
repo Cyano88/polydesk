@@ -2,7 +2,7 @@
 /**
  * /agent - PolyDesk x402 wallet flow.
  *
- * Handles Arc wallet access, x402 activation, LP Scout payment, OG Labs
+ * Handles Arc wallet access, x402 activation, LP Scout payment, 0G
  * verification, and receipt history for the standalone PolyDesk app.
  */
 
@@ -1407,9 +1407,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   }
   const pocketBalanceLabel = formatUsdcAmount(treasuryBalance, treasuryBalanceError, treasuryBalanceChecked)
   const x402BalanceLabel = formatUsdcAmount(x402Balance, x402BalanceError, x402BalanceChecked)
-  const shortAgentWallet = currentAgentWallet
-    ? `${currentAgentWallet.slice(0, 6)}...${currentAgentWallet.slice(-4)}`
-    : ''
   const lpScoutX402Ready = Boolean(
     agentWalletAccessConnected &&
     x402BalanceNumber !== null &&
@@ -1424,7 +1421,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : lpScoutX402Ready
     ? 'Ready'
     : treasuryEmpty
-    ? 'Copy address'
+    ? 'Needs USDC'
     : treasuryBalanceKnown
     ? 'Ready'
     : 'Checking'
@@ -1444,7 +1441,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : lpScoutHasResult
     ? 'Running'
     : 'After payment'
-  const lpScoutWalletBalanceReady = Boolean(agentWalletAccessConnected && treasuryBalanceKnown && !treasuryEmpty)
   const lpScoutWalletBalanceChecking = Boolean(agentWalletAccessConnected && !treasuryBalanceChecked)
   const lpScoutNeedsSetup = Boolean(agentWalletAccessConnected && !lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking)
   const lpScoutPrimaryDisabled = Boolean(
@@ -1467,9 +1463,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : !agentWalletAccessConnected
     ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsSetup
-    ? <><Wallet className="h-4 w-4" /> Fund x402</>
+    ? <><Wallet className="h-4 w-4" /> Fund x402 balance</>
     : lpScoutHasResult
-    ? <><RefreshCw className="h-4 w-4" /> Run LP Scout again</>
+    ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
     : <><span className="mx-auto">Proceed to LP Scout</span><ShieldCheck className="absolute right-4 h-4 w-4" strokeWidth={2} /></>
   const walletErrorMessage = walletError
     ? /invalid or expired request id/i.test(walletError)
@@ -1766,87 +1762,31 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                   </div>
                 )}
 
-                {agentWalletAccessConnected && (
-                  <details className="group rounded-lg border border-gray-200 bg-white/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
-                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-center gap-3 text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold text-gray-800 dark:text-gray-100">Pocket Wallet</span>
-                        <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">{shortAgentWallet || 'Arc wallet'}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="text-right text-[10px] font-bold uppercase tracking-wider text-gray-400">Arc USDC</span>
-                        <span className="text-right font-mono text-xs font-semibold text-gray-700 dark:text-gray-100">{pocketBalanceLabel}</span>
-                        <ArrowRight className="h-3.5 w-3.5 text-gray-400 transition-transform group-open:rotate-90 dark:text-gray-500" />
-                      </span>
-                    </summary>
-                    <div className="mt-2 space-y-2 border-t border-gray-100 pt-2 dark:border-white/10">
-                      <div className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-black/10">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:bg-white/[0.06] dark:text-gray-300">
-                            Arc USDC {pocketBalanceLabel}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-gray-600 dark:text-gray-300">{currentAgentWallet}</span>
-                          <button
-                            type="button"
-                            onClick={copyAgentWallet}
-                            className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:text-white"
-                            aria-label="Copy Arc wallet address"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                            {copiedWallet && (
-                              <span className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg">
-                                Copied
-                              </span>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => refreshAgentBalances()}
-                            disabled={balancesRefreshing || x402Busy}
-                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
-                            aria-label="Refresh balances"
-                          >
-                            <RefreshCw className={cn('h-3.5 w-3.5', balancesRefreshing && 'animate-spin')} />
-                          </button>
-                        </div>
+                {agentWalletAccessConnected && !lpScoutHasResult && (
+                  <div className="rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402 balance</p>
+                        <p className="mt-0.5 truncate font-mono text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
+                          {x402BalanceLabel}
+                        </p>
                       </div>
-                      <div className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-black/10">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402</span>
-                          <span className="truncate font-mono text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
-                            {x402BalanceLabel}
-                          </span>
-                        </div>
-                        {lpScoutWalletBalanceReady && !lpScoutX402Ready && (
-                          <div className="mt-2 space-y-1.5">
-                            <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Activate x402</p>
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={x402Amount}
-                                onChange={event => {
-                                  setX402BalanceError('')
-                                  setX402Amount(event.target.value.replace(/[^\d.]/g, ''))
-                                }}
-                                inputMode="decimal"
-                                className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-                              />
-                              <button
-                                type="button"
-                                onClick={activateX402Balance}
-                                disabled={x402Busy || x402ActivationBlocked}
-                                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 px-3 text-xs font-semibold text-white transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950"
-                              >
-                                {x402Busy ? <PulsingDots /> : 'Activate'}
-                              </button>
-                            </div>
-                            {(x402ValidationMessage || x402BalanceError) && (
-                              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-200">{x402ValidationMessage || x402BalanceError}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshAgentBalances()}
+                        disabled={balancesRefreshing || x402Busy}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
+                        aria-label="Refresh x402 balance"
+                      >
+                        <RefreshCw className={cn('h-3.5 w-3.5', balancesRefreshing && 'animate-spin')} />
+                      </button>
                     </div>
-                  </details>
+                    {!lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking && (
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                        Open wallet manager to fund or activate x402 before this scout runs.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {!lpScoutAuthorizationOpen && lpScoutHasResult && (
@@ -1856,7 +1796,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-gray-900 dark:text-white">LP Scout payment received</p>
                           <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                            Agent Hash is preparing the result with Circle Gateway and OG Labs verification.
+                            Agent Hash is preparing the result with Circle Gateway and 0G archive proof.
                           </p>
                         </div>
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -1864,12 +1804,15 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold">
                         <span className="rounded-lg bg-gray-50 px-2 py-1 text-gray-600 dark:bg-black/10 dark:text-gray-300">Circle Gateway</span>
                         <span className={cn(
-                          'rounded-lg px-2 py-1',
+                          'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-1',
                           lpScoutVerified
                             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
                             : 'bg-purple-50 text-purple-700 dark:bg-purple-400/10 dark:text-purple-200',
                         )}>
-                          {lpScoutVerified ? 'OG verified' : 'OG pending'}
+                          <span className="inline-flex items-center rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold leading-none text-purple-500 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300">
+                            0G
+                          </span>
+                          {lpScoutVerified ? '0G archived' : '0G pending'}
                         </span>
                         <span className="truncate rounded-lg bg-gray-50 px-2 py-1 text-gray-600 dark:bg-black/10 dark:text-gray-300" title={latestX402Spend?.proof?.transaction || latestX402Spend?.proof?.proofHash || undefined}>
                           {latestX402Spend?.proof?.transaction ? 'TX ready' : latestX402Spend?.proof?.proofHash ? 'Proof ready' : 'Receipt ready'}
@@ -1885,30 +1828,34 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="max-w-[96%] rounded-2xl rounded-bl-md border border-emerald-100 bg-white px-3 py-3 text-xs leading-relaxed text-gray-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-gray-200">
+                    <div className="rounded-xl border border-gray-100 bg-white px-3 py-3 text-xs leading-relaxed text-gray-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200">
                       {!lpScoutVerified ? (
-                        <div className="rounded-xl border border-purple-100 bg-purple-50/80 px-3 py-3 text-purple-800 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-100">
-                          <div className="flex items-center gap-2">
-                            {zeroScoutBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                            <p className="text-[11px] font-bold uppercase tracking-widest">OG Labs verification</p>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2 dark:border-white/10 dark:bg-black/10">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="relative inline-flex shrink-0 items-center rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold leading-none text-purple-500 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300">
+                                0G
+                                {zeroScoutBusy && <Loader2 className="absolute -right-1 -top-1 h-3 w-3 animate-spin text-purple-500" />}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-semibold text-gray-900 dark:text-white">0G archive pending</p>
+                                <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">Payment saved. Agent Hash is finalizing the verified result.</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={generateZeroScoutBrief}
+                              disabled={zeroScoutBusy || !latestScoutActivity?.id}
+                              className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-semibold text-gray-600 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
+                            >
+                              {zeroScoutBusy ? 'Archiving' : 'Retry'}
+                            </button>
                           </div>
-                          <p className="mt-2 text-xs leading-relaxed">
-                            The paid Polymarket scout source is saved. PolyDesk is waiting for the OG Labs verification layer before showing the LP answer.
-                          </p>
                           {zeroScoutError && (
                             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
                               {zeroScoutError}
                             </p>
                           )}
-                          <button
-                            type="button"
-                            onClick={generateZeroScoutBrief}
-                            disabled={zeroScoutBusy || !latestScoutActivity?.id}
-                            className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-purple-950 px-3 py-2 text-[11px] font-semibold text-white transition-all hover:bg-purple-900 active:scale-[0.98] disabled:opacity-50 dark:bg-purple-100 dark:text-purple-950 dark:hover:bg-white"
-                          >
-                            {zeroScoutBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                            Verify with OG Labs
-                          </button>
                         </div>
                       ) : (
                       <>
@@ -1982,6 +1929,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
                           >
+                            <span className="mr-1 inline-flex items-center rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold leading-none text-purple-500 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300">
+                              0G
+                            </span>
                             0G proof
                           </a>
                         )}
@@ -2089,19 +2039,16 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       }}
                       disabled={lpScoutPrimaryDisabled}
                       className={cn(
-                        'relative inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold shadow-button transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
+                        'relative inline-flex w-full items-center justify-center gap-2 rounded-xl font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
                         lpScoutPrimaryDisabled
                           ? 'bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400'
+                          : lpScoutHasResult
+                          ? 'border border-gray-200 bg-white px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]'
                           : 'bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200',
                       )}
                     >
                       {lpScoutPrimaryContent}
                     </button>
-                    {agentWalletAccessConnected && lpScoutHasResult && (
-                      <p className="text-center text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Runs a fresh paid scout with live Polymarket data - max {pendingScoutMaxAmount || '0.01'} USDC.
-                      </p>
-                    )}
                     {!agentWalletAccessConnected && !hasPendingLpScoutRequest && (
                       <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                         {embeddedWalletManager
@@ -2548,7 +2495,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             {item.proof?.proofHash && !item.og?.ogExplorer && (
                               <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-100 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-500">
                                 <Loader2 className="h-3 w-3" />
-                                OG pending
+                                0G pending
                               </span>
                             )}
                             {item.proof?.proofHash && (
@@ -2568,7 +2515,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-purple-100 bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 transition-colors hover:bg-purple-100 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200"
                               >
                                 <ShieldCheck className="h-3 w-3" />
-                                OG verified
+                                0G archived
                               </a>
                             )}
                             {item.proof?.proofHash && (
