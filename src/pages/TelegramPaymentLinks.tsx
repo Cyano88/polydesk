@@ -2902,9 +2902,9 @@ export function TelegramHelperPanel({
         let zeroScout = scout.result?.zeroscout
         let zeroScoutError = ''
         if (!zeroScout) {
-          setAgentStatus('Pinging ZeroScout for 0G verification...')
+          setAgentStatus('Payment verified. ZeroScout is finalizing the LP answer...')
           const controller = new AbortController()
-          const timeout = window.setTimeout(() => controller.abort(), 25_000)
+          const timeout = window.setTimeout(() => controller.abort(), 90_000)
           try {
             const res = await fetch('/api/zeroscout/polymarket-brief', {
               method: 'POST',
@@ -2920,15 +2920,20 @@ export function TelegramHelperPanel({
             const data = await res.json() as { ok?: boolean; zeroscout?: Record<string, any>; error?: string }
             if (res.ok && data.ok && data.zeroscout) zeroScout = data.zeroscout
             if (!zeroScout && data.error) zeroScoutError = data.error
-            activity = await loadActivity()
-            scout = activity.find(item => item.id === lpScoutActivityId) || scout
-            zeroScout = zeroScout || scout.result?.zeroscout
           } catch (err) {
             zeroScoutError = err instanceof DOMException && err.name === 'AbortError'
-              ? 'ZeroScout verification is still running. Check this result again shortly.'
+              ? 'ZeroScout is still preparing the verified brief.'
               : err instanceof Error ? err.message : 'ZeroScout verification is still finalizing.'
           } finally {
             window.clearTimeout(timeout)
+          }
+          const waitUntil = Date.now() + 90_000
+          while (!zeroScout && Date.now() < waitUntil) {
+            setAgentStatus('Payment verified. Waiting for ZeroScout to return the verified brief...')
+            await polyDeskWait(10_000)
+            activity = await loadActivity()
+            scout = activity.find(item => item.id === lpScoutActivityId) || scout
+            zeroScout = zeroScout || scout.result?.zeroscout
           }
         }
         setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
