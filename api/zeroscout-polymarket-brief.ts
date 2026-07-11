@@ -104,6 +104,82 @@ function findMatchingPaidScoutProof(activity: AgentActivity, items: AgentActivit
   ))
 }
 
+export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, activityIdInput: unknown, options: {
+  includeClaudeReview?: boolean
+  includeOpenAiReview?: boolean
+} = {}) {
+  const agentSlug = normalizeActivitySlug(agentSlugInput)
+  const activityId = String(activityIdInput ?? '').trim()
+  if (!agentSlug || !activityId) {
+    const error = new Error('Run a paid LP Scout first, then generate a ZeroScout operator signal from that saved result.') as Error & { status?: number }
+    error.status = 400
+    throw error
+  }
+
+  const scoutActivity = await findAgentActivity(activityId)
+  if (!isStoredPolymarketScoutActivity(scoutActivity) || scoutActivity?.agentSlug !== agentSlug) {
+    const error = new Error('ZeroScout can only review a saved Polymarket LP Scout result from this agent.') as Error & { status?: number }
+    error.status = 403
+    throw error
+  }
+
+  const activity = await listAgentActivity(agentSlug, 80)
+  const paidScout = findMatchingPaidScoutProof(scoutActivity, activity)
+  if (!paidScout?.proof?.proofHash) {
+    const error = new Error('No matching x402 payment proof was found for this LP Scout result.') as Error & { status?: number }
+    error.status = 403
+    throw error
+  }
+
+  const existing = activity.find(item => (
+    item.type === 'scout_returned'
+    && item.result?.zeroscout
+    && item.result?.sourceActivityId === scoutActivity.id
+  ))
+  if (existing?.result?.zeroscout) return { result: existing.result.zeroscout, existed: true }
+
+  const scout = safeScout(scoutActivity.result)
+  const request = requestFromServiceUrl(scoutActivity.serviceUrl)
+  const payload = {
+    partner: 'HashKey PayLink',
+    productType: 'prediction-market',
+    analysisType: 'lp-market-intelligence',
+    objective: 'Find useful LP intelligence signals from supplied Polymarket market, rewards, spread, and depth data.',
+    outputStyle: 'operator-brief',
+    data: {
+      request: {
+        mode: request.mode,
+        context: request.context,
+        budget: request.budget,
+      },
+      source: 'PolyDesk LP Scout using Polymarket Gamma, CLOB rewards, and order book APIs.',
+      scout,
+      x402ProofHash: paidScout.proof.proofHash,
+      disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
+    },
+    includeClaudeReview: options.includeClaudeReview !== false,
+    includeOpenAiReview: options.includeOpenAiReview !== false,
+  }
+  const result = await callZeroScoutIntelligence(payload, { requireProof: true })
+
+  await appendAgentActivity({
+    agentSlug,
+    type: 'scout_returned',
+    title: 'ZeroScout LP operator signal',
+    direction: 'result',
+    network: result.network || 'ZeroScout',
+    serviceUrl: scoutActivity.serviceUrl,
+    detail: result.summary || 'ZeroScout generated a stored LP intelligence signal.',
+    result: {
+      sourceActivityId: scoutActivity.id,
+      x402ProofHash: paidScout.proof.proofHash,
+      zeroscout: result,
+    } as Record<string, unknown>,
+  })
+
+  return { result, existed: false }
+}
+
 export default async function zeroScoutPolymarketBriefHandler(req: Request, res: Response) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -112,76 +188,11 @@ export default async function zeroScoutPolymarketBriefHandler(req: Request, res:
   }
 
   try {
-    const agentSlug = normalizeActivitySlug(req.body?.agentSlug)
-    const activityId = String(req.body?.activityId ?? '').trim()
-    if (!agentSlug || !activityId) {
-      res.status(400).json({ ok: false, error: 'Run a paid LP Scout first, then generate a ZeroScout operator signal from that saved result.' })
-      return
-    }
-
-    const scoutActivity = await findAgentActivity(activityId)
-    if (!isStoredPolymarketScoutActivity(scoutActivity) || scoutActivity?.agentSlug !== agentSlug) {
-      res.status(403).json({ ok: false, error: 'ZeroScout can only review a saved Polymarket LP Scout result from this agent.' })
-      return
-    }
-
-    const activity = await listAgentActivity(agentSlug, 80)
-    const paidScout = findMatchingPaidScoutProof(scoutActivity, activity)
-    if (!paidScout?.proof?.proofHash) {
-      res.status(403).json({ ok: false, error: 'No matching x402 payment proof was found for this LP Scout result.' })
-      return
-    }
-
-    const existing = activity.find(item => (
-      item.type === 'scout_returned'
-      && item.result?.zeroscout
-      && item.result?.sourceActivityId === scoutActivity.id
-    ))
-    if (existing?.result?.zeroscout) {
-      res.status(200).json({ ok: true, zeroscout: existing.result.zeroscout })
-      return
-    }
-
-    const scout = safeScout(scoutActivity.result)
-    const request = requestFromServiceUrl(scoutActivity.serviceUrl)
-    const payload = {
-      partner: 'HashKey PayLink',
-      productType: 'prediction-market',
-      analysisType: 'lp-market-intelligence',
-      objective: 'Find useful LP intelligence signals from supplied Polymarket market, rewards, spread, and depth data.',
-      outputStyle: 'operator-brief',
-      data: {
-        request: {
-          mode: request.mode,
-          context: request.context,
-          budget: request.budget,
-        },
-        source: 'PolyDesk LP Scout using Polymarket Gamma, CLOB rewards, and order book APIs.',
-        scout,
-        x402ProofHash: paidScout.proof.proofHash,
-        disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
-      },
+    const generated = await generateZeroScoutPolymarketBrief(req.body?.agentSlug, req.body?.activityId, {
       includeClaudeReview: req.body?.includeClaudeReview !== false,
       includeOpenAiReview: req.body?.includeOpenAiReview !== false,
-    }
-    const result = await callZeroScoutIntelligence(payload, { requireProof: true })
-
-    await appendAgentActivity({
-      agentSlug,
-      type: 'scout_returned',
-      title: 'ZeroScout LP operator signal',
-      direction: 'result',
-      network: result.network || 'ZeroScout',
-      serviceUrl: scoutActivity.serviceUrl,
-      detail: result.summary || 'ZeroScout generated a stored LP intelligence signal.',
-      result: {
-        sourceActivityId: scoutActivity.id,
-        x402ProofHash: paidScout.proof.proofHash,
-        zeroscout: result,
-      } as Record<string, unknown>,
     })
-
-    res.status(201).json({ ok: true, zeroscout: result })
+    res.status(generated.existed ? 200 : 201).json({ ok: true, zeroscout: generated.result })
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : 500
     res.status(status).json({ ok: false, error: error instanceof Error ? error.message : 'ZeroScout operator signal failed' })

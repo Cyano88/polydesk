@@ -77,6 +77,10 @@ export default function PolyDesk() {
   const activeLane = normalizeLane(searchParams.get('lane'))
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
   const agentRouteOpen = searchParams.get('agent') === '1'
+  const lpScoutActivityId = searchParams.get('lpScoutActivity')?.trim() ?? ''
+  const lpScoutReceiptId = searchParams.get('lpScoutReceipt')?.trim() ?? ''
+  const lpScoutAgentSlug = searchParams.get('lpScoutAgent')?.trim() ?? ''
+  const agentMessage = searchParams.get('agentMessage')?.trim() ?? ''
   const [isAgentOpen, setIsAgentOpen] = useState(Boolean(activeLane || agentRouteOpen))
   const [agentLane, setAgentLane] = useState<PolyDeskLane | ''>(activeLane)
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView)
@@ -291,6 +295,11 @@ export default function PolyDesk() {
               hideTopDivider
               polyDeskResetSignal={polyDeskResetSignal}
               onPolyDeskSubModeChange={setAgentLane}
+              autoQuestion={agentMessage || undefined}
+              autoQuestionKey={lpScoutActivityId ? `lp-scout:${lpScoutActivityId}` : undefined}
+              lpScoutActivityId={lpScoutActivityId || undefined}
+              lpScoutReceiptId={lpScoutReceiptId || undefined}
+              lpScoutAgentSlug={lpScoutAgentSlug || undefined}
               onRecoverTelegramName={() => undefined}
               onBack={() => {
                 if (activeLane) {

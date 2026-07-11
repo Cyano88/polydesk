@@ -1634,6 +1634,11 @@ export function TelegramHelperPanel({
   polyDeskResetSignal = 0,
   helperBackSignal = 0,
   onPolyDeskSubModeChange,
+  autoQuestion,
+  autoQuestionKey,
+  lpScoutActivityId,
+  lpScoutReceiptId,
+  lpScoutAgentSlug,
 }: {
   telegramName: string
   ownerKey: string
@@ -1653,6 +1658,11 @@ export function TelegramHelperPanel({
   polyDeskResetSignal?: number
   helperBackSignal?: number
   onPolyDeskSubModeChange?: (mode: PolyDeskSubMode | '') => void
+  autoQuestion?: string
+  autoQuestionKey?: string
+  lpScoutActivityId?: string
+  lpScoutReceiptId?: string
+  lpScoutAgentSlug?: string
 }) {
   const cleanTelegramName = telegramName === 'there' ? '' : telegramName
   const helperSessionKeyBase = (ownerKey || telegramId || initialPayer || cleanTelegramName || 'local-helper').trim().toLowerCase()
@@ -1701,6 +1711,7 @@ export function TelegramHelperPanel({
   const [checkpointBusy, setCheckpointBusy] = useState(false)
   const helperScrollRef = useRef<HTMLDivElement | null>(null)
   const helperAbortRef = useRef<AbortController | null>(null)
+  const autoQuestionRanRef = useRef('')
   const initialRouteAppliedRef = useRef(Boolean(initialNotice || initialHelperMode || initialPolyDeskSubMode))
   const helperFirstScrollRef = useRef(true)
   const suppressThreadHydrationRef = useRef(false)
@@ -2875,6 +2886,89 @@ export function TelegramHelperPanel({
       return true
     }
 
+    if (polyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
+      setAgentStatus('Reading paid LP Scout receipt...')
+      const agentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
+      try {
+        const loadActivity = async () => {
+          const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(agentSlug)}`)
+          const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
+          if (!res.ok) throw new Error(data.error || 'Could not load LP Scout activity.')
+          return Array.isArray(data.activity) ? data.activity : []
+        }
+        let activity = await loadActivity()
+        let scout = activity.find(item => item.id === lpScoutActivityId)
+        if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
+        let zeroScout = scout.result?.zeroscout
+        if (!zeroScout) {
+          setAgentStatus('Pinging ZeroScout for 0G verification...')
+          try {
+            const res = await fetch('/api/zeroscout/polymarket-brief', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                agentSlug,
+                activityId: lpScoutActivityId,
+                includeClaudeReview: true,
+                includeOpenAiReview: true,
+              }),
+            })
+            const data = await res.json() as { ok?: boolean; zeroscout?: Record<string, any>; error?: string }
+            if (res.ok && data.ok && data.zeroscout) zeroScout = data.zeroscout
+            activity = await loadActivity()
+            scout = activity.find(item => item.id === lpScoutActivityId) || scout
+            zeroScout = zeroScout || scout.result?.zeroscout
+          } catch {
+            // Keep the paid receipt visible even if verification is still finalizing.
+          }
+        }
+        setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
+        const result = scout.result || {}
+        const signals = Array.isArray(result.signals) ? result.signals
+          : Array.isArray(result.highlights) ? result.highlights
+          : []
+        const opportunities = Array.isArray(result.opportunities) ? result.opportunities : []
+        const marketItems = [...opportunities, ...signals]
+        const marketLinks = marketItems
+          .map((item, index) => {
+            const url = String(item?.polymarketUrl || item?.marketUrl || item?.url || item?.link || '')
+            if (!/^https?:\/\//i.test(url)) return null
+            const labelSource = String(item?.title || item?.market || item?.question || item?.name || `Market ${index + 1}`)
+            const label = labelSource.length > 28 ? `${labelSource.slice(0, 25)}...` : labelSource
+            return { label, url }
+          })
+          .filter(Boolean)
+          .slice(0, 4)
+        const createdAt = Number(scout.createdAt || 0)
+        const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
+        const answerLines = [
+          zeroScout
+            ? `LP Scout result is ready and 0G-verified (${ageText}).`
+            : `LP Scout payment is verified and the paid result is saved (${ageText}). 0G verification is still finalizing.`,
+          String(result.summary || zeroScout?.summary || scout.detail || 'Agent Hash prepared the paid Polymarket LP Scout result.'),
+          result.nextAction ? `Next: ${result.nextAction}` : '',
+          zeroScout?.proof?.storageRoot || zeroScout?.proof?.contentHash || zeroScout?.proof?.storageTxHash
+            ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
+            : 'Proof: Circle Gateway receipt is attached; ZeroScout proof will appear when final verification lands.',
+        ].filter(Boolean)
+        finishHelperMessage(nextQuestion, {
+          answer: answerLines.join('\n\n'),
+          actionLinks: [
+            ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
+            { label: 'LP Scout receipt', url: `/receipt/${encodeURIComponent(lpScoutActivityId)}` },
+            ...marketLinks,
+          ],
+        })
+        return true
+      } catch (err) {
+        finishHelperMessage(nextQuestion, {
+          answer: err instanceof Error ? err.message : 'Could not open the paid LP Scout result yet.',
+          actionLink: { label: 'LP Scout', url: '/?service=lp-scout' },
+        })
+        return true
+      }
+    }
+
     const x402Url = buildLpScoutWalletManagerUrl(nextQuestion)
     const treasuryRequest = lpScoutTreasuryAccessRequest()
     finishHelperMessage(nextQuestion, {
@@ -2919,9 +3013,10 @@ export function TelegramHelperPanel({
     }
   }
 
-  async function askHelper() {
-    if (!question.trim() || asking || !started) return
-    const nextQuestion = question.trim()
+  async function askHelper(overrideQuestion?: string) {
+    const rawQuestion = typeof overrideQuestion === 'string' ? overrideQuestion : question
+    if (!rawQuestion.trim() || asking || !started) return
+    const nextQuestion = rawQuestion.trim()
     if (!helperMode) {
       setAskError('Choose a mode to start.')
       return
@@ -3151,6 +3246,17 @@ export function TelegramHelperPanel({
       setAsking(false)
     }
   }
+
+  useEffect(() => {
+    const cleanQuestion = autoQuestion?.trim()
+    if (!cleanQuestion || asking || !started) return
+    if (helperMode !== 'polydesk' || polyDeskSubMode !== 'lp-scout') return
+    const runKey = autoQuestionKey || cleanQuestion
+    if (autoQuestionRanRef.current === runKey) return
+    autoQuestionRanRef.current = runKey
+    setQuestion(cleanQuestion)
+    void askHelper(cleanQuestion)
+  }, [autoQuestion, autoQuestionKey, asking, started, helperMode, polyDeskSubMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openHelperCheckout() {
     startHelper()
@@ -3560,7 +3666,7 @@ function TelegramX402WalletPanel({
   )
 }
 
-type LpScoutPath = '' | 'access'
+type LpScoutPath = '' | 'access' | 'fund'
 type LpScoutStep = 'service' | 'agent'
 
 function PolyDeskBackButton({ onClick }: { onClick: () => void }) {
@@ -3647,7 +3753,9 @@ export function LpScoutPanel({
   onPrefillConsumed: () => void
   onBack: () => void
 }) {
-  const [path, setPath] = useState<LpScoutPath>('')
+  const [searchParams] = useSearchParams()
+  const initialLpScoutPath = searchParams.get('lpScoutPath') === 'fund' ? 'fund' : ''
+  const [path, setPath] = useState<LpScoutPath>(initialLpScoutPath)
   const [step, setStep] = useState<LpScoutStep>('service')
   const [mode, setMode] = useState<LpScoutMode>('best')
   const [query, setQuery] = useState('')
@@ -3686,7 +3794,17 @@ export function LpScoutPanel({
     setStep('service')
   }
 
+  function startFundingFlow() {
+    setPath('fund')
+    setStep('agent')
+  }
+
   function backFromPath() {
+    if (path === 'fund') {
+      setPath('')
+      setStep('service')
+      return
+    }
     if (step === 'agent') {
       setStep('service')
       return
@@ -3706,6 +3824,15 @@ export function LpScoutPanel({
       n: 'arc',
       context: query.trim() || undefined,
       budget: budget.trim() || undefined,
+    }
+  }
+
+  function buildWalletFundingParams() {
+    return {
+      profile: 'agent',
+      walletManager: 'service',
+      src: 'lp-scout',
+      n: 'arc',
     }
   }
 
@@ -3734,7 +3861,21 @@ export function LpScoutPanel({
             body="Pay per call for live Polymarket reward, spread, depth, and risk analysis."
             onClick={startAccessFlow}
           />
+          <PolyDeskMenuCard
+            title="Fund x402 Pocket Wallet"
+            body="Copy your Arc wallet, fund USDC, and activate x402 before paid LP Scout calls."
+            onClick={startFundingFlow}
+          />
         </div>
+      </div>
+    )
+  }
+
+  if (path === 'fund') {
+    return (
+      <div className="mt-4 space-y-4">
+        <PolyDeskBackButton onClick={backFromPath} />
+        <AgentWorkspace embedded forceProfile requestParams={buildWalletFundingParams()} />
       </div>
     )
   }

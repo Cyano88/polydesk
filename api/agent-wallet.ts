@@ -8,6 +8,7 @@ import { createPublicClient, defineChain, formatUnits, http } from 'viem'
 import { appendAgentActivity, listAgentActivity } from './agent-activity.js'
 import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
+import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 
 const execFileAsync = promisify(execFile)
 const CIRCLE_BIN = process.platform === 'win32' ? 'circle.cmd' : 'circle'
@@ -184,8 +185,8 @@ export async function payAgentX402Service(params: {
     detail: params.spendDetail ?? 'Agent paid a machine-to-machine service',
     proof,
   })
-  if (params.appendResultActivity !== false) {
-    await appendAgentActivity({
+  const resultActivity = params.appendResultActivity !== false
+    ? await appendAgentActivity({
       agentSlug: params.agentSlug,
       type: 'scout_returned',
       title: params.resultTitle ?? 'Live Polymarket scout returned',
@@ -198,7 +199,7 @@ export async function payAgentX402Service(params: {
         : 'API returned one conservative LP candidate'),
       result: params.result ?? parsedResponse?.scout,
     })
-  }
+    : undefined
   if (params.sellerAgentSlug && params.sellerAgentSlug !== params.agentSlug) {
     await appendAgentActivity({
       agentSlug: params.sellerAgentSlug,
@@ -219,6 +220,7 @@ export async function payAgentX402Service(params: {
     walletAddress: record.walletAddress,
     response: parsedResponse,
     receiptActivityId: spendActivity?.id,
+    resultActivityId: resultActivity?.id,
     proof,
     raw: output.slice(0, 3000),
   }
@@ -991,6 +993,15 @@ export default async function handler(req: Request, res: Response) {
           serviceUrl,
           maxAmount,
         })
+        const zeroscoutQueued = Boolean(action === 'pay-lp-scout' && result.resultActivityId)
+        if (zeroscoutQueued) {
+          void generateZeroScoutPolymarketBrief(agentSlug, result.resultActivityId, {
+            includeClaudeReview: true,
+            includeOpenAiReview: true,
+          }).catch(err => {
+            console.warn('[agent-wallet] ZeroScout LP preparation failed:', err instanceof Error ? err.message : String(err))
+          })
+        }
         return res.json({
           ok: true,
           agentSlug,
@@ -998,6 +1009,9 @@ export default async function handler(req: Request, res: Response) {
           serviceUrl,
           maxAmount: String(maxAmount),
           response: result.response,
+          receiptActivityId: result.receiptActivityId,
+          resultActivityId: result.resultActivityId,
+          zeroscoutQueued,
           raw: result.raw,
         })
       } catch (err) {
