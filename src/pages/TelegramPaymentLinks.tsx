@@ -1855,6 +1855,7 @@ export function TelegramHelperPanel({
           suppressThreadHydrationRef.current = false
           return
         }
+        if (helperMode === 'polydesk' && polyDeskSubMode === 'lp-scout' && lpScoutActivityId) return
         if (freshThreadIdsRef.current.has(activeHelperThreadId)) return
         if (helperMode && data.profile?.helperThread?.length && !(lockedHelperMode === 'polydesk' && helperMode === 'polydesk' && !polyDeskSubMode)) {
           const storedMessages = data.profile.helperThread.map(item => ({
@@ -2888,16 +2889,29 @@ export function TelegramHelperPanel({
 
     if (polyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
       setAgentStatus('Reading paid LP Scout receipt...')
-      const agentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
+      const requestedAgentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
+      const agentSlugCandidates = Array.from(new Set([requestedAgentSlug, 'polydesk-agent'].filter(Boolean)))
       try {
-        const loadActivity = async () => {
-          const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(agentSlug)}`)
+        const loadActivity = async (slug: string) => {
+          const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}`)
           const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
           if (!res.ok) throw new Error(data.error || 'Could not load LP Scout activity.')
           return Array.isArray(data.activity) ? data.activity : []
         }
-        let activity = await loadActivity()
-        let scout = activity.find(item => item.id === lpScoutActivityId)
+        let activeAgentSlug = agentSlugCandidates[0] || 'polydesk-agent'
+        let activity: Array<Record<string, any>> = []
+        let scout: Record<string, any> | undefined
+        for (const candidate of agentSlugCandidates) {
+          const candidateActivity = await loadActivity(candidate)
+          const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
+          if (candidateScout) {
+            activeAgentSlug = candidate
+            activity = candidateActivity
+            scout = candidateScout
+            break
+          }
+          if (!activity.length) activity = candidateActivity
+        }
         if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
         let zeroScout = scout.result?.zeroscout
         let zeroScoutError = ''
@@ -2911,7 +2925,7 @@ export function TelegramHelperPanel({
               headers: { 'Content-Type': 'application/json' },
               signal: controller.signal,
               body: JSON.stringify({
-                agentSlug,
+                agentSlug: activeAgentSlug,
                 activityId: lpScoutActivityId,
                 includeClaudeReview: true,
                 includeOpenAiReview: true,
@@ -2931,7 +2945,7 @@ export function TelegramHelperPanel({
           while (!zeroScout && Date.now() < waitUntil) {
             setAgentStatus('Payment verified. Waiting for ZeroScout to return the verified brief...')
             await polyDeskWait(10_000)
-            activity = await loadActivity()
+            activity = await loadActivity(activeAgentSlug)
             scout = activity.find(item => item.id === lpScoutActivityId) || scout
             zeroScout = zeroScout || scout.result?.zeroscout
           }
