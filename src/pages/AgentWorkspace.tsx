@@ -2102,7 +2102,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
             )}
           </div>
 
-          {showAgentWalletAccessPanel && (
+          {showAgentWalletAccessPanel && !agentWalletAccessConnected && (
             <div className={cn(
               'w-full min-w-0 space-y-2 overflow-hidden rounded-xl border p-3 transition-all',
               hasPendingLpScoutRequest

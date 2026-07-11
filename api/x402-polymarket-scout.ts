@@ -13,12 +13,31 @@ type PaidRequest = Request & {
 
 const SELLER_ADDRESS = process.env.X402_SELLER_ADDRESS ?? process.env.TREASURY_ADDRESS
 const PRICE = process.env.X402_POLYMARKET_SCOUT_PRICE ?? '$0.01'
-const FACILITATOR_URL = process.env.X402_FACILITATOR_URL?.trim()
+const ARC_TESTNET_CAIP2 = 'eip155:5042002'
+const DEFAULT_TESTNET_FACILITATOR_URL = 'https://gateway-api-testnet.circle.com'
+const RAW_ACCEPT_NETWORKS = process.env.X402_POLYMARKET_SCOUT_ACCEPT_NETWORKS?.trim()
+  || process.env.X402_ACCEPT_NETWORKS?.trim()
+  || ARC_TESTNET_CAIP2
 const REQUEST_TIMEOUT_MS = 12_000
-const ACCEPT_NETWORKS = process.env.X402_ACCEPT_NETWORKS
-  ?.split(',')
-  .map(network => network.trim())
+const ACCEPT_NETWORKS = RAW_ACCEPT_NETWORKS
+  .split(',')
+  .map(network => normalizeX402Network(network))
   .filter(Boolean)
+const RAW_FACILITATOR_URL = process.env.X402_POLYMARKET_SCOUT_FACILITATOR_URL?.trim()
+  || process.env.X402_FACILITATOR_URL?.trim()
+  || ''
+const ACCEPTS_ARC_TESTNET = ACCEPT_NETWORKS.includes(ARC_TESTNET_CAIP2)
+const FACILITATOR_URL = ACCEPTS_ARC_TESTNET && (!RAW_FACILITATOR_URL || /gateway-api\.circle\.com\/?$/i.test(RAW_FACILITATOR_URL))
+  ? DEFAULT_TESTNET_FACILITATOR_URL
+  : RAW_FACILITATOR_URL || DEFAULT_TESTNET_FACILITATOR_URL
+
+function normalizeX402Network(network: string) {
+  const clean = network.trim()
+  const key = clean.toLowerCase().replace(/[_\s]/g, '-')
+  if (!clean) return ''
+  if (key === 'arc' || key === 'arc-testnet' || key === 'arctestnet' || key === '5042002') return ARC_TESTNET_CAIP2
+  return clean
+}
 
 let gatewayMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined
 
