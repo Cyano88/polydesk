@@ -68,22 +68,6 @@ const services: PolyDeskAgentService[] = [
       'article URL for attribution',
     ],
   },
-  {
-    id: 'worldcup-intelligence-bundle',
-    title: 'World Cup Intelligence Bundle',
-    description: 'Bundle service combining live scores, market news, and LP Scout context for buyer agents.',
-    category: 'prediction-market',
-    endpoint: '/api/a2mcp/worldcup-intelligence-bundle',
-    method: 'GET',
-    pricing: { model: 'x402-fixed', amount: '0.015', asset: 'USDC' },
-    payment: { required: true, standard: 'x402' },
-    output: [
-      'live match context',
-      'market-moving news context',
-      'LP Scout signal when a clean setup is available',
-      'agent-ready summary for resale or composition',
-    ],
-  },
 ]
 
 export function polyDeskAgentServices() {
