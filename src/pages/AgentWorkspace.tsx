@@ -1440,7 +1440,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : !agentWalletAccessConnected
     ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsFunding
-    ? <span>Add USDC</span>
+    ? <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> <span>Add USDC</span></>
     : lpScoutNeedsActivation
     ? <><ArrowRight className="h-4 w-4" /> Activate x402</>
     : lpScoutHasResult
@@ -2242,7 +2242,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><ArrowRight className="h-4 w-4" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
                       {!hasPendingLpScoutRequest && (
                         <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
