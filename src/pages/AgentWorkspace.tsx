@@ -724,7 +724,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         if (existing.link?.circleWalletAddress) {
           setCurrentAgentWallet(existing.link.circleWalletAddress)
           setAgentWalletChain(existing.link.circleBlockchain)
+          setAgentWalletSessionConnected(true)
+          setTreasuryBalance(null)
+          setTreasuryBalanceChecked(false)
+          setTreasuryBalanceError('')
           setWalletStep('done')
+          if (hasPendingLpScoutRequest) setShowWalletAccessPanel(false)
           setWalletError(null)
         }
       } catch (err) {
@@ -732,7 +737,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       }
     })()
     return () => { cancelled = true }
-  }, [showAgentProfile, privyAuthenticated, privyEmail, agentNetwork, getAccessToken])
+  }, [showAgentProfile, privyAuthenticated, privyEmail, agentNetwork, getAccessToken, hasPendingLpScoutRequest])
 
   useEffect(() => {
     let cancelled = false
