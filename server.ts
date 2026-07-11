@@ -10,6 +10,7 @@ import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
+import a2mcpWorldcupBundleHandler from './api/a2mcp-worldcup-bundle.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
@@ -113,6 +114,7 @@ app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/a2mcp/polymarket-lp-scout', strictLimiter, x402PolymarketScoutHandler)
 app.get('/api/a2mcp/worldcup-live-scores', readLimiter, polyStreamHandler)
 app.get('/api/a2mcp/worldcup-market-news', readLimiter, polyWorldcupNewsHandler)
+app.get('/api/a2mcp/worldcup-intelligence-bundle', strictLimiter, a2mcpWorldcupBundleHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', strictLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
