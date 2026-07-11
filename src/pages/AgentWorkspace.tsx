@@ -17,6 +17,7 @@ import { PRIVY_AUTH_ENABLED }           from '../lib/authMode'
 import { resolvePrivyCircleLink, savePrivyCircleLink } from '../lib/privyCircleLink'
 import { PrivyConnectButton }           from '../lib/PrivyConnectButton'
 import { POLYDESK_LOGIN_OPTIONS }       from '../lib/privyLoginOptions'
+import { paylinkOrigin }                from '../lib/config'
 import ZeroScoutPowerBadge              from '../components/ZeroScoutPowerBadge'
 import {
   CheckCircle2, AlertCircle, Loader2, Send,
@@ -767,6 +768,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
           setTreasuryBalanceError(readableTreasuryBalanceError(data.balanceError || 'Balance unavailable', CHAIN_META[agentNetwork].label))
           return
         }
+        setTreasuryBalanceError('')
         setTreasuryBalance(data.balance ?? '0')
       })
       .catch(error => {
@@ -805,9 +807,20 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       }
       if (!res.ok || !data.ok) throw new Error(data.gatewayBalanceError ?? 'x402 balance unavailable')
       if (data.gatewayBalance !== undefined) setX402Balance(data.gatewayBalance)
-      if (data.gatewayBalanceError) setX402BalanceError(data.gatewayBalanceError)
+      if (data.gatewayBalanceError) {
+        setX402BalanceError(data.gatewayBalanceError)
+        if (/reconnect|session expired|sign in/i.test(data.gatewayBalanceError)) {
+          setAgentWalletSessionConnected(false)
+          setShowWalletAccessPanel(true)
+        }
+      }
     } catch (err) {
-      setX402BalanceError(err instanceof Error ? err.message : 'x402 balance unavailable')
+      const message = err instanceof Error ? err.message : 'x402 balance unavailable'
+      setX402BalanceError(message)
+      if (/reconnect|session expired|sign in/i.test(message)) {
+        setAgentWalletSessionConnected(false)
+        setShowWalletAccessPanel(true)
+      }
     } finally {
       setX402BalanceChecked(true)
     }
@@ -973,7 +986,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     p.set('g', returnUrl.toString())
     p.set('ad', '1')
     if (currentAgentWallet) p.set('e', currentAgentWallet)
-    return `/pay?${p.toString()}`
+    return `${paylinkOrigin}/pay?${p.toString()}`
   }
 
   function handleFundAgent() {
@@ -1390,11 +1403,22 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy])
   const connectedWalletNeedsAccess = Boolean(currentAgentWallet && !agentWalletAccessConnected)
   const showAgentWalletAccessPanel = Boolean(!agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
+  const sessionReconnectNeeded = Boolean(currentAgentWallet && !agentWalletAccessConnected && showAgentWalletAccessPanel)
   const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected)
   const x402Refreshing = Boolean(agentWalletAccessConnected && !x402BalanceChecked)
   const balancesRefreshing = Boolean(agentWalletAccessConnected && (!treasuryBalanceChecked || x402Refreshing || activityBusy))
   const pendingScoutMaxAmountNumber = Number(pendingScoutMaxAmount || '0.01')
   const x402BalanceNumber = x402Balance !== null ? Number(x402Balance) : null
+  const formatUsdcAmount = (value: string | null, error: string, checked: boolean) => {
+    if (value !== null) return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
+    if (!checked) return 'Checking...'
+    return error ? 'Unavailable' : '0 USDC'
+  }
+  const pocketBalanceLabel = formatUsdcAmount(treasuryBalance, treasuryBalanceError, treasuryBalanceChecked)
+  const x402BalanceLabel = formatUsdcAmount(x402Balance, x402BalanceError, x402BalanceChecked)
+  const shortAgentWallet = currentAgentWallet
+    ? `${currentAgentWallet.slice(0, 6)}...${currentAgentWallet.slice(-4)}`
+    : ''
   const lpScoutX402Ready = Boolean(
     agentWalletAccessConnected &&
     x402BalanceNumber !== null &&
@@ -1442,10 +1466,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking wallet</>
     : !privyAuthenticated
     ? <><Mail className="h-4 w-4" /> Sign in</>
+    : sessionReconnectNeeded
+    ? <><Wallet className="h-4 w-4" /> Reconnect wallet</>
     : !agentWalletAccessConnected
     ? <><Wallet className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsFunding
-    ? <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> <span>Add USDC</span></>
+    ? <><Wallet className="h-4 w-4" /> <span>Add USDC</span></>
     : lpScoutNeedsActivation
     ? <><ArrowRight className="h-4 w-4" /> Activate x402</>
     : lpScoutHasResult
@@ -1653,7 +1679,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     <div className="text-right">
                       <p className="text-sm font-semibold text-gray-900 dark:text-white" title={treasuryBalanceError || undefined}>
                         {currentAgentWallet
-                          ? treasuryBalanceError || treasuryBalanceChecked ? 'Unavailable' : 'Checking...'
+                          ? pocketBalanceLabel
                           : 'No wallet'}
                       </p>
                       <p className="mt-0.5 text-[10px] font-semibold text-gray-400">{selectedAgentNetworkLabel}</p>
@@ -1748,64 +1774,79 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
 
                 {agentWalletAccessConnected && (
                   <details className="group rounded-lg border border-gray-200 bg-white/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
-                      <span className="min-w-0 truncate">
-                        {lpScoutNeedsFunding
-                          ? 'Add USDC to Pocket Wallet'
-                          : lpScoutNeedsActivation
-                          ? 'Activate x402 service balance'
-                          : 'Pocket Wallet ready'}
+                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-center gap-3 text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 [&::-webkit-details-marker]:hidden">
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-gray-800 dark:text-gray-100">Pocket Wallet</span>
+                        <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-400">{shortAgentWallet || 'Arc wallet'}</span>
                       </span>
-                      <span className="ml-auto flex shrink-0 items-center gap-2">
-                        <span className="font-mono font-semibold text-gray-600 dark:text-gray-200">
-                          {treasuryBalance !== null
-                            ? `${Number(treasuryBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
-                            : treasuryBalanceError || treasuryBalanceChecked
-                            ? 'Unavailable'
-                            : 'Checking...'}
-                        </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="text-right font-mono text-xs font-semibold text-gray-700 dark:text-gray-100">{pocketBalanceLabel}</span>
                         <ArrowRight className="h-3.5 w-3.5 text-gray-400 transition-transform group-open:rotate-90 dark:text-gray-500" />
                       </span>
                     </summary>
                     <div className="mt-2 space-y-2 border-t border-gray-100 pt-2 dark:border-white/10">
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-black/10">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pocket Wallet</p>
-                          <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white" title={treasuryBalanceError || undefined}>
-                            {treasuryBalance !== null
-                              ? `${Number(treasuryBalance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
-                              : treasuryBalanceError || treasuryBalanceChecked
-                              ? 'Unavailable'
-                              : 'Checking...'}
+                      <div className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-black/10">
+                        <span className="min-w-0 truncate font-mono text-[11px] text-gray-600 dark:text-gray-300">{currentAgentWallet}</span>
+                        <button
+                          type="button"
+                          onClick={copyAgentWallet}
+                          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:text-white"
+                          aria-label="Copy Arc wallet address"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          {copiedWallet && (
+                            <span className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg">
+                              Copied
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-black/10">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Arc USDC</p>
+                          <p className="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-white" title={treasuryBalanceError || undefined}>
+                            {pocketBalanceLabel}
                           </p>
                         </div>
-                        <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-black/10">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402 balance</p>
-                          <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
-                            {x402Balance !== null
-                              ? `${Number(x402Balance).toLocaleString(undefined, { maximumFractionDigits: 6 })} USDC`
-                              : x402BalanceError || x402BalanceChecked
-                              ? 'Unavailable'
-                              : 'Checking...'}
+                        <div className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-black/10">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402</p>
+                          <p className="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
+                            {x402BalanceLabel}
                           </p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <Link
-                          to={buildAgentFundUrl()}
+                      <div className={cn('grid gap-2', lpScoutWalletBalanceReady ? 'grid-cols-3' : 'grid-cols-2')}>
+                        <a
+                          href={buildAgentFundUrl()}
                           onClick={handleFundAgent}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
                         >
-                          Add USDC
-                        </Link>
+                          <Wallet className="h-3.5 w-3.5" />
+                          Fund
+                        </a>
+                        {lpScoutWalletBalanceReady && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setX402BalanceError('')
+                              setX402ActivationSuccess('')
+                              setX402ModalOpen(true)
+                            }}
+                            disabled={x402Busy}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
+                          >
+                            <ArrowRight className="h-3.5 w-3.5" />
+                            Activate
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => refreshAgentBalances()}
                           disabled={balancesRefreshing || x402Busy}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
+                          className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
+                          aria-label="Refresh balances"
                         >
                           <RefreshCw className={cn('h-3.5 w-3.5', balancesRefreshing && 'animate-spin')} />
-                          Refresh
                         </button>
                       </div>
                     </div>
@@ -2040,7 +2081,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         }
                         if (lpScoutNeedsFunding) {
                           handleFundAgent()
-                          navigate(buildAgentFundUrl())
+                          window.location.assign(buildAgentFundUrl())
                           return
                         }
                         if (lpScoutNeedsActivation) {
@@ -2202,7 +2243,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             value={walletEmail}
                             onChange={e => setWalletEmail(e.target.value)}
                             placeholder="Circle email"
-                            disabled={walletBusy || walletStep === 'done'}
+                            disabled={walletBusy}
                             className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none disabled:opacity-60 dark:text-white dark:placeholder:text-gray-500"
                           />
                         </div>
@@ -2242,12 +2283,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       <button
                         type="button"
                         onClick={() => callAgentWallet('init')}
-                        disabled={walletBusy || (!(!currentAgentWallet && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail) && !walletEmail.trim()) || walletStep === 'done'}
+                        disabled={walletBusy || (!(!currentAgentWallet && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail) && !walletEmail.trim())}
                         className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-6 py-3.5 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><img src="/pocket-circle.png" alt="" className="h-6 w-6 object-contain invert dark:invert-0" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : <><Wallet className="h-4 w-4" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
                       {!hasPendingLpScoutRequest && (
                         <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
@@ -2336,13 +2377,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         : 'Checking...'}
                     </p>
                   </div>
-                  <Link
-                    to={buildAgentFundUrl()}
+                  <a
+                    href={buildAgentFundUrl()}
                     onClick={handleFundAgent}
                     className="inline-flex h-8 min-w-[82px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 text-xs font-semibold text-white transition-all hover:bg-gray-800 active:scale-[0.98] dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                   >
                     <ArrowRight className="h-3.5 w-3.5" /> Fund
-                  </Link>
+                  </a>
                 </div>
                 <div className="border-t border-gray-100 px-3 py-3 dark:border-white/10">
                   <div className="flex items-center justify-between gap-3">
