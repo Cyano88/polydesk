@@ -418,7 +418,7 @@ function extractRewardMarkets(data: unknown): PolymarketRewardMarket[] {
 async function fetchPolymarketRewardMarkets(query?: string) {
   const search = query ? `&q=${encodeURIComponent(query)}` : ''
   const urls = [
-    `https://clob.polymarket.com/rewards/markets/multi?page_size=100&order_by=rate_per_day&position=DESC${search}`,
+    `https://clob.polymarket.com/rewards/markets/multi?page_size=250&order_by=rate_per_day&position=DESC${search}`,
     'https://clob.polymarket.com/rewards/markets/current',
   ]
 
@@ -435,7 +435,7 @@ async function fetchGammaMarkets(query?: string) {
   const params = new URLSearchParams({
     active: 'true',
     closed: 'false',
-    limit: '40',
+    limit: '100',
   })
   if (query) params.set('search', query)
   const data = await fetchPolymarketJson(`https://gamma-api.polymarket.com/markets?${params.toString()}`)
@@ -724,7 +724,7 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
     }
   }
 
-  const candidates = markets.slice(0, mode === 'market' ? 4 : 24)
+  const candidates = markets.slice(0, mode === 'market' ? 4 : 80)
   const analyzed = (await Promise.all(candidates.map(analyzePolymarketLpMarket)))
   const conservative = analyzed.filter(isConservativeCandidate)
   if (mode !== 'market' && !conservative.length) {
@@ -743,7 +743,7 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   }
   const opportunities = (conservative.length ? conservative : analyzed)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 1)
+    .slice(0, mode === 'market' ? 1 : 3)
     .map(opportunity => serializeOpportunity(opportunity, budget))
 
   const themeText = mode === 'theme' && context ? ` for "${context}"` : ''
@@ -751,8 +751,8 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const summary = mode === 'market'
     ? `Live LP Scout checked the requested Polymarket market${marketText} using current book, spread, depth, and maker-order risk.`
     : mode === 'theme'
-    ? `Live LP Scout selected one conservative Polymarket LP candidate${themeText} after checking rewards, spread, depth, time left, and volatility.`
-    : `Live LP Scout selected one conservative Polymarket reward market after checking rewards, spread, depth, time left, and volatility.`
+    ? `Live LP Scout selected ${opportunities.length === 1 ? 'one conservative Polymarket LP candidate' : `${opportunities.length} conservative Polymarket LP candidates`}${themeText} after checking rewards, spread, depth, time left, and volatility.`
+    : `Live LP Scout selected ${opportunities.length === 1 ? 'one conservative Polymarket reward market' : `${opportunities.length} conservative Polymarket reward markets`} after checking rewards, spread, depth, time left, and volatility.`
 
   return {
     summary,
