@@ -1,5 +1,8 @@
 import type { NextFunction, Request, Response } from 'express'
+import crypto from 'node:crypto'
 import { formatUnits } from 'viem'
+import { appendAgentActivity, normalizeActivitySlug } from './agent-activity.js'
+import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -118,6 +121,119 @@ async function getGatewayMiddleware() {
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function cleanHeader(value: unknown) {
+  return Array.isArray(value) ? String(value[0] ?? '').trim() : String(value ?? '').trim()
+}
+
+function canonicalServiceUrl(req: Request) {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(req.query)) {
+    if (Array.isArray(value)) {
+      for (const item of value) query.append(key, String(item ?? ''))
+    } else if (value !== undefined) {
+      query.set(key, String(value))
+    }
+  }
+  const suffix = query.toString()
+  return `/api/x402/polymarket-scout${suffix ? `?${suffix}` : ''}`
+}
+
+function proofForPayment(req: PaidRequest, amount: string) {
+  const payment = req.payment
+  if (!payment) return undefined
+  const proof = {
+    kind: 'circle_gateway_x402' as const,
+    provider: 'Circle Gateway x402',
+    service: 'polymarket-lp-scout',
+    buyerAgent: normalizeActivitySlug(cleanHeader(req.headers['x-buyer-agent']) || cleanHeader(req.headers['x-agent-slug']) || String(req.query.agent ?? '') || payment.payer || 'a2mcp-buyer'),
+    sellerAgent: 'polydesk',
+    payer: payment.payer,
+    seller: SELLER_ADDRESS,
+    amount,
+    network: payment.network,
+    transaction: payment.transaction,
+    serviceUrl: canonicalServiceUrl(req),
+    generatedAt: new Date().toISOString(),
+  }
+  const proofHash = crypto.createHash('sha256').update(JSON.stringify({
+    kind: proof.kind,
+    provider: proof.provider,
+    service: proof.service,
+    buyerAgent: proof.buyerAgent,
+    sellerAgent: proof.sellerAgent,
+    payer: proof.payer,
+    seller: proof.seller,
+    amount: proof.amount,
+    network: proof.network,
+    transaction: proof.transaction,
+    serviceUrl: proof.serviceUrl,
+  })).digest('hex')
+  return { ...proof, proofHash }
+}
+
+async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeof buildLiveScout>>, amount: string) {
+  const proof = proofForPayment(req, amount)
+  if (!proof) return undefined
+  const agentSlug = proof.buyerAgent || 'a2mcp-buyer'
+  const serviceUrl = canonicalServiceUrl(req)
+  const spend = await appendAgentActivity({
+    agentSlug,
+    type: 'x402_spent',
+    title: 'Bought PolyDesk LP Scout API',
+    amount,
+    asset: 'USDC',
+    direction: 'out',
+    network: 'Circle Gateway x402',
+    wallet: proof.payer,
+    serviceUrl,
+    detail: 'Buyer agent paid PolyDesk for a Polymarket LP Scout result.',
+    proof,
+  })
+  const result = await appendAgentActivity({
+    agentSlug,
+    type: 'scout_returned',
+    title: 'PolyDesk LP Scout result returned',
+    direction: 'result',
+    network: 'Polymarket CLOB',
+    wallet: proof.payer,
+    serviceUrl,
+    detail: scout.summary || 'PolyDesk returned a paid LP Scout result.',
+    result: scout,
+    proof,
+  })
+  if (result?.id) {
+    await appendAgentActivity({
+      agentSlug,
+      type: 'scout_verification_queued',
+      title: 'ZeroScout LP verification queued',
+      direction: 'system',
+      network: 'ZeroScout / 0G',
+      wallet: proof.payer,
+      serviceUrl,
+      detail: 'PolyDesk queued ZeroScout verification for the paid A2MCP LP Scout result.',
+      result: {
+        sourceActivityId: result.id,
+        receiptActivityId: spend?.id,
+        proofHash: proof.proofHash,
+        status: 'queued',
+      },
+    })
+    void generateZeroScoutPolymarketBrief(agentSlug, result.id, {
+      includeClaudeReview: true,
+      includeOpenAiReview: true,
+    }).catch(err => {
+      console.warn('[x402-polymarket-scout] ZeroScout LP preparation failed:', err instanceof Error ? err.message : String(err))
+    })
+  }
+  return {
+    agentSlug,
+    receiptActivityId: spend?.id,
+    resultActivityId: result?.id,
+    proofHash: proof.proofHash,
+    zeroscoutQueued: Boolean(result?.id),
+  }
 }
 
 async function fetchWithTimeout(url: string, init?: RequestInit) {
@@ -657,10 +773,12 @@ async function scoutResponse(req: PaidRequest) {
     context: cleanContext(req.query.context),
     budget: cleanContext(req.query.budget),
   })
+  const activity = payment ? await recordPaidScout(req, scout, amount) : undefined
   return {
     ok: true,
     service: 'PolyDesk x402 Polymarket LP Scout',
     paid: true,
+    buyerAgent: activity?.agentSlug,
     payment: payment
       ? {
           payer: payment.payer,
@@ -675,6 +793,7 @@ async function scoutResponse(req: PaidRequest) {
       price: PRICE,
       seller: SELLER_ADDRESS,
       generatedAt: new Date().toISOString(),
+      activity,
     },
   }
 }
