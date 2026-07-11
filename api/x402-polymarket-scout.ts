@@ -621,7 +621,7 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
     typeof spread === 'number' ? `${(spread * 100).toFixed(1)}c spread` : 'spread unknown',
     typeof book.depthAtTwoCents === 'number' ? `${book.depthAtTwoCents.toFixed(0)} depth within 2c` : 'depth unknown',
     typeof opportunity.dailyReward === 'number' ? `${opportunity.dailyReward.toFixed(0)} USDC/day rewards` : 'reward rate unknown',
-  ].join(' · ')
+  ].join(' | ')
 
   return {
     ...opportunity,
@@ -707,6 +707,26 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
   }
 }
 
+function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
+  return {
+    title: opportunity.title,
+    marketUrl: opportunity.marketUrl,
+    daysToResolve: opportunity.daysToResolve,
+    dailyReward: rounded(opportunity.dailyReward, 2),
+    liquidity: rounded(opportunity.liquidity, 2),
+    liveSpread: rounded(opportunity.spread),
+    depthAtTwoCents: rounded(opportunity.depthAtTwoCents, 2),
+    bestBid: rounded(opportunity.bestBid),
+    bestAsk: rounded(opportunity.bestAsk),
+    midpoint: rounded(opportunity.midpoint),
+    oneDayPriceChange: rounded(opportunity.oneDayPriceChange),
+    eligible: opportunity.eligible,
+    lpExecutionRisk: opportunity.lpExecutionRisk,
+    score: rounded(opportunity.score, 2),
+    scoutReason: opportunity.scoutReason,
+  }
+}
+
 export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const mode = normalizeScoutMode(options.mode)
   const context = cleanContext(options.context)
@@ -742,8 +762,14 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
       request: { mode, context, budget },
     }
   }
-  const opportunities = (conservative.length ? conservative : analyzed)
+  const ranked = (conservative.length ? conservative : analyzed)
     .sort((a, b) => b.score - a.score)
+  const rejected = analyzed
+    .filter(opportunity => !isConservativeCandidate(opportunity))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(serializeCandidateAudit)
+  const opportunities = ranked
     .slice(0, mode === 'market' ? 1 : 3)
     .map(opportunity => serializeOpportunity(opportunity, budget))
 
@@ -759,6 +785,13 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
     summary,
     signals: opportunities.map((opportunity, index) => formatOpportunitySignal(opportunity, index, mode)),
     opportunities,
+    candidateAudit: {
+      scanned: analyzed.length,
+      conservativePassed: conservative.length,
+      rankingBasis: 'Score blends rewards, spread, book depth, liquidity, time-to-resolution, tradable midpoint, volatility, and headline-risk filters.',
+      reviewedCandidates: ranked.slice(0, 12).map(serializeCandidateAudit),
+      rejectedCandidates: rejected,
+    },
     nextAction: 'Human action only: open the market, confirm the live book still matches this scout, then place a small maker quote inside the spread. Do not use market orders.',
     disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
     source: 'Polymarket Gamma markets/events plus CLOB rewards and order book APIs',
