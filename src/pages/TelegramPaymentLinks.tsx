@@ -3294,7 +3294,10 @@ export function TelegramHelperPanel({
     if (helperMode !== 'polydesk' || polyDeskSubMode !== 'lp-scout') return
     const runKey = autoQuestionKey || cleanQuestion
     if (autoQuestionRanRef.current === runKey) return
+    const persistedRunKey = `polydesk:auto-question-ran:${runKey}`
+    if (window.sessionStorage.getItem(persistedRunKey) === '1') return
     autoQuestionRanRef.current = runKey
+    window.sessionStorage.setItem(persistedRunKey, '1')
     setQuestion(cleanQuestion)
     void askHelper(cleanQuestion)
   }, [autoQuestion, autoQuestionKey, asking, started, helperMode, polyDeskSubMode]) // eslint-disable-line react-hooks/exhaustive-deps
