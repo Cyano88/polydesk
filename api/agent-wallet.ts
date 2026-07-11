@@ -995,6 +995,22 @@ export default async function handler(req: Request, res: Response) {
         })
         const zeroscoutQueued = Boolean(action === 'pay-lp-scout' && result.resultActivityId)
         if (zeroscoutQueued) {
+          await appendAgentActivity({
+            agentSlug,
+            type: 'scout_verification_queued',
+            title: 'Agent Hash queued LP Scout verification',
+            direction: 'system',
+            network: 'ZeroScout / 0G',
+            wallet: result.walletAddress,
+            serviceUrl,
+            detail: 'Payment was validated by Circle Gateway x402. Agent Hash queued ZeroScout verification for the saved LP Scout result.',
+            result: {
+              sourceActivityId: result.resultActivityId,
+              receiptActivityId: result.receiptActivityId,
+              proofHash: result.proof?.proofHash,
+              status: 'queued',
+            },
+          })
           void generateZeroScoutPolymarketBrief(agentSlug, result.resultActivityId, {
             includeClaudeReview: true,
             includeOpenAiReview: true,

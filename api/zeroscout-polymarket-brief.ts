@@ -104,6 +104,26 @@ function findMatchingPaidScoutProof(activity: AgentActivity, items: AgentActivit
   ))
 }
 
+function topOpportunitySummary(scout: ReturnType<typeof safeScout>) {
+  const first = Array.isArray(scout.opportunities) ? scout.opportunities[0] : undefined
+  if (!first || typeof first !== 'object') return undefined
+  return {
+    title: first.title,
+    marketUrl: first.marketUrl,
+    score: first.score,
+    rewardPerDay: first.dailyReward,
+    bestBid: first.bestBid,
+    bestAsk: first.bestAsk,
+    liveSpread: first.liveSpread,
+    depthAtTwoCents: first.depthAtTwoCents,
+    suggestedYesBid: first.suggestedYesBid,
+    suggestedNoBid: first.suggestedNoBid,
+    lpExecutionRisk: first.lpExecutionRisk,
+    outcomeRisk: first.outcomeRisk,
+    reason: first.scoutReason,
+  }
+}
+
 export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, activityIdInput: unknown, options: {
   includeClaudeReview?: boolean
   includeOpenAiReview?: boolean
@@ -140,12 +160,18 @@ export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, 
 
   const scout = safeScout(scoutActivity.result)
   const request = requestFromServiceUrl(scoutActivity.serviceUrl)
+  const topOpportunity = topOpportunitySummary(scout)
   const payload = {
-    partner: 'HashKey PayLink',
+    partner: 'PolyDesk',
     productType: 'prediction-market',
-    analysisType: 'lp-market-intelligence',
-    objective: 'Find useful LP intelligence signals from supplied Polymarket market, rewards, spread, and depth data.',
-    outputStyle: 'operator-brief',
+    analysisType: 'polydesk-paid-lp-scout-verification',
+    objective: [
+      'Verify and enrich a paid PolyDesk LP Scout result for Agent Hash to deliver to a human Polymarket liquidity provider.',
+      'Use only the supplied scout data, x402 payment proof, and market/order-book fields. Do not invent live odds, balances, fills, outcomes, or guarantees.',
+      'Produce a concise operator brief that explains why the candidate was selected, what must be rechecked on Polymarket before quoting, what can go wrong, and what a cautious human next step is.',
+      'The output must be educational research only. It must not be financial advice, automated trading instruction, or a promise of rewards.',
+    ].join(' '),
+    outputStyle: 'agent-handoff-operator-brief',
     data: {
       request: {
         mode: request.mode,
@@ -154,7 +180,46 @@ export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, 
       },
       source: 'PolyDesk LP Scout using Polymarket Gamma, CLOB rewards, and order book APIs.',
       scout,
-      x402ProofHash: paidScout.proof.proofHash,
+      topOpportunity,
+      paymentValidation: {
+        status: 'x402-paid',
+        provider: paidScout.proof.provider ?? 'Circle Gateway x402',
+        proofHash: paidScout.proof.proofHash,
+        paymentNetwork: paidScout.proof.network,
+        transaction: paidScout.proof.transaction,
+        payer: paidScout.proof.payer,
+        amount: paidScout.proof.amount,
+        paidActivityId: paidScout.id,
+        scoutActivityId: scoutActivity.id,
+        paidAt: paidScout.createdAt,
+        scoutReturnedAt: scoutActivity.createdAt,
+        serviceUrl: scoutActivity.serviceUrl,
+      },
+      agentHandoff: {
+        agent: 'Agent Hash',
+        userMessage: 'View LP Scout result',
+        expectedBehavior: [
+          'If ZeroScout proof is ready, Agent Hash should deliver the verified LP Scout result immediately.',
+          'If proof is still finalizing, Agent Hash should show the saved paid scout result and explain that 0G verification is continuing.',
+          'Agent Hash must never ask the user to pay again for the same saved scout activity.',
+        ],
+      },
+      operatorRules: [
+        'Prefer one clear primary opportunity over a long list.',
+        'Explain the reward/spread/depth tradeoff in plain language.',
+        'Call out shallow books, stale data, high headline risk, wide spread, and time-to-resolution risk.',
+        'Tell the user to re-open the Polymarket market and confirm the live order book before placing any maker quote.',
+        'Do not recommend market orders. Do not imply PolyDesk will place, cancel, or manage LP orders.',
+        'If the supplied data is insufficient, say what is missing instead of forcing a recommendation.',
+      ],
+      desiredFields: {
+        summary: 'One or two sentence human-ready answer.',
+        signals: 'Three concise bullets: opportunity, execution check, risk.',
+        riskFlags: 'Specific risk flags from supplied data.',
+        recommendedActions: 'Human review steps only, including live order-book confirmation.',
+        dataGaps: 'Missing or stale fields ZeroScout could not verify from supplied data.',
+        safetyBoundaries: 'No financial advice, no auto-trading, no guaranteed rewards.',
+      },
       disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
     },
     includeClaudeReview: options.includeClaudeReview !== false,
