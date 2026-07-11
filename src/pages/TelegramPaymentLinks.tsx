@@ -2900,12 +2900,16 @@ export function TelegramHelperPanel({
         let scout = activity.find(item => item.id === lpScoutActivityId)
         if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
         let zeroScout = scout.result?.zeroscout
+        let zeroScoutError = ''
         if (!zeroScout) {
           setAgentStatus('Pinging ZeroScout for 0G verification...')
+          const controller = new AbortController()
+          const timeout = window.setTimeout(() => controller.abort(), 25_000)
           try {
             const res = await fetch('/api/zeroscout/polymarket-brief', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
               body: JSON.stringify({
                 agentSlug,
                 activityId: lpScoutActivityId,
@@ -2915,11 +2919,16 @@ export function TelegramHelperPanel({
             })
             const data = await res.json() as { ok?: boolean; zeroscout?: Record<string, any>; error?: string }
             if (res.ok && data.ok && data.zeroscout) zeroScout = data.zeroscout
+            if (!zeroScout && data.error) zeroScoutError = data.error
             activity = await loadActivity()
             scout = activity.find(item => item.id === lpScoutActivityId) || scout
             zeroScout = zeroScout || scout.result?.zeroscout
-          } catch {
-            // Keep the paid receipt visible even if verification is still finalizing.
+          } catch (err) {
+            zeroScoutError = err instanceof DOMException && err.name === 'AbortError'
+              ? 'ZeroScout verification is still running. Check this result again shortly.'
+              : err instanceof Error ? err.message : 'ZeroScout verification is still finalizing.'
+          } finally {
+            window.clearTimeout(timeout)
           }
         }
         setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
@@ -2939,38 +2948,30 @@ export function TelegramHelperPanel({
           })
           .filter(Boolean)
           .slice(0, 4)
-        const opportunityLines = opportunities
-          .slice(0, 3)
-          .map((item, index) => {
-            const title = String(item?.title || item?.market || item?.question || `Market ${index + 1}`)
-            const days = typeof item?.daysToResolve === 'number' ? `${item.daysToResolve}d left` : 'duration unknown'
-            const reward = typeof item?.dailyReward === 'number' ? `${item.dailyReward} USDC/day` : 'reward unknown'
-            const spread = typeof item?.liveSpread === 'number' ? `${(item.liveSpread * 100).toFixed(1)}c spread` : 'spread unknown'
-            const depth = typeof item?.depthAtTwoCents === 'number' ? `${Math.round(item.depthAtTwoCents).toLocaleString()} depth within 2c` : 'depth unknown'
-            const yes = typeof item?.suggestedYesBid === 'number' ? item.suggestedYesBid.toFixed(3) : ''
-            const no = typeof item?.suggestedNoBid === 'number' ? item.suggestedNoBid.toFixed(3) : ''
-            const entry = yes || no
-              ? `Entry: place maker quotes only. Consider YES near ${yes || 'n/a'} or NO near ${no || 'n/a'} after refreshing the live book.`
-              : 'Entry: wait until the live bid/ask and midpoint are visible before quoting.'
-            return [
-              `${index + 1}. ${title}`,
-              `${reward} | ${spread} | ${depth} | ${days}`,
-              entry,
-              'Exit/risk: cancel stale quotes quickly; do not market order into a moving book.',
-            ].join('\n')
-          })
         const createdAt = Number(scout.createdAt || 0)
         const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
-        const answerLines = [
-          zeroScout
-            ? `LP Scout result is ready and 0G-verified (${ageText}).`
-            : `LP Scout payment is verified and the paid result is saved (${ageText}). 0G verification is still finalizing.`,
-          String(result.summary || zeroScout?.summary || scout.detail || 'Agent Hash prepared the paid Polymarket LP Scout result.'),
-          opportunityLines.length ? `Quote guide:\n\n${opportunityLines.join('\n\n')}` : '',
-          result.nextAction ? `Next: ${result.nextAction}` : '',
-          zeroScout?.proof?.storageRoot || zeroScout?.proof?.contentHash || zeroScout?.proof?.storageTxHash
+        const zeroScoutRecord = zeroScout && typeof zeroScout === 'object' ? zeroScout as Record<string, any> : null
+        const zeroScoutProof = zeroScoutRecord?.proof && typeof zeroScoutRecord.proof === 'object' ? zeroScoutRecord.proof as Record<string, unknown> : {}
+        const zeroScoutActions = Array.isArray(zeroScoutRecord?.recommendedActions) ? zeroScoutRecord.recommendedActions : []
+        const zeroScoutRisks = Array.isArray(zeroScoutRecord?.riskFlags) ? zeroScoutRecord.riskFlags : []
+        const zeroScoutBoundaries = Array.isArray(zeroScoutRecord?.safetyBoundaries) ? zeroScoutRecord.safetyBoundaries : []
+        const zeroScoutSummary = zeroScoutRecord
+          ? String(zeroScoutRecord.suggestedAnswer || zeroScoutRecord.summary || zeroScoutRecord.reasoningSummary || 'ZeroScout returned a verified LP Scout result.')
+          : ''
+        const answerLines = zeroScoutRecord ? [
+          `ZeroScout verified LP Scout result (${ageText}).`,
+          zeroScoutSummary,
+          zeroScoutActions.length ? `Recommended actions:\n${zeroScoutActions.slice(0, 5).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+          zeroScoutRisks.length ? `Risk flags:\n${zeroScoutRisks.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+          zeroScoutBoundaries.length ? `Safety boundaries:\n${zeroScoutBoundaries.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+          zeroScoutProof.storageRoot || zeroScoutProof.contentHash || zeroScoutProof.storageTxHash || zeroScoutProof.storageUri
             ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
-            : 'Proof: Circle Gateway receipt is attached; ZeroScout proof will appear when final verification lands.',
+            : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
+        ].filter(Boolean) : [
+          `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
+          'Payment is verified and saved. Agent Hash will show the final LP answer only after ZeroScout returns the verified brief.',
+          zeroScoutError ? `Status: ${zeroScoutError}` : '',
+          'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
         ].filter(Boolean)
         finishHelperMessage(nextQuestion, {
           answer: answerLines.join('\n\n'),
