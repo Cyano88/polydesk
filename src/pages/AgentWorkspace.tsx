@@ -1715,10 +1715,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
               </p>
             )}
             {hasPendingLpScoutRequest && (
-              <div className="w-full min-w-0 space-y-2.5 rounded-xl border border-gray-100 bg-white px-3 py-3 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-                <div className="flex items-center justify-between gap-3">
+              <div className="w-full min-w-0 space-y-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">Arc x402 checkout</p>
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">Pay with x402</p>
                     <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
                       {scoutModeLabel(pendingScoutMode)}
                     </p>
@@ -1726,26 +1726,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                   <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-500 shadow-sm dark:bg-white/[0.08] dark:text-gray-300">
                     Max {pendingScoutMaxAmount || '0.01'} USDC
                   </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { label: 'Wallet', value: lpScoutWalletStatus, active: agentWalletAccessConnected },
-                    { label: 'Funds', value: lpScoutFundingStatus, active: agentWalletAccessConnected && !treasuryEmpty },
-                    { label: 'x402', value: lpScoutX402Status, active: lpScoutX402Ready },
-                  ].map(item => (
-                    <div
-                      key={item.label}
-                      className={cn(
-                        'min-w-0 rounded-lg border px-2 py-1.5 text-center',
-                        item.active
-                          ? 'border-emerald-100 bg-white text-emerald-700 dark:border-emerald-400/20 dark:bg-white/[0.06] dark:text-emerald-200'
-                          : 'border-gray-100 bg-white text-gray-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300',
-                      )}
-                    >
-                      <p className="truncate text-[9px] font-bold uppercase tracking-wider opacity-70">{item.label}</p>
-                      <p className="mt-0.5 truncate text-[11px] font-semibold">{item.value}</p>
-                    </div>
-                  ))}
                 </div>
                 {(pendingScoutContext || pendingScoutBudget) && (
                   <div className="flex flex-wrap gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
@@ -1763,27 +1743,52 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                 )}
 
                 {agentWalletAccessConnected && !lpScoutHasResult && (
-                  <div className="rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">x402 balance</p>
-                        <p className="mt-0.5 truncate font-mono text-sm font-semibold text-gray-900 dark:text-white" title={x402BalanceError || undefined}>
-                          {x402BalanceLabel}
-                        </p>
+                  <div className="space-y-1.5">
+                    {[
+                      {
+                        label: 'Wallet',
+                        value: agentWalletRestorePending ? 'Checking' : agentWalletAccessConnected ? 'Ready' : 'Sign in',
+                        done: agentWalletAccessConnected,
+                        busy: agentWalletRestorePending,
+                      },
+                      {
+                        label: 'x402 balance',
+                        value: x402Refreshing || lpScoutWalletBalanceChecking ? 'Checking' : lpScoutX402Ready ? 'Ready' : 'Needs funding',
+                        done: lpScoutX402Ready,
+                        busy: x402Refreshing || lpScoutWalletBalanceChecking,
+                      },
+                      {
+                        label: 'LP Scout',
+                        value: lpScoutX402Ready ? 'Ready to run' : 'Waiting for x402',
+                        done: lpScoutX402Ready,
+                        busy: false,
+                      },
+                    ].map(step => (
+                      <div key={step.label} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={cn(
+                            'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px]',
+                            step.done
+                              ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200'
+                              : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-400',
+                          )}>
+                            {step.busy ? <Loader2 className="h-3 w-3 animate-spin" /> : step.done ? <CheckCircle2 className="h-3 w-3" /> : <span>{step.label === 'Wallet' ? '1' : step.label === 'x402 balance' ? '2' : '3'}</span>}
+                          </span>
+                          <span className="truncate text-xs font-semibold text-gray-900 dark:text-white">{step.label}</span>
+                        </div>
+                        <span className={cn(
+                          'shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold',
+                          step.done
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
+                            : 'bg-gray-50 text-gray-500 dark:bg-white/[0.06] dark:text-gray-300',
+                        )}>
+                          {step.value}
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => refreshAgentBalances()}
-                        disabled={balancesRefreshing || x402Busy}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
-                        aria-label="Refresh x402 balance"
-                      >
-                        <RefreshCw className={cn('h-3.5 w-3.5', balancesRefreshing && 'animate-spin')} />
-                      </button>
-                    </div>
+                    ))}
                     {!lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking && (
-                      <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Open wallet manager to fund or activate x402 before this scout runs.
+                      <p className="px-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                        Use Fund x402 balance to open the wallet manager, then return here to run the scout.
                       </p>
                     )}
                   </div>
