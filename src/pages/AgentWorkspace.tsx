@@ -526,6 +526,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const [activityBusy, setActivityBusy] = useState(false)
   const [walletError, setWalletError] = useState<string | null>(null)
   const [showWalletAccessPanel, setShowWalletAccessPanel] = useState(shouldOpenWalletLinkPanel)
+  const [agentWalletRestoreChecked, setAgentWalletRestoreChecked] = useState(false)
 
   useEffect(() => {
     if (!hasPendingLpScoutRequest) return
@@ -547,10 +548,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   }, [hasPendingLpScoutRequest, normalizedAgentSlug, pendingScoutMode, embeddedWalletManager])
 
   useEffect(() => {
-    if (!hasPendingLpScoutRequest || agentWalletSessionConnected) return
+    if (!hasPendingLpScoutRequest || agentWalletSessionConnected || !agentWalletRestoreChecked) return
     setShowWalletAccessPanel(true)
     setWalletMode('login')
-  }, [hasPendingLpScoutRequest, agentWalletSessionConnected])
+  }, [hasPendingLpScoutRequest, agentWalletSessionConnected, agentWalletRestoreChecked])
 
   useEffect(() => {
     if (!privyAuthenticated) return
@@ -711,9 +712,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
 
   useEffect(() => {
     let cancelled = false
-    if (!showAgentProfile || !PRIVY_AUTH_ENABLED || !privyAuthenticated || !privyEmail) return
+    if (!showAgentProfile || !PRIVY_AUTH_ENABLED || !privyAuthenticated || !privyEmail) {
+      setAgentWalletRestoreChecked(true)
+      return
+    }
     const runKey = `${agentNetwork}:${privyEmail}`
     agentPrivyRestoreKey.current = runKey
+    setAgentWalletRestoreChecked(false)
     setWalletEmail(current => current || privyEmail)
     ;(async () => {
       try {
@@ -738,6 +743,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         }
       } catch (err) {
         console.warn('[Agent] Privy Circle agent wallet restore failed', err)
+      } finally {
+        if (!cancelled && agentPrivyRestoreKey.current === runKey) setAgentWalletRestoreChecked(true)
       }
     })()
     return () => { cancelled = true }
@@ -1377,6 +1384,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : displayAgentProfile?.purpose || 'Sign in, link a Circle wallet, fund USDC, and activate x402 from the dashboard.'
   const displayAgentImage = displayAgentProfile ? resolveAgentProfileImage(displayAgentProfile) : null
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
+  const agentWalletRestorePending = Boolean(PRIVY_AUTH_ENABLED && showAgentProfile && privyAuthenticated && privyEmail && !agentWalletRestoreChecked)
   useEffect(() => {
     if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
     if (lpScoutResult?.zeroscoutQueued && lpScoutResult.resultActivityId === latestScoutActivity.id) return
@@ -1385,9 +1393,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     generateZeroScoutBrief().catch(() => undefined)
   }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy, lpScoutResult?.zeroscoutQueued, lpScoutResult?.resultActivityId])
   const connectedWalletNeedsAccess = Boolean(currentAgentWallet && !agentWalletAccessConnected)
-  const showAgentWalletAccessPanel = Boolean(!agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
+  const showAgentWalletAccessPanel = Boolean(!agentWalletRestorePending && !agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
   const sessionReconnectNeeded = Boolean(currentAgentWallet && !agentWalletAccessConnected && showAgentWalletAccessPanel)
-  const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected)
+  const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected && !agentWalletRestorePending)
   const x402Refreshing = Boolean(agentWalletAccessConnected && !x402BalanceChecked)
   const balancesRefreshing = Boolean(agentWalletAccessConnected && (!treasuryBalanceChecked || x402Refreshing || activityBusy))
   const pendingScoutMaxAmountNumber = Number(pendingScoutMaxAmount || '0.01')
@@ -1408,8 +1416,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     Number.isFinite(x402BalanceNumber) &&
     x402BalanceNumber >= (Number.isFinite(pendingScoutMaxAmountNumber) ? pendingScoutMaxAmountNumber : 0.01),
   )
-  const lpScoutWalletStatus = agentWalletAccessConnected ? 'Ready' : 'Email required'
-  const lpScoutFundingStatus = !agentWalletAccessConnected
+  const lpScoutWalletStatus = agentWalletRestorePending ? 'Checking' : agentWalletAccessConnected ? 'Ready' : 'Email required'
+  const lpScoutFundingStatus = agentWalletRestorePending
+    ? 'Checking'
+    : !agentWalletAccessConnected
     ? 'Locked'
     : lpScoutX402Ready
     ? 'Ready'
@@ -1418,7 +1428,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : treasuryBalanceKnown
     ? 'Ready'
     : 'Checking'
-  const lpScoutX402Status = !agentWalletAccessConnected
+  const lpScoutX402Status = agentWalletRestorePending
+    ? 'Checking'
+    : !agentWalletAccessConnected
     ? 'Locked'
     : lpScoutX402Ready
     ? 'Ready'
@@ -1438,6 +1450,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const lpScoutPrimaryDisabled = Boolean(
     lpScoutBusy ||
     x402Busy ||
+    agentWalletRestorePending ||
     x402Refreshing ||
     (!lpScoutX402Ready && lpScoutWalletBalanceChecking),
   )
@@ -1445,7 +1458,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Running LP Scout</>
     : x402Busy
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Activating x402</>
-    : x402Refreshing || lpScoutWalletBalanceChecking
+    : agentWalletRestorePending || x402Refreshing || lpScoutWalletBalanceChecking
     ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking wallet</>
     : !privyAuthenticated
     ? <><Mail className="h-4 w-4" /> Sign in</>
