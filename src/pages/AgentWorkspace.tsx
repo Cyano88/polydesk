@@ -2241,7 +2241,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><img src="/hash-logo-transparent.png" alt="" className="h-5 w-5 object-contain invert mix-blend-screen dark:invert-0 dark:mix-blend-multiply" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : hasPendingLpScoutRequest
+                          ? <><ArrowRight className="h-4 w-4" /> Open Pocket Wallet</>
+                          : <><img src="/hash-logo-transparent.png" alt="" className="h-5 w-5 object-contain invert mix-blend-screen dark:invert-0 dark:mix-blend-multiply" /> {walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
                       {!hasPendingLpScoutRequest && (
                         <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
