@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.8",
+    "@circle-fin/cli": "^0.0.6",
     "@circle-fin/unified-balance-kit": "^1.1.0",
     "@circle-fin/x402-batching": "^3.0.4",
     "@coral-xyz/anchor": "^0.32.1",

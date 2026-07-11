@@ -84,20 +84,36 @@ services:
       - key: DEFAULT_AGENT_SLUG
         value: polydesk-agent
       - key: DEFAULT_AGENT_WALLET_CHAIN
-        value: BASE
+        value: ARC-TESTNET
       - key: DEFAULT_AGENT_CHAIN
-        value: BASE
+        value: ARC-TESTNET
       - key: DEFAULT_AGENT_WALLET_ADDRESS
         sync: false
       - key: AGENT_WALLET_SERVICE_SECRET
         sync: false
       - key: AGENT_WALLET_ALLOWED_SERVICE_URLS
         sync: false
+      - key: AGENT_WALLET_MAX_SERVICE_AMOUNT
+        value: "0.01"
+      - key: AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT
+        value: "5"
+      - key: AGENT_WALLET_GATEWAY_BALANCE_CHAIN
+        value: ARC-TESTNET
+      - key: AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_ATTEMPTS
+        value: "6"
+      - key: AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_DELAY_MS
+        value: "5000"
       - key: AGENT_PROFILE_STORE
         sync: false
       - key: AGENT_PROFILE_STORE_KEY
         sync: false
       - key: PRIVY_CIRCLE_LINK_STORE
+        sync: false
+      - key: CIRCLE_CLI_ENABLED
+        value: "true"
+      - key: CIRCLE_API_KEY
+        sync: false
+      - key: CIRCLE_TEST_API_KEY
         sync: false
 
       - key: X402_SELLER_ADDRESS
