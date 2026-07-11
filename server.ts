@@ -9,6 +9,7 @@ import agentAskHandler from './api/agent-ask.js'
 import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
+import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
@@ -97,6 +98,7 @@ app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
+app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)

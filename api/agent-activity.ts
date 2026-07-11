@@ -12,6 +12,7 @@ export type AgentActivityType =
   | 'x402_spent'
   | 'x402_sold'
   | 'scout_returned'
+  | 'scout_verification_queued'
   | 'governance'
 
 export type AgentActivityProof = {

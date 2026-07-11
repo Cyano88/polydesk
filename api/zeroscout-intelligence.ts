@@ -2,6 +2,7 @@ export type ZeroScoutPayload = {
   partner: string
   productType: string
   analysisType: string
+  proofClass?: string
   objective: string
   outputStyle: string
   data: Record<string, unknown>
