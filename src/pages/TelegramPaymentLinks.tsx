@@ -1855,16 +1855,20 @@ export function TelegramHelperPanel({
           suppressThreadHydrationRef.current = false
           return
         }
-        if (helperMode === 'polydesk' && polyDeskSubMode === 'lp-scout' && lpScoutActivityId) return
         if (freshThreadIdsRef.current.has(activeHelperThreadId)) return
         if (helperMode && data.profile?.helperThread?.length && !(lockedHelperMode === 'polydesk' && helperMode === 'polydesk' && !polyDeskSubMode)) {
+          const lpScoutResultMessagePrefix = lpScoutActivityId ? `lp-scout-result:${lpScoutActivityId}` : ''
           const storedMessages = data.profile.helperThread.map(item => ({
             id: item.id,
             question: item.question,
             answer: item.answer,
             paylink: item.paylink,
             actionLinks: item.actionLinks,
-          }))
+          })).filter(item => {
+            if (!lpScoutResultMessagePrefix) return true
+            if ((item.question ?? '').trim().toLowerCase() !== 'view lp scout result') return true
+            return String(item.id ?? '').startsWith(lpScoutResultMessagePrefix)
+          })
           setMessages(prev => {
             const seenIds = new Set(prev.map(item => item.id).filter(Boolean))
             const seenFallback = new Set(prev.map(item => `${item.question ?? ''}|${item.answer ?? ''}`))
@@ -2993,6 +2997,7 @@ export function TelegramHelperPanel({
           'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
         ].filter(Boolean)
         finishHelperMessage(nextQuestion, {
+          id: `lp-scout-result:${lpScoutActivityId}`,
           answer: answerLines.join('\n\n'),
           actionLinks: [
             ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
@@ -3379,7 +3384,7 @@ export function TelegramHelperPanel({
                 )}
 
                 {helperMode === 'polydesk' && polyDeskSubMode && (
-                  <div className="flex justify-center">
+                  <div className="flex flex-wrap justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -3394,6 +3399,16 @@ export function TelegramHelperPanel({
                       className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200 dark:hover:bg-white/[0.1]"
                     >
                       Desk Agent / {polyDeskSubModes.find(mode => mode.id === polyDeskSubMode)?.label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void clearCurrentHelperThread()
+                        setMessages([{ answer: 'Chat history cleared. I kept your saved profile, wallet preferences, and memory.' }])
+                      }}
+                      className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-gray-500 shadow-sm transition hover:bg-gray-50 hover:text-gray-800 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
+                    >
+                      Delete chat
                     </button>
                   </div>
                 )}

@@ -1255,6 +1255,17 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setZeroScoutError('')
       setReceiptsOpen(true)
       clearLpScoutIntent()
+      if (data.resultActivityId) {
+        const next = new URLSearchParams()
+        next.set('agent', '1')
+        next.set('lane', 'lp-scout')
+        next.set('lpScoutActivity', data.resultActivityId)
+        if (data.receiptActivityId) next.set('lpScoutReceipt', data.receiptActivityId)
+        next.set('lpScoutAgent', payerAgentSlug)
+        next.set('agentMessage', 'View LP Scout result')
+        navigate(`/?${next.toString()}`)
+        return
+      }
       await refreshX402Balance()
       await loadAgentWallet()
     } catch (err) {
