@@ -1608,16 +1608,18 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
           )}
 
           <div className={cn(
-            !hasPendingLpScoutRequest && 'mt-4',
-            !hasPendingLpScoutRequest && 'rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]',
+            !hasPendingLpScoutRequest && !embeddedWalletManager && 'mt-4',
+            !hasPendingLpScoutRequest && !embeddedWalletManager && 'rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]',
           )}>
             {!hasPendingLpScoutRequest && savedLpScoutIntent && (
               <div className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 dark:border-emerald-400/20 dark:bg-emerald-400/10">
                 <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">LP Scout request saved</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-200/80">
-                  Finish wallet access, then continue {savedLpScoutIntent.label.toLowerCase()} without starting over.
+                  {embeddedWalletManager
+                    ? `Finish x402 setup, then continue ${savedLpScoutIntent.label.toLowerCase()}.`
+                    : `Finish wallet access, then continue ${savedLpScoutIntent.label.toLowerCase()} without starting over.`}
                 </p>
-                <button
+                {(!embeddedWalletManager || agentWalletAccessConnected) && <button
                   type="button"
                   onClick={() => {
                     if (agentWalletAccessConnected) {
@@ -1635,10 +1637,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                 >
                   {agentWalletAccessConnected ? <ArrowRight className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
                   {agentWalletAccessConnected ? 'Continue LP Scout' : embeddedWalletManager ? 'Authorize wallet' : 'Authorize paying agent'}
-                </button>
+                </button>}
               </div>
             )}
-            {!hasPendingLpScoutRequest && (
+            {!hasPendingLpScoutRequest && !embeddedWalletManager && (
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Balance network</p>
@@ -1676,7 +1678,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
               </div>
             </div>
             )}
-            {!hasPendingLpScoutRequest && !agentWalletAccessConnected && (
+            {!hasPendingLpScoutRequest && !agentWalletAccessConnected && !embeddedWalletManager && (
               connectedWalletNeedsAccess ? (
                 <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
                   <div>
@@ -1707,12 +1709,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                 </div>
               )
             )}
-            {!hasPendingLpScoutRequest && currentAgentWallet && !agentWalletAccessConnected && !connectedWalletNeedsAccess && (
+            {!hasPendingLpScoutRequest && currentAgentWallet && !agentWalletAccessConnected && !connectedWalletNeedsAccess && !embeddedWalletManager && (
               <p className="mt-3 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                 Fund Circle wallet balance first. x402 activation moves part of that USDC into Circle Gateway.
               </p>
             )}
-            {!hasPendingLpScoutRequest && connectedWalletNeedsAccess && !showWalletAccessPanel && (
+            {!hasPendingLpScoutRequest && connectedWalletNeedsAccess && !showWalletAccessPanel && !embeddedWalletManager && (
               <div className="mt-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.04]">
                 <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                   Sign in to view balances, receipts, and x402 actions.
@@ -2090,18 +2092,18 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     {hasPendingLpScoutRequest
                       ? 'Pocket Wallet'
                       : currentAgentWallet
-                      ? 'Wallet access'
+                      ? embeddedWalletManager ? 'Confirm email' : 'Wallet access'
                       : agentEmailConnected
-                      ? 'Wallet access'
+                      ? embeddedWalletManager ? 'Confirm email' : 'Wallet access'
                       : 'Sign in'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {hasPendingLpScoutRequest
                       ? currentAgentWallet ? 'Confirm Arc x402 access.' : 'Use your email wallet for Arc x402.'
                       : currentAgentWallet
-                      ? embeddedWalletManager ? 'Confirm the Circle email for this wallet to view balances and receipts.' : 'Confirm the Circle email for this agent to view balances and receipts.'
+                      ? embeddedWalletManager ? 'Use the Circle email for this Arc wallet.' : 'Confirm the Circle email for this agent to view balances and receipts.'
                       : agentEmailConnected
-                      ? embeddedWalletManager ? 'Create or link a Circle wallet for x402 services.' : 'Create or link a Circle agent wallet.'
+                      ? embeddedWalletManager ? 'Enter the Circle email for Arc x402 funding.' : 'Create or link a Circle agent wallet.'
                       : 'Email sign-in is required before wallet setup.'}
                   </p>
                 </div>
@@ -2238,11 +2240,11 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       >
                         {walletBusy && walletStep === 'idle'
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Opening Circle wallet</>
-                          : <><Wallet className="h-4 w-4" /> {hasPendingLpScoutRequest ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
+                          : <><Wallet className="h-4 w-4" /> {hasPendingLpScoutRequest || embeddedWalletManager ? 'Open Pocket Wallet' : walletMode === 'create' ? 'Create wallet' : 'Send code'}</>}
                       </button>
                       {!hasPendingLpScoutRequest && (
                         <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">
-                          Circle will email a one-time code.
+                          Use the newest code sent by email.
                         </p>
                       )}
                     </>
@@ -2285,7 +2287,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     </div>
                   )}
 
-                  {!currentAgentWallet && (
+                  {!currentAgentWallet && !embeddedWalletManager && (
                     <button
                       type="button"
                       onClick={() => {
