@@ -1490,6 +1490,16 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     setBalanceRefreshNonce(current => current + 1)
   }, [agentWalletAccessConnected])
 
+  useEffect(() => {
+    if (hasPendingLpScoutRequest || !savedLpScoutIntent || !currentAgentWallet || agentWalletAccessConnected || agentWalletRestorePending) return
+    setShowWalletAccessPanel(true)
+    setWalletMode('login')
+    setWalletStep('idle')
+    setWalletOtp('')
+    setWalletOtpContext(null)
+    setWalletError(null)
+  }, [hasPendingLpScoutRequest, savedLpScoutIntent, currentAgentWallet, agentWalletAccessConnected, agentWalletRestorePending])
+
   if (showHelperDemo) {
     return (
       <div className="mx-auto max-w-md animate-slide-up">
