@@ -2,8 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import crypto from 'node:crypto'
 import { archivePayment } from './og-storage.js'
+import { mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 
 const STORE_PATH = process.env.AGENT_WALLET_PROVISION_STORE ?? './data/agent-wallet-provisioning.json'
+const STORE_KEY = (process.env.AGENT_ACTIVITY_STORE_KEY ?? 'polydesk:agent-activity').trim()
 
 export type AgentActivityType =
   | 'wallet_connected'
@@ -17,7 +19,7 @@ export type AgentActivityType =
   | 'governance'
 
 export type AgentActivityProof = {
-  kind: 'circle_gateway_x402'
+  kind: 'circle_gateway_x402' | 'okx_agent_payments_x402'
   provider?: string
   service?: string
   buyerAgent?: string
@@ -68,11 +70,26 @@ type ActivityStore = {
   activity?: Record<string, AgentActivity[]>
 }
 
+function normalizeActivityStore(value: Partial<ActivityStore> | undefined): ActivityStore {
+  return {
+    pending: value?.pending ?? {},
+    agents: value?.agents ?? {},
+    activity: value?.activity ?? {},
+  }
+}
+
 export function normalizeActivitySlug(value: unknown) {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 32)
 }
 
 async function readActivityStore(): Promise<ActivityStore> {
+  try {
+    const remote = await readDurableJson<Partial<ActivityStore>>(STORE_KEY)
+    if (remote) return normalizeActivityStore(remote)
+  } catch (err) {
+    console.warn('[agent-activity] durable load failed; using file fallback.', err instanceof Error ? err.message : String(err))
+  }
+
   try {
     return JSON.parse(await readFile(STORE_PATH, 'utf8')) as ActivityStore
   } catch {
@@ -83,6 +100,31 @@ async function readActivityStore(): Promise<ActivityStore> {
 async function writeActivityStore(data: ActivityStore) {
   await mkdir(dirname(STORE_PATH), { recursive: true })
   await writeFile(STORE_PATH, JSON.stringify(data, null, 2))
+  try {
+    await writeDurableJson(STORE_KEY, data)
+  } catch (err) {
+    console.warn('[agent-activity] durable save failed; file fallback saved.', err instanceof Error ? err.message : String(err))
+  }
+}
+
+async function writeActivityFile(data: ActivityStore) {
+  await mkdir(dirname(STORE_PATH), { recursive: true })
+  await writeFile(STORE_PATH, JSON.stringify(data, null, 2))
+}
+
+async function mutateActivityStore(mutate: (store: ActivityStore) => ActivityStore | Promise<ActivityStore>) {
+  try {
+    const next = await mutateDurableJson<Partial<ActivityStore>>(STORE_KEY, async current => mutate(normalizeActivityStore(current)))
+    const normalized = normalizeActivityStore(next)
+    await writeActivityFile(normalized).catch(() => undefined)
+    return normalized
+  } catch (err) {
+    console.warn('[agent-activity] durable mutation failed; using file fallback.', err instanceof Error ? err.message : String(err))
+  }
+
+  const next = await mutate(await readActivityStore())
+  await writeActivityStore(next)
+  return next
 }
 
 function shouldArchiveActivity(item: AgentActivity) {
@@ -90,14 +132,15 @@ function shouldArchiveActivity(item: AgentActivity) {
 }
 
 async function patchActivityOgProof(agentSlug: string, activityId: string, og: AgentActivityOgProof) {
-  const store = await readActivityStore()
   const slug = normalizeActivitySlug(agentSlug)
-  const items = store.activity?.[slug]
-  if (!items?.length) return
-  const index = items.findIndex(item => item.id === activityId)
-  if (index === -1) return
-  items[index] = { ...items[index], og }
-  await writeActivityStore(store)
+  await mutateActivityStore(store => {
+    const items = store.activity?.[slug]
+    if (!items?.length) return store
+    const index = items.findIndex(item => item.id === activityId)
+    if (index === -1) return store
+    items[index] = { ...items[index], og }
+    return store
+  })
 }
 
 async function archiveAgentActivity(item: AgentActivity) {
@@ -153,31 +196,30 @@ export async function findAgentActivity(activityId: string) {
 export async function appendAgentActivity(input: Omit<AgentActivity, 'id' | 'createdAt'> & { createdAt?: number }) {
   const slug = normalizeActivitySlug(input.agentSlug)
   if (!slug) return undefined
-  const store = await readActivityStore()
   const next: AgentActivity = {
     ...input,
     agentSlug: slug,
     id: crypto.randomUUID(),
     createdAt: input.createdAt ?? Date.now(),
   }
-  store.activity = store.activity ?? {}
-  const existing = store.activity[slug] ?? []
-  const isDuplicate = existing.some(item => (
-    (input.txHash && item.txHash?.toLowerCase() === input.txHash.toLowerCase() && item.type === input.type)
-    || (input.proof?.proofHash && item.proof?.proofHash === input.proof.proofHash && item.type === input.type)
-  ))
-  if (isDuplicate) {
-    const duplicate = existing.find(item => (
+  let duplicate: AgentActivity | undefined
+  let appended: AgentActivity | undefined
+  await mutateActivityStore(store => {
+    store.activity = store.activity ?? {}
+    const existing = store.activity[slug] ?? []
+    duplicate = existing.find(item => (
       (input.txHash && item.txHash?.toLowerCase() === input.txHash.toLowerCase() && item.type === input.type)
       || (input.proof?.proofHash && item.proof?.proofHash === input.proof.proofHash && item.type === input.type)
     ))
-    if (duplicate && shouldArchiveActivity(duplicate) && !duplicate.og) {
-      void archiveAgentActivity(duplicate).catch(() => {})
-    }
+    if (duplicate) return store
+    appended = next
+    store.activity[slug] = [next, ...existing].slice(0, 80)
+    return store
+  })
+  if (duplicate) {
+    if (shouldArchiveActivity(duplicate) && !duplicate.og) void archiveAgentActivity(duplicate).catch(() => {})
     return duplicate
   }
-  store.activity[slug] = [next, ...existing].slice(0, 80)
-  await writeActivityStore(store)
-  void archiveAgentActivity(next).catch(() => {})
-  return next
+  if (appended) void archiveAgentActivity(appended).catch(() => {})
+  return appended
 }

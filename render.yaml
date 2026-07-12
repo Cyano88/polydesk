@@ -91,6 +91,8 @@ services:
         sync: false
       - key: AGENT_WALLET_SERVICE_SECRET
         sync: false
+      - key: AGENT_ACTIVITY_STORE_KEY
+        value: polydesk:agent-activity
       - key: AGENT_WALLET_ALLOWED_SERVICE_URLS
         sync: false
       - key: AGENT_WALLET_MAX_SERVICE_AMOUNT
