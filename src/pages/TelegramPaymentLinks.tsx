@@ -3008,18 +3008,34 @@ export function TelegramHelperPanel({
           const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
           const zeroScoutRecord = candidateZeroScout && typeof candidateZeroScout === 'object' ? candidateZeroScout as Record<string, any> : null
           const zeroScoutProof = zeroScoutRecord?.proof && typeof zeroScoutRecord.proof === 'object' ? zeroScoutRecord.proof as Record<string, unknown> : {}
-          const zeroScoutActions = Array.isArray(zeroScoutRecord?.recommendedActions) ? zeroScoutRecord.recommendedActions : []
-          const zeroScoutRisks = Array.isArray(zeroScoutRecord?.riskFlags) ? zeroScoutRecord.riskFlags : []
-          const zeroScoutBoundaries = Array.isArray(zeroScoutRecord?.safetyBoundaries) ? zeroScoutRecord.safetyBoundaries : []
+          const cleanLpScoutLine = (value: unknown) => String(value || '')
+            .replace(/\bscout timestamp is\s*\d{10,}\b/gi, 'scout data can age quickly')
+            .replace(/\btimestamp is\s*\d{10,}\b/gi, 'data can age quickly')
+            .replace(/\b\d{13}\b/g, 'the saved scout time')
+            .replace(/\b(api|backend|provider routing|model routing|internal activity id)s?\b/gi, 'verification')
+            .replace(/\s+/g, ' ')
+            .trim()
+          const compactList = (items: unknown[], max: number) => items
+            .map(cleanLpScoutLine)
+            .filter(Boolean)
+            .slice(0, max)
+          const zeroScoutActions = compactList(Array.isArray(zeroScoutRecord?.recommendedActions) ? zeroScoutRecord.recommendedActions : [], 4)
+          const zeroScoutRisks = compactList(Array.isArray(zeroScoutRecord?.riskFlags) ? zeroScoutRecord.riskFlags : [], 3)
+          const zeroScoutBoundaries = compactList(Array.isArray(zeroScoutRecord?.safetyBoundaries) ? zeroScoutRecord.safetyBoundaries : [], 2)
           const zeroScoutSummary = zeroScoutRecord
-            ? String(zeroScoutRecord.suggestedAnswer || zeroScoutRecord.summary || zeroScoutRecord.reasoningSummary || 'ZeroScout returned a verified LP Scout result.')
+            ? cleanLpScoutLine(zeroScoutRecord.suggestedAnswer || zeroScoutRecord.summary || zeroScoutRecord.reasoningSummary || 'ZeroScout returned a verified LP Scout result.')
             : ''
+          const proofTxHash = String(zeroScoutProof.storageTxHash || '').trim()
+          const proofRoot = String(zeroScoutProof.storageRoot || zeroScoutProof.contentHash || '').trim()
+          const proofUrl = /^0x[a-fA-F0-9]{64}$/.test(proofTxHash)
+            ? `https://chainscan.0g.ai/tx/${proofTxHash}`
+            : proofRoot ? `https://storagescan.0g.ai/file?root=${encodeURIComponent(proofRoot)}` : ''
           const answerLines = zeroScoutRecord ? [
             `ZeroScout verified LP Scout result (${ageText}).`,
             zeroScoutSummary,
-            zeroScoutActions.length ? `Recommended actions:\n${zeroScoutActions.slice(0, 5).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
-            zeroScoutRisks.length ? `Risk flags:\n${zeroScoutRisks.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
-            zeroScoutBoundaries.length ? `Safety boundaries:\n${zeroScoutBoundaries.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+            zeroScoutActions.length ? `Action checklist:\n${zeroScoutActions.map((item, index) => `${index + 1}. ${item}`).join('\n')}` : '',
+            zeroScoutRisks.length ? `Risk flags:\n${zeroScoutRisks.map((item, index) => `${index + 1}. ${item}`).join('\n')}` : '',
+            zeroScoutBoundaries.length ? `Safety:\n${zeroScoutBoundaries.map((item, index) => `${index + 1}. ${item}`).join('\n')}` : '',
             zeroScoutProof.storageRoot || zeroScoutProof.contentHash || zeroScoutProof.storageTxHash || zeroScoutProof.storageUri
               ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
               : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
@@ -3039,6 +3055,7 @@ export function TelegramHelperPanel({
             actionLinks: [
               ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
               { label: 'LP Scout receipt', url: `/receipt/${encodeURIComponent(lpScoutActivityId)}` },
+              ...(proofUrl ? [{ label: '0G proof', url: proofUrl }] : []),
               ...marketLinks,
             ],
           }
