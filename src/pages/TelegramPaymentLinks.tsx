@@ -2899,7 +2899,11 @@ export function TelegramHelperPanel({
         const loadActivity = async (slug: string) => {
           const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}`)
           const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
-          if (!res.ok) throw new Error(data.error || 'Could not load LP Scout activity.')
+          if (!res.ok) {
+            throw new Error(res.status === 429
+              ? 'LP Scout result is syncing. Payment is saved, but the result reader is cooling down for a moment. Try again shortly.'
+              : data.error || 'Could not load LP Scout activity.')
+          }
           return Array.isArray(data.activity) ? data.activity : []
         }
         let activeAgentSlug = agentSlugCandidates[0] || 'polydesk-agent'
@@ -2937,7 +2941,9 @@ export function TelegramHelperPanel({
             })
             const data = await res.json() as { ok?: boolean; zeroscout?: Record<string, any>; error?: string }
             if (res.ok && data.ok && data.zeroscout) zeroScout = data.zeroscout
-            if (!zeroScout && data.error) zeroScoutError = data.error
+            if (!zeroScout && data.error) zeroScoutError = res.status === 429
+              ? 'ZeroScout is still finalizing. Payment is saved; try again shortly.'
+              : data.error
           } catch (err) {
             zeroScoutError = err instanceof DOMException && err.name === 'AbortError'
               ? 'ZeroScout is still preparing the verified brief.'
