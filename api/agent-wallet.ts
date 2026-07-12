@@ -38,6 +38,20 @@ function publicErrorMessage(err: unknown) {
     .replace(/api[_-]?key[=:]\s*[A-Za-z0-9._~+/=-]+/gi, 'api_key=[redacted]')
     .slice(0, 240)
 }
+
+function isTransientZeroScoutError(err: unknown) {
+  const status = typeof (err as { status?: unknown })?.status === 'number'
+    ? (err as { status: number }).status
+    : 0
+  const message = err instanceof Error ? err.message : String(err ?? '')
+  return (
+    !status
+    || status === 408
+    || status === 429
+    || status >= 500
+    || /abort|aborted|timeout|timed out|network|fetch failed|upstream/i.test(message)
+  )
+}
 const MAX_SERVICE_AMOUNT = Number(process.env.AGENT_WALLET_MAX_SERVICE_AMOUNT ?? process.env.X402_POLYMARKET_SCOUT_MAX_AMOUNT ?? '0.01')
 const MAX_GATEWAY_DEPOSIT_AMOUNT = Number(process.env.AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT ?? '5')
 const GATEWAY_BALANCE_CHAIN = process.env.AGENT_WALLET_GATEWAY_BALANCE_CHAIN ?? 'ARC-TESTNET'
@@ -1024,22 +1038,26 @@ export default async function handler(req: Request, res: Response) {
             includeOpenAiReview: true,
           }).catch(async err => {
             const detail = publicErrorMessage(err)
-            console.warn('[agent-wallet] ZeroScout LP preparation failed:', detail)
+            const transient = isTransientZeroScoutError(err)
+            console.warn(transient ? '[agent-wallet] ZeroScout LP preparation still pending:' : '[agent-wallet] ZeroScout LP preparation failed:', detail)
             await appendAgentActivity({
               agentSlug,
-              type: 'scout_verification_failed',
-              title: 'ZeroScout LP verification needs retry',
+              type: transient ? 'scout_verification_queued' : 'scout_verification_failed',
+              title: transient ? 'ZeroScout LP verification still finalizing' : 'ZeroScout LP verification needs retry',
               direction: 'system',
               network: 'ZeroScout / 0G',
               wallet: result.walletAddress,
               serviceUrl,
-              detail,
+              detail: transient
+                ? 'ZeroScout is still finalizing this paid LP Scout result. Payment is saved and retrying does not require another x402 payment.'
+                : detail,
               result: {
                 sourceActivityId: result.resultActivityId,
                 receiptActivityId: result.receiptActivityId,
                 proofHash: result.proof?.proofHash,
-                status: 'failed',
-                error: detail,
+                status: transient ? 'queued' : 'failed',
+                error: transient ? undefined : detail,
+                retryable: transient || undefined,
               },
             }).catch(activityErr => {
               console.warn('[agent-wallet] failed to record ZeroScout failure:', publicErrorMessage(activityErr))

@@ -2944,6 +2944,12 @@ export function TelegramHelperPanel({
             window.clearTimeout(timeout)
           }
         }
+        const isTransientScoutFailure = (item: Record<string, any> | undefined) => {
+          if (!item) return false
+          const status = String(item.result?.status || '').toLowerCase()
+          const message = String(item.result?.error || item.detail || '')
+          return Boolean(item.result?.retryable || status === 'queued' || /abort|aborted|timeout|timed out|network|fetch failed|upstream|too many requests/i.test(message))
+        }
         const readPaidScoutState = async () => {
           for (const candidate of agentSlugCandidates) {
             const candidateActivity = await loadActivity(candidate)
@@ -2952,6 +2958,7 @@ export function TelegramHelperPanel({
               const failed = candidateActivity.find(item => (
                 item.type === 'scout_verification_failed'
                 && item.result?.sourceActivityId === lpScoutActivityId
+                && !isTransientScoutFailure(item)
               ))
               const verified = candidateActivity.find(item => (
                 item.type === 'scout_returned'
@@ -3039,6 +3046,11 @@ export function TelegramHelperPanel({
         let state = await readPaidScoutState()
         if (!state.zeroScout && !state.failedVerification) {
           setAgentStatus('Receipt verified. Waiting for ZeroScout to return the stored LP brief...')
+          fetch('/api/zeroscout/polymarket-brief', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentSlug: requestedAgentSlug, activityId: lpScoutActivityId }),
+          }).catch(() => undefined)
           const statusSteps = [
             'Receipt verified. Waiting for ZeroScout to return the stored LP brief...',
             'ZeroScout is checking the paid scout data against the candidate audit...',
