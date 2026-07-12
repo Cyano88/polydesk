@@ -3063,14 +3063,14 @@ export function TelegramHelperPanel({
         }
         let state = await readPaidScoutState()
         if (!state.zeroScout && !state.failedVerification) {
-          setAgentStatus('Receipt verified. Waiting for ZeroScout to return the stored LP brief...')
+          setAgentStatus('Receipt verified. This could take up to 2-3 mins, please be patient.')
           fetch('/api/zeroscout/polymarket-brief', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agentSlug: requestedAgentSlug, activityId: lpScoutActivityId }),
           }).catch(() => undefined)
           const statusSteps = [
-            'Receipt verified. Waiting for ZeroScout to return the stored LP brief...',
+            'Receipt verified. This could take up to 2-3 mins, please be patient.',
             'ZeroScout is checking the paid scout data against the candidate audit...',
             '0G archive is still finalizing. Keeping the receipt attached...',
             'Still connected. Agent Hash will reveal the result as soon as ZeroScout stores it...',
@@ -3591,11 +3591,11 @@ const helperThinkingCopy: Record<HelperThinkingState, string[]> = {
   'payment-draft': ['Matching details...', 'Holding the draft...', 'Preparing reply...', 'Polishing wording...'],
   'payment-wallet': ['Checking wallet...', 'Validating flow...', 'Matching details...', 'Preparing reply...'],
   'paylink-build': ['Building PayLink...', 'Validating flow...', 'Polishing wording...', 'Almost ready...'],
-  'deep-research': ['Reading this...', 'Checking context...', 'Preparing reply...', 'Almost ready...'],
+  'deep-research': ['Reading this...', 'Checking context...', 'This could take up to 2-3 mins, please be patient.', 'Preparing reply...', 'Almost ready...'],
   proof: ['Polishing wording...', 'Validating flow...', 'Almost ready...'],
 }
 
-const helperSlowThinkingCopy = ['Putting things in order...', 'Almost ready...', 'Please be patient...']
+const helperSlowThinkingCopy = ['Putting things in order...', 'This could take up to 2-3 mins, please be patient.', 'Almost ready...']
 
 function helperSlowThinkingDelays(state: HelperThinkingState) {
   if (state === 'deep-research') return [10000, 18000, 26000]
