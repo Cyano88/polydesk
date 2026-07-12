@@ -1015,16 +1015,14 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setWalletError(embeddedWalletManager ? 'Sign in with email to manage your Circle wallet.' : 'Sign in with email to manage your Circle agent wallet.')
       return
     }
-    const email = (embeddedWalletManager && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
-      ? privyEmail
-      : !currentAgentWallet && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
-      ? privyEmail
-      : walletEmail).trim().toLowerCase()
+    const email = (walletEmail.trim()
+      || (PRIVY_AUTH_ENABLED && privyAuthenticated ? privyEmail : '')
+    ).trim().toLowerCase()
     if (!email) {
       setWalletError(embeddedWalletManager ? 'Enter the Circle email for this wallet.' : 'Enter the Circle email for this agent wallet.')
       return
     }
-    const requestAgentSlug = agentSlug || (embeddedWalletManager ? stableWalletSlugFromEmail(email) : PLATFORM_AGENT_SLUG)
+    const requestAgentSlug = embeddedWalletManager ? stableWalletSlugFromEmail(email) : agentSlug || PLATFORM_AGENT_SLUG
     if (!requestAgentSlug) {
       setWalletError('Enter the Circle email for this wallet.')
       return
@@ -2181,32 +2179,25 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                 <div className="space-y-2">
                   {walletStep !== 'otp' && (
                     <>
-                      {PRIVY_AUTH_ENABLED && !currentAgentWallet && privyAuthenticated ? (
-                        <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.06]">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-white/[0.08] dark:text-gray-200">
-                            <Wallet className="h-4 w-4" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                              {hasPendingLpScoutRequest ? 'Email wallet' : walletMode === 'create' ? 'Create Circle wallet' : 'Link existing wallet'}
-                            </p>
-                            <p className="mt-0.5 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
-                              {privyEmail || 'Email session active'}
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.06]">
-                          <input
-                            type="email"
-                            value={walletEmail}
-                            onChange={e => setWalletEmail(e.target.value)}
-                            placeholder="Circle email"
-                            disabled={walletBusy}
-                            className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none disabled:opacity-60 dark:text-white dark:placeholder:text-gray-500"
-                          />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.06]">
+                        <input
+                          type="email"
+                          value={walletEmail}
+                          onChange={e => {
+                            setWalletEmail(e.target.value)
+                            setWalletExpectedAddress('')
+                            setWalletChoices([])
+                            if (walletOtpContext) {
+                              setWalletOtp('')
+                              setWalletOtpContext(null)
+                              setWalletStep('idle')
+                            }
+                          }}
+                          placeholder={privyEmail || 'Circle email'}
+                          disabled={walletBusy}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none disabled:opacity-60 dark:text-white dark:placeholder:text-gray-500"
+                        />
+                      </div>
                       {walletChoices.length > 0 && (
                         <div className="space-y-2 rounded-lg border border-amber-100 bg-amber-50/70 p-2 dark:border-amber-400/20 dark:bg-amber-400/10">
                           <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-200">Choose wallet</p>
