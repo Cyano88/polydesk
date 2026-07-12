@@ -436,6 +436,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const navigate = useNavigate()
   const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout: logoutPrivy, getAccessToken } = usePrivy()
   const privyEmail = emailFromPrivyUser(privyUser).trim().toLowerCase()
+  const [walletEmail, setWalletEmail] = useState('')
   const params = mergedAgentRequestParams(requestParams)
   const agentSlug = params.get('agent') ?? ''
   const shouldOpenWalletLinkPanel = params.get('linkWallet') === '1'
@@ -447,7 +448,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const hasPendingLpScoutRequest = pendingRun === 'polymarket-scout'
   const embeddedWalletManager = Boolean(!agentSlug && ((embedded && forceProfile) || params.get('walletManager') === 'service'))
   const isArcX402FundingSurface = Boolean(embeddedWalletManager && !hasPendingLpScoutRequest)
-  const privyManagedWalletSlug = embeddedWalletManager ? stableWalletSlugFromEmail(privyEmail) : ''
+  const embeddedWalletEmail = (walletEmail.trim() || privyEmail).trim().toLowerCase()
+  const privyManagedWalletSlug = embeddedWalletManager && embeddedWalletEmail ? stableWalletSlugFromEmail(embeddedWalletEmail) : ''
   const normalizedAgentSlug = agentSlug || privyManagedWalletSlug || (embeddedWalletManager ? '' : PLATFORM_AGENT_SLUG)
   const savedLpScoutIntent = readSavedLpScoutIntent(normalizedAgentSlug)
   const rawUrlAgentWallet = params.get('wallet') ?? params.get('e') ?? ''
@@ -513,7 +515,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const [activity, setActivity] = useState<AgentActivity[]>([])
   const [copiedProofId, setCopiedProofId] = useState('')
   const [copiedWallet, setCopiedWallet] = useState(false)
-  const [walletEmail, setWalletEmail] = useState('')
   const [walletOtp, setWalletOtp] = useState('')
   const [walletExpectedAddress, setWalletExpectedAddress] = useState('')
   const [walletChoices, setWalletChoices] = useState<WalletChoice[]>([])
@@ -607,7 +608,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     setX402BalanceChecked(false)
     setX402BalanceError('')
     setActivity([])
-    if (embeddedWalletManager) setWalletEmail(privyEmail || '')
+    if (embeddedWalletManager) setWalletEmail(current => current || privyEmail || '')
     setWalletStep('idle')
     setWalletOtp('')
     setWalletOtpContext(null)
