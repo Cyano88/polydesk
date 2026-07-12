@@ -54,6 +54,11 @@ function shortHash(value: unknown) {
   return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-6)}` : text
 }
 
+function metricLabel(value: unknown, suffix: string) {
+  const text = clean(value)
+  return text ? `${text} ${suffix}` : ''
+}
+
 function reportText(report: NonNullable<ReportResponse['report']>) {
   return [
     'PolyDesk LP Scout Report',
@@ -174,26 +179,44 @@ export default function LPScoutReport() {
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Markets</p>
                   <div className="space-y-2">
-                    {report.marketLinks.slice(0, 3).map((market, index) => (
+                    {report.marketLinks.slice(0, 3).map((market, index) => {
+                      const reward = metricLabel(market.rewardDaily, 'USDC/day')
+                      const spread = metricLabel(market.spread, 'spread')
+                      const depth = metricLabel(market.depth, 'depth within 2c')
+                      const days = metricLabel(market.daysLeft, 'days left')
+                      const yesQuote = clean(market.yesQuote)
+                      const noQuote = clean(market.noQuote)
+                      return (
                       <a
                         key={`${market.url}-${index}`}
                         href={market.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="group block rounded-xl border border-gray-100 p-3 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
+                        className="group block rounded-xl border border-gray-100 p-3.5 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <p className="min-w-0 text-sm font-semibold leading-5 text-gray-900 dark:text-white">{market.label}</p>
-                          <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-gray-300 transition group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase text-gray-400">Market {index + 1}</p>
+                            <p className="mt-1 text-sm font-semibold leading-5 text-gray-900 dark:text-white">{market.label}</p>
+                          </div>
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gray-950 px-2.5 py-1 text-[11px] font-semibold text-white dark:bg-white dark:text-gray-950">
+                            Open <ExternalLink className="h-3 w-3" />
+                          </span>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                          {clean(market.rewardDaily) && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{clean(market.rewardDaily)} reward/day</span>}
-                          {clean(market.spread) && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{clean(market.spread)} spread</span>}
-                          {clean(market.depth) && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{clean(market.depth)} depth</span>}
-                          {clean(market.daysLeft) && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{clean(market.daysLeft)} days</span>}
+                        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                          {reward && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{reward}</span>}
+                          {spread && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{spread}</span>}
+                          {depth && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{depth}</span>}
+                          {days && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{days}</span>}
                         </div>
+                        {(yesQuote || noQuote) && (
+                          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                            {yesQuote && <div className="rounded-lg bg-emerald-50 px-3 py-2 font-semibold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">YES quote near {yesQuote}</div>}
+                            {noQuote && <div className="rounded-lg bg-gray-100 px-3 py-2 font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">NO quote near {noQuote}</div>}
+                          </div>
+                        )}
                       </a>
-                    ))}
+                    )})}
                   </div>
                 </div>
               )}
@@ -203,9 +226,9 @@ export default function LPScoutReport() {
                   <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Action Checklist</p>
                   <ol className="space-y-2">
                     {report.recommendedActions.slice(0, 4).map((item, index) => (
-                      <li key={index} className="flex gap-3 text-sm text-gray-700 dark:text-gray-200">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-950 text-[11px] font-semibold text-white dark:bg-white dark:text-gray-950">{index + 1}</span>
-                        <span>{clean(item)}</span>
+                      <li key={index} className="grid grid-cols-[1.25rem_1fr] gap-3 text-sm text-gray-700 dark:text-gray-200">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-950 text-[11px] font-semibold leading-none text-white dark:bg-white dark:text-gray-950">{index + 1}</span>
+                        <span className="leading-5">{clean(item)}</span>
                       </li>
                     ))}
                   </ol>
@@ -215,8 +238,13 @@ export default function LPScoutReport() {
               {!!report.riskFlags?.length && (
                 <section className="rounded-xl border border-amber-100 bg-amber-50 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
                   <p className="text-xs font-semibold uppercase text-amber-700 dark:text-amber-300">Risk Flags</p>
-                  <ul className="mt-2 space-y-1.5 text-sm text-amber-900 dark:text-amber-100">
-                    {report.riskFlags.slice(0, 3).map((item, index) => <li key={index}>- {clean(item)}</li>)}
+                  <ul className="mt-2 space-y-2 text-sm text-amber-900 dark:text-amber-100">
+                    {report.riskFlags.slice(0, 3).map((item, index) => (
+                      <li key={index} className="grid grid-cols-[0.5rem_1fr] gap-2">
+                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        <span className="leading-5">{clean(item)}</span>
+                      </li>
+                    ))}
                   </ul>
                 </section>
               )}
