@@ -1414,6 +1414,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : 'After payment'
   const lpScoutWalletBalanceChecking = Boolean(agentWalletAccessConnected && !treasuryBalanceChecked)
   const lpScoutNeedsSetup = Boolean(agentWalletAccessConnected && !lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking)
+  const lpScoutNeedsSessionRefresh = Boolean(lpScoutNeedsSetup && /reconnect|session expired|sign in/i.test(x402BalanceError))
   const lpScoutPrimaryDisabled = Boolean(
     lpScoutBusy ||
     x402Busy ||
@@ -1433,8 +1434,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? <><Wallet className="h-4 w-4" /> Reconnect wallet</>
     : !agentWalletAccessConnected
     ? <><ArrowRight className="h-4 w-4" /> Authorize wallet</>
-    : lpScoutNeedsSetup
+    : lpScoutNeedsSessionRefresh
     ? <><ArrowRight className="h-4 w-4" /> Sign in to continue</>
+    : lpScoutNeedsSetup
+    ? <><ArrowRight className="h-4 w-4" /> Open wallet manager</>
     : lpScoutHasResult
     ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
     : <><ArrowRight className="h-4 w-4" /> Continue to LP Scout</>
@@ -1759,7 +1762,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                     ))}
                     {!lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking && (
                       <p className="px-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                        Sign in to refresh x402 gateway access, then continue.
+                        {lpScoutNeedsSessionRefresh
+                          ? 'Sign in to refresh x402 gateway access, then continue.'
+                          : 'Use the wallet manager to fund or activate x402 for this email, then return here.'}
                       </p>
                     )}
                   </div>
@@ -1979,6 +1984,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           return
                         }
                         if (!lpScoutX402Ready) {
+                          if (!lpScoutNeedsSessionRefresh) {
+                            navigate('/?service=lp-scout&lpScoutPath=fund')
+                            return
+                          }
                           setAgentWalletSessionConnected(false)
                           setShowWalletAccessPanel(true)
                           setWalletMode('login')
