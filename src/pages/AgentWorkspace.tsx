@@ -997,7 +997,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setShowWalletAccessPanel(false)
       return true
     }
-    navigate(intent.href, { replace: true })
+    window.location.replace(intent.href)
     return true
   }
 
