@@ -167,7 +167,7 @@ function receiptLabels(receipt: PaylinkReceipt) {
   const isBankSend = receipt.source === 'bank-send'
   const isPolymarket = receipt.source === 'polymarket-funding' || receipt.settlementType === 'polymarket_bridge'
   const isX402 = receipt.source === 'x402' || receipt.settlementType === 'circle-gateway-x402'
-  const heading = isStream ? 'PolyDesk LP Scout receipt' : isBankSend ? 'Bank send receipt' : isBank ? 'Bank receive receipt' : isPos ? 'Retail POS receipt' : isPolymarket ? 'Polymarket funding receipt' : isX402 ? 'PolyDesk LP Scout receipt' : 'Request payment receipt'
+  const heading = isStream ? 'PolyDesk LP Scout receipt' : isBankSend ? 'Bank send receipt' : isBank ? 'Bank receive receipt' : isPos ? 'Retail POS receipt' : isPolymarket ? 'Polymarket funding receipt' : isX402 ? 'PolyDesk x402 receipt' : 'Request payment receipt'
   const title = isCheckpoint ? 'Checkpoint release confirmed' : isStream ? 'Stream created' : isBankSend ? 'USDC funding confirmed' : isBank ? 'Bank payout confirmed' : isPos ? 'Retail payment confirmed' : isPolymarket ? 'Polymarket funded' : isX402 ? 'LP Scout delivered' : 'Payment confirmed'
   const amountLabel = isCheckpoint ? 'Released amount' : isStream ? 'Stream amount' : isBankSend ? 'USDC settled' : isBank ? 'Amount paid' : isPolymarket ? 'Amount funded' : isX402 ? 'Access price' : 'Amount paid'
   const payer = isCheckpoint ? 'Reader wallet' : isStream ? 'Sender' : isBankSend ? 'Bank payer' : isBank ? 'Payer wallet' : isPos ? 'Payer wallet' : isPolymarket ? 'Funder' : isX402 ? 'Reader wallet' : 'Payer'

@@ -2919,7 +2919,7 @@ export function TelegramHelperPanel({
     }
 
     if (polyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
-      setAgentStatus('Reading paid LP Scout receipt...')
+      setAgentStatus('Reading paid LP Scout report...')
       const requestedAgentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
       const agentSlugCandidates = Array.from(new Set([requestedAgentSlug, 'polydesk-agent'].filter(Boolean)))
       try {
@@ -3030,6 +3030,7 @@ export function TelegramHelperPanel({
           const proofUrl = /^0x[a-fA-F0-9]{64}$/.test(proofTxHash)
             ? `https://chainscan.0g.ai/tx/${proofTxHash}`
             : proofRoot ? `https://storagescan.0g.ai/file?root=${encodeURIComponent(proofRoot)}` : ''
+          const reportUrl = `/report/lp-scout/${encodeURIComponent(lpScoutActivityId)}${lpScoutReceiptId ? `?receipt=${encodeURIComponent(lpScoutReceiptId)}` : ''}`
           const answerLines = zeroScoutRecord ? [
             `ZeroScout verified LP Scout result (${ageText}).`,
             zeroScoutSummary,
@@ -3044,7 +3045,7 @@ export function TelegramHelperPanel({
               ? `ZeroScout could not finalize this paid LP Scout result yet (${ageText}).`
               : `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
             failedVerification
-              ? 'Payment is verified and saved. Your x402 and LP Scout receipts are still valid; retrying ZeroScout is safe and does not require paying again for this saved scout.'
+              ? 'Payment is verified and saved. Your x402 receipt and LP Scout report are still valid; retrying ZeroScout is safe and does not require paying again for this saved scout.'
               : 'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
             statusText ? `Status: ${statusText}` : '',
             'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
@@ -3054,7 +3055,7 @@ export function TelegramHelperPanel({
             answer: answerLines.join('\n\n'),
             actionLinks: [
               ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
-              { label: 'LP Scout receipt', url: `/receipt/${encodeURIComponent(lpScoutActivityId)}` },
+              { label: 'LP Scout report', url: reportUrl },
               ...(proofUrl ? [{ label: '0G proof', url: proofUrl }] : []),
               ...marketLinks,
             ],

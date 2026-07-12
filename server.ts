@@ -12,6 +12,7 @@ import agentWalletHandler from './api/agent-wallet.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
+import lpScoutReportHandler from './api/lp-scout-report.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -118,6 +119,7 @@ app.get('/api/a2mcp/worldcup-market-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
+app.get('/api/lp-scout-report', readLimiter, lpScoutReportHandler)
 app.get('/api/x402-polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout-polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402-receipt', readLimiter, x402ReceiptHandler)

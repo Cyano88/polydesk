@@ -68,8 +68,7 @@ export default function X402Receipt() {
         setData(x402)
         return
       }
-      const paylinkRes = await fetch(`/api/receipt?id=${encodeURIComponent(activityId)}`)
-      setData(await paylinkRes.json())
+      setData(x402.ok === false ? x402 : { ok: false, error: x402.error || 'x402 receipt not found.' })
     } finally {
       setBusy(false)
     }
