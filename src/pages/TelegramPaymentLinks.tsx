@@ -2897,14 +2897,25 @@ export function TelegramHelperPanel({
       const agentSlugCandidates = Array.from(new Set([requestedAgentSlug, 'polydesk-agent'].filter(Boolean)))
       try {
         const loadActivity = async (slug: string) => {
-          const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}`)
-          const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
-          if (!res.ok) {
-            throw new Error(res.status === 429
-              ? 'LP Scout result is syncing. Payment is saved, but the result reader is cooling down for a moment. Try again shortly.'
-              : data.error || 'Could not load LP Scout activity.')
+          const controller = new AbortController()
+          const timeout = window.setTimeout(() => controller.abort(), 30_000)
+          try {
+            const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}`, { signal: controller.signal })
+            const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
+            if (!res.ok) {
+              throw new Error(res.status === 429
+                ? 'LP Scout result is syncing. Payment is saved, but the result reader is cooling down for a moment. Try again shortly.'
+                : data.error || 'Could not load LP Scout activity.')
+            }
+            return Array.isArray(data.activity) ? data.activity : []
+          } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') {
+              throw new Error('LP Scout result is still syncing. Payment is saved; try again shortly.')
+            }
+            throw err
+          } finally {
+            window.clearTimeout(timeout)
           }
-          return Array.isArray(data.activity) ? data.activity : []
         }
         let activeAgentSlug = agentSlugCandidates[0] || 'polydesk-agent'
         let activity: Array<Record<string, any>> = []
@@ -2926,7 +2937,7 @@ export function TelegramHelperPanel({
         if (!zeroScout) {
           setAgentStatus('Payment verified. ZeroScout is finalizing the LP answer...')
           const controller = new AbortController()
-          const timeout = window.setTimeout(() => controller.abort(), 90_000)
+          const timeout = window.setTimeout(() => controller.abort(), 45_000)
           try {
             const res = await fetch('/api/zeroscout/polymarket-brief', {
               method: 'POST',
@@ -2951,7 +2962,7 @@ export function TelegramHelperPanel({
           } finally {
             window.clearTimeout(timeout)
           }
-          const waitUntil = Date.now() + 90_000
+          const waitUntil = Date.now() + 60_000
           while (!zeroScout && Date.now() < waitUntil) {
             setAgentStatus('Payment verified. Waiting for ZeroScout to return the verified brief...')
             await polyDeskWait(10_000)
@@ -2978,39 +2989,60 @@ export function TelegramHelperPanel({
           .filter(Boolean)
           .slice(0, 4)
         const createdAt = Number(scout.createdAt || 0)
-        const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
-        const zeroScoutRecord = zeroScout && typeof zeroScout === 'object' ? zeroScout as Record<string, any> : null
-        const zeroScoutProof = zeroScoutRecord?.proof && typeof zeroScoutRecord.proof === 'object' ? zeroScoutRecord.proof as Record<string, unknown> : {}
-        const zeroScoutActions = Array.isArray(zeroScoutRecord?.recommendedActions) ? zeroScoutRecord.recommendedActions : []
-        const zeroScoutRisks = Array.isArray(zeroScoutRecord?.riskFlags) ? zeroScoutRecord.riskFlags : []
-        const zeroScoutBoundaries = Array.isArray(zeroScoutRecord?.safetyBoundaries) ? zeroScoutRecord.safetyBoundaries : []
-        const zeroScoutSummary = zeroScoutRecord
-          ? String(zeroScoutRecord.suggestedAnswer || zeroScoutRecord.summary || zeroScoutRecord.reasoningSummary || 'ZeroScout returned a verified LP Scout result.')
-          : ''
-        const answerLines = zeroScoutRecord ? [
-          `ZeroScout verified LP Scout result (${ageText}).`,
-          zeroScoutSummary,
-          zeroScoutActions.length ? `Recommended actions:\n${zeroScoutActions.slice(0, 5).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
-          zeroScoutRisks.length ? `Risk flags:\n${zeroScoutRisks.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
-          zeroScoutBoundaries.length ? `Safety boundaries:\n${zeroScoutBoundaries.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
-          zeroScoutProof.storageRoot || zeroScoutProof.contentHash || zeroScoutProof.storageTxHash || zeroScoutProof.storageUri
-            ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
-            : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
-        ].filter(Boolean) : [
-          `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
-          'Payment is verified and saved. Agent Hash will show the final LP answer only after ZeroScout returns the verified brief.',
-          zeroScoutError ? `Status: ${zeroScoutError}` : '',
-          'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
-        ].filter(Boolean)
-        finishHelperMessage(nextQuestion, {
-          id: `lp-scout-result:${lpScoutActivityId}`,
-          answer: answerLines.join('\n\n'),
-          actionLinks: [
-            ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
-            { label: 'LP Scout receipt', url: `/receipt/${encodeURIComponent(lpScoutActivityId)}` },
-            ...marketLinks,
-          ],
-        })
+        const buildLpScoutMessage = (candidateZeroScout: unknown, statusText = '') => {
+          const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
+          const zeroScoutRecord = candidateZeroScout && typeof candidateZeroScout === 'object' ? candidateZeroScout as Record<string, any> : null
+          const zeroScoutProof = zeroScoutRecord?.proof && typeof zeroScoutRecord.proof === 'object' ? zeroScoutRecord.proof as Record<string, unknown> : {}
+          const zeroScoutActions = Array.isArray(zeroScoutRecord?.recommendedActions) ? zeroScoutRecord.recommendedActions : []
+          const zeroScoutRisks = Array.isArray(zeroScoutRecord?.riskFlags) ? zeroScoutRecord.riskFlags : []
+          const zeroScoutBoundaries = Array.isArray(zeroScoutRecord?.safetyBoundaries) ? zeroScoutRecord.safetyBoundaries : []
+          const zeroScoutSummary = zeroScoutRecord
+            ? String(zeroScoutRecord.suggestedAnswer || zeroScoutRecord.summary || zeroScoutRecord.reasoningSummary || 'ZeroScout returned a verified LP Scout result.')
+            : ''
+          const answerLines = zeroScoutRecord ? [
+            `ZeroScout verified LP Scout result (${ageText}).`,
+            zeroScoutSummary,
+            zeroScoutActions.length ? `Recommended actions:\n${zeroScoutActions.slice(0, 5).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+            zeroScoutRisks.length ? `Risk flags:\n${zeroScoutRisks.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+            zeroScoutBoundaries.length ? `Safety boundaries:\n${zeroScoutBoundaries.slice(0, 4).map((item, index) => `${index + 1}. ${String(item)}`).join('\n')}` : '',
+            zeroScoutProof.storageRoot || zeroScoutProof.contentHash || zeroScoutProof.storageTxHash || zeroScoutProof.storageUri
+              ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
+              : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
+          ].filter(Boolean) : [
+            `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
+            'Payment is verified and saved. Agent Hash is still watching for the verified brief and will update this result when ZeroScout returns it.',
+            statusText ? `Status: ${statusText}` : '',
+            'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
+          ].filter(Boolean)
+          return {
+            id: `lp-scout-result:${lpScoutActivityId}`,
+            answer: answerLines.join('\n\n'),
+            actionLinks: [
+              ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
+              { label: 'LP Scout receipt', url: `/receipt/${encodeURIComponent(lpScoutActivityId)}` },
+              ...marketLinks,
+            ],
+          }
+        }
+        finishHelperMessage(nextQuestion, buildLpScoutMessage(zeroScout, zeroScoutError))
+        if (!zeroScout) {
+          void (async () => {
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+              await polyDeskWait(15_000)
+              try {
+                const nextActivity = await loadActivity(activeAgentSlug)
+                const nextScout = nextActivity.find(item => item.id === lpScoutActivityId)
+                const nextZeroScout = nextScout?.result?.zeroscout
+                if (nextZeroScout) {
+                  finishHelperMessage(nextQuestion, buildLpScoutMessage(nextZeroScout))
+                  break
+                }
+              } catch {
+                // Keep the saved pending result visible; the user can also reopen the receipt.
+              }
+            }
+          })()
+        }
         return true
       } catch (err) {
         finishHelperMessage(nextQuestion, {
@@ -3559,7 +3591,7 @@ function HelperThinkingIndicator({ statusText, state }: { statusText: string; st
         </span>
       </div>
       <p className="ml-3 mt-1 text-xs italic text-[#8e8e93] dark:text-gray-400">
-        {slowPhase >= 0 ? helperSlowThinkingCopy[slowPhase] : steps[stepIndex]}
+        {statusText || (slowPhase >= 0 ? helperSlowThinkingCopy[slowPhase] : steps[stepIndex])}
       </p>
     </div>
   )
