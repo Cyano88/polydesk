@@ -30,6 +30,14 @@ const ALLOWED_SERVICE_URLS = new Set(
     .map(item => item.trim())
     .filter(Boolean),
 )
+
+function publicErrorMessage(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err ?? 'Unknown ZeroScout error')
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/api[_-]?key[=:]\s*[A-Za-z0-9._~+/=-]+/gi, 'api_key=[redacted]')
+    .slice(0, 240)
+}
 const MAX_SERVICE_AMOUNT = Number(process.env.AGENT_WALLET_MAX_SERVICE_AMOUNT ?? process.env.X402_POLYMARKET_SCOUT_MAX_AMOUNT ?? '0.01')
 const MAX_GATEWAY_DEPOSIT_AMOUNT = Number(process.env.AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT ?? '5')
 const GATEWAY_BALANCE_CHAIN = process.env.AGENT_WALLET_GATEWAY_BALANCE_CHAIN ?? 'ARC-TESTNET'
@@ -1014,8 +1022,28 @@ export default async function handler(req: Request, res: Response) {
           void generateZeroScoutPolymarketBrief(agentSlug, result.resultActivityId, {
             includeClaudeReview: true,
             includeOpenAiReview: true,
-          }).catch(err => {
-            console.warn('[agent-wallet] ZeroScout LP preparation failed:', err instanceof Error ? err.message : String(err))
+          }).catch(async err => {
+            const detail = publicErrorMessage(err)
+            console.warn('[agent-wallet] ZeroScout LP preparation failed:', detail)
+            await appendAgentActivity({
+              agentSlug,
+              type: 'scout_verification_failed',
+              title: 'ZeroScout LP verification needs retry',
+              direction: 'system',
+              network: 'ZeroScout / 0G',
+              wallet: result.walletAddress,
+              serviceUrl,
+              detail,
+              result: {
+                sourceActivityId: result.resultActivityId,
+                receiptActivityId: result.receiptActivityId,
+                proofHash: result.proof?.proofHash,
+                status: 'failed',
+                error: detail,
+              },
+            }).catch(activityErr => {
+              console.warn('[agent-wallet] failed to record ZeroScout failure:', publicErrorMessage(activityErr))
+            })
           })
         }
         return res.json({

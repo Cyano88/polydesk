@@ -34,6 +34,14 @@ const FACILITATOR_URL = ACCEPTS_ARC_TESTNET && (!RAW_FACILITATOR_URL || /gateway
   ? DEFAULT_TESTNET_FACILITATOR_URL
   : RAW_FACILITATOR_URL || DEFAULT_TESTNET_FACILITATOR_URL
 
+function publicErrorMessage(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err ?? 'Unknown ZeroScout error')
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/api[_-]?key[=:]\s*[A-Za-z0-9._~+/=-]+/gi, 'api_key=[redacted]')
+    .slice(0, 240)
+}
+
 function normalizeX402Network(network: string) {
   const clean = network.trim()
   const key = clean.toLowerCase().replace(/[_\s]/g, '-')
@@ -223,8 +231,28 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
     void generateZeroScoutPolymarketBrief(agentSlug, result.id, {
       includeClaudeReview: true,
       includeOpenAiReview: true,
-    }).catch(err => {
-      console.warn('[x402-polymarket-scout] ZeroScout LP preparation failed:', err instanceof Error ? err.message : String(err))
+    }).catch(async err => {
+      const detail = publicErrorMessage(err)
+      console.warn('[x402-polymarket-scout] ZeroScout LP preparation failed:', detail)
+      await appendAgentActivity({
+        agentSlug,
+        type: 'scout_verification_failed',
+        title: 'ZeroScout LP verification needs retry',
+        direction: 'system',
+        network: 'ZeroScout / 0G',
+        wallet: proof.payer,
+        serviceUrl,
+        detail,
+        result: {
+          sourceActivityId: result.id,
+          receiptActivityId: spend?.id,
+          proofHash: proof.proofHash,
+          status: 'failed',
+          error: detail,
+        },
+      }).catch(activityErr => {
+        console.warn('[x402-polymarket-scout] failed to record ZeroScout failure:', publicErrorMessage(activityErr))
+      })
     })
   }
   return {

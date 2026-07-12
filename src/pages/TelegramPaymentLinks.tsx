@@ -2924,18 +2924,28 @@ export function TelegramHelperPanel({
           }
         }
         let scout: Record<string, any> | undefined
+        let scoutActivity: Array<Record<string, any>> = []
         for (const candidate of agentSlugCandidates) {
           const candidateActivity = await loadActivity(candidate)
           const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
           if (candidateScout) {
             scout = candidateScout
+            scoutActivity = candidateActivity
             break
           }
         }
         if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
         let zeroScout = scout.result?.zeroscout
         let zeroScoutError = ''
-        if (!zeroScout) zeroScoutError = 'ZeroScout is still preparing the verified brief.'
+        const failedVerification = scoutActivity.find(item => (
+          item.type === 'scout_verification_failed'
+          && item.result?.sourceActivityId === lpScoutActivityId
+        ))
+        if (!zeroScout) {
+          zeroScoutError = failedVerification
+            ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Reason: ${String(failedVerification.result?.error || failedVerification.detail || 'verification failed').slice(0, 180)}`
+            : 'ZeroScout is still preparing the verified brief.'
+        }
         setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
         const result = scout.result || {}
         const signals = Array.isArray(result.signals) ? result.signals
@@ -2974,8 +2984,12 @@ export function TelegramHelperPanel({
               ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
               : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
           ].filter(Boolean) : [
-            `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
-            'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
+            failedVerification
+              ? `ZeroScout could not finalize this paid LP Scout result yet (${ageText}).`
+              : `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
+            failedVerification
+              ? 'Payment is verified and saved. Your x402 and LP Scout receipts are still valid; retrying ZeroScout is safe and does not require paying again for this saved scout.'
+              : 'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
             statusText ? `Status: ${statusText}` : '',
             'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
           ].filter(Boolean)
