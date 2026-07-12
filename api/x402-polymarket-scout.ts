@@ -11,6 +11,11 @@ type PaidRequest = Request & {
     amount: string
     network: string
     transaction?: string
+    asset?: string
+    provider?: string
+    kind?: 'circle_gateway_x402' | 'okx_agent_payments_x402'
+    seller?: string
+    serviceUrl?: string
   }
 }
 
@@ -187,6 +192,8 @@ function cleanHeader(value: unknown) {
 }
 
 function canonicalServiceUrl(req: Request) {
+  const paymentServiceUrl = (req as PaidRequest).payment?.serviceUrl
+  if (paymentServiceUrl) return paymentServiceUrl
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(req.query)) {
     if (Array.isArray(value)) {
@@ -215,14 +222,16 @@ function absoluteUrl(req: Request, path: string) {
 function proofForPayment(req: PaidRequest, amount: string) {
   const payment = req.payment
   if (!payment) return undefined
+  const provider = payment.provider || 'Circle Gateway x402'
+  const seller = payment.seller || SELLER_ADDRESS
   const proof = {
-    kind: 'circle_gateway_x402' as const,
-    provider: 'Circle Gateway x402',
+    kind: payment.kind || 'circle_gateway_x402',
+    provider,
     service: 'polymarket-lp-scout',
     buyerAgent: normalizeActivitySlug(cleanHeader(req.headers['x-buyer-agent']) || cleanHeader(req.headers['x-agent-slug']) || String(req.query.agent ?? '') || payment.payer || 'a2mcp-buyer'),
     sellerAgent: 'polydesk',
     payer: payment.payer,
-    seller: SELLER_ADDRESS,
+    seller,
     amount,
     network: payment.network,
     transaction: payment.transaction,
@@ -255,9 +264,9 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
     type: 'x402_spent',
     title: 'Bought PolyDesk LP Scout API',
     amount,
-    asset: 'USDC',
+    asset: req.payment?.asset || 'USDC',
     direction: 'out',
-    network: 'Circle Gateway x402',
+    network: req.payment?.provider || 'Circle Gateway x402',
     wallet: proof.payer,
     serviceUrl,
     detail: 'Buyer agent paid PolyDesk for a Polymarket LP Scout result.',
@@ -895,9 +904,10 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   }
 }
 
-async function scoutResponse(req: PaidRequest) {
+export async function scoutResponse(req: PaidRequest) {
   const payment = req.payment
-  const amount = payment?.amount ? `${formatUnits(BigInt(payment.amount), 6)} USDC` : PRICE
+  const asset = payment?.asset || 'USDC'
+  const amount = payment?.amount ? `${formatUnits(BigInt(payment.amount), 6)} ${asset}` : PRICE
   const scout = await buildLiveScout({
     mode: normalizeScoutMode(req.query.scoutMode),
     context: cleanContext(req.query.context),
@@ -929,8 +939,9 @@ async function scoutResponse(req: PaidRequest) {
     scout,
     receipt: {
       provider: 'Circle Gateway x402',
+      ...(payment?.provider ? { provider: payment.provider } : {}),
       price: PRICE,
-      seller: SELLER_ADDRESS,
+      seller: payment?.seller || SELLER_ADDRESS,
       generatedAt: new Date().toISOString(),
       activity,
     },

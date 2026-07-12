@@ -10,7 +10,8 @@ type PolyDeskAgentService = {
   pricing: {
     model: 'free' | 'x402-fixed'
     amount: string
-    asset: 'USDC'
+    asset: 'USDC' | 'USDT'
+    network?: string
   }
   payment: {
     required: boolean
@@ -42,7 +43,7 @@ const services: PolyDeskAgentService[] = [
     category: 'prediction-market',
     endpoint: '/api/a2mcp/polymarket-lp-scout',
     method: 'GET',
-    pricing: { model: 'x402-fixed', amount: '0.01', asset: 'USDC' },
+    pricing: { model: 'x402-fixed', amount: '0.01', asset: 'USDC', network: 'Arc Testnet' },
     payment: { required: true, standard: 'x402' },
     request: {
       query: [
@@ -64,6 +65,46 @@ const services: PolyDeskAgentService[] = [
     ],
     artifacts: [
       'x402 receipt URL',
+      'LP Scout report URL',
+      '0G proof URL when verification is archived',
+      'machine-readable receiptActivityId and resultActivityId',
+    ],
+    safety: [
+      'educational LP research only',
+      'human must re-open Polymarket and verify the live book before quoting',
+      'no automated trading and no guaranteed rewards',
+      'market orders are explicitly discouraged',
+    ],
+  },
+  {
+    id: 'okx-polymarket-lp-scout',
+    title: 'Polymarket LP Scout for OKX.AI',
+    description: 'OKX-compatible paid LP operator intelligence for buyer agents. Pays on X Layer with USDT and returns receipt-backed PolyDesk LP Scout reports.',
+    category: 'prediction-market',
+    endpoint: '/api/a2mcp/okx/polymarket-lp-scout',
+    method: 'GET',
+    pricing: { model: 'x402-fixed', amount: '0.01', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
+    request: {
+      query: [
+        { name: 'scoutMode', required: false, description: 'LP Scout category.', values: ['best', 'theme', 'market'] },
+        { name: 'context', required: false, description: 'Theme, market URL, slug, sector, event, token, election, or sports category.' },
+        { name: 'budget', required: false, description: 'Human budget context in USDC. Used for sizing guidance only; PolyDesk does not trade.' },
+        { name: 'agent', required: false, description: 'Buyer-agent slug used to store receipts and reports.' },
+      ],
+      headers: [
+        { name: 'x-buyer-agent', required: false, description: 'Preferred buyer-agent identifier for receipt/report attribution.' },
+        { name: 'x-agent-slug', required: false, description: 'Fallback buyer-agent identifier.' },
+      ],
+    },
+    output: [
+      'best available LP opportunity when one passes the safety screen',
+      'plain-language execution checklist',
+      'risk flags and data gaps',
+      'x402 receipt and ZeroScout/0G verification handoff',
+    ],
+    artifacts: [
+      'OKX x402 receipt URL',
       'LP Scout report URL',
       '0G proof URL when verification is archived',
       'machine-readable receiptActivityId and resultActivityId',

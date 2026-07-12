@@ -127,6 +127,15 @@ services:
       - key: X402_POLYMARKET_SCOUT_URL
         sync: false
 
+      - key: OKX_X402_FACILITATOR_PRIVATE_KEY
+        sync: false
+      - key: OKX_X402_PAY_TO
+        sync: false
+      - key: OKX_XLAYER_RPC_URL
+        sync: false
+      - key: OKX_X402_POLYMARKET_LP_SCOUT_PRICE
+        value: "0.01"
+
       - key: CIRCLE_GATEWAY_API_BASE
         sync: false
       - key: CIRCLE_X402_RECEIPT_API_KEY

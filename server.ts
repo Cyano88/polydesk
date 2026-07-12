@@ -13,6 +13,7 @@ import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
+import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -114,6 +115,7 @@ app.post('/api/evm-balance', readLimiter, evmBalanceHandler)
 app.post('/api/solana-balance', readLimiter, solanaBalanceHandler)
 app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/a2mcp/polymarket-lp-scout', strictLimiter, x402PolymarketScoutHandler)
+app.get('/api/a2mcp/okx/polymarket-lp-scout', strictLimiter, okxA2mcpPolymarketLpScoutHandler)
 app.get('/api/a2mcp/worldcup-live-scores', readLimiter, polyStreamHandler)
 app.get('/api/a2mcp/worldcup-market-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
