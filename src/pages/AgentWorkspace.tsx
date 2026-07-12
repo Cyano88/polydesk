@@ -607,6 +607,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     setX402BalanceChecked(false)
     setX402BalanceError('')
     setActivity([])
+    if (embeddedWalletManager) setWalletEmail(privyEmail || '')
     setWalletStep('idle')
     setWalletOtp('')
     setWalletOtpContext(null)
@@ -1014,7 +1015,11 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setWalletError(embeddedWalletManager ? 'Sign in with email to manage your Circle wallet.' : 'Sign in with email to manage your Circle agent wallet.')
       return
     }
-    const email = (!currentAgentWallet && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail ? privyEmail : walletEmail).trim().toLowerCase()
+    const email = (embeddedWalletManager && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
+      ? privyEmail
+      : !currentAgentWallet && PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
+      ? privyEmail
+      : walletEmail).trim().toLowerCase()
     if (!email) {
       setWalletError(embeddedWalletManager ? 'Enter the Circle email for this wallet.' : 'Enter the Circle email for this agent wallet.')
       return

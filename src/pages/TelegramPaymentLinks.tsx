@@ -3813,6 +3813,13 @@ export function LpScoutPanel({
   const canChooseAgent = contextReady && amountReady
 
   useEffect(() => {
+    if (searchParams.get('lpScoutPath') === 'fund') {
+      setPath('fund')
+      setStep('agent')
+    }
+  }, [searchParams])
+
+  useEffect(() => {
     if (!prefill) return
     const option = lpScoutOptions.find(item => item.id === prefill.mode) ?? lpScoutOptions[0]
     setPath('access')
