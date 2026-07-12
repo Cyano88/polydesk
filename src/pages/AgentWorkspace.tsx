@@ -579,6 +579,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const bottomRef    = useRef<HTMLDivElement>(null)
   const autoRan      = useRef(false)
   const agentPrivyRestoreKey = useRef('')
+  const agentWalletIdentityKey = useRef('')
   const helperCheckpointKey = useRef('')
   useEffect(() => {
     if (!showHelperDemo) return
@@ -590,6 +591,28 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isAsking])
+
+  useEffect(() => {
+    if (!showAgentProfile) return
+    const key = `${normalizedAgentSlug || ''}:${privyEmail || ''}:${agentNetwork}:${agentWallet || ''}`
+    if (agentWalletIdentityKey.current === key) return
+    agentWalletIdentityKey.current = key
+    setCurrentAgentWallet(agentWallet)
+    setAgentWalletSessionConnected(false)
+    setAgentWalletChain('')
+    setTreasuryBalance(null)
+    setTreasuryBalanceChecked(false)
+    setTreasuryBalanceError('')
+    setX402Balance(null)
+    setX402BalanceChecked(false)
+    setX402BalanceError('')
+    setActivity([])
+    setWalletStep('idle')
+    setWalletOtp('')
+    setWalletOtpContext(null)
+    setWalletError(null)
+    if (!shouldOpenWalletLinkPanel) setShowWalletAccessPanel(false)
+  }, [showAgentProfile, normalizedAgentSlug, privyEmail, agentNetwork, agentWallet, shouldOpenWalletLinkPanel])
 
   async function loadHelperProfile(owner: string, fallbackOwner = '') {
     const cleanOwner = owner.trim()
@@ -659,6 +682,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       if (!res.ok) return
       const data = await res.json() as { walletAddress?: string; chain?: string; connected?: boolean; activity?: AgentActivity[] }
       if (data.walletAddress) setCurrentAgentWallet(data.walletAddress)
+      else if (!agentWallet) setCurrentAgentWallet('')
       setAgentWalletSessionConnected(Boolean(data.connected))
       if (data.chain) setAgentWalletChain(data.chain)
       if (Array.isArray(data.activity)) setActivity(data.activity)
@@ -730,11 +754,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         if (existing.link?.circleWalletAddress) {
           setCurrentAgentWallet(existing.link.circleWalletAddress)
           setAgentWalletChain(existing.link.circleBlockchain)
-          setAgentWalletSessionConnected(true)
           setTreasuryBalance(null)
           setTreasuryBalanceChecked(false)
           setTreasuryBalanceError('')
-          setWalletStep('done')
+          setWalletStep('idle')
           if (hasPendingLpScoutRequest) setShowWalletAccessPanel(false)
           setWalletError(null)
         }
@@ -1378,6 +1401,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   }
   const pocketBalanceLabel = formatUsdcAmount(treasuryBalance, treasuryBalanceError, treasuryBalanceChecked)
   const x402BalanceLabel = formatUsdcAmount(x402Balance, x402BalanceError, x402BalanceChecked)
+  const x402SessionRefreshNeeded = Boolean(agentWalletAccessConnected && /reconnect|session expired|sign in/i.test(x402BalanceError))
   const lpScoutX402Ready = Boolean(
     agentWalletAccessConnected &&
     x402BalanceNumber !== null &&
@@ -1404,9 +1428,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? 'Ready'
     : x402Refreshing
     ? 'Checking'
+    : x402SessionRefreshNeeded
+    ? 'Sign in'
+    : x402BalanceError
+    ? 'Unavailable'
     : treasuryEmpty
     ? 'Needs USDC'
-    : 'Activate'
+    : 'Needs x402'
   const lpScoutVerificationStatus = lpScoutVerified
     ? 'Verified'
     : lpScoutHasResult
@@ -1414,7 +1442,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : 'After payment'
   const lpScoutWalletBalanceChecking = Boolean(agentWalletAccessConnected && !treasuryBalanceChecked)
   const lpScoutNeedsSetup = Boolean(agentWalletAccessConnected && !lpScoutX402Ready && !x402Refreshing && !lpScoutWalletBalanceChecking)
-  const lpScoutNeedsSessionRefresh = Boolean(lpScoutNeedsSetup && /reconnect|session expired|sign in/i.test(x402BalanceError))
+  const lpScoutNeedsSessionRefresh = Boolean(lpScoutNeedsSetup && x402SessionRefreshNeeded)
+  const lpScoutNeedsWalletFunding = Boolean(lpScoutNeedsSetup && !lpScoutNeedsSessionRefresh && treasuryEmpty)
   const lpScoutPrimaryDisabled = Boolean(
     lpScoutBusy ||
     x402Busy ||
@@ -1436,8 +1465,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     ? <><ArrowRight className="h-4 w-4" /> Authorize wallet</>
     : lpScoutNeedsSessionRefresh
     ? <><ArrowRight className="h-4 w-4" /> Sign in to continue</>
+    : lpScoutNeedsWalletFunding
+    ? <><ArrowRight className="h-4 w-4" /> Fund x402 wallet</>
     : lpScoutNeedsSetup
-    ? <><ArrowRight className="h-4 w-4" /> Open wallet manager</>
+    ? <><ArrowRight className="h-4 w-4" /> Activate x402</>
     : lpScoutHasResult
     ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
     : <><ArrowRight className="h-4 w-4" /> Continue to LP Scout</>
@@ -1727,7 +1758,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       },
                       {
                         label: 'x402 balance',
-                        value: x402Refreshing || lpScoutWalletBalanceChecking ? 'Checking' : lpScoutX402Ready ? 'Ready' : 'Sign in',
+                        value: x402Refreshing || lpScoutWalletBalanceChecking ? 'Checking' : lpScoutX402Status,
                         done: lpScoutX402Ready,
                         busy: x402Refreshing || lpScoutWalletBalanceChecking,
                       },
@@ -1764,7 +1795,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       <p className="px-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                         {lpScoutNeedsSessionRefresh
                           ? 'Sign in to refresh x402 gateway access, then continue.'
-                          : 'Use the wallet manager to fund or activate x402 for this email, then return here.'}
+                          : lpScoutNeedsWalletFunding
+                          ? 'Fund the x402 wallet for this email, then return here to run LP Scout.'
+                          : 'Activate x402 balance for this email, then return here to run LP Scout.'}
                       </p>
                     )}
                   </div>
