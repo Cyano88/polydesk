@@ -16,7 +16,22 @@ type PolyDeskAgentService = {
     required: boolean
     standard: 'x402' | 'none'
   }
+  request?: {
+    query?: Array<{
+      name: string
+      required: boolean
+      description: string
+      values?: string[]
+    }>
+    headers?: Array<{
+      name: string
+      required: boolean
+      description: string
+    }>
+  }
   output: string[]
+  artifacts?: string[]
+  safety?: string[]
 }
 
 const services: PolyDeskAgentService[] = [
@@ -29,11 +44,35 @@ const services: PolyDeskAgentService[] = [
     method: 'GET',
     pricing: { model: 'x402-fixed', amount: '0.01', asset: 'USDC' },
     payment: { required: true, standard: 'x402' },
+    request: {
+      query: [
+        { name: 'scoutMode', required: false, description: 'LP Scout category.', values: ['best', 'theme', 'market'] },
+        { name: 'context', required: false, description: 'Theme, market URL, slug, sector, event, token, election, or sports category.' },
+        { name: 'budget', required: false, description: 'Human budget context in USDC. Used for sizing guidance only; PolyDesk does not trade.' },
+        { name: 'agent', required: false, description: 'Buyer-agent slug used to store receipts and reports.' },
+      ],
+      headers: [
+        { name: 'x-buyer-agent', required: false, description: 'Preferred buyer-agent identifier for receipt/report attribution.' },
+        { name: 'x-agent-slug', required: false, description: 'Fallback buyer-agent identifier.' },
+      ],
+    },
     output: [
       'best available LP opportunity when one passes the safety screen',
       'plain-language execution checklist',
       'risk flags and data gaps',
       'x402 receipt and ZeroScout/0G verification handoff',
+    ],
+    artifacts: [
+      'x402 receipt URL',
+      'LP Scout report URL',
+      '0G proof URL when verification is archived',
+      'machine-readable receiptActivityId and resultActivityId',
+    ],
+    safety: [
+      'educational LP research only',
+      'human must re-open Polymarket and verify the live book before quoting',
+      'no automated trading and no guaranteed rewards',
+      'market orders are explicitly discouraged',
     ],
   },
   {
@@ -80,6 +119,8 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     provider: 'PolyDesk',
     protocol: 'A2MCP-ready x402 services',
     description: 'Prediction-market intelligence, World Cup live context, and paid Polymarket LP Scout services for buyer agents.',
+    baseUrl: 'https://polydesk-i96m.onrender.com',
+    agentEconomyPositioning: 'Other agents can pay per call, receive a receipt-backed LP Scout report, and compose or resell the intelligence with proof links intact.',
     services,
   })
 }

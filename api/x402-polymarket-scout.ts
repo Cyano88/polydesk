@@ -162,6 +162,19 @@ function canonicalServiceUrl(req: Request) {
   return `/api/x402/polymarket-scout${suffix ? `?${suffix}` : ''}`
 }
 
+function requestOrigin(req: Request) {
+  const forwardedProto = cleanHeader(req.headers['x-forwarded-proto'])
+  const forwardedHost = cleanHeader(req.headers['x-forwarded-host'])
+  const host = forwardedHost || cleanHeader(req.headers.host)
+  if (host) return `${forwardedProto || req.protocol || 'https'}://${host}`
+  return process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://polydesk-i96m.onrender.com'
+}
+
+function absoluteUrl(req: Request, path: string) {
+  if (/^https?:\/\//i.test(path)) return path
+  return `${requestOrigin(req)}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 function proofForPayment(req: PaidRequest, amount: string) {
   const payment = req.payment
   if (!payment) return undefined
@@ -854,11 +867,20 @@ async function scoutResponse(req: PaidRequest) {
     budget: cleanContext(req.query.budget),
   })
   const activity = payment ? await recordPaidScout(req, scout, amount) : undefined
+  const receiptUrl = activity?.receiptActivityId
+    ? `/receipt/${encodeURIComponent(activity.receiptActivityId)}`
+    : undefined
+  const reportUrl = activity?.resultActivityId
+    ? `/report/lp-scout/${encodeURIComponent(activity.resultActivityId)}${activity.receiptActivityId ? `?receipt=${encodeURIComponent(activity.receiptActivityId)}` : ''}`
+    : undefined
   return {
     ok: true,
     service: 'PolyDesk x402 Polymarket LP Scout',
+    serviceId: 'polymarket-lp-scout',
+    protocol: 'A2MCP x402',
     paid: true,
     buyerAgent: activity?.agentSlug,
+    sellerAgent: 'polydesk',
     payment: payment
       ? {
           payer: payment.payer,
@@ -874,6 +896,30 @@ async function scoutResponse(req: PaidRequest) {
       seller: SELLER_ADDRESS,
       generatedAt: new Date().toISOString(),
       activity,
+    },
+    artifacts: {
+      receiptActivityId: activity?.receiptActivityId,
+      resultActivityId: activity?.resultActivityId,
+      x402ReceiptUrl: receiptUrl ? absoluteUrl(req, receiptUrl) : undefined,
+      lpScoutReportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
+      proofHash: activity?.proofHash,
+      zeroScoutStatus: activity?.zeroscoutQueued ? 'queued' : 'not_queued',
+      proofUrl: undefined,
+    },
+    agentHandoff: {
+      recommendedMessage: 'View LP Scout result',
+      reportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
+      receiptUrl: receiptUrl ? absoluteUrl(req, receiptUrl) : undefined,
+      note: 'ZeroScout / 0G verification may finalize after the paid response. Use lpScoutReportUrl as the durable delivery artifact.',
+    },
+    safety: {
+      purpose: 'Educational LP operator intelligence for human review.',
+      boundaries: [
+        'Do not treat this as financial advice.',
+        'Do not automate trades from this response.',
+        'Re-open Polymarket and confirm the live order book before quoting.',
+        'Use maker quotes only; avoid market orders.',
+      ],
     },
   }
 }
