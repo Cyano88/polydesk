@@ -3038,11 +3038,7 @@ export function TelegramHelperPanel({
         }
         let state = await readPaidScoutState()
         if (!state.zeroScout && !state.failedVerification) {
-          updateLiveHelperMessage(nextQuestion, buildLpScoutMessage(
-            state.scout,
-            null,
-            'Agent Hash found the paid receipt. ZeroScout is preparing the verified brief.',
-          ))
+          setAgentStatus('Receipt verified. Waiting for ZeroScout to return the stored LP brief...')
           const statusSteps = [
             'Receipt verified. Waiting for ZeroScout to return the stored LP brief...',
             'ZeroScout is checking the paid scout data against the candidate audit...',
@@ -3054,11 +3050,6 @@ export function TelegramHelperPanel({
             await sleepForScout(attempt < 2 ? 6000 : 10000)
             state = await readPaidScoutState()
             if (state.zeroScout || state.failedVerification) break
-            updateLiveHelperMessage(nextQuestion, buildLpScoutMessage(
-              state.scout,
-              null,
-              `Still checking ZeroScout / 0G verification. Attempt ${attempt + 1}/24.`,
-            ))
           }
         }
         const zeroScoutError = state.zeroScout
