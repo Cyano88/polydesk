@@ -2923,60 +2923,19 @@ export function TelegramHelperPanel({
             window.clearTimeout(timeout)
           }
         }
-        let activeAgentSlug = agentSlugCandidates[0] || 'polydesk-agent'
-        let activity: Array<Record<string, any>> = []
         let scout: Record<string, any> | undefined
         for (const candidate of agentSlugCandidates) {
           const candidateActivity = await loadActivity(candidate)
           const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
           if (candidateScout) {
-            activeAgentSlug = candidate
-            activity = candidateActivity
             scout = candidateScout
             break
           }
-          if (!activity.length) activity = candidateActivity
         }
         if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
         let zeroScout = scout.result?.zeroscout
         let zeroScoutError = ''
-        if (!zeroScout) {
-          setAgentStatus('Payment verified. ZeroScout is finalizing the LP answer...')
-          const controller = new AbortController()
-          const timeout = window.setTimeout(() => controller.abort(), 45_000)
-          try {
-            const res = await fetch('/api/zeroscout/polymarket-brief', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal: controller.signal,
-              body: JSON.stringify({
-                agentSlug: activeAgentSlug,
-                activityId: lpScoutActivityId,
-                includeClaudeReview: true,
-                includeOpenAiReview: true,
-              }),
-            })
-            const data = await res.json() as { ok?: boolean; zeroscout?: Record<string, any>; error?: string }
-            if (res.ok && data.ok && data.zeroscout) zeroScout = data.zeroscout
-            if (!zeroScout && data.error) zeroScoutError = res.status === 429
-              ? 'ZeroScout is still finalizing. Payment is saved; try again shortly.'
-              : data.error
-          } catch (err) {
-            zeroScoutError = err instanceof DOMException && err.name === 'AbortError'
-              ? 'ZeroScout is still preparing the verified brief.'
-              : err instanceof Error ? err.message : 'ZeroScout verification is still finalizing.'
-          } finally {
-            window.clearTimeout(timeout)
-          }
-          const waitUntil = Date.now() + 60_000
-          while (!zeroScout && Date.now() < waitUntil) {
-            setAgentStatus('Payment verified. Waiting for ZeroScout to return the verified brief...')
-            await polyDeskWait(10_000)
-            activity = await loadActivity(activeAgentSlug)
-            scout = activity.find(item => item.id === lpScoutActivityId) || scout
-            zeroScout = zeroScout || scout.result?.zeroscout
-          }
-        }
+        if (!zeroScout) zeroScoutError = 'ZeroScout is still preparing the verified brief.'
         setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
         const result = scout.result || {}
         const signals = Array.isArray(result.signals) ? result.signals
@@ -3016,7 +2975,7 @@ export function TelegramHelperPanel({
               : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
           ].filter(Boolean) : [
             `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
-            'Payment is verified and saved. Agent Hash is still watching for the verified brief and will update this result when ZeroScout returns it.',
+            'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
             statusText ? `Status: ${statusText}` : '',
             'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
           ].filter(Boolean)
@@ -3031,24 +2990,6 @@ export function TelegramHelperPanel({
           }
         }
         finishHelperMessage(nextQuestion, buildLpScoutMessage(zeroScout, zeroScoutError))
-        if (!zeroScout) {
-          void (async () => {
-            for (let attempt = 0; attempt < 12; attempt += 1) {
-              await polyDeskWait(15_000)
-              try {
-                const nextActivity = await loadActivity(activeAgentSlug)
-                const nextScout = nextActivity.find(item => item.id === lpScoutActivityId)
-                const nextZeroScout = nextScout?.result?.zeroscout
-                if (nextZeroScout) {
-                  finishHelperMessage(nextQuestion, buildLpScoutMessage(nextZeroScout))
-                  break
-                }
-              } catch {
-                // Keep the saved pending result visible; the user can also reopen the receipt.
-              }
-            }
-          })()
-        }
         return true
       } catch (err) {
         finishHelperMessage(nextQuestion, {
