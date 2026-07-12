@@ -1330,13 +1330,20 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     setCopiedProofId(item.id)
     window.setTimeout(() => setCopiedProofId(''), 1400)
   }
-  const latestZeroScoutActivity = activity.find(item => item.type === 'scout_returned' && item.result?.zeroscout)
-  const latestScoutActivity = activity.find(item => item.type === 'scout_returned' && !item.result?.zeroscout)
-  const latestX402Spend = activity.find(item => item.type === 'x402_spent' && item.proof?.proofHash)
-  const latestScoutActivityId = lpScoutResult?.resultActivityId || latestScoutActivity?.id || ''
-  const latestReceiptActivityId = lpScoutResult?.receiptActivityId || latestX402Spend?.id || ''
-  const latestScoutOutput = lpScoutResult?.response?.scout ?? latestScoutActivity?.result
-  const latestZeroScout = zeroScoutResult ?? latestZeroScoutActivity?.result?.zeroscout
+  const activeScoutActivityId = lpScoutResult?.resultActivityId || ''
+  const activeScoutActivity = activeScoutActivityId
+    ? activity.find(item => item.id === activeScoutActivityId && item.type === 'scout_returned' && !item.result?.zeroscout)
+    : undefined
+  const activeZeroScoutActivity = activeScoutActivityId
+    ? activity.find(item => item.type === 'scout_returned' && item.result?.zeroscout && item.result?.sourceActivityId === activeScoutActivityId)
+    : undefined
+  const activeX402Spend = lpScoutResult?.receiptActivityId
+    ? activity.find(item => item.id === lpScoutResult.receiptActivityId && item.type === 'x402_spent' && item.proof?.proofHash)
+    : undefined
+  const latestScoutActivityId = activeScoutActivityId
+  const latestReceiptActivityId = lpScoutResult?.receiptActivityId || ''
+  const latestScoutOutput = lpScoutResult?.response?.scout ?? activeScoutActivity?.result
+  const latestZeroScout = zeroScoutResult ?? activeZeroScoutActivity?.result?.zeroscout
   const latestScoutSignals = latestScoutOutput?.signals ?? latestScoutOutput?.highlights ?? []
   const latestPrimaryOpportunity = latestScoutOutput?.opportunities?.[0]
   const lpScoutHasResult = Boolean(latestScoutOutput?.summary || latestScoutSignals.length)
@@ -1843,8 +1850,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           </span>
                           {lpScoutVerified ? '0G archived' : '0G pending'}
                         </span>
-                        <span className="truncate rounded-lg bg-gray-50 px-2 py-1 text-gray-600 dark:bg-black/10 dark:text-gray-300" title={latestX402Spend?.proof?.transaction || latestX402Spend?.proof?.proofHash || undefined}>
-                          {latestX402Spend?.proof?.transaction ? 'TX ready' : latestX402Spend?.proof?.proofHash ? 'Proof ready' : 'Receipt ready'}
+                        <span className="truncate rounded-lg bg-gray-50 px-2 py-1 text-gray-600 dark:bg-black/10 dark:text-gray-300" title={activeX402Spend?.proof?.transaction || activeX402Spend?.proof?.proofHash || undefined}>
+                          {activeX402Spend?.proof?.transaction ? 'TX ready' : activeX402Spend?.proof?.proofHash ? 'Proof ready' : 'Receipt ready'}
                         </span>
                       </div>
                       <button
@@ -1929,17 +1936,17 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         This is research for a human LP. PolyDesk does not place, cancel, or manage Polymarket LP orders for you.
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                        {latestX402Spend?.proof?.proofHash && (
+                        {activeX402Spend?.proof?.proofHash && (
                           <Link
-                            to={`/receipt/${encodeURIComponent(latestX402Spend.id)}`}
+                            to={`/receipt/${encodeURIComponent(activeX402Spend.id)}`}
                             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
                           >
                             View x402 receipt
                           </Link>
                         )}
-                        {latestX402Spend?.og?.ogExplorer && (
+                        {activeX402Spend?.og?.ogExplorer && (
                           <a
-                            href={latestX402Spend.og.ogExplorer}
+                            href={activeX402Spend.og.ogExplorer}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[10px] text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
