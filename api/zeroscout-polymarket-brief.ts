@@ -2,7 +2,10 @@ import type { Request, Response } from 'express'
 import { appendAgentActivity, findAgentActivity, listAgentActivity, normalizeActivitySlug, type AgentActivity } from './agent-activity.js'
 import { callZeroScoutIntelligence } from './zeroscout-intelligence.js'
 
-const POLYMARKET_SCOUT_PATH = '/api/x402/polymarket-scout'
+const POLYMARKET_SCOUT_PATHS = new Set([
+  '/api/x402/polymarket-scout',
+  '/api/a2mcp/okx/polymarket-lp-scout',
+])
 
 function cleanText(value: unknown, fallback = '') {
   const text = typeof value === 'string' ? value.trim() : ''
@@ -67,6 +70,10 @@ function getScoutPath(serviceUrl: string | undefined) {
   }
 }
 
+function isPolymarketScoutPath(serviceUrl: string | undefined) {
+  return POLYMARKET_SCOUT_PATHS.has(getScoutPath(serviceUrl))
+}
+
 function requestFromServiceUrl(serviceUrl: string | undefined) {
   if (!serviceUrl) return {}
   try {
@@ -86,7 +93,7 @@ function isStoredPolymarketScoutActivity(activity: AgentActivity | undefined) {
     activity
     && activity.type === 'scout_returned'
     && !activity.result?.zeroscout
-    && getScoutPath(activity.serviceUrl) === POLYMARKET_SCOUT_PATH
+    && isPolymarketScoutPath(activity.serviceUrl)
     && activity.result
     && typeof activity.result === 'object',
   )
@@ -97,7 +104,7 @@ function findMatchingPaidScoutProof(activity: AgentActivity, items: AgentActivit
   return items.find(item => (
     item.type === 'x402_spent'
     && item.proof?.proofHash
-    && getScoutPath(item.serviceUrl) === POLYMARKET_SCOUT_PATH
+    && isPolymarketScoutPath(item.serviceUrl)
     && String(item.serviceUrl ?? '') === serviceUrl
     && item.createdAt <= activity.createdAt
     && activity.createdAt - item.createdAt < 15 * 60 * 1000
