@@ -506,8 +506,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const [lpScoutBusy, setLpScoutBusy] = useState(false)
   const [lpScoutError, setLpScoutError] = useState('')
   const [lpScoutResult, setLpScoutResult] = useState<LpScoutRunResult | null>(null)
-  const [zeroScoutBusy, setZeroScoutBusy] = useState(false)
-  const [zeroScoutError, setZeroScoutError] = useState('')
   const [zeroScoutResult, setZeroScoutResult] = useState<ZeroScoutIntelligenceResult | null>(null)
   const [receiptsOpen, setReceiptsOpen] = useState(false)
   const [agentProfile, setAgentProfile] = useState<AgentProfileSummary | null>(agentSlug === PLATFORM_AGENT_SLUG || (!agentSlug && !embeddedWalletManager) ? PLATFORM_AGENT_PROFILE : null)
@@ -580,7 +578,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const helperVerifyRequestRef = useRef(0)
   const bottomRef    = useRef<HTMLDivElement>(null)
   const autoRan      = useRef(false)
-  const zeroScoutAutoKey = useRef('')
   const agentPrivyRestoreKey = useRef('')
   const helperCheckpointKey = useRef('')
   useEffect(() => {
@@ -1252,7 +1249,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'LP Scout x402 request failed')
       setLpScoutResult(data)
       setZeroScoutResult(null)
-      setZeroScoutError('')
       setReceiptsOpen(true)
       clearLpScoutIntent()
       if (data.resultActivityId) {
@@ -1279,35 +1275,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       }
     } finally {
       setLpScoutBusy(false)
-    }
-  }
-
-  async function generateZeroScoutBrief() {
-    if (!latestScoutOutput || zeroScoutBusy) return
-    setZeroScoutBusy(true)
-    setZeroScoutError('')
-    try {
-      const payerAgentSlug = normalizedAgentSlug || (embeddedWalletManager ? '' : PLATFORM_AGENT_SLUG)
-      if (!latestScoutActivity?.id) throw new Error('Refresh the agent record, then review the saved LP Scout result.')
-      const res = await fetch('/api/zeroscout/polymarket-brief', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentSlug: payerAgentSlug || undefined,
-          activityId: latestScoutActivity.id,
-          includeClaudeReview: true,
-          includeOpenAiReview: true,
-        }),
-      })
-      const data = await readAgentWalletJson<{ ok?: boolean; error?: string; zeroscout?: ZeroScoutIntelligenceResult }>(res)
-      if (!res.ok || !data.ok || !data.zeroscout) throw new Error(data.error ?? 'ZeroScout operator signal failed')
-      setZeroScoutResult(data.zeroscout)
-      setReceiptsOpen(true)
-      await loadAgentWallet()
-    } catch (err) {
-      setZeroScoutError(err instanceof Error ? err.message : 'ZeroScout operator signal failed')
-    } finally {
-      setZeroScoutBusy(false)
     }
   }
 
@@ -1396,13 +1363,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const displayAgentImage = displayAgentProfile ? resolveAgentProfileImage(displayAgentProfile) : null
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
   const agentWalletRestorePending = Boolean(PRIVY_AUTH_ENABLED && showAgentProfile && privyAuthenticated && privyEmail && !agentWalletRestoreChecked)
-  useEffect(() => {
-    if (!hasPendingLpScoutRequest || !agentWalletAccessConnected || !latestScoutActivity?.id || latestZeroScout || zeroScoutBusy) return
-    if (lpScoutResult?.zeroscoutQueued && lpScoutResult.resultActivityId === latestScoutActivity.id) return
-    if (zeroScoutAutoKey.current === latestScoutActivity.id) return
-    zeroScoutAutoKey.current = latestScoutActivity.id
-    generateZeroScoutBrief().catch(() => undefined)
-  }, [hasPendingLpScoutRequest, agentWalletAccessConnected, latestScoutActivity?.id, latestZeroScout, zeroScoutBusy, lpScoutResult?.zeroscoutQueued, lpScoutResult?.resultActivityId])
   const connectedWalletNeedsAccess = Boolean(currentAgentWallet && !agentWalletAccessConnected)
   const showAgentWalletAccessPanel = Boolean(!agentWalletRestorePending && !agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
   const sessionReconnectNeeded = Boolean(currentAgentWallet && !agentWalletAccessConnected && showAgentWalletAccessPanel)
@@ -1851,27 +1811,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="relative inline-flex shrink-0 items-center rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold leading-none text-purple-500 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300">
                                 0G
-                                {zeroScoutBusy && <Loader2 className="absolute -right-1 -top-1 h-3 w-3 animate-spin text-purple-500" />}
                               </span>
                               <div className="min-w-0">
                                 <p className="text-[11px] font-semibold text-gray-900 dark:text-white">0G archive pending</p>
                                 <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">Payment saved. Agent Hash is finalizing the verified result.</p>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={generateZeroScoutBrief}
-                              disabled={zeroScoutBusy || !latestScoutActivity?.id}
-                              className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-semibold text-gray-600 transition-all hover:bg-gray-50 active:scale-[0.98] disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
-                            >
-                              {zeroScoutBusy ? 'Archiving' : 'Retry'}
-                            </button>
                           </div>
-                          {zeroScoutError && (
-                            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                              {zeroScoutError}
-                            </p>
-                          )}
                         </div>
                       ) : (
                       <>
@@ -1951,22 +1897,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             0G proof
                           </a>
                         )}
-                        <button
-                          type="button"
-                          onClick={generateZeroScoutBrief}
-                          disabled={zeroScoutBusy || !latestScoutActivity?.id}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-purple-100 bg-purple-50 px-2.5 py-1 text-[10px] text-purple-700 transition-all hover:bg-purple-100 active:scale-[0.98] disabled:opacity-50 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-200"
-                          title={latestScoutActivity?.id ? 'Generate a stored operator signal from this paid scout result.' : 'Refresh the agent record after LP Scout returns.'}
-                        >
-                          {zeroScoutBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                          ZeroScout signal
-                        </button>
                       </div>
-                      {zeroScoutError && (
-                        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                          {zeroScoutError}
-                        </p>
-                      )}
                       {latestZeroScout && (
                         <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 rounded-xl border border-purple-100 bg-purple-50/70 px-2.5 py-2 text-[10px] font-semibold text-purple-800 dark:border-purple-400/20 dark:bg-purple-400/10 dark:text-purple-100">
                           <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white text-purple-700 shadow-sm dark:bg-white/[0.08] dark:text-purple-100">
