@@ -1727,6 +1727,12 @@ export function TelegramHelperPanel({
   }, [helperMode, lockedHelperMode])
 
   useEffect(() => {
+    if (!initialPolyDeskSubMode) return
+    if (helperMode !== 'polydesk') setHelperMode('polydesk')
+    if (polyDeskSubMode !== initialPolyDeskSubMode) setPolyDeskSubMode(initialPolyDeskSubMode)
+  }, [initialPolyDeskSubMode, helperMode, polyDeskSubMode])
+
+  useEffect(() => {
     if (!polyDeskResetSignal) return
     setPolyDeskSubMode('')
     setPolyPortfolioFundingDraft(null)

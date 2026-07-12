@@ -81,13 +81,14 @@ export default function PolyDesk() {
   const lpScoutReceiptId = searchParams.get('lpScoutReceipt')?.trim() ?? ''
   const lpScoutAgentSlug = searchParams.get('lpScoutAgent')?.trim() ?? ''
   const agentMessage = searchParams.get('agentMessage')?.trim() ?? ''
-  const [isAgentOpen, setIsAgentOpen] = useState(Boolean(activeLane || agentRouteOpen))
-  const [agentLane, setAgentLane] = useState<PolyDeskLane | ''>(activeLane)
+  const effectiveAgentLane = activeLane || (lpScoutActivityId ? 'lp-scout' : '')
+  const [isAgentOpen, setIsAgentOpen] = useState(Boolean(effectiveAgentLane || agentRouteOpen))
+  const [agentLane, setAgentLane] = useState<PolyDeskLane | ''>(effectiveAgentLane)
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView)
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const [polyDeskResetSignal, setPolyDeskResetSignal] = useState(0)
   const [promptIndex, setPromptIndex] = useState(0)
-  const helperKey = activeLane || 'choose-lane'
+  const helperKey = effectiveAgentLane || 'choose-lane'
   const welcomeText = 'Welcome back, there. Ask me about Polymarket funding, portfolio, World Cup markets, LP Scout, and live market context.'
   const introPrompts = useMemo(() => [
     { text: 'I am Desk Agent.', delayMs: 5200 },
@@ -287,7 +288,7 @@ export default function PolyDesk() {
               initialEventId=""
               initialPayer=""
               initialHelperMode="polydesk"
-              initialPolyDeskSubMode={activeLane}
+              initialPolyDeskSubMode={effectiveAgentLane}
               initialNotice=""
               lockedHelperMode="polydesk"
               welcomeText={welcomeText}
@@ -302,7 +303,7 @@ export default function PolyDesk() {
               lpScoutAgentSlug={lpScoutAgentSlug || undefined}
               onRecoverTelegramName={() => undefined}
               onBack={() => {
-                if (activeLane) {
+                if (effectiveAgentLane) {
                   const next = new URLSearchParams(searchParams)
                   next.delete('lane')
                   setSearchParams(next, { replace: false })
