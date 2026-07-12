@@ -49,7 +49,7 @@ function isTransientZeroScoutError(err: unknown) {
     || status === 408
     || status === 429
     || status >= 500
-    || /abort|aborted|timeout|timed out|network|fetch failed|upstream/i.test(message)
+    || /abort|aborted|timeout|timed out|network|fetch failed|upstream|replacement fee too low|nonce too low|already known|underpriced|0G upload error/i.test(message)
   )
 }
 const MAX_SERVICE_AMOUNT = Number(process.env.AGENT_WALLET_MAX_SERVICE_AMOUNT ?? process.env.X402_POLYMARKET_SCOUT_MAX_AMOUNT ?? '0.01')

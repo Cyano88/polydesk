@@ -2948,7 +2948,7 @@ export function TelegramHelperPanel({
           if (!item) return false
           const status = String(item.result?.status || '').toLowerCase()
           const message = String(item.result?.error || item.detail || '')
-          return Boolean(item.result?.retryable || status === 'queued' || /abort|aborted|timeout|timed out|network|fetch failed|upstream|too many requests/i.test(message))
+          return Boolean(item.result?.retryable || status === 'queued' || /abort|aborted|timeout|timed out|network|fetch failed|upstream|too many requests|replacement fee too low|nonce too low|already known|underpriced|0G upload error/i.test(message))
         }
         const readPaidScoutState = async () => {
           for (const candidate of agentSlugCandidates) {

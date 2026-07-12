@@ -42,6 +42,20 @@ function publicErrorMessage(err: unknown) {
     .slice(0, 240)
 }
 
+function isTransientZeroScoutError(err: unknown) {
+  const status = typeof (err as { status?: unknown })?.status === 'number'
+    ? (err as { status: number }).status
+    : 0
+  const message = err instanceof Error ? err.message : String(err ?? '')
+  return (
+    !status
+    || status === 408
+    || status === 429
+    || status >= 500
+    || /abort|aborted|timeout|timed out|network|fetch failed|upstream|replacement fee too low|nonce too low|already known|underpriced|0G upload error/i.test(message)
+  )
+}
+
 function normalizeX402Network(network: string) {
   const clean = network.trim()
   const key = clean.toLowerCase().replace(/[_\s]/g, '-')
@@ -233,22 +247,26 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
       includeOpenAiReview: true,
     }).catch(async err => {
       const detail = publicErrorMessage(err)
-      console.warn('[x402-polymarket-scout] ZeroScout LP preparation failed:', detail)
+      const transient = isTransientZeroScoutError(err)
+      console.warn(transient ? '[x402-polymarket-scout] ZeroScout LP preparation still pending:' : '[x402-polymarket-scout] ZeroScout LP preparation failed:', detail)
       await appendAgentActivity({
         agentSlug,
-        type: 'scout_verification_failed',
-        title: 'ZeroScout LP verification needs retry',
+        type: transient ? 'scout_verification_queued' : 'scout_verification_failed',
+        title: transient ? 'ZeroScout LP verification still finalizing' : 'ZeroScout LP verification needs retry',
         direction: 'system',
         network: 'ZeroScout / 0G',
         wallet: proof.payer,
         serviceUrl,
-        detail,
+        detail: transient
+          ? 'ZeroScout is still finalizing this paid LP Scout result. Payment is saved and retrying does not require another x402 payment.'
+          : detail,
         result: {
           sourceActivityId: result.id,
           receiptActivityId: spend?.id,
           proofHash: proof.proofHash,
-          status: 'failed',
-          error: detail,
+          status: transient ? 'queued' : 'failed',
+          error: transient ? undefined : detail,
+          retryable: transient || undefined,
         },
       }).catch(activityErr => {
         console.warn('[x402-polymarket-scout] failed to record ZeroScout failure:', publicErrorMessage(activityErr))
