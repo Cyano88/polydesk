@@ -141,6 +141,43 @@ async function getGatewayMiddleware() {
   return gatewayMiddleware
 }
 
+function enrichPaymentRequiredBody(req: Request, res: Response) {
+  const originalEnd = res.end.bind(res)
+  res.end = ((chunk?: unknown, encoding?: BufferEncoding | (() => void), callback?: () => void) => {
+    const statusCode = res.statusCode
+    const bodyText = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : typeof chunk === 'string' ? chunk : ''
+    if (statusCode === 402 && (!bodyText || bodyText === '{}')) {
+      const paymentRequired = String(res.getHeader('payment-required') || res.getHeader('PAYMENT-REQUIRED') || '')
+      const decoded = paymentRequired
+        ? (() => {
+            try {
+              return JSON.parse(Buffer.from(paymentRequired, 'base64').toString('utf8')) as unknown
+            } catch {
+              return undefined
+            }
+          })()
+        : undefined
+      const payload = JSON.stringify({
+        ok: false,
+        error: 'payment_required',
+        service: 'PolyDesk x402 Polymarket LP Scout',
+        serviceId: 'polymarket-lp-scout',
+        protocol: 'A2MCP x402',
+        price: PRICE,
+        seller: SELLER_ADDRESS,
+        endpoint: canonicalServiceUrl(req),
+        message: 'This endpoint sells a paid LP Scout result. Pay with an x402-compatible client, then retry the same URL with the payment header.',
+        paymentRequired,
+        payment: decoded,
+      })
+      res.setHeader('Content-Type', 'application/json')
+      res.setHeader('Content-Length', Buffer.byteLength(payload))
+      return originalEnd(payload, typeof encoding === 'function' ? encoding : callback)
+    }
+    return originalEnd(chunk as never, encoding as never, callback)
+  }) as typeof res.end
+}
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -927,6 +964,7 @@ async function scoutResponse(req: PaidRequest) {
 export default async function handler(req: Request, res: Response, next?: NextFunction) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
   try {
+    enrichPaymentRequiredBody(req, res)
     const middleware = await getGatewayMiddleware()
     return middleware(req, res, async () => res.json(await scoutResponse(req as PaidRequest)))
   } catch (err) {
