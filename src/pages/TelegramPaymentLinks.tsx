@@ -1923,7 +1923,7 @@ export function TelegramHelperPanel({
       let pendingIndex = -1
       for (let index = next.length - 1; index >= 0; index -= 1) {
         const item = next[index]
-        if (item.question === nextQuestion && !item.answer && !item.paylink) {
+        if ((message.id && item.id === message.id) || (item.question === nextQuestion && !item.answer && !item.paylink)) {
           pendingIndex = index
           break
         }
@@ -1936,6 +1936,27 @@ export function TelegramHelperPanel({
       return prev
     })
     void appendHelperThreadMessage(nextQuestion, { ...message, id: messageId })
+  }
+
+  function updateLiveHelperMessage(nextQuestion: string, message: Omit<HelperMessage, 'question'>) {
+    const messageId = message.id || `helper-${helperIdentityKey}-${Date.now().toString(36)}`
+    setMessages(prev => {
+      const next = [...prev]
+      let index = next.findIndex(item => item.id === messageId)
+      if (index < 0) {
+        for (let cursor = next.length - 1; cursor >= 0; cursor -= 1) {
+          const item = next[cursor]
+          if (item.question === nextQuestion && !item.answer && !item.paylink) {
+            index = cursor
+            break
+          }
+        }
+      }
+      const live = { question: nextQuestion, ...message, id: messageId }
+      if (index >= 0) next[index] = live
+      else next.push(live)
+      return next
+    })
   }
 
   async function appendHelperThreadMessage(nextQuestion: string, message: Omit<HelperMessage, 'question'>) {
@@ -2923,48 +2944,60 @@ export function TelegramHelperPanel({
             window.clearTimeout(timeout)
           }
         }
-        let scout: Record<string, any> | undefined
-        let scoutActivity: Array<Record<string, any>> = []
-        for (const candidate of agentSlugCandidates) {
-          const candidateActivity = await loadActivity(candidate)
-          const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
-          if (candidateScout) {
-            scout = candidateScout
-            scoutActivity = candidateActivity
-            break
+        const readPaidScoutState = async () => {
+          for (const candidate of agentSlugCandidates) {
+            const candidateActivity = await loadActivity(candidate)
+            const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
+            if (candidateScout) {
+              const failed = candidateActivity.find(item => (
+                item.type === 'scout_verification_failed'
+                && item.result?.sourceActivityId === lpScoutActivityId
+              ))
+              const verified = candidateActivity.find(item => (
+                item.type === 'scout_returned'
+                && item.result?.zeroscout
+                && item.result?.sourceActivityId === lpScoutActivityId
+              ))
+              return {
+                scout: candidateScout,
+                zeroScout: candidateScout.result?.zeroscout || verified?.result?.zeroscout,
+                failedVerification: failed,
+              }
+            }
           }
+          throw new Error('Paid LP Scout activity was not found for this wallet.')
         }
-        if (!scout) throw new Error('Paid LP Scout activity was not found for this wallet.')
-        let zeroScout = scout.result?.zeroscout
-        let zeroScoutError = ''
-        const failedVerification = scoutActivity.find(item => (
-          item.type === 'scout_verification_failed'
-          && item.result?.sourceActivityId === lpScoutActivityId
-        ))
-        if (!zeroScout) {
-          zeroScoutError = failedVerification
-            ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Reason: ${String(failedVerification.result?.error || failedVerification.detail || 'verification failed').slice(0, 180)}`
-            : 'ZeroScout is still preparing the verified brief.'
-        }
-        setAgentStatus(zeroScout ? 'Delivering verified LP Scout result...' : 'LP Scout result is still being verified...')
-        const result = scout.result || {}
-        const signals = Array.isArray(result.signals) ? result.signals
-          : Array.isArray(result.highlights) ? result.highlights
-          : []
-        const opportunities = Array.isArray(result.opportunities) ? result.opportunities : []
-        const marketItems = [...opportunities, ...signals]
-        const marketLinks = marketItems
-          .map((item, index) => {
-            const url = String(item?.polymarketUrl || item?.marketUrl || item?.url || item?.link || '')
-            if (!/^https?:\/\//i.test(url)) return null
-            const labelSource = String(item?.title || item?.market || item?.question || item?.name || `Market ${index + 1}`)
-            const label = labelSource.length > 28 ? `${labelSource.slice(0, 25)}...` : labelSource
-            return { label, url }
-          })
-          .filter(Boolean)
-          .slice(0, 4)
-        const createdAt = Number(scout.createdAt || 0)
-        const buildLpScoutMessage = (candidateZeroScout: unknown, statusText = '') => {
+        const sleepForScout = (ms: number) => new Promise<void>((resolve, reject) => {
+          const signal = helperAbortRef.current?.signal
+          if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'))
+            return
+          }
+          const timer = window.setTimeout(resolve, ms)
+          const abort = () => {
+            window.clearTimeout(timer)
+            reject(new DOMException('Aborted', 'AbortError'))
+          }
+          signal?.addEventListener('abort', abort, { once: true })
+        })
+        const buildLpScoutMessage = (scout: Record<string, any>, candidateZeroScout: unknown, statusText = '', failedVerification?: Record<string, any>) => {
+          const result = scout.result || {}
+          const signals = Array.isArray(result.signals) ? result.signals
+            : Array.isArray(result.highlights) ? result.highlights
+            : []
+          const opportunities = Array.isArray(result.opportunities) ? result.opportunities : []
+          const marketItems = [...opportunities, ...signals]
+          const marketLinks = marketItems
+            .map((item, index) => {
+              const url = String(item?.polymarketUrl || item?.marketUrl || item?.url || item?.link || '')
+              if (!/^https?:\/\//i.test(url)) return null
+              const labelSource = String(item?.title || item?.market || item?.question || item?.name || `Market ${index + 1}`)
+              const label = labelSource.length > 28 ? `${labelSource.slice(0, 25)}...` : labelSource
+              return { label, url }
+            })
+            .filter(Boolean)
+            .slice(0, 4)
+          const createdAt = Number(scout.createdAt || 0)
           const ageText = createdAt ? `${Math.max(0, Math.round((Date.now() - createdAt) / 60000))} min ago` : 'ready'
           const zeroScoutRecord = candidateZeroScout && typeof candidateZeroScout === 'object' ? candidateZeroScout as Record<string, any> : null
           const zeroScoutProof = zeroScoutRecord?.proof && typeof zeroScoutRecord.proof === 'object' ? zeroScoutRecord.proof as Record<string, unknown> : {}
@@ -3003,7 +3036,38 @@ export function TelegramHelperPanel({
             ],
           }
         }
-        finishHelperMessage(nextQuestion, buildLpScoutMessage(zeroScout, zeroScoutError))
+        let state = await readPaidScoutState()
+        if (!state.zeroScout && !state.failedVerification) {
+          updateLiveHelperMessage(nextQuestion, buildLpScoutMessage(
+            state.scout,
+            null,
+            'Agent Hash found the paid receipt. ZeroScout is preparing the verified brief.',
+          ))
+          const statusSteps = [
+            'Receipt verified. Waiting for ZeroScout to return the stored LP brief...',
+            'ZeroScout is checking the paid scout data against the candidate audit...',
+            '0G archive is still finalizing. Keeping the receipt attached...',
+            'Still connected. Agent Hash will reveal the result as soon as ZeroScout stores it...',
+          ]
+          for (let attempt = 0; attempt < 24; attempt += 1) {
+            setAgentStatus(statusSteps[Math.min(statusSteps.length - 1, Math.floor(attempt / 6))])
+            await sleepForScout(attempt < 2 ? 6000 : 10000)
+            state = await readPaidScoutState()
+            if (state.zeroScout || state.failedVerification) break
+            updateLiveHelperMessage(nextQuestion, buildLpScoutMessage(
+              state.scout,
+              null,
+              `Still checking ZeroScout / 0G verification. Attempt ${attempt + 1}/24.`,
+            ))
+          }
+        }
+        const zeroScoutError = state.zeroScout
+          ? ''
+          : state.failedVerification
+          ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Reason: ${String(state.failedVerification.result?.error || state.failedVerification.detail || 'verification failed').slice(0, 180)}`
+          : 'ZeroScout is still preparing the verified brief. You can return to this receipt later; Agent Hash will read the saved result when ZeroScout stores it.'
+        setAgentStatus(state.zeroScout ? 'Delivering verified LP Scout result...' : state.failedVerification ? 'ZeroScout returned a retry state.' : 'ZeroScout is still finalizing; receipt remains saved.')
+        finishHelperMessage(nextQuestion, buildLpScoutMessage(state.scout, state.zeroScout, zeroScoutError, state.failedVerification))
         return true
       } catch (err) {
         finishHelperMessage(nextQuestion, {
