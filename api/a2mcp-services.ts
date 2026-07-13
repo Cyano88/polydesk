@@ -4,7 +4,7 @@ type PolyDeskAgentService = {
   id: string
   title: string
   description: string
-  category: 'prediction-market' | 'sports-data' | 'market-intelligence'
+  category: 'prediction-market' | 'sports-data' | 'market-intelligence' | 'funding'
   endpoint: string
   method: 'GET' | 'POST'
   pricing: {
@@ -130,6 +130,44 @@ const services: PolyDeskAgentService[] = [
       'clock and kickoff context',
       'linked Polymarket market context when matched',
       'trade-option metadata for PolyDesk routing',
+    ],
+  },
+  {
+    id: 'polymarket-funding-link',
+    title: 'Polymarket Funding Link',
+    description: 'Create a Hash PayLink hosted checkout that funds a public Polymarket wallet through the Polymarket bridge with USDC.',
+    category: 'funding',
+    endpoint: '/api/a2mcp/polymarket-funding-link',
+    method: 'GET',
+    pricing: { model: 'free', amount: '0', asset: 'USDC' },
+    payment: { required: false, standard: 'none' },
+    request: {
+      query: [
+        { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to fund.' },
+        { name: 'amount', required: true, description: 'USDC amount. Minimum is currently 3 USDC.' },
+        { name: 'network', required: false, description: 'Funding network. Defaults to Base.', values: ['base', 'arbitrum', 'solana'] },
+        { name: 'agent', required: false, description: 'Buyer-agent slug used for attribution in the response.' },
+      ],
+      headers: [
+        { name: 'x-buyer-agent', required: false, description: 'Preferred buyer-agent identifier for attribution.' },
+        { name: 'x-agent-slug', required: false, description: 'Fallback buyer-agent identifier.' },
+      ],
+    },
+    output: [
+      'hosted Hash PayLink checkout URL',
+      'Polymarket bridge deposit address',
+      'request id for checkout tracking',
+      'funding safety instructions for buyer agents',
+    ],
+    artifacts: [
+      'Hash PayLink checkout URL',
+      'Polymarket bridge deposit address',
+      'requestId for hosted checkout bridge status',
+    ],
+    safety: [
+      'agent must show the target Polymarket wallet before the user pays',
+      'funding is complete only after the hosted checkout confirms bridge settlement',
+      'PolyDesk creates the funding handoff and does not custody buyer-agent funds',
     ],
   },
   {
