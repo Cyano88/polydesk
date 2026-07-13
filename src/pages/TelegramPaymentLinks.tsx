@@ -4154,7 +4154,10 @@ type PolyWorldCupFeed = {
   ok?: boolean
   providerConfigured?: boolean
   source?: string
+  mode?: 'live' | 'fallback' | string
   updatedAt?: string
+  freshnessSeconds?: number
+  error?: string
   articles?: PolyWorldCupArticle[]
 }
 
@@ -4200,13 +4203,15 @@ export function PolyWorldCupNewsPanel({
 
   const articles = feed?.articles?.length ? feed.articles : fallbackWorldCupArticles
   const lead = articles[active % articles.length] ?? articles[0]
-  const hasProviderFeed = Boolean(feed?.providerConfigured && feed?.source && feed.source !== 'fallback' && !error)
+  const hasProviderFeed = Boolean(feed?.mode === 'live' || (feed?.providerConfigured && feed?.source && feed.source !== 'fallback'))
   const statusText = loading
     ? 'Refreshing feed'
     : error
     ? 'Provider feed unavailable'
     : hasProviderFeed
-    ? `Updated ${relativeNewsTime(feed?.updatedAt || '')}`
+    ? typeof feed?.freshnessSeconds === 'number'
+      ? `Updated ${feed.freshnessSeconds < 60 ? `${feed.freshnessSeconds}s ago` : relativeNewsTime(feed?.updatedAt || '')}`
+      : `Updated ${relativeNewsTime(feed?.updatedAt || '')}`
     : 'Hash PayLink desk feed'
 
   useEffect(() => {

@@ -18,7 +18,10 @@ type CacheEntry = {
     ok: true
     providerConfigured: boolean
     source: string
+    mode: 'live' | 'fallback'
     updatedAt: string
+    freshnessSeconds: number
+    error?: string
     articles: PolyWorldCupArticle[]
   }
 }
@@ -26,6 +29,37 @@ type CacheEntry = {
 const DEFAULT_QUERY = 'World Cup 2026 OR FIFA World Cup'
 const DEFAULT_CACHE_MS = 15 * 60 * 1000
 const FALLBACK_IMAGE = '/brand/world-globe.png'
+const DEFAULT_NEWS_API_URL = 'https://gnews.io/api/v4/search'
+
+const OFFICIAL_OKX_NEWS: PolyWorldCupArticle[] = [
+  {
+    title: 'OKX introduces Exchange OS on X Layer for custom spot, perpetual and outcome markets',
+    description: 'Official OKX announcement for Exchange OS, the X Layer market infrastructure that includes staged support for outcome-market infrastructure.',
+    source: 'OKX Learn',
+    image: '/brand/world-globe.png',
+    url: 'https://www.okx.com/en-us/learn/exchange-os',
+    publishedAt: '2026-05-26T00:00:00.000Z',
+    tag: 'X Layer',
+  },
+  {
+    title: 'X Layer details Flashblocks engineering for low-latency app infrastructure',
+    description: 'Official X Layer engineering post covering flashblocks, low-latency RPC updates, and real-time app infrastructure.',
+    source: 'OKX Learn',
+    image: '/brand/world-globe.png',
+    url: 'https://www.okx.com/en-ae/learn/flashblocks-on-x-layer',
+    publishedAt: '2026-05-27T00:00:00.000Z',
+    tag: 'Infrastructure',
+  },
+  {
+    title: 'World Cup market context needs live news checks before quoting',
+    description: 'Use football headlines, squad context, and current Polymarket order-book depth before placing maker quotes in World Cup markets.',
+    source: 'PolyDesk',
+    image: FALLBACK_IMAGE,
+    url: '',
+    publishedAt: '2026-06-11T23:59:00.000Z',
+    tag: 'Markets',
+  },
+]
 
 let cache: CacheEntry | null = null
 
@@ -83,6 +117,38 @@ function tagFor(title: string, description: string) {
   return 'World Cup'
 }
 
+function dedupeArticles(articles: PolyWorldCupArticle[]) {
+  const seen = new Set<string>()
+  return articles.filter(article => {
+    const key = (article.url || article.title).trim().toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function mergeOfficialNews(articles: PolyWorldCupArticle[]) {
+  const live = dedupeArticles(articles)
+  const official = dedupeArticles(OFFICIAL_OKX_NEWS).filter(article => {
+    const key = (article.url || article.title).trim().toLowerCase()
+    return !live.some(item => (item.url || item.title).trim().toLowerCase() === key)
+  })
+  const merged: PolyWorldCupArticle[] = []
+  let officialIndex = 0
+  for (const [index, article] of live.entries()) {
+    merged.push(article)
+    if ((index + 1) % 2 === 0 && officialIndex < official.length) {
+      merged.push(official[officialIndex])
+      officialIndex += 1
+    }
+  }
+  while (officialIndex < official.length) {
+    merged.push(official[officialIndex])
+    officialIndex += 1
+  }
+  return merged.slice(0, 12)
+}
+
 function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null {
   const title = asString(article.title) || asString(article.headline)
   if (!title) return null
@@ -125,15 +191,15 @@ function extractArticles(payload: unknown): ProviderArticle[] {
 }
 
 function fallbackArticles(): PolyWorldCupArticle[] {
-  const now = new Date().toISOString()
-  return [
+  const now = Date.now()
+  return mergeOfficialNews([
     {
       title: 'World Cup outright markets need fresh news checks before quoting',
       description: 'Use team news, injury context, and current order-book depth before placing maker orders in World Cup markets.',
       source: 'Hash PayLink desk',
       image: FALLBACK_IMAGE,
       url: '',
-      publishedAt: now,
+      publishedAt: new Date(now).toISOString(),
       tag: 'Markets',
     },
     {
@@ -142,7 +208,7 @@ function fallbackArticles(): PolyWorldCupArticle[] {
       source: 'Hash PayLink desk',
       image: FALLBACK_IMAGE,
       url: '',
-      publishedAt: now,
+      publishedAt: new Date(now - 60_000).toISOString(),
       tag: 'Squads',
     },
     {
@@ -151,14 +217,16 @@ function fallbackArticles(): PolyWorldCupArticle[] {
       source: 'Hash PayLink desk',
       image: FALLBACK_IMAGE,
       url: '',
-      publishedAt: now,
+      publishedAt: new Date(now - 120_000).toISOString(),
       tag: 'Fixtures',
     },
-  ]
+  ])
 }
 
 async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
-  const apiUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
+  const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
+  const configuredUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
+  const apiUrl = configuredUrl || (apiKey ? DEFAULT_NEWS_API_URL : '')
   if (!apiUrl) return []
 
   const url = new URL(apiUrl)
@@ -166,9 +234,9 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
   const limitParam = process.env.POLY_NEWS_LIMIT_PARAM?.trim() || 'max'
   if (!url.searchParams.has(queryParam)) url.searchParams.set(queryParam, envValue('POLY_NEWS_QUERY', 'NEWS_QUERY') || DEFAULT_QUERY)
   if (!url.searchParams.has(limitParam)) url.searchParams.set(limitParam, process.env.POLY_NEWS_LIMIT?.trim() || '10')
+  if (!url.searchParams.has('lang')) url.searchParams.set('lang', process.env.POLY_NEWS_LANG?.trim() || 'en')
 
   const headers: Record<string, string> = { Accept: 'application/json' }
-  const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
   const authHeader = process.env.POLY_NEWS_API_AUTH_HEADER?.trim()
   if (apiKey && authHeader) {
     headers[authHeader] = apiKey
@@ -194,27 +262,38 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
 export async function getPolyWorldcupNewsFeed() {
   const cacheMs = Number(envValue('POLY_NEWS_CACHE_MS', 'NEWS_CACHE_MS') || DEFAULT_CACHE_MS)
   const ttl = Number.isFinite(cacheMs) && cacheMs > 0 ? cacheMs : DEFAULT_CACHE_MS
-  if (cache && cache.expiresAt > Date.now()) return cache.feed
+  if (cache && cache.expiresAt > Date.now()) {
+    return {
+      ...cache.feed,
+      freshnessSeconds: Math.floor((Date.now() - Date.parse(cache.feed.updatedAt)) / 1000),
+    }
+  }
 
-  const providerConfigured = Boolean(envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
+  const providerConfigured = Boolean(envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY') || envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
   try {
     const providerArticles = await fetchProviderArticles()
-    const articles = providerArticles.length ? providerArticles : fallbackArticles()
+    const articles = providerArticles.length ? mergeOfficialNews(providerArticles) : fallbackArticles()
     const feed = {
       ok: true as const,
       providerConfigured,
-      source: providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'provider' : 'fallback',
+      source: providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'fallback',
+      mode: providerArticles.length ? 'live' as const : 'fallback' as const,
       updatedAt: new Date().toISOString(),
+      freshnessSeconds: 0,
       articles,
     }
     cache = { expiresAt: Date.now() + ttl, feed }
     return feed
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
     const feed = {
       ok: true as const,
       providerConfigured,
       source: 'fallback',
+      mode: 'fallback' as const,
       updatedAt: new Date().toISOString(),
+      freshnessSeconds: 0,
+      error: detail.slice(0, 240),
       articles: fallbackArticles(),
     }
     cache = { expiresAt: Date.now() + Math.min(ttl, 60_000), feed }
@@ -228,5 +307,6 @@ export default async function polyWorldcupNewsHandler(req: Request, res: Respons
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
+  if (req.query.force === '1') cache = null
   return res.json(await getPolyWorldcupNewsFeed())
 }
