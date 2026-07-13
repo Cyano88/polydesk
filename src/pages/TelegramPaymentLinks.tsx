@@ -8788,7 +8788,7 @@ export function PolyPortfolioPanel({
 
   return (
     <div className="mt-4 space-y-4">
-      <PolyDeskBackButton onClick={onBack} />
+      <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />
 
       {/* Watched account card */}
       {unsignedPortfolioAction === 'watch' && (
