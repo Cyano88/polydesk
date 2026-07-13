@@ -932,6 +932,7 @@ export default function TelegramPaymentLinks() {
   const [opened, setOpened] = useState(searchParams.get('open') !== '0')
   const [activeSection, setActiveSection] = useState<TelegramSectionId>(initialAgentService ? 'agent-wallets' : initialMarketService ? 'market-tools' : initialSection)
   const [activeService, setActiveService] = useState<TelegramServiceId | ''>(initialService)
+  const [previousMarketService, setPreviousMarketService] = useState<TelegramServiceId | ''>('')
   const [requestMode, setRequestMode] = useState<RequestMode | ''>(initialServiceParam === 'request-usdc' ? initialMode : '')
   const [savedRequest, setSavedRequest] = useState<SavedRequest | null>(null)
   const [polymarketMode, setPolymarketMode] = useState<PolymarketMode>('')
@@ -1070,6 +1071,17 @@ export default function TelegramPaymentLinks() {
   function openPolymarketService() {
     setActiveService('fund-polymarket')
     setPolymarketMode('')
+  }
+
+  function openMarketService(service: TelegramServiceId) {
+    setPreviousMarketService(activeService)
+    setActiveService(service)
+  }
+
+  function backToMarketService(parent: TelegramServiceId | '' = '') {
+    const target = previousMarketService || parent
+    setPreviousMarketService('')
+    setActiveService(target)
   }
 
   function selectSection(section: TelegramSectionId) {
@@ -1440,8 +1452,8 @@ export default function TelegramPaymentLinks() {
           ) : activeService === 'poly-portfolio' ? (
             <PolyPortfolioPanel
               onBack={() => setActiveService('')}
-              onOpenLpScout={() => setActiveService('lp-scout')}
-              onOpenWorldCup={() => setActiveService('poly-worldcup')}
+              onOpenLpScout={() => openMarketService('lp-scout')}
+              onOpenWorldCup={() => openMarketService('poly-worldcup')}
               telegramOwner={telegramIdentity.isStable ? telegramIdentity.owner : ''}
               telegramId={telegramIdentity.isStable ? telegramIdentity.owner.replace(/^telegram:/, '') : ''}
               initialPortfolioAction={searchParams.get('portfolio') === 'trading' ? 'trading' : null}
@@ -1450,29 +1462,28 @@ export default function TelegramPaymentLinks() {
           ) : activeService === 'poly-worldcup' ? (
             <PolyWorldCupHubPanel
               onBack={() => setActiveService('')}
-              onOpenNews={() => setActiveService('poly-worldcup-news')}
-              onOpenScores={() => setActiveService('poly-stream')}
-              onOpenPortfolio={() => setActiveService('poly-portfolio')}
+              onOpenNews={() => openMarketService('poly-worldcup-news')}
+              onOpenScores={() => openMarketService('poly-stream')}
             />
           ) : activeService === 'lp-scout' ? (
             <LpScoutPanel
               prefill={lpScoutPrefill}
               onPrefillConsumed={() => setLpScoutPrefill(null)}
-              onBack={() => setActiveService('')}
+              onBack={() => backToMarketService('')}
             />
           ) : activeService === 'poly-worldcup-news' ? (
             <PolyWorldCupNewsPanel
-              onBack={() => setActiveService('poly-worldcup')}
-              onOpenScores={() => setActiveService('poly-stream')}
+              onBack={() => backToMarketService('poly-worldcup')}
+              onOpenScores={() => openMarketService('poly-stream')}
               onOpenLpScout={prefill => {
                 setLpScoutPrefill(prefill)
-                setActiveService('lp-scout')
+                openMarketService('lp-scout')
               }}
             />
           ) : activeService === 'poly-stream' ? (
             <PolyStreamPanel
-              onBack={() => setActiveService('poly-worldcup')}
-              onOpenNews={() => setActiveService('poly-worldcup-news')}
+              onBack={() => backToMarketService('poly-worldcup')}
+              onOpenNews={() => openMarketService('poly-worldcup-news')}
             />
           ) : activeService === 'hashpaylink-helper' ? (
             <TelegramHelperPanel
@@ -4265,7 +4276,7 @@ export function PolyWorldCupNewsPanel({
       </div>
 
       <div className="space-y-2">
-        <div className="relative min-h-[176px] overflow-hidden rounded-xl">
+        <div className="relative h-[220px] overflow-hidden rounded-xl sm:h-[248px]">
           <img
             src={brokenImages[lead.title] ? POLYMARKET_LOGO : lead.image || POLYMARKET_LOGO}
             alt=""
@@ -4276,7 +4287,7 @@ export function PolyWorldCupNewsPanel({
             )}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/10" />
-          <div className="relative flex min-h-[176px] flex-col justify-end p-3 sm:p-4">
+          <div className="relative flex h-full flex-col justify-end p-3 sm:p-4">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-gray-950">{lead.tag || 'World Cup'}</span>
               <span className="max-w-[180px] truncate rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white ring-1 ring-white/20">{lead.source}</span>
@@ -4319,7 +4330,7 @@ export function PolyWorldCupNewsPanel({
           </div>
         </div>
 
-        <div className="divide-y divide-gray-100 dark:divide-white/10">
+        <div className="max-h-[min(46vh,440px)] divide-y divide-gray-100 overflow-y-auto overscroll-contain pr-1 [scrollbar-color:rgba(148,163,184,0.28)_transparent] [scrollbar-width:thin] dark:divide-white/10 dark:[scrollbar-color:rgba(255,255,255,0.18)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/50 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
           {articles.map((article, index) => {
             const selected = index === active % articles.length
             const imageBroken = brokenImages[article.title]
@@ -5172,7 +5183,7 @@ function HashLiveScoreWidget({
         </div>
       )}
 
-      <div className="divide-y divide-gray-100 dark:divide-white/10">
+      <div className="max-h-[min(44vh,460px)] divide-y divide-gray-100 overflow-y-auto overscroll-contain pr-1 [scrollbar-color:rgba(148,163,184,0.28)_transparent] [scrollbar-width:thin] dark:divide-white/10 dark:[scrollbar-color:rgba(255,255,255,0.18)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/50 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
         {rest.map(match => {
           const [rowHome, rowAway] = splitFixtureTitle(match.title)
           return (
@@ -9703,34 +9714,11 @@ export function PolyWorldCupHubPanel({
   onBack,
   onOpenNews,
   onOpenScores,
-  onOpenPortfolio,
 }: {
   onBack: () => void
   onOpenNews: () => void
   onOpenScores: () => void
-  onOpenPortfolio: () => void
 }) {
-  const { authenticated, getAccessToken } = usePrivy()
-  const [hasProfile, setHasProfile] = useState<boolean>(false)
-
-  useEffect(() => {
-    let cancelled = false
-    async function probe() {
-      if (!authenticated) return
-      try {
-        const token = await getAccessToken()
-        if (!token) return
-        const res = await fetch('/api/polymarket-portfolio?action=profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = await res.json() as { ok?: boolean; profile?: PolymarketProfile | null }
-        if (!cancelled && res.ok && data.ok) setHasProfile(Boolean(data.profile?.polymarketAddress))
-      } catch { /* silent */ }
-    }
-    void probe()
-    return () => { cancelled = true }
-  }, [authenticated, getAccessToken])
-
   return (
     <div className="mt-4 space-y-3">
       <div className="space-y-2">
@@ -9744,13 +9732,6 @@ export function PolyWorldCupHubPanel({
           body="Headlines that move Polymarket prices and LP risk."
           onClick={onOpenNews}
         />
-        {hasProfile && (
-          <PolyDeskMenuCard
-            title="Portfolio exposure"
-            body="Check watched positions and market exposure before opening a trade."
-            onClick={onOpenPortfolio}
-          />
-        )}
       </div>
     </div>
   )

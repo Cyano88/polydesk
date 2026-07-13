@@ -85,6 +85,7 @@ export default function PolyDesk() {
   const [isAgentOpen, setIsAgentOpen] = useState(Boolean(effectiveAgentLane || agentRouteOpen))
   const [agentLane, setAgentLane] = useState<PolyDeskLane | ''>(effectiveAgentLane)
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView)
+  const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const [polyDeskResetSignal, setPolyDeskResetSignal] = useState(0)
   const [promptIndex, setPromptIndex] = useState(0)
@@ -105,7 +106,7 @@ export default function PolyDesk() {
     return email ? `email:${email}` : wallet ? `wallet:${wallet}` : 'polydesk-web'
   }, [searchParams])
 
-  function openServiceView(view: PolyDeskServiceView) {
+  function openServiceView(view: PolyDeskServiceView, trackPrevious = true) {
     const next = new URLSearchParams(searchParams)
     next.delete('agent')
     next.delete('lane')
@@ -114,10 +115,17 @@ export default function PolyDesk() {
     setSearchParams(next, { replace: false })
     setIsAgentOpen(false)
     setAgentLane('')
+    if (trackPrevious) setPreviousServiceView(serviceView)
     setServiceView(view)
     window.setTimeout(() => {
       document.querySelector('[data-polydesk-service-view="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 40)
+  }
+
+  function backToServiceParent(parent: PolyDeskServiceView) {
+    const target = previousServiceView || parent
+    setPreviousServiceView('')
+    openServiceView(target, false)
   }
 
   function closeServiceView() {
@@ -337,11 +345,10 @@ export default function PolyDesk() {
                 onBack={closeServiceView}
                 onOpenNews={() => openServiceView('worldcup-news')}
                 onOpenScores={() => openServiceView('worldcup-scores')}
-                onOpenPortfolio={() => openServiceView('portfolio')}
               />
             ) : serviceView === 'worldcup-news' ? (
               <PolyWorldCupNewsPanel
-                onBack={() => openServiceView('worldcup')}
+                onBack={() => backToServiceParent('worldcup')}
                 onOpenScores={() => openServiceView('worldcup-scores')}
                 onOpenLpScout={prefill => {
                   setLpScoutPrefill(prefill)
@@ -350,7 +357,7 @@ export default function PolyDesk() {
               />
             ) : serviceView === 'worldcup-scores' ? (
               <PolyStreamPanel
-                onBack={() => openServiceView('worldcup')}
+                onBack={() => backToServiceParent('worldcup')}
                 onOpenNews={() => openServiceView('worldcup-news')}
               />
             ) : (
