@@ -46,6 +46,7 @@ import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_AGENT_URL || 'https://t.me/HashPayLinkBot'
 const PUBLIC_PAYLINK_ORIGIN = (import.meta.env.VITE_PUBLIC_PAYLINK_ORIGIN || 'https://hashpaylink.com').replace(/\/+$/, '')
+const POLYDESK_NAIRA_FUNDING_ENABLED = /^(1|true|yes)$/i.test(import.meta.env.VITE_POLYDESK_NAIRA_FUNDING_ENABLED || '')
 const POLYMARKET_LOGO = '/brand/polymarket-logo.png'
 const HELPER_PAYMENT_REQUEST_DAILY_LIMIT = 20
 function TelegramServicesIcon({ className = '' }: { className?: string }) {
@@ -7035,6 +7036,14 @@ export function PolyPortfolioPanel({
   const [positionStatusTab, setPositionStatusTab] = useState<PolymarketPositionStatus>('live')
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
+  useEffect(() => {
+    if (!POLYDESK_NAIRA_FUNDING_ENABLED && fundMethod === 'naira') {
+      setFundMethod('usdc')
+      setFundError('')
+      setFundResult(null)
+    }
+  }, [fundMethod])
+
   const profile = bundle?.profile ?? null
   const settings = bundle?.settings ?? null
   const signingWallet = privyWallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? '')) ?? null
@@ -9153,29 +9162,31 @@ export function PolyPortfolioPanel({
           <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
             {!fundResult ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/[0.06]">
-                  {([
-                    ['usdc', 'USDC'],
-                    ['naira', 'Naira'],
-                  ] as const).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => {
-                        setFundMethod(key)
-                        setFundError('')
-                      }}
-                      className={cn(
-                        'rounded-lg px-3 py-2 text-xs font-bold transition',
-                        fundMethod === key
-                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-950 dark:text-white'
-                          : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                {POLYDESK_NAIRA_FUNDING_ENABLED && (
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-white/[0.06]">
+                    {([
+                      ['usdc', 'USDC'],
+                      ['naira', 'Naira'],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          setFundMethod(key)
+                          setFundError('')
+                        }}
+                        className={cn(
+                          'rounded-lg px-3 py-2 text-xs font-bold transition',
+                          fundMethod === key
+                            ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-950 dark:text-white'
+                            : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {fundMethod === 'usdc' ? (
                   <InputBlock
                     label="Amount USDC"

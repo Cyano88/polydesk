@@ -4,6 +4,10 @@ import { isAddress } from 'viem'
 
 const DEFAULT_HASH_PAYLINK_ORIGIN = 'https://hashpaylink.com'
 
+function nairaFundingEnabled() {
+  return /^(1|true|yes)$/i.test(process.env.POLYDESK_NAIRA_FUNDING_ENABLED ?? '')
+}
+
 function cleanText(value: unknown, fallback = '') {
   return String(value ?? fallback).replace(/\s+/g, ' ').trim()
 }
@@ -53,6 +57,12 @@ export default async function handler(req: Request, res: Response) {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ ok: false, error: 'Method not allowed.' })
+    }
+    if (!nairaFundingEnabled()) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Naira funding is temporarily unavailable. Use USDC bridge funding while bank transfer settlement is being reviewed.',
+      })
     }
 
     const serviceToken = process.env.HASH_PAYLINK_POLYDESK_SERVICE_TOKEN?.trim()
