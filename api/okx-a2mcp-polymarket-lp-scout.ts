@@ -1,26 +1,20 @@
 import type { Request, Response } from 'express'
+import { OKXFacilitatorClient } from '@okxweb3/x402-core'
 import {
   x402HTTPResourceServer,
   x402ResourceServer,
-  type FacilitatorClient,
   type HTTPAdapter,
   type HTTPRequestContext,
   type PaymentPayload,
   type PaymentRequirements,
   type RoutesConfig,
-} from '@x402/core/server'
-import { x402Facilitator } from '@x402/core/facilitator'
-import { ExactEvmScheme as ExactEvmServerScheme } from '@x402/evm/exact/server'
-import { registerExactEvmScheme as registerExactEvmFacilitator } from '@x402/evm/exact/facilitator'
-import { toFacilitatorEvmSigner } from '@x402/evm'
-import { createPublicClient, createWalletClient, defineChain, http, publicActions } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+} from '@okxweb3/x402-core/server'
+import { ExactEvmScheme as ExactEvmServerScheme } from '@okxweb3/x402-evm/exact/server'
 import { scoutResponse } from './x402-polymarket-scout.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
-const DEFAULT_PRICE = '0.01'
-const DEFAULT_RPC_URL = 'https://rpc.xlayer.tech'
+const DEFAULT_PRICE = '0.3'
 
 let okxHttpServerPromise: Promise<x402HTTPResourceServer> | undefined
 
@@ -87,16 +81,6 @@ function decimalUsdtToAtomic(amount: number) {
   return String(Math.round(amount * 1_000_000))
 }
 
-function buildXLayerChain(rpcUrl: string) {
-  return defineChain({
-    id: 196,
-    name: 'X Layer',
-    nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
-    rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } },
-    blockExplorers: { default: { name: 'OKX Explorer', url: 'https://web3.okx.com/explorer/x-layer' } },
-  })
-}
-
 function payerFromPayload(paymentPayload: PaymentPayload) {
   const payload = paymentPayload.payload as Record<string, unknown>
   const authorization = payload.authorization as Record<string, unknown> | undefined
@@ -104,40 +88,22 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
   return clean(authorization?.from || permit2?.from || permit2?.owner || 'okx-buyer')
 }
 
-function makeFacilitatorClient(facilitator: x402Facilitator): FacilitatorClient {
-  return {
-    verify: (paymentPayload, paymentRequirements) => facilitator.verify(paymentPayload, paymentRequirements),
-    settle: (paymentPayload, paymentRequirements) => facilitator.settle(paymentPayload, paymentRequirements),
-    getSupported: async () => facilitator.getSupported(),
-  }
-}
-
 async function getOkxHttpServer(req: Request) {
   if (!okxHttpServerPromise) {
     okxHttpServerPromise = (async () => {
-      const privateKey = env('OKX_X402_FACILITATOR_PRIVATE_KEY', 'OKX_X402_PRIVATE_KEY')
-      if (!privateKey) throw new Error('OKX_X402_FACILITATOR_PRIVATE_KEY is required for OKX A2MCP x402 settlement')
+      const apiKey = env('OKX_X402_API_KEY', 'OKX_API_KEY')
+      const secretKey = env('OKX_X402_SECRET_KEY', 'OKX_SECRET_KEY')
+      const passphrase = env('OKX_X402_PASSPHRASE', 'OKX_PASSPHRASE')
+      if (!apiKey || !secretKey || !passphrase) {
+        throw new Error('OKX_X402_API_KEY, OKX_X402_SECRET_KEY, and OKX_X402_PASSPHRASE are required for OKX SDK x402 settlement')
+      }
 
-      const rpcUrl = env('OKX_XLAYER_RPC_URL', 'XLAYER_RPC_URL') || DEFAULT_RPC_URL
-      const chain = buildXLayerChain(rpcUrl)
-      const account = privateKeyToAccount(privateKey as `0x${string}`)
-      const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
-      const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) }).extend(publicActions)
-      const facilitatorSigner = toFacilitatorEvmSigner({
-        address: account.address,
-        readContract: publicClient.readContract,
-        verifyTypedData: publicClient.verifyTypedData,
-        writeContract: walletClient.writeContract,
-        sendTransaction: walletClient.sendTransaction,
-        waitForTransactionReceipt: publicClient.waitForTransactionReceipt,
-        getCode: publicClient.getCode,
-      })
-
-      const facilitator = new x402Facilitator()
-      registerExactEvmFacilitator(facilitator, {
-        signer: facilitatorSigner,
-        networks: OKX_XLAYER_NETWORK,
-        simulateInSettle: true,
+      const facilitator = new OKXFacilitatorClient({
+        apiKey,
+        secretKey,
+        passphrase,
+        baseUrl: env('OKX_X402_BASE_URL') || undefined,
+        syncSettle: env('OKX_X402_SYNC_SETTLE') === 'true',
       })
 
       const evmServer = new ExactEvmServerScheme()
@@ -156,10 +122,11 @@ async function getOkxHttpServer(req: Request) {
         }
       })
 
-      const resourceServer = new x402ResourceServer(makeFacilitatorClient(facilitator))
+      const resourceServer = new x402ResourceServer(facilitator)
       resourceServer.register(OKX_XLAYER_NETWORK, evmServer)
 
-      const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS') || account.address
+      const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
+      if (!payTo) throw new Error('OKX_X402_PAY_TO is required for OKX A2MCP x402 settlement')
       const price = env('OKX_X402_POLYMARKET_LP_SCOUT_PRICE') || DEFAULT_PRICE
       const resource = `${publicOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`
       const routes: RoutesConfig = {
@@ -270,7 +237,7 @@ export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res
     return res.json(await scoutResponse(paidReq))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'OKX A2MCP x402 route unavailable'
-    const status = /OKX_X402_FACILITATOR_PRIVATE_KEY|private key|RPC/i.test(message) ? 503 : 500
+    const status = /OKX_X402_|OKX API|private key|RPC/i.test(message) ? 503 : 500
     return res.status(status).json({ ok: false, error: message })
   }
 }

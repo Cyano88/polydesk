@@ -83,7 +83,7 @@ const services: PolyDeskAgentService[] = [
     category: 'prediction-market',
     endpoint: '/api/a2mcp/okx/polymarket-lp-scout',
     method: 'GET',
-    pricing: { model: 'x402-fixed', amount: '0.01', asset: 'USDT', network: 'X Layer' },
+    pricing: { model: 'x402-fixed', amount: '0.3', asset: 'USDT', network: 'X Layer' },
     payment: { required: true, standard: 'x402' },
     request: {
       query: [
