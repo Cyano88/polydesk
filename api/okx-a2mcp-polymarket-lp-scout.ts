@@ -25,6 +25,7 @@ function clean(value: unknown) {
 function env(...names: string[]) {
   for (const name of names) {
     const value = clean(process.env[name])
+    if (value.toLowerCase() === 'undefined' || value.toLowerCase() === 'null') continue
     if (value) return value
   }
   return ''
