@@ -9,7 +9,7 @@ import {
   type PaymentRequirements,
   type RoutesConfig,
 } from '@okxweb3/x402-core/server'
-import { ExactEvmScheme as ExactEvmServerScheme } from '@okxweb3/x402-evm/exact/server'
+import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import { scoutResponse } from './x402-polymarket-scout.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
@@ -106,24 +106,8 @@ async function getOkxHttpServer(req: Request) {
         syncSettle: env('OKX_X402_SYNC_SETTLE') === 'true',
       })
 
-      const evmServer = new ExactEvmServerScheme()
-      evmServer.registerMoneyParser(async (amount, network) => {
-        if (network !== OKX_XLAYER_NETWORK) return null
-        return {
-          amount: decimalUsdtToAtomic(amount),
-          asset: OKX_XLAYER_USDT,
-          extra: {
-            assetTransferMethod: 'permit2',
-            tokenSymbol: 'USDT',
-            decimals: 6,
-            name: 'USDT',
-            version: '1',
-          },
-        }
-      })
-
       const resourceServer = new x402ResourceServer(facilitator)
-      resourceServer.register(OKX_XLAYER_NETWORK, evmServer)
+      registerExactEvmScheme(resourceServer)
 
       const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
       if (!payTo) throw new Error('OKX_X402_PAY_TO is required for OKX A2MCP x402 settlement')
@@ -135,7 +119,17 @@ async function getOkxHttpServer(req: Request) {
             scheme: 'exact',
             network: OKX_XLAYER_NETWORK,
             payTo,
-            price: `$${price}`,
+            price: {
+              amount: decimalUsdtToAtomic(Number(price)),
+              asset: OKX_XLAYER_USDT,
+              extra: {
+                assetTransferMethod: 'permit2',
+                tokenSymbol: 'USDT',
+                decimals: 6,
+                name: 'USDT',
+                version: '1',
+              },
+            },
             maxTimeoutSeconds: 600,
             extra: {
               assetTransferMethod: 'permit2',
@@ -171,7 +165,10 @@ async function getOkxHttpServer(req: Request) {
       const httpServer = new x402HTTPResourceServer(resourceServer, routes)
       await httpServer.initialize()
       return httpServer
-    })()
+    })().catch(err => {
+      okxHttpServerPromise = undefined
+      throw err
+    })
   }
   return okxHttpServerPromise
 }
