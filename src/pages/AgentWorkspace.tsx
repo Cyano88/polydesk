@@ -1477,9 +1477,9 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     : lpScoutNeedsSessionRefresh
     ? <><ArrowRight className="h-4 w-4" /> Sign in to continue</>
     : lpScoutNeedsWalletFunding
-    ? <><ArrowRight className="h-4 w-4" /> Fund x402 wallet</>
+    ? <><ArrowRight className="h-4 w-4" /> Set up x402</>
     : lpScoutNeedsSetup
-    ? <><ArrowRight className="h-4 w-4" /> Activate x402</>
+    ? <><ArrowRight className="h-4 w-4" /> Set up x402</>
     : lpScoutHasResult
     ? <><RefreshCw className="h-3.5 w-3.5" /> Run again</>
     : <><ArrowRight className="h-4 w-4" /> Continue to LP Scout</>
@@ -1818,9 +1818,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                       <p className="px-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                         {lpScoutNeedsSessionRefresh
                           ? 'Sign in to refresh x402 gateway access, then continue.'
-                          : lpScoutNeedsWalletFunding
-                          ? 'Fund the x402 wallet for this email, then return here to run LP Scout.'
-                          : 'Activate x402 balance for this email, then return here to run LP Scout.'}
+                          : 'Open wallet manager to fund or activate x402 for this email, then return here to run LP Scout.'}
                       </p>
                     )}
                   </div>

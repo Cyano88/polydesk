@@ -2071,8 +2071,6 @@ export function TelegramHelperPanel({
     onPolyDeskSubModeChange?.(mode)
     setPolyPortfolioFundingDraft(null)
     setAskError('')
-    suppressThreadHydrationRef.current = true
-    freshThreadIdsRef.current.add(`mode:polydesk:${mode}`)
     setMessages([{ question: selected.label, answer: selected.intro }])
     window.setTimeout(() => {
       document.querySelector<HTMLInputElement>('[data-agent-hash-input="true"]')?.focus()
