@@ -88,6 +88,17 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
   return clean(authorization?.from || permit2?.from || permit2?.owner || 'okx-buyer')
 }
 
+function normalizeSupportedResponse(value: unknown) {
+  const raw = value as { kinds?: unknown; extensions?: unknown; signers?: unknown } | unknown[]
+  if (Array.isArray(raw)) return { kinds: raw, extensions: [], signers: {} }
+  const kinds = Array.isArray(raw?.kinds) ? raw.kinds : []
+  return {
+    kinds,
+    extensions: Array.isArray(raw?.extensions) ? raw.extensions : [],
+    signers: raw?.signers && typeof raw.signers === 'object' ? raw.signers as Record<string, string[]> : {},
+  }
+}
+
 async function getOkxHttpServer(req: Request) {
   if (!okxHttpServerPromise) {
     okxHttpServerPromise = (async () => {
@@ -105,8 +116,18 @@ async function getOkxHttpServer(req: Request) {
         baseUrl: env('OKX_X402_BASE_URL') || undefined,
         syncSettle: env('OKX_X402_SYNC_SETTLE') === 'true',
       })
+      const supported = normalizeSupportedResponse(await facilitator.getSupported())
+      if (!supported.kinds.length) {
+        throw new Error('OKX facilitator returned no supported x402 payment kinds. Check that the Render OKX API key has Payment API access.')
+      }
+      const facilitatorWithNormalizedSupported = {
+        verify: facilitator.verify.bind(facilitator),
+        settle: facilitator.settle.bind(facilitator),
+        getSettleStatus: facilitator.getSettleStatus.bind(facilitator),
+        getSupported: async () => supported,
+      }
 
-      const resourceServer = new x402ResourceServer(facilitator)
+      const resourceServer = new x402ResourceServer(facilitatorWithNormalizedSupported)
       registerExactEvmScheme(resourceServer)
 
       const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
