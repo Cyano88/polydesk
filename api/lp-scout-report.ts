@@ -104,8 +104,10 @@ export default async function handler(req: Request, res: Response) {
 
     const zeroScout = asObject(asObject(scout.result).zeroscout || asObject(verified?.result).zeroscout)
     const proof = asObject(zeroScout.proof)
+    const zeroScoutProofUrl = proofUrl(proof)
     const localArchive = scout.og || verified?.og || x402?.og
     const localArchiveStatus = scout.ogStatus || verified?.ogStatus || x402?.ogStatus
+    const localArchiveUrl = ogProofUrl(localArchive)
     const scoutResult = asObject(scout.result)
     const zeroScoutActions = Array.isArray(zeroScout.recommendedActions) ? zeroScout.recommendedActions : []
     const zeroScoutRisks = Array.isArray(zeroScout.riskFlags) ? zeroScout.riskFlags : []
@@ -129,15 +131,15 @@ export default async function handler(req: Request, res: Response) {
         zeroscout: zeroScout,
         proof: {
           ...proof,
-          url: proofUrl(proof),
+          url: zeroScoutProofUrl,
         },
         archive: {
-          status: localArchive ? 'archived' : localArchiveStatus?.status ?? 'archiving',
+          status: localArchive || zeroScoutProofUrl ? 'archived' : localArchiveStatus?.status ?? 'archiving',
           proof: localArchive,
-          url: ogProofUrl(localArchive),
-          lastError: localArchiveStatus?.lastError,
-          lastStage: localArchiveStatus?.lastStage,
-          retryable: localArchiveStatus?.retryable,
+          url: localArchiveUrl || zeroScoutProofUrl,
+          lastError: zeroScoutProofUrl ? undefined : localArchiveStatus?.lastError,
+          lastStage: zeroScoutProofUrl ? undefined : localArchiveStatus?.lastStage,
+          retryable: zeroScoutProofUrl ? undefined : localArchiveStatus?.retryable,
           attempts: localArchiveStatus?.attempts,
           lastAttemptAt: localArchiveStatus?.lastAttemptAt,
         },

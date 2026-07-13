@@ -79,7 +79,7 @@ function reportText(report: NonNullable<ReportResponse['report']>) {
     report.riskFlags?.length ? `Risk flags:\n${report.riskFlags.map((item, index) => `${index + 1}. ${clean(item)}`).join('\n')}` : '',
     report.proof?.url ? `ZeroScout proof: ${report.proof.url}` : '',
     report.archive?.url ? `0G archive: ${report.archive.url}` : '',
-    report.archive?.status === 'failed' ? `0G archive status: ${report.archive.lastStage || 'failed'} - ${report.archive.lastError || 'needs retry'}` : '',
+    !report.proof?.url && report.archive?.status === 'failed' ? `0G archive status: ${report.archive.lastStage || 'failed'} - ${report.archive.lastError || 'needs retry'}` : '',
     report.x402?.receiptUrl ? `x402 receipt: ${window.location.origin}${report.x402.receiptUrl}` : '',
     `Report URL: ${window.location.href}`,
   ].filter(Boolean).join('\n\n')
@@ -119,7 +119,7 @@ export default function LPScoutReport() {
   const proofUrl = clean(report?.proof?.url)
   const archiveUrl = clean(report?.archive?.url)
   const archiveStatus = clean(report?.archive?.status)
-  const archiveFailed = archiveStatus === 'failed'
+  const archiveFailed = archiveStatus === 'failed' && !proofUrl
   const displayProofUrl = proofUrl || archiveUrl
   const copyText = useMemo(() => report ? reportText(report) : '', [report])
 
