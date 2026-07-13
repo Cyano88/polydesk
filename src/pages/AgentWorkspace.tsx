@@ -1833,7 +1833,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-gray-900 dark:text-white">LP Scout payment received</p>
                           <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
-                            Agent Hash is preparing the result with Circle Gateway and 0G archive proof.
+                            Agent Hash is preparing the result while 0G archives the proof in the background.
                           </p>
                         </div>
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -1849,7 +1849,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                           <span className="inline-flex items-center rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold leading-none text-purple-500 dark:border-purple-900/60 dark:bg-purple-950/50 dark:text-purple-300">
                             0G
                           </span>
-                          {lpScoutVerified ? '0G archived' : '0G pending'}
+                          {lpScoutVerified ? '0G archived' : '0G archiving'}
                         </span>
                         <span className="truncate rounded-lg bg-gray-50 px-2 py-1 text-gray-600 dark:bg-black/10 dark:text-gray-300" title={activeX402Spend?.proof?.transaction || activeX402Spend?.proof?.proofHash || undefined}>
                           {activeX402Spend?.proof?.transaction ? 'TX ready' : activeX402Spend?.proof?.proofHash ? 'Proof ready' : 'Receipt ready'}
@@ -1874,8 +1874,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                                 0G
                               </span>
                               <div className="min-w-0">
-                                <p className="text-[11px] font-semibold text-gray-900 dark:text-white">0G archive pending</p>
-                                <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">Payment saved. Agent Hash is finalizing the verified result.</p>
+                                <p className="text-[11px] font-semibold text-gray-900 dark:text-white">0G archiving in background</p>
+                                <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">Payment saved. The report stays usable while proof is archived.</p>
                               </div>
                             </div>
                           </div>
@@ -2506,7 +2506,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                             {item.proof?.proofHash && !item.og?.ogExplorer && (
                               <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-100 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-500">
                                 <Loader2 className="h-3 w-3" />
-                                0G pending
+                                0G archiving
                               </span>
                             )}
                             {item.proof?.proofHash && (

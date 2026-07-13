@@ -16,6 +16,12 @@ function proofUrl(proof: Record<string, unknown>) {
   return root ? `https://storagescan.0g.ai/file?root=${encodeURIComponent(root)}` : ''
 }
 
+function ogProofUrl(value: unknown) {
+  const proof = asObject(value)
+  const tx = String(proof.ogTxHash || '').trim()
+  return /^0x[a-fA-F0-9]{64}$/.test(tx) ? `https://chainscan.0g.ai/tx/${tx}` : ''
+}
+
 function marketLinksFromScout(result: Record<string, unknown>) {
   const scoutResult = asObject(result.result)
   const items = [
@@ -98,6 +104,8 @@ export default async function handler(req: Request, res: Response) {
 
     const zeroScout = asObject(asObject(scout.result).zeroscout || asObject(verified?.result).zeroscout)
     const proof = asObject(zeroScout.proof)
+    const localArchive = scout.og || verified?.og || x402?.og
+    const localArchiveStatus = scout.ogStatus || verified?.ogStatus || x402?.ogStatus
     const scoutResult = asObject(scout.result)
     const zeroScoutActions = Array.isArray(zeroScout.recommendedActions) ? zeroScout.recommendedActions : []
     const zeroScoutRisks = Array.isArray(zeroScout.riskFlags) ? zeroScout.riskFlags : []
@@ -122,6 +130,16 @@ export default async function handler(req: Request, res: Response) {
         proof: {
           ...proof,
           url: proofUrl(proof),
+        },
+        archive: {
+          status: localArchive ? 'archived' : localArchiveStatus?.status ?? 'archiving',
+          proof: localArchive,
+          url: ogProofUrl(localArchive),
+          lastError: localArchiveStatus?.lastError,
+          lastStage: localArchiveStatus?.lastStage,
+          retryable: localArchiveStatus?.retryable,
+          attempts: localArchiveStatus?.attempts,
+          lastAttemptAt: localArchiveStatus?.lastAttemptAt,
         },
         x402: x402 ? {
           id: x402.id,

@@ -77,16 +77,77 @@ export type ArchiveResult = {
   ogTxHash: string  // PayLinkArchive on-chain tx (chainscan.0g.ai/tx/...)
 }
 
+export type ArchiveFailure = {
+  ok: false
+  stage: 'config' | 'merkle' | 'upload' | 'anchor' | 'unexpected'
+  error: string
+  retryable: boolean
+}
+
+export type ArchiveOutcome = { ok: true; result: ArchiveResult } | ArchiveFailure
+
+let archiveQueue: Promise<void> = Promise.resolve()
+
+function errorText(value: unknown) {
+  return value instanceof Error ? value.message : String(value ?? 'Unknown 0G archive error')
+}
+
+function isRetryableArchiveError(value: unknown) {
+  return /timeout|timed out|network|fetch failed|replacement fee too low|nonce|underpriced|already known|temporar|rate|503|502|500/i.test(errorText(value))
+}
+
+function archiveFailure(stage: ArchiveFailure['stage'], error: unknown, retryable = isRetryableArchiveError(error)): ArchiveFailure {
+  return {
+    ok: false,
+    stage,
+    error: errorText(error).slice(0, 500),
+    retryable,
+  }
+}
+
+async function wait(ms: number) {
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function withArchiveQueue<T>(work: () => Promise<T>): Promise<T> {
+  const previous = archiveQueue
+  let release!: () => void
+  archiveQueue = new Promise<void>(resolve => {
+    release = resolve
+  })
+  await previous.catch(() => undefined)
+  try {
+    return await work()
+  } finally {
+    release()
+  }
+}
+
+async function retryArchiveStep<T>(label: string, work: () => Promise<T>, attempts = 2): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await work()
+    } catch (error) {
+      lastError = error
+      if (!isRetryableArchiveError(error) || attempt === attempts - 1) break
+      console.warn(`[0g] ${label} retry ${attempt + 1}/${attempts - 1}:`, errorText(error))
+      await wait(1200 + attempt * 1800)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(errorText(lastError))
+}
+
 /**
  * Upload a payment record to 0G Storage and anchor the root hash on-chain.
  * Returns { rootHash, ogTxHash } on success, null on any failure.
  * Never throws — all errors are caught and logged.
  */
-export async function archivePayment(entry: ArchiveRecord): Promise<ArchiveResult | null> {
+async function archivePaymentUnlocked(entry: ArchiveRecord): Promise<ArchiveOutcome> {
   const signer = getSigner()
   if (!signer) {
     console.warn('[0g] OG_STORAGE_KEY not set — skipping archive')
-    return null
+    return archiveFailure('config', 'OG_STORAGE_KEY not set', false)
   }
 
   const tmpPath = join(tmpdir(), `paylink-${randomBytes(8).toString('hex')}.json`)
@@ -102,21 +163,21 @@ export async function archivePayment(entry: ArchiveRecord): Promise<ArchiveResul
     if (treeErr || !tree) {
       console.error('[0g] merkle tree error:', treeErr)
       await file.close()
-      return null
+      return archiveFailure('merkle', treeErr || '0G merkle tree was not returned')
     }
     const rootHash = tree.rootHash() as string
 
     const indexer = new Indexer(INDEXER_RPC)
-    const [, uploadErr] = await withTimeout(
+    const [, uploadErr] = await retryArchiveStep('upload', () => withTimeout(
       indexer.upload(file, EVM_RPC, signer as never),
       OG_UPLOAD_TIMEOUT_MS,
       '0G upload',
-    )
+    ))
     await file.close()
 
     if (uploadErr) {
       console.error('[0g] upload error:', uploadErr)
-      return null
+      return archiveFailure('upload', uploadErr)
     }
     console.log(`[0g] uploaded payment record — rootHash: ${rootHash}`)
 
@@ -124,12 +185,12 @@ export async function archivePayment(entry: ArchiveRecord): Promise<ArchiveResul
     const archiveAddr = process.env.OG_ARCHIVE_ADDRESS
     if (!archiveAddr || !ethers.isAddress(archiveAddr)) {
       console.warn('[0g] OG_ARCHIVE_ADDRESS not set — skipping on-chain anchor')
-      return null
+      return archiveFailure('config', 'OG_ARCHIVE_ADDRESS not set or invalid', false)
     }
 
     try {
       const contract = new ethers.Contract(archiveAddr, ARCHIVE_ABI, signer)
-      const tx = await withTimeout(
+      const tx = await retryArchiveStep('anchor', () => withTimeout(
         contract.archive(
           entry.eventId,
           ethers.hexlify(ethers.toUtf8Bytes(rootHash).slice(0, 32)).padEnd(66, '0') as `0x${string}`,
@@ -140,18 +201,27 @@ export async function archivePayment(entry: ArchiveRecord): Promise<ArchiveResul
         ),
         OG_ANCHOR_TIMEOUT_MS,
         '0G archive transaction',
-      )
-      await withTimeout(tx.wait(), OG_ANCHOR_TIMEOUT_MS, '0G archive confirmation')
+      ))
+      await retryArchiveStep('anchor confirmation', () => withTimeout(tx.wait(), OG_ANCHOR_TIMEOUT_MS, '0G archive confirmation'))
       console.log(`[0g] anchored on-chain — tx: ${tx.hash}`)
-      return { rootHash, ogTxHash: tx.hash as string }
+      return { ok: true, result: { rootHash, ogTxHash: tx.hash as string } }
     } catch (anchorErr) {
-      console.warn('[0g] on-chain anchor failed:', anchorErr instanceof Error ? anchorErr.message : anchorErr)
-      return null
+      console.warn('[0g] on-chain anchor failed:', errorText(anchorErr))
+      return archiveFailure('anchor', anchorErr)
     }
   } catch (err) {
-    console.error('[0g] unexpected error:', err instanceof Error ? err.message : err)
-    return null
+    console.error('[0g] unexpected error:', errorText(err))
+    return archiveFailure('unexpected', err)
   } finally {
     await unlink(tmpPath).catch(() => {})
   }
+}
+
+export async function archivePaymentDetailed(entry: ArchiveRecord): Promise<ArchiveOutcome> {
+  return withArchiveQueue(() => archivePaymentUnlocked(entry))
+}
+
+export async function archivePayment(entry: ArchiveRecord): Promise<ArchiveResult | null> {
+  const outcome = await archivePaymentDetailed(entry)
+  return outcome.ok ? outcome.result : null
 }

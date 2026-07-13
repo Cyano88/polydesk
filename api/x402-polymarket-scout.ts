@@ -311,13 +311,13 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
       await appendAgentActivity({
         agentSlug,
         type: transient ? 'scout_verification_queued' : 'scout_verification_failed',
-        title: transient ? 'ZeroScout LP verification still finalizing' : 'ZeroScout LP verification needs retry',
+        title: transient ? 'ZeroScout verification continuing' : 'ZeroScout verification needs retry',
         direction: 'system',
         network: 'ZeroScout / 0G',
         wallet: proof.payer,
         serviceUrl,
         detail: transient
-          ? 'ZeroScout is still finalizing this paid LP Scout result. Payment is saved and retrying does not require another x402 payment.'
+          ? 'ZeroScout is still preparing the verified LP Scout brief. Payment is saved and no additional x402 payment is required.'
           : detail,
         result: {
           sourceActivityId: result.id,
@@ -958,7 +958,7 @@ export async function scoutResponse(req: PaidRequest) {
       recommendedMessage: 'View LP Scout result',
       reportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
       receiptUrl: receiptUrl ? absoluteUrl(req, receiptUrl) : undefined,
-      note: 'ZeroScout / 0G verification may finalize after the paid response. Use lpScoutReportUrl as the durable delivery artifact.',
+      note: 'The LP Scout result is delivered after payment. ZeroScout / 0G proof is archived in the background and appears on the report when ready.',
     },
     safety: {
       purpose: 'Educational LP operator intelligence for human review.',

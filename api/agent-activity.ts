@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import crypto from 'node:crypto'
-import { archivePayment } from './og-storage.js'
+import { archivePaymentDetailed, type ArchiveFailure } from './og-storage.js'
 import { mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 
 const STORE_PATH = process.env.AGENT_WALLET_PROVISION_STORE ?? './data/agent-wallet-provisioning.json'
@@ -45,6 +45,15 @@ export type AgentActivityOgProof = {
   archivedAt: number
 }
 
+export type AgentActivityOgStatus = {
+  status: 'archiving' | 'archived' | 'failed'
+  attempts: number
+  lastAttemptAt: number
+  lastError?: string
+  lastStage?: ArchiveFailure['stage']
+  retryable?: boolean
+}
+
 export type AgentActivity = {
   id: string
   agentSlug: string
@@ -61,6 +70,7 @@ export type AgentActivity = {
   result?: Record<string, unknown>
   proof?: AgentActivityProof
   og?: AgentActivityOgProof
+  ogStatus?: AgentActivityOgStatus
   createdAt: number
 }
 
@@ -131,6 +141,16 @@ function shouldArchiveActivity(item: AgentActivity) {
   return !!item.txHash || !!item.proof?.proofHash
 }
 
+function shouldAttemptArchiveNow(item: AgentActivity) {
+  if (!shouldArchiveActivity(item) || item.og) return false
+  const status = item.ogStatus
+  if (!status) return true
+  if (status.status === 'archived') return false
+  if (status.status === 'archiving' && Date.now() - status.lastAttemptAt < 2 * 60 * 1000) return false
+  if (status.status === 'failed' && status.retryable === false) return false
+  return true
+}
+
 async function patchActivityOgProof(agentSlug: string, activityId: string, og: AgentActivityOgProof) {
   const slug = normalizeActivitySlug(agentSlug)
   await mutateActivityStore(store => {
@@ -138,14 +158,46 @@ async function patchActivityOgProof(agentSlug: string, activityId: string, og: A
     if (!items?.length) return store
     const index = items.findIndex(item => item.id === activityId)
     if (index === -1) return store
-    items[index] = { ...items[index], og }
+    const current = items[index]
+    items[index] = {
+      ...current,
+      og,
+      ogStatus: {
+        status: 'archived',
+        attempts: current.ogStatus?.attempts ?? 1,
+        lastAttemptAt: Date.now(),
+      },
+    }
+    return store
+  })
+}
+
+async function patchActivityOgStatus(agentSlug: string, activityId: string, nextStatus: Omit<AgentActivityOgStatus, 'attempts'>) {
+  const slug = normalizeActivitySlug(agentSlug)
+  await mutateActivityStore(store => {
+    const items = store.activity?.[slug]
+    if (!items?.length) return store
+    const index = items.findIndex(item => item.id === activityId)
+    if (index === -1) return store
+    const current = items[index]
+    items[index] = {
+      ...current,
+      ogStatus: {
+        ...nextStatus,
+        attempts: (current.ogStatus?.attempts ?? 0) + (nextStatus.status === 'archiving' ? 1 : 0),
+      },
+    }
     return store
   })
 }
 
 async function archiveAgentActivity(item: AgentActivity) {
-  if (!shouldArchiveActivity(item) || item.og) return
-  const result = await archivePayment({
+  if (!shouldAttemptArchiveNow(item)) return
+  await patchActivityOgStatus(item.agentSlug, item.id, {
+    status: 'archiving',
+    lastAttemptAt: Date.now(),
+  })
+  const outcome = await archivePaymentDetailed({
     eventId: `agent:${item.agentSlug}:${item.id}`,
     txHash: item.txHash || item.proof?.transaction || item.proof?.proofHash || item.id,
     chain: item.network || item.proof?.network || 'agentic',
@@ -157,7 +209,17 @@ async function archiveAgentActivity(item: AgentActivity) {
       activity: item,
     },
   })
-  if (!result) return
+  if (!outcome.ok) {
+    await patchActivityOgStatus(item.agentSlug, item.id, {
+      status: 'failed',
+      lastAttemptAt: Date.now(),
+      lastStage: outcome.stage,
+      lastError: outcome.error,
+      retryable: outcome.retryable,
+    })
+    return
+  }
+  const result = outcome.result
   await patchActivityOgProof(item.agentSlug, item.id, {
     rootHash: result.rootHash,
     ogTxHash: result.ogTxHash,
@@ -168,7 +230,7 @@ async function archiveAgentActivity(item: AgentActivity) {
 
 export async function ensureAgentActivityArchived(activityId: string) {
   const found = await findAgentActivity(activityId)
-  if (!found || found.og || !shouldArchiveActivity(found)) return found
+  if (!found || !shouldAttemptArchiveNow(found)) return found
   await archiveAgentActivity(found)
   return findAgentActivity(activityId)
 }
@@ -217,7 +279,7 @@ export async function appendAgentActivity(input: Omit<AgentActivity, 'id' | 'cre
     return store
   })
   if (duplicate) {
-    if (shouldArchiveActivity(duplicate) && !duplicate.og) void archiveAgentActivity(duplicate).catch(() => {})
+    if (shouldAttemptArchiveNow(duplicate)) void archiveAgentActivity(duplicate).catch(() => {})
     return duplicate
   }
   if (appended) void archiveAgentActivity(appended).catch(() => {})

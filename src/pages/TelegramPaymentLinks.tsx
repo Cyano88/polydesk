@@ -3039,11 +3039,11 @@ export function TelegramHelperPanel({
             zeroScoutBoundaries.length ? `Safety:\n${zeroScoutBoundaries.map((item, index) => `${index + 1}. ${item}`).join('\n')}` : '',
             zeroScoutProof.storageRoot || zeroScoutProof.contentHash || zeroScoutProof.storageTxHash || zeroScoutProof.storageUri
               ? 'Proof: ZeroScout / 0G verification is attached to this scout.'
-              : 'Proof: ZeroScout returned the brief; 0G archive metadata is still attaching.',
+              : 'Proof: ZeroScout returned the brief; 0G is being archived in the background.',
           ].filter(Boolean) : [
             failedVerification
               ? `ZeroScout could not finalize this paid LP Scout result yet (${ageText}).`
-              : `ZeroScout is still finalizing this paid LP Scout result (${ageText}).`,
+              : `ZeroScout is preparing this paid LP Scout result (${ageText}).`,
             failedVerification
               ? 'Payment is verified and saved. Your x402 receipt and LP Scout report are still valid; retrying ZeroScout is safe and does not require paying again for this saved scout.'
               : 'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
@@ -3072,7 +3072,7 @@ export function TelegramHelperPanel({
           const statusSteps = [
             'Receipt verified. This could take up to 2-3 mins, please be patient.',
             'ZeroScout is checking the paid scout data against the candidate audit...',
-            '0G archive is still finalizing. Keeping the receipt attached...',
+            'ZeroScout is preparing the verified brief. Keeping the receipt attached...',
             'Still connected. Agent Hash will reveal the result as soon as ZeroScout stores it...',
           ]
           for (let attempt = 0; attempt < 24; attempt += 1) {
@@ -3085,9 +3085,9 @@ export function TelegramHelperPanel({
         const zeroScoutError = state.zeroScout
           ? ''
           : state.failedVerification
-          ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Reason: ${String(state.failedVerification.result?.error || state.failedVerification.detail || 'verification failed').slice(0, 180)}`
+          ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Diagnostic: ${String(state.failedVerification.result?.error || state.failedVerification.detail || 'verification still processing').slice(0, 180)}`
           : 'ZeroScout is still preparing the verified brief. You can return to this receipt later; Agent Hash will read the saved result when ZeroScout stores it.'
-        setAgentStatus(state.zeroScout ? 'Delivering verified LP Scout result...' : state.failedVerification ? 'ZeroScout returned a retry state.' : 'ZeroScout is still finalizing; receipt remains saved.')
+        setAgentStatus(state.zeroScout ? 'Delivering verified LP Scout result...' : state.failedVerification ? 'ZeroScout returned a retry state.' : 'ZeroScout is still preparing; receipt remains saved.')
         finishHelperMessage(nextQuestion, buildLpScoutMessage(state.scout, state.zeroScout, zeroScoutError, state.failedVerification))
         return true
       } catch (err) {
@@ -3105,7 +3105,7 @@ export function TelegramHelperPanel({
       answer: [
         'LP Scout is paid access.',
         'Choose x402 access for strict LP Scout proof.',
-        'OG Labs verifies the paid LP Scout answer before delivery.',
+        'ZeroScout verifies the paid LP Scout answer; 0G proof archives in the background when available.',
       ].join('\n'),
       actionLink: { label: 'x402 access', url: x402Url },
       paylink: treasuryRequest,

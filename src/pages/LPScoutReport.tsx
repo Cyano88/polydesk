@@ -26,6 +26,16 @@ type ReportResponse = {
       noQuote?: unknown
     }>
     proof?: Record<string, unknown> & { url?: string }
+    archive?: {
+      status?: 'archiving' | 'archived' | 'failed' | string
+      url?: string
+      lastError?: string
+      lastStage?: string
+      retryable?: boolean
+      attempts?: number
+      lastAttemptAt?: number
+      proof?: Record<string, unknown>
+    }
     x402?: {
       id: string
       amount?: string
@@ -67,7 +77,9 @@ function reportText(report: NonNullable<ReportResponse['report']>) {
     '',
     report.recommendedActions?.length ? `Action checklist:\n${report.recommendedActions.map((item, index) => `${index + 1}. ${clean(item)}`).join('\n')}` : '',
     report.riskFlags?.length ? `Risk flags:\n${report.riskFlags.map((item, index) => `${index + 1}. ${clean(item)}`).join('\n')}` : '',
-    report.proof?.url ? `0G proof: ${report.proof.url}` : '',
+    report.proof?.url ? `ZeroScout proof: ${report.proof.url}` : '',
+    report.archive?.url ? `0G archive: ${report.archive.url}` : '',
+    report.archive?.status === 'failed' ? `0G archive status: ${report.archive.lastStage || 'failed'} - ${report.archive.lastError || 'needs retry'}` : '',
     report.x402?.receiptUrl ? `x402 receipt: ${window.location.origin}${report.x402.receiptUrl}` : '',
     `Report URL: ${window.location.href}`,
   ].filter(Boolean).join('\n\n')
@@ -105,6 +117,10 @@ export default function LPScoutReport() {
   const status = clean(report?.status)
   const verified = status === 'verified'
   const proofUrl = clean(report?.proof?.url)
+  const archiveUrl = clean(report?.archive?.url)
+  const archiveStatus = clean(report?.archive?.status)
+  const archiveFailed = archiveStatus === 'failed'
+  const displayProofUrl = proofUrl || archiveUrl
   const copyText = useMemo(() => report ? reportText(report) : '', [report])
 
   async function copy(value: string, label: string) {
@@ -159,8 +175,8 @@ export default function LPScoutReport() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                    {verified ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />}
-                    {verified ? 'ZeroScout verified' : status === 'needs_retry' ? 'Verification needs retry' : 'Verification finalizing'}
+                    {verified || archiveUrl ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : archiveFailed ? <TriangleAlert className="h-3.5 w-3.5 text-amber-500" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />}
+                    {verified ? 'ZeroScout verified' : archiveUrl ? '0G archived' : archiveFailed ? '0G archive needs attention' : '0G archiving in background'}
                   </div>
                   <h1 className="text-2xl font-semibold tracking-tight">PolyDesk LP Scout Report</h1>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{ageText(report.createdAt)} - x402-paid operator intelligence</p>
@@ -256,7 +272,12 @@ export default function LPScoutReport() {
                 </div>
                 <div>
                   <p className="font-semibold text-gray-400">0G Proof</p>
-                  {proofUrl ? <a href={proofUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-semibold text-gray-900 hover:underline dark:text-white">Open proof <ExternalLink className="h-3 w-3" /></a> : <p className="mt-1 text-gray-500">Finalizing</p>}
+                  {displayProofUrl ? <a href={displayProofUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 font-semibold text-gray-900 hover:underline dark:text-white">Open proof <ExternalLink className="h-3 w-3" /></a> : <p className="mt-1 text-gray-500">{archiveFailed ? 'Archive needs retry' : 'Archiving in background'}</p>}
+                  {archiveFailed && (
+                    <p className="mt-1 line-clamp-2 text-[11px] text-amber-600 dark:text-amber-300">
+                      {clean(report.archive?.lastStage)}{report.archive?.lastStage ? ': ' : ''}{clean(report.archive?.lastError || '0G archive failed before proof was stored.')}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="font-semibold text-gray-400">Proof Hash</p>

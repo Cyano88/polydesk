@@ -210,7 +210,7 @@ export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, 
         userMessage: 'View LP Scout result',
         expectedBehavior: [
           'If ZeroScout proof is ready, Agent Hash should deliver the verified LP Scout result immediately.',
-          'If proof is still finalizing, Agent Hash should show the saved paid scout result and explain that 0G verification is continuing.',
+          'If proof is not attached yet, Agent Hash should show the saved paid scout result and explain that 0G is being archived in the background.',
           'Agent Hash must never ask the user to pay again for the same saved scout activity.',
         ],
       },

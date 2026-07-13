@@ -1043,13 +1043,13 @@ export default async function handler(req: Request, res: Response) {
             await appendAgentActivity({
               agentSlug,
               type: transient ? 'scout_verification_queued' : 'scout_verification_failed',
-              title: transient ? 'ZeroScout LP verification still finalizing' : 'ZeroScout LP verification needs retry',
+              title: transient ? 'ZeroScout verification continuing' : 'ZeroScout verification needs retry',
               direction: 'system',
               network: 'ZeroScout / 0G',
               wallet: result.walletAddress,
               serviceUrl,
               detail: transient
-                ? 'ZeroScout is still finalizing this paid LP Scout result. Payment is saved and retrying does not require another x402 payment.'
+                ? 'ZeroScout is still preparing the verified LP Scout brief. Payment is saved and no additional x402 payment is required.'
                 : detail,
               result: {
                 sourceActivityId: result.resultActivityId,

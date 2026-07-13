@@ -87,6 +87,7 @@ export default async function handler(req: Request, res: Response) {
         governance: proof.governance ?? getAgentGovernanceProfile(),
         proof,
         og: activity.og,
+        ogStatus: activity.ogStatus,
       },
       circle,
     })
