@@ -110,11 +110,12 @@ async function getOkxHttpServer(req: Request) {
         throw new Error('OKX_X402_API_KEY, OKX_X402_SECRET_KEY, and OKX_X402_PASSPHRASE are required for OKX SDK x402 settlement')
       }
 
+      const okxBaseUrl = env('OKX_X402_BASE_URL')
       const facilitator = new OKXFacilitatorClient({
         apiKey,
         secretKey,
         passphrase,
-        baseUrl: env('OKX_X402_BASE_URL') || undefined,
+        ...(okxBaseUrl && /^https?:\/\//i.test(okxBaseUrl) ? { baseUrl: okxBaseUrl } : {}),
         syncSettle: env('OKX_X402_SYNC_SETTLE') === 'true',
       })
       const supported = normalizeSupportedResponse(await facilitator.getSupported())
