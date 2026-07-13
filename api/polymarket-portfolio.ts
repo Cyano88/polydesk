@@ -10,7 +10,7 @@ const ALERT_FROM_EMAIL = process.env.POLYMARKET_ALERT_FROM_EMAIL
   ?? process.env.ALERT_FROM_EMAIL
   ?? process.env.AGENTIC_STREAMING_FROM_EMAIL
   ?? process.env.STREAM_INVITE_FROM_EMAIL
-const ALERT_FROM_NAME = process.env.POLYMARKET_ALERT_FROM_NAME ?? 'Hash PayLink Polymarket'
+const ALERT_FROM_NAME = process.env.POLYMARKET_ALERT_FROM_NAME ?? 'PolyDesk'
 const POLYMARKET_RELAYER_URL = (process.env.POLYMARKET_RELAYER_URL ?? process.env.RELAYER_URL ?? '').trim()
 const POLYMARKET_CHAIN_ID = Number(process.env.POLYMARKET_CHAIN_ID ?? 137)
 const POLYMARKET_RPC_URL = (process.env.POLYMARKET_RPC_URL ?? process.env.POLYGON_RPC_URL ?? '').trim()
@@ -337,20 +337,20 @@ async function sendPolymarketAlertEmail(input: {
     '',
     `Profile: ${input.address}`,
     '',
-    'Open Hash PayLink from Telegram to review your portfolio, alerts, and LP Scout context.',
+    'Open PolyDesk to review your portfolio, alerts, and LP Scout context.',
     '',
-    'Hash PayLink',
+    'PolyDesk',
   ].join('\n')
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:620px">
-      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b7280">Hash PayLink for Polymarket</p>
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b7280">PolyDesk for Polymarket</p>
       <h2 style="margin:0 0 10px;font-size:20px">${escapeHtml(input.title)}</h2>
       <p style="margin:0 0 14px;color:#4b5563">${escapeHtml(input.body)}</p>
       <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin:14px 0;background:#f9fafb">
         <div style="font-size:12px;color:#6b7280">Profile</div>
         <div style="font-family:monospace;font-size:13px;color:#111827">${escapeHtml(input.address)}</div>
       </div>
-      <p style="margin:0;color:#6b7280;font-size:13px">Open Hash PayLink from Telegram to review your portfolio, alerts, and LP Scout context.</p>
+      <p style="margin:0;color:#6b7280;font-size:13px">Open PolyDesk to review your portfolio, alerts, and LP Scout context.</p>
     </div>
   `
   try {
