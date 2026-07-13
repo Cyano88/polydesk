@@ -30,14 +30,37 @@ function marketLinksFromScout(result: Record<string, unknown>) {
     return {
       label: String(item.title || item.market || item.question || item.name || `Market ${index + 1}`).trim(),
       url,
-      rewardDaily: item.rewardDaily ?? item.rewardsDaily ?? item.reward ?? undefined,
-      spread: item.spread ?? item.spreadCents ?? undefined,
-      depth: item.depthWithin2c ?? item.depth ?? undefined,
-      daysLeft: item.daysLeft ?? item.timeLeftDays ?? undefined,
-      yesQuote: item.yesQuote ?? item.yesEntry ?? item.yes ?? undefined,
-      noQuote: item.noQuote ?? item.noEntry ?? item.no ?? undefined,
+      rewardDaily: item.rewardDaily ?? item.rewardsDaily ?? item.dailyReward ?? item.rewardPerDay ?? item.reward ?? undefined,
+      spread: item.spread ?? item.spreadCents ?? item.liveSpread ?? item.maxSpread ?? undefined,
+      depth: item.depthWithin2c ?? item.depthAtTwoCents ?? item.depth ?? undefined,
+      daysLeft: item.daysLeft ?? item.timeLeftDays ?? item.daysToResolve ?? undefined,
+      yesQuote: item.yesQuote ?? item.yesEntry ?? item.suggestedYesBid ?? item.bestBid ?? item.yes ?? undefined,
+      noQuote: item.noQuote ?? item.noEntry ?? item.suggestedNoBid ?? item.bestAsk ?? item.no ?? undefined,
+      executionPlan: Array.isArray(item.executionPlan) ? item.executionPlan : undefined,
     }
   }).filter(Boolean).slice(0, 6)
+}
+
+function scoutFallbackActions(result: Record<string, unknown>) {
+  const scoutResult = asObject(result.result)
+  const first = asArray(scoutResult.opportunities)[0]
+  const executionPlan = Array.isArray(first?.executionPlan)
+    ? first.executionPlan.map(item => String(item ?? '').trim()).filter(Boolean)
+    : []
+  if (executionPlan.length) return executionPlan
+  const nextAction = String(scoutResult.nextAction ?? '').trim()
+  return nextAction ? [nextAction] : []
+}
+
+function scoutFallbackRiskFlags(result: Record<string, unknown>) {
+  const scoutResult = asObject(result.result)
+  const first = asArray(scoutResult.opportunities)[0]
+  const flags = [
+    first?.outcomeRisk ? `Outcome risk: ${String(first.outcomeRisk)}` : '',
+    first?.lpExecutionRisk ? `LP execution risk: ${String(first.lpExecutionRisk)}` : '',
+    String(scoutResult.disclaimer ?? '').trim(),
+  ].filter(Boolean)
+  return flags
 }
 
 export default async function handler(req: Request, res: Response) {
@@ -76,6 +99,8 @@ export default async function handler(req: Request, res: Response) {
     const zeroScout = asObject(asObject(scout.result).zeroscout || asObject(verified?.result).zeroscout)
     const proof = asObject(zeroScout.proof)
     const scoutResult = asObject(scout.result)
+    const zeroScoutActions = Array.isArray(zeroScout.recommendedActions) ? zeroScout.recommendedActions : []
+    const zeroScoutRisks = Array.isArray(zeroScout.riskFlags) ? zeroScout.riskFlags : []
 
     return res.json({
       ok: true,
@@ -88,8 +113,8 @@ export default async function handler(req: Request, res: Response) {
         detail: scout.detail,
         summary: zeroScout.suggestedAnswer || zeroScout.summary || scout.detail || 'LP Scout report is saved.',
         signals: Array.isArray(zeroScout.signals) ? zeroScout.signals : [],
-        recommendedActions: Array.isArray(zeroScout.recommendedActions) ? zeroScout.recommendedActions : [],
-        riskFlags: Array.isArray(zeroScout.riskFlags) ? zeroScout.riskFlags : [],
+        recommendedActions: zeroScoutActions.length ? zeroScoutActions : scoutFallbackActions({ result: scoutResult }),
+        riskFlags: zeroScoutRisks.length ? zeroScoutRisks : scoutFallbackRiskFlags({ result: scoutResult }),
         safetyBoundaries: Array.isArray(zeroScout.safetyBoundaries) ? zeroScout.safetyBoundaries : [],
         marketLinks: marketLinksFromScout({ result: scoutResult }),
         scout: scoutResult,
