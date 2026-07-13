@@ -201,7 +201,10 @@ export default function PolyDesk() {
 
   return (
     <main className="text-gray-950 dark:text-white">
-      <div className="mx-auto w-full max-w-md space-y-5">
+      <div className={cn(
+        'mx-auto w-full space-y-5',
+        serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' ? 'max-w-2xl' : 'max-w-md',
+      )}>
         {isAgentOpen && (
           <button
             type="button"
@@ -316,11 +319,7 @@ export default function PolyDesk() {
         {serviceView && !isAgentOpen && (
           <section
             data-polydesk-service-view="true"
-            className={cn(
-              serviceView === 'portfolio'
-                ? 'p-0'
-                : 'rounded-2xl border border-gray-100 bg-white p-4 shadow-card dark:border-white/10 dark:bg-[#111114]',
-            )}
+            className="p-0"
           >
             {serviceView === 'portfolio' ? (
               <PolyPortfolioPanel

@@ -2039,7 +2039,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         }
                         if (!lpScoutX402Ready) {
                           if (!lpScoutNeedsSessionRefresh) {
-                            navigate('/?service=lp-scout&lpScoutPath=fund')
+                            navigate(`${window.location.pathname}?service=lp-scout&lpScoutPath=fund`)
                             return
                           }
                           setAgentWalletSessionConnected(false)

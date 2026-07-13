@@ -3987,23 +3987,7 @@ export function LpScoutPanel({
 
   if (!path) {
     return (
-      <div className="mt-4 space-y-4">
-        <PolyDeskBackButton onClick={onBack} />
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-                <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
-              </span>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk LP Scout</p>
-            </div>
-            <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Run PolyDesk LP Scout</h2>
-            <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-              Use x402 to pay per call for live Polymarket LP research.
-            </p>
-          </div>
-        </div>
-
+      <div className="mt-4 space-y-3">
         <div className="space-y-2">
           <PolyDeskMenuCard
             title="Run LP Scout with x402"
@@ -4258,20 +4242,9 @@ export function PolyWorldCupNewsPanel({
   return (
     <div className="mt-4 space-y-3">
       <PolyDeskBackButton onClick={onBack} />
-      <div className="flex flex-col items-start justify-between gap-2.5 sm:flex-row">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-              <Newspaper className="h-4 w-4 text-gray-800 dark:text-gray-100" />
-            </span>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Polymarket News</p>
-          </div>
-          <h2 className="mt-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white">World Cup market pulse</h2>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-            Track World Cup headlines that can affect Polymarket prices, liquidity, and LP risk before asking the agent for an operator signal.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 sm:mt-7">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Polymarket News</p>
+        <div className="flex shrink-0 items-center gap-1.5">
           <span className={cn(
             'rounded-full px-2 py-1 text-[10px] font-bold leading-none',
             hasProviderFeed
@@ -4291,8 +4264,8 @@ export function PolyWorldCupNewsPanel({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.05]">
-        <div className="relative min-h-[176px]">
+      <div className="space-y-2">
+        <div className="relative min-h-[176px] overflow-hidden rounded-xl">
           <img
             src={brokenImages[lead.title] ? POLYMARKET_LOGO : lead.image || POLYMARKET_LOGO}
             alt=""
@@ -4346,7 +4319,7 @@ export function PolyWorldCupNewsPanel({
           </div>
         </div>
 
-        <div className="max-h-[260px] space-y-1.5 overflow-y-auto border-t border-gray-100 p-2 [scrollbar-color:rgba(148,163,184,0.28)_transparent] [scrollbar-width:thin] dark:border-white/10 dark:[scrollbar-color:rgba(255,255,255,0.18)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/40 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
+        <div className="divide-y divide-gray-100 dark:divide-white/10">
           {articles.map((article, index) => {
             const selected = index === active % articles.length
             const imageBroken = brokenImages[article.title]
@@ -4356,10 +4329,8 @@ export function PolyWorldCupNewsPanel({
                 type="button"
                 onClick={() => setActive(index)}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-xl border p-2 text-left transition-all',
-                  selected
-                    ? 'border-gray-950 bg-gray-50 dark:border-white dark:bg-white/10'
-                    : 'border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-white/10 dark:hover:bg-white/[0.06]',
+                  'flex w-full items-center gap-2.5 py-2.5 text-left transition-all hover:bg-gray-50 dark:hover:bg-white/[0.05]',
+                  selected && 'bg-gray-50 dark:bg-white/[0.06]',
                 )}
               >
                 <span className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-white/10">
@@ -4975,7 +4946,7 @@ function HashLiveScoreWidget({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-100 bg-white dark:border-white/10 dark:bg-white/[0.04]">
+    <div className="space-y-2">
       {featured && (
         <div className="relative min-h-[184px] overflow-hidden border-b border-gray-100 bg-gray-950 p-3 text-white dark:border-white/10">
           {homeFlag && (
@@ -5201,7 +5172,7 @@ function HashLiveScoreWidget({
         </div>
       )}
 
-      <div className="max-h-[268px] divide-y divide-gray-100 overflow-y-auto [scrollbar-color:rgba(148,163,184,0.25)_transparent] [scrollbar-width:thin] dark:divide-white/10 dark:[scrollbar-color:rgba(255,255,255,0.16)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/40 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
+      <div className="divide-y divide-gray-100 dark:divide-white/10">
         {rest.map(match => {
           const [rowHome, rowAway] = splitFixtureTitle(match.title)
           return (
@@ -5639,18 +5610,10 @@ export function PolyStreamPanel({
   return (
     <div className="mt-4 space-y-3">
       <PolyDeskBackButton onClick={onBack} />
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-              <Radio className="h-4 w-4 text-gray-800 dark:text-gray-100" />
-            </span>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">World Cup Scores</p>
-          </div>
-          <h2 className="mt-2 text-base font-semibold tracking-tight text-gray-900 dark:text-white">Live World Cup board</h2>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">World Cup Scores</p>
         <span className={cn(
-          'shrink-0 rounded-full px-2 py-1 text-[10px] font-bold sm:mt-7',
+          'shrink-0 rounded-full px-2 py-1 text-[10px] font-bold',
           providerReady
             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
             : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
@@ -5659,8 +5622,8 @@ export function PolyStreamPanel({
         </span>
       </div>
 
-      <div className="space-y-2 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-white/[0.05]">
-        <div className="flex items-center justify-between gap-2 px-1">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
           <span className={cn(
             'inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-[11px] font-semibold',
             providerReady
@@ -5703,7 +5666,7 @@ export function PolyStreamPanel({
           tradeSuccess={tradeSuccess}
           signingWalletAddress={savedTradingAddress || signingWalletAddress}
         />
-        <p className="px-1 pb-1 text-[10px] font-medium leading-relaxed text-gray-400 dark:text-gray-500">
+        <p className="text-[10px] font-medium leading-relaxed text-gray-400 dark:text-gray-500">
           Live markets move fast. Confirm the latest score and odds on Polymarket before trading.
         </p>
       </div>
@@ -8237,7 +8200,7 @@ export function PolyPortfolioPanel({
     const selectedAction = portfolioActions.find(([key]) => key === unsignedPortfolioAction)
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={selectedAction ? () => setUnsignedPortfolioAction(null) : onBack} />
+        {selectedAction && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         {!selectedAction ? (
           <div className="space-y-2">
             {portfolioActions.map(([key, label, body]) => (
@@ -8317,7 +8280,7 @@ export function PolyPortfolioPanel({
 
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={backHandler} />
+        {selectedAction && <PolyDeskBackButton onClick={backHandler} />}
 
         {!selectedAction ? (
           <div className="space-y-2">
@@ -8541,7 +8504,6 @@ export function PolyPortfolioPanel({
     ] as const
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={onBack} />
         <div className="space-y-2">
           {portfolioActions.map(([key, label, body]) => (
             <PolyDeskMenuCard key={key} title={label} body={body} onClick={() => setUnsignedPortfolioAction(key)} />
@@ -9770,19 +9732,7 @@ export function PolyWorldCupHubPanel({
   }, [authenticated, getAccessToken])
 
   return (
-    <div className="mt-4 space-y-4">
-      <PolyDeskBackButton onClick={onBack} />
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-          <Radio className="h-4 w-4 text-gray-500" />
-        </span>
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk World Cup</p>
-      </div>
-      <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Live scores, market odds, direct trade routes.</h2>
-      <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-        Live scores come from the matchday feed. Market odds and trade routes come from Polymarket. No stale fallbacks.
-      </p>
-
+    <div className="mt-4 space-y-3">
       <div className="space-y-2">
         <PolyDeskMenuCard
           title="World Cup markets"
