@@ -4,7 +4,7 @@ type PolyDeskAgentService = {
   id: string
   title: string
   description: string
-  category: 'prediction-market' | 'sports-data' | 'market-intelligence' | 'funding'
+  category: 'prediction-market' | 'sports-data' | 'market-intelligence' | 'funding' | 'portfolio'
   endpoint: string
   method: 'GET' | 'POST'
   pricing: {
@@ -168,6 +168,43 @@ const services: PolyDeskAgentService[] = [
       'agent must show the target Polymarket wallet before the user pays',
       'funding is complete only after the hosted checkout confirms bridge settlement',
       'PolyDesk creates the funding handoff and does not custody buyer-agent funds',
+    ],
+  },
+  {
+    id: 'polymarket-portfolio-watch',
+    title: 'Polymarket Portfolio Watch',
+    description: 'Read-only public-wallet monitoring for Polymarket portfolio value, open positions, PnL, and claimable positions.',
+    category: 'portfolio',
+    endpoint: '/api/a2mcp/polymarket-portfolio-watch',
+    method: 'GET',
+    pricing: { model: 'free', amount: '0', asset: 'USDC' },
+    payment: { required: false, standard: 'none' },
+    request: {
+      query: [
+        { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to monitor.' },
+        { name: 'limit', required: false, description: 'Maximum positions to inspect. Defaults to 50, max 100.' },
+        { name: 'agent', required: false, description: 'Buyer-agent slug used for attribution in the response.' },
+      ],
+      headers: [
+        { name: 'x-buyer-agent', required: false, description: 'Preferred buyer-agent identifier for attribution.' },
+        { name: 'x-agent-slug', required: false, description: 'Fallback buyer-agent identifier.' },
+      ],
+    },
+    output: [
+      'portfolio value estimate',
+      'open position count and top positions',
+      'estimated open PnL',
+      'claimable position list',
+      'source and freshness metadata',
+    ],
+    artifacts: [
+      'PolyDesk portfolio URL',
+      'machine-readable wallet snapshot',
+    ],
+    safety: [
+      'read-only public wallet monitoring',
+      'PolyDesk does not custody funds or place trades for buyer agents',
+      'portfolio values and claimable status should be rechecked on Polymarket before acting',
     ],
   },
   {

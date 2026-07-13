@@ -10,6 +10,7 @@ import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
 import a2mcpPolymarketFundingLinkHandler from './api/a2mcp-polymarket-funding-link.js'
+import a2mcpPolymarketPortfolioWatchHandler from './api/a2mcp-polymarket-portfolio-watch.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
@@ -104,6 +105,7 @@ app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHan
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.get('/api/a2mcp/polymarket-funding-link', strictLimiter, a2mcpPolymarketFundingLinkHandler)
+app.get('/api/a2mcp/polymarket-portfolio-watch', readLimiter, a2mcpPolymarketPortfolioWatchHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)
