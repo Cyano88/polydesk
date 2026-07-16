@@ -155,8 +155,9 @@ export async function payAgentX402Service(params: {
   const store = await readStore()
   const record = resolveAgentRecord(store, params.agentSlug)
   if (!record?.walletAddress || !record.sessionId) {
-    const error = new Error('Agent wallet session not found. Create the wallet on the web dashboard first.') as Error & { status?: number }
+    const error = new Error('Pocket Wallet needs a fresh Arc sign-in before this x402 payment can continue.') as Error & { status?: number; code?: string }
     error.status = 404
+    error.code = 'circle_session_missing'
     throw error
   }
 
@@ -1121,7 +1122,7 @@ export default async function handler(req: Request, res: Response) {
             error: serviceError.message,
           })
         }
-        if (serviceError.status === 404) return res.status(404).json({ ok: false, error: serviceError.message })
+        if (serviceError.status === 404) return res.status(404).json({ ok: false, code: serviceError.code || 'circle_session_missing', error: serviceError.message })
         throw err
       }
     }

@@ -1322,14 +1322,18 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LP Scout x402 request failed'
       const code = (err as Error & { code?: string })?.code
-      if (code === 'circle_session_expired') {
+      if (code === 'circle_session_expired' || code === 'circle_session_missing') {
         setAgentWalletSessionConnected(false)
+        setCurrentAgentWallet('')
         setShowWalletAccessPanel(true)
         setWalletMode('login')
         setWalletStep('idle')
         setWalletOtp('')
         setWalletOtpContext(null)
-        setLpScoutError('Your Arc x402 session expired before payment. Reconnect Pocket Wallet; this Scout request is still saved and has not been charged.')
+        setLpScoutError('')
+        setWalletError(code === 'circle_session_missing'
+          ? 'Pocket Wallet needs one fresh Arc sign-in. Open it below; this Scout request is saved and has not been charged.'
+          : 'Your Arc x402 session expired before payment. Reconnect below; this Scout request is saved and has not been charged.')
       } else if (/insufficient|balance|fund|top up|deposit|gateway/i.test(message)) {
         setX402ModalOpen(true)
         refreshX402Balance().catch(() => undefined)
