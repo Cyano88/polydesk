@@ -79,7 +79,9 @@ function AppProviders() {
     },
     appearance: {
       theme: privyTheme,
-      logo: '/brand/polydesk-privy-bw-180x90.png',
+      logo: privyTheme === 'dark'
+        ? '/brand/polydesk-privy-dark-180x90.png'
+        : '/brand/polydesk-privy-light-180x90.png',
       landingHeader: 'PolyDesk',
       loginMessage: 'Team will never ask for this code',
       emailDomain: 'PolyDesk',
