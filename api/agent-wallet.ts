@@ -9,6 +9,7 @@ import { appendAgentActivity, listAgentActivity } from './agent-activity.js'
 import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
+import { withCircleSessionLock } from './circle-session-queue.js'
 
 const execFileAsync = promisify(execFile)
 const CIRCLE_BIN = process.platform === 'win32' ? 'circle.cmd' : 'circle'
@@ -599,20 +600,22 @@ async function walletChoicesWithBalances(wallets: string[], key: string, chain: 
 }
 
 async function runCircle(args: string[], key: string, timeoutMs = 60_000) {
-  const sessionHome = resolve(CIRCLE_SESSION_ROOT, safeSessionKey(key))
-  await mkdir(sessionHome, { recursive: true })
-  const { stdout, stderr } = await execFileAsync(CIRCLE_BIN, args, {
-    timeout: timeoutMs,
-    maxBuffer: 128 * 1024,
-    shell: false,
-    env: {
-      ...process.env,
-      HOME: sessionHome,
-      USERPROFILE: sessionHome,
-      CIRCLE_ACCEPT_TERMS: '1',
-    },
+  return withCircleSessionLock(key, async () => {
+    const sessionHome = resolve(CIRCLE_SESSION_ROOT, safeSessionKey(key))
+    await mkdir(sessionHome, { recursive: true })
+    const { stdout, stderr } = await execFileAsync(CIRCLE_BIN, args, {
+      timeout: timeoutMs,
+      maxBuffer: 128 * 1024,
+      shell: false,
+      env: {
+        ...process.env,
+        HOME: sessionHome,
+        USERPROFILE: sessionHome,
+        CIRCLE_ACCEPT_TERMS: '1',
+      },
+    })
+    return [stdout, stderr].filter(Boolean).join('\n').trim()
   })
-  return [stdout, stderr].filter(Boolean).join('\n').trim()
 }
 
 async function readCircleGatewayBalance(walletAddress: string, key: string, chain: string) {

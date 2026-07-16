@@ -580,6 +580,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const bottomRef    = useRef<HTMLDivElement>(null)
   const autoRan      = useRef(false)
   const lpScoutResumeAfterValidationRef = useRef(false)
+  const validatedX402SessionRef = useRef('')
   const agentPrivyRestoreKey = useRef('')
   const agentWalletIdentityKey = useRef('')
   const helperCheckpointKey = useRef('')
@@ -866,8 +867,17 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   }
 
   useEffect(() => {
+    const validationKey = `${normalizedAgentSlug}:${currentAgentWallet.toLowerCase()}:${agentNetwork}`
+    if (
+      agentWalletSessionConnected
+      && x402BalanceChecked
+      && validatedX402SessionRef.current === validationKey
+    ) {
+      validatedX402SessionRef.current = ''
+      return
+    }
     refreshX402Balance().catch(() => undefined)
-  }, [normalizedAgentSlug, agentWalletSessionConnected, currentAgentWallet, showAgentProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [normalizedAgentSlug, agentWalletSessionConnected, currentAgentWallet, agentNetwork, showAgentProfile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-verify when eventId + payer arrive via access link URL params
   useEffect(() => {
@@ -1108,6 +1118,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         setWalletOtpContext({ email, network: agentNetwork })
         setWalletStep('otp')
       } else if (data.walletAddress && data.connected === true) {
+        validatedX402SessionRef.current = `${requestAgentSlug}:${data.walletAddress.toLowerCase()}:${agentNetwork}`
         setCurrentAgentWallet(data.walletAddress)
         if (data.chain) setAgentWalletChain(data.chain)
         setTreasuryBalance(null)
