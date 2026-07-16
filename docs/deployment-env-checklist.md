@@ -24,6 +24,7 @@ Render can use the committed `render.yaml` blueprint:
 - Start command: `npm run start`
 - Health route: `/api/health`
 - Fill every `sync: false` value in Render before live smoke testing.
+- Keep the `polydesk-data` disk mounted at `/var/data`. `DATA_PATH=/var/data` makes Circle CLI sessions and file-backed wallet state survive restarts and keeps OTP-completed Arc x402 sessions on the same durable volume.
 
 Expected server:
 

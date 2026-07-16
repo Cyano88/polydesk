@@ -6,11 +6,17 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
+    disk:
+      name: polydesk-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "20"
       - key: PORT
         value: "3000"
+      - key: DATA_PATH
+        value: /var/data
       - key: VITE_AUTH_BRIDGE
         value: hybrid
       - key: VITE_PRIVY_APP_ID

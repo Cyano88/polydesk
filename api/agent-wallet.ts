@@ -614,6 +614,20 @@ async function runCircle(args: string[], key: string, timeoutMs = 60_000) {
   return [stdout, stderr].filter(Boolean).join('\n').trim()
 }
 
+async function readCircleGatewayBalance(walletAddress: string, key: string, chain: string) {
+  let output = ''
+  try {
+    output = await runCircle(['gateway', 'balance', '--address', walletAddress, '--chain', chain, '--output', 'json'], key, 30_000)
+  } catch (err) {
+    if (isCircleLoginExpired(err)) throw err
+    output = await runCircle(['gateway', 'balance', '--address', walletAddress, '--chain', chain], key, 30_000)
+  }
+  return {
+    balance: parseBalance(output),
+    output,
+  }
+}
+
 export default async function handler(req: Request, res: Response) {
   if (req.method === 'GET') {
     const agentSlug = normalizeSlug(req.query.agent)
@@ -669,13 +683,8 @@ export default async function handler(req: Request, res: Response) {
       gatewayBalanceChecked = true
       try {
         const key = `${agentSlug}_${record.sessionId}`
-        let output = ''
-        try {
-          output = await runCircle(['gateway', 'balance', '--address', record.walletAddress, '--chain', gatewayBalanceChain, '--output', 'json'], key, 30_000)
-        } catch {
-          output = await runCircle(['gateway', 'balance', '--address', record.walletAddress, '--chain', gatewayBalanceChain], key, 30_000)
-        }
-        gatewayBalance = parseBalance(output)
+        const gateway = await readCircleGatewayBalance(record.walletAddress, key, gatewayBalanceChain)
+        gatewayBalance = gateway.balance
         if (gatewayBalance === undefined) gatewayBalanceError = 'Circle CLI returned no parseable x402 balance.'
       } catch (err) {
         if (isCircleLoginExpired(err)) {
@@ -701,6 +710,7 @@ export default async function handler(req: Request, res: Response) {
       gatewayBalance,
       gatewayBalanceChecked,
       gatewayBalanceError,
+      code: sessionExpired ? 'circle_session_expired' : undefined,
       gatewayBalanceChain,
       activity: await listAgentActivity(agentSlug),
       updatedAt: record?.updatedAt,
@@ -792,6 +802,23 @@ export default async function handler(req: Request, res: Response) {
         })
       }
       if (!walletAddress) return res.status(502).json({ ok: false, error: 'Circle login completed, but no wallet address was found.' })
+
+      let gatewayBalance: string | undefined
+      try {
+        const gateway = await readCircleGatewayBalance(walletAddress, key, ARC_TESTNET_GATEWAY_CHAIN)
+        gatewayBalance = gateway.balance
+      } catch (err) {
+        const sessionExpired = isCircleLoginExpired(err)
+        return res.status(sessionExpired ? 409 : 503).json({
+          ok: false,
+          connected: false,
+          code: sessionExpired ? 'circle_session_expired' : 'circle_session_validation_failed',
+          error: sessionExpired
+            ? 'Circle accepted the OTP, but the secure Arc x402 session was not available. Reopen Pocket Wallet and request a new code.'
+            : 'Circle accepted the OTP, but PolyDesk could not validate Arc x402 access. Reopen Pocket Wallet and try again.',
+        })
+      }
+
       delete store.pending[id]
       const envRecord = getEnvAgentRecord(agentSlug)
       if (envRecord?.walletAddress && envRecord.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
@@ -828,7 +855,16 @@ export default async function handler(req: Request, res: Response) {
         wallet: walletAddress,
         detail: 'Arc Testnet session connected',
       })
-      return res.json({ ok: true, walletAddress, chain, agentSlug })
+      return res.json({
+        ok: true,
+        connected: true,
+        walletAddress,
+        chain,
+        agentSlug,
+        gatewayBalance,
+        gatewayBalanceChecked: true,
+        gatewayBalanceChain: ARC_TESTNET_GATEWAY_CHAIN,
+      })
     }
 
     if (action === 'disconnect') {

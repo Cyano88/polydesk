@@ -579,6 +579,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const helperVerifyRequestRef = useRef(0)
   const bottomRef    = useRef<HTMLDivElement>(null)
   const autoRan      = useRef(false)
+  const lpScoutResumeAfterValidationRef = useRef(false)
   const agentPrivyRestoreKey = useRef('')
   const agentWalletIdentityKey = useRef('')
   const helperCheckpointKey = useRef('')
@@ -834,6 +835,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}&x402=1${gatewayChain}`)
       const data = await res.json() as {
         ok?: boolean
+        code?: string
         gatewayBalance?: string
         gatewayBalanceError?: string
       }
@@ -841,7 +843,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       if (data.gatewayBalance !== undefined) setX402Balance(data.gatewayBalance)
       if (data.gatewayBalanceError) {
         setX402BalanceError(data.gatewayBalanceError)
-        if (/reconnect|session expired|sign in/i.test(data.gatewayBalanceError)) {
+        if (data.code === 'circle_session_expired') {
           setAgentWalletSessionConnected(false)
           setShowWalletAccessPanel(true)
         }
@@ -849,10 +851,6 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     } catch (err) {
       const message = err instanceof Error ? err.message : 'x402 balance unavailable'
       setX402BalanceError(message)
-      if (/reconnect|session expired|sign in/i.test(message)) {
-        setAgentWalletSessionConnected(false)
-        setShowWalletAccessPanel(true)
-      }
     } finally {
       setX402BalanceChecked(true)
     }
@@ -1062,7 +1060,27 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
               : ignoreUrlAgentWallet ? currentAgentWallet || undefined : intendedAgentWallet || currentAgentWallet || undefined),
         }),
       })
-      const data = await res.json() as { ok?: boolean; error?: string; walletAddress?: string; chain?: string; code?: string; existingWallet?: string; newWallet?: string; availableWallets?: WalletChoice[] }
+      const data = await res.json() as {
+        ok?: boolean
+        error?: string
+        code?: string
+        connected?: boolean
+        walletAddress?: string
+        chain?: string
+        gatewayBalance?: string
+        gatewayBalanceChecked?: boolean
+        existingWallet?: string
+        newWallet?: string
+        availableWallets?: WalletChoice[]
+      }
+      if (data.code === 'circle_session_expired' || data.code === 'circle_session_validation_failed') {
+        setAgentWalletSessionConnected(false)
+        setShowWalletAccessPanel(true)
+        setWalletStep('idle')
+        setWalletOtp('')
+        setWalletOtpContext(null)
+        throw new Error(data.error ?? 'Arc x402 access could not be validated. Reopen Pocket Wallet and request a new code.')
+      }
       if (data.code === 'wallet_mismatch') {
         throw new Error(`Circle returned a different wallet. Existing: ${data.existingWallet ?? 'saved wallet'}. New: ${data.newWallet ?? 'new wallet'}. Sign in with the email for the existing funded wallet, or replace it intentionally.`)
       }
@@ -1089,15 +1107,19 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         setWalletOtp('')
         setWalletOtpContext({ email, network: agentNetwork })
         setWalletStep('otp')
-      } else if (data.walletAddress) {
+      } else if (data.walletAddress && data.connected === true) {
         setCurrentAgentWallet(data.walletAddress)
         if (data.chain) setAgentWalletChain(data.chain)
         setTreasuryBalance(null)
         setTreasuryBalanceChecked(false)
         setTreasuryBalanceError('')
+        setX402Balance(data.gatewayBalance ?? null)
+        setX402BalanceChecked(Boolean(data.gatewayBalanceChecked))
+        setX402BalanceError('')
         setWalletStep('done')
         setWalletOtpContext(null)
         setAgentWalletSessionConnected(true)
+        lpScoutResumeAfterValidationRef.current = hasPendingLpScoutRequest
         if (hasPendingLpScoutRequest) setShowWalletAccessPanel(false)
         if (PRIVY_AUTH_ENABLED && privyAuthenticated) {
           const token = await getAccessToken()
@@ -1119,6 +1141,8 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
         window.setTimeout(() => {
           resumeSavedLpScoutIntent()
         }, 0)
+      } else if (action === 'complete') {
+        throw new Error('Circle accepted the code, but Arc x402 access was not validated. Reopen Pocket Wallet and try again.')
       }
     } catch (err) {
       setWalletError(err instanceof Error ? err.message : embeddedWalletManager ? 'Circle wallet request failed' : 'Circle Agent Wallet request failed')
@@ -1272,8 +1296,12 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
           budget: pendingScoutBudget || undefined,
         }),
       })
-      const data = await readAgentWalletJson<LpScoutRunResult & { ok?: boolean; error?: string }>(res)
-      if (!res.ok || !data.ok) throw new Error(data.error ?? 'LP Scout x402 request failed')
+      const data = await readAgentWalletJson<LpScoutRunResult & { ok?: boolean; error?: string; code?: string }>(res)
+      if (!res.ok || !data.ok) {
+        const error = new Error(data.error ?? 'LP Scout x402 request failed') as Error & { code?: string }
+        error.code = data.code
+        throw error
+      }
       setLpScoutResult(data)
       setZeroScoutResult(null)
       setReceiptsOpen(true)
@@ -1293,7 +1321,16 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       await loadAgentWallet()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LP Scout x402 request failed'
-      if (/insufficient|balance|fund|top up|deposit|gateway/i.test(message)) {
+      const code = (err as Error & { code?: string })?.code
+      if (code === 'circle_session_expired') {
+        setAgentWalletSessionConnected(false)
+        setShowWalletAccessPanel(true)
+        setWalletMode('login')
+        setWalletStep('idle')
+        setWalletOtp('')
+        setWalletOtpContext(null)
+        setLpScoutError('Your Arc x402 session expired before payment. Reconnect Pocket Wallet; this Scout request is still saved and has not been charged.')
+      } else if (/insufficient|balance|fund|top up|deposit|gateway/i.test(message)) {
         setX402ModalOpen(true)
         refreshX402Balance().catch(() => undefined)
         setLpScoutError('x402 service balance is too low for LP Scout. Fund Circle wallet balance, activate x402 service balance, then continue.')
@@ -1495,6 +1532,13 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     if (!agentWalletAccessConnected) return
     setBalanceRefreshNonce(current => current + 1)
   }, [agentWalletAccessConnected])
+
+  useEffect(() => {
+    if (!lpScoutResumeAfterValidationRef.current || !hasPendingLpScoutRequest) return
+    if (!agentWalletAccessConnected || !x402BalanceChecked || lpScoutBusy) return
+    lpScoutResumeAfterValidationRef.current = false
+    if (lpScoutX402Ready) void runLpScoutRequest()
+  }, [hasPendingLpScoutRequest, agentWalletAccessConnected, x402BalanceChecked, lpScoutX402Ready, lpScoutBusy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (hasPendingLpScoutRequest || !savedLpScoutIntent || !currentAgentWallet || agentWalletAccessConnected || agentWalletRestorePending) return
