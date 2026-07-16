@@ -7,11 +7,13 @@ import {
   Copy,
   Eye,
   LogOut,
+  Mic2,
   Moon,
   Newspaper,
   Radar,
   Sun,
   Trophy,
+  UserRound,
   Wallet,
 } from 'lucide-react'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
@@ -46,34 +48,74 @@ function avatarGradient(seed: string) {
   return `linear-gradient(135deg, hsl(${hue} 76% 58%), hsl(${(hue + 78) % 360} 70% 34%))`
 }
 
-function PolyDeskLaunchGate({ ready }: { ready: boolean }) {
+function LaunchIdentitySequence() {
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-[#F5F5F7] px-5 py-24 text-gray-950 dark:bg-[#111113] dark:text-white">
+    <div className="polydesk-launch-identity" aria-hidden="true">
+      <span className="polydesk-launch-identity__halo" />
+      <span className="polydesk-launch-identity__stage polydesk-launch-identity__human">
+        <UserRound />
+      </span>
+      <span className="polydesk-launch-identity__stage polydesk-launch-identity__voice">
+        <Mic2 />
+        <span className="polydesk-launch-identity__signal"><i /><i /><i /></span>
+      </span>
+      <span className="polydesk-launch-identity__stage polydesk-launch-identity__mark">
+        <PolymarketMark />
+      </span>
+      <span className="polydesk-launch-identity__market-dot polydesk-launch-identity__market-dot--one" />
+      <span className="polydesk-launch-identity__market-dot polydesk-launch-identity__market-dot--two" />
+    </div>
+  )
+}
+
+function PolyDeskLaunchGate({
+  ready,
+  theme,
+  onToggleTheme,
+}: {
+  ready: boolean
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
+}) {
+  return (
+    <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f9] px-5 py-24 text-gray-950 dark:bg-[#111113] dark:text-white">
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.95),transparent_38%),radial-gradient(circle_at_12%_76%,rgba(96,165,250,0.14),transparent_34%),radial-gradient(circle_at_88%_68%,rgba(167,139,250,0.13),transparent_32%)] dark:bg-[radial-gradient(ellipse_at_50%_16%,rgba(255,255,255,0.075),transparent_32%),radial-gradient(ellipse_at_50%_100%,rgba(255,255,255,0.025),transparent_44%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.22] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(circle_at_center,black,transparent_76%)] dark:opacity-0" />
+      <div className="pointer-events-none absolute inset-0 -z-10 hidden overflow-hidden dark:block" aria-hidden="true">
+        <span className="absolute -bottom-[52%] -left-[18%] h-[72%] w-[88%] rounded-[50%] border border-white/[0.035]" />
+        <span className="absolute -bottom-[46%] -left-[10%] h-[66%] w-[84%] rounded-[50%] border border-white/[0.045]" />
+        <span className="absolute -bottom-[54%] -right-[24%] h-[78%] w-[92%] rounded-[50%] border border-white/[0.03]" />
+        <span className="absolute left-1/2 top-[20%] h-px w-24 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </div>
       <header className="absolute inset-x-0 top-0">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-6">
           <span className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
             <PolymarketMark className="h-5 w-5" /> PolyDesk
           </span>
-          <PrivyConnectButton
-            debugLabel="polydesk-header-sign-in"
-            loginOptions={{ loginMethods: ['email', 'wallet'] }}
-            logoutOnAuthenticated={false}
-            disabled={!ready}
-            className="rounded-full border border-gray-200 bg-white px-3.5 py-2 text-[11px] font-bold text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09]"
-          >
-            Sign in
-          </PrivyConnectButton>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+              title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+              className="grid h-8 w-8 place-items-center rounded-full border border-white/70 bg-white/55 text-gray-500 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.05] dark:text-gray-400 dark:hover:bg-white/[0.10] dark:hover:text-white"
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+            <PrivyConnectButton
+              debugLabel="polydesk-header-sign-in"
+              loginOptions={{ loginMethods: ['email', 'wallet'] }}
+              logoutOnAuthenticated={false}
+              disabled={!ready}
+              className="rounded-full border border-gray-200 bg-white px-3.5 py-2 text-[11px] font-bold text-gray-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.09]"
+            >
+              Sign in
+            </PrivyConnectButton>
+          </div>
         </div>
       </header>
       <section className="w-full max-w-sm text-center" aria-labelledby="polydesk-sign-in-title">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-          <img
-            src="/brand/polydesk-okx-avatar-bw.png"
-            alt=""
-            className="h-full w-full object-cover"
-            onError={event => { event.currentTarget.style.display = 'none' }}
-          />
-        </div>
+        <LaunchIdentitySequence />
         <h1 id="polydesk-sign-in-title" className="mt-5 text-3xl font-black tracking-tight">PolyDesk</h1>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Your intelligent desk for prediction markets.</p>
 
@@ -82,7 +124,7 @@ function PolyDeskLaunchGate({ ready }: { ready: boolean }) {
           loginOptions={{ loginMethods: ['email'] }}
           logoutOnAuthenticated={false}
           disabled={!ready}
-          className="mt-8 flex w-full items-center justify-center rounded-2xl bg-gray-950 px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+          className="mx-auto mt-7 flex min-h-11 w-full max-w-xs items-center justify-center rounded-full bg-gray-950 px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_14px_34px_rgba(15,23,42,0.22)] disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:shadow-[0_10px_34px_rgba(0,0,0,0.35)] dark:hover:bg-gray-100"
         >
           {ready ? 'Sign in with email' : 'Preparing sign in…'}
         </PrivyConnectButton>
@@ -93,13 +135,16 @@ function PolyDeskLaunchGate({ ready }: { ready: boolean }) {
           loginOptions={{ loginMethods: ['wallet'] }}
           logoutOnAuthenticated={false}
           disabled={!ready}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 text-sm font-bold text-gray-900 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
+          className="mx-auto mt-2 flex min-h-11 w-full max-w-xs items-center justify-center gap-2 rounded-full border border-white/70 bg-white/70 px-5 py-2.5 text-[13px] font-bold text-gray-900 shadow-[0_8px_26px_rgba(15,23,42,0.08)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white hover:bg-white disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:shadow-[0_8px_26px_rgba(0,0,0,0.22)] dark:hover:bg-white/[0.10]"
         >
           <Wallet className="h-4 w-4" />
           Connect external wallet
         </PrivyConnectButton>
         <p className="mt-5 text-[11px] leading-5 text-gray-400 dark:text-gray-500">Secure access powered by Privy. PolyDesk never asks for your private key.</p>
       </section>
+      <footer className="absolute inset-x-0 bottom-0 border-t border-white/60 bg-white/35 py-3 text-center text-[10px] font-medium tracking-wide text-gray-400 backdrop-blur-xl dark:border-white/[0.06] dark:bg-black/10 dark:text-gray-500">
+        Powered by <span className="font-bold text-gray-600 dark:text-gray-300">Hash PayLink</span>
+      </footer>
     </main>
   )
 }
@@ -196,7 +241,15 @@ function PolyDeskWorkspace() {
     { id: 'theme', label: 'Theme', icon: theme === 'dark' ? Sun : Moon, onClick: () => setTheme(value => value === 'dark' ? 'light' : 'dark') },
   ]
 
-  if (!ready || !authenticated) return <PolyDeskLaunchGate ready={ready} />
+  if (!ready || !authenticated) {
+    return (
+      <PolyDeskLaunchGate
+        ready={ready}
+        theme={theme}
+        onToggleTheme={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
+      />
+    )
+  }
 
   async function copyWallet() {
     if (!walletAddress || !navigator.clipboard) return
@@ -268,19 +321,17 @@ function PolyDeskWorkspace() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <main className={cn('mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10', workspace !== 'agent' && 'pb-24 sm:pb-24')}>
         <Outlet />
       </main>
 
       {workspace !== 'agent' && (
-        <footer className="border-t border-gray-100 bg-white/60 py-3 dark:border-white/5 dark:bg-[#111113]/70">
-          <div className="mx-auto flex w-full max-w-5xl justify-center px-4 sm:px-6">
-            <WorkspaceUtilityPill
-              label={workspace === 'portfolio' ? 'Portfolio tools' : 'Trade tools'}
-              items={workspace === 'portfolio' ? portfolioItems : tradeItems}
-            />
-          </div>
-        </footer>
+        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+          <WorkspaceUtilityPill
+            label={workspace === 'portfolio' ? 'Portfolio tools' : 'Trade tools'}
+            items={workspace === 'portfolio' ? portfolioItems : tradeItems}
+          />
+        </div>
       )}
     </div>
   )

@@ -944,3 +944,158 @@ html.dark .polydesk-powered-footer strong {
     box-shadow: 0 8px 20px rgba(17, 24, 39, 0.08), 0 0 0 3px rgba(124, 58, 237, 0.08);
   }
 }
+
+.polydesk-launch-identity {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-inline: auto;
+  display: grid;
+  place-items: center;
+  color: #111827;
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.14));
+}
+
+html.dark .polydesk-launch-identity {
+  color: #f9fafb;
+  filter: drop-shadow(0 12px 28px rgba(255, 255, 255, 0.08));
+}
+
+.polydesk-launch-identity__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  will-change: opacity, transform, filter;
+}
+
+.polydesk-launch-identity__stage > svg {
+  width: 54px;
+  height: 54px;
+  stroke-width: 1.65;
+}
+
+.polydesk-launch-identity__human {
+  animation: polydeskIdentityHuman 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.polydesk-launch-identity__voice {
+  animation: polydeskIdentityVoice 1.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.polydesk-launch-identity__mark {
+  animation: polydeskIdentityMark 1.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.polydesk-launch-identity__halo {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 9999px;
+  opacity: 0;
+  animation: polydeskIdentityHalo 1.9s ease-out both;
+}
+
+.polydesk-launch-identity__signal {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  transform: translateX(-50%);
+}
+
+.polydesk-launch-identity__signal i {
+  width: 3px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: polydeskVoiceBar 430ms ease-in-out infinite alternate;
+}
+
+.polydesk-launch-identity__signal i:nth-child(2) {
+  height: 12px;
+  animation-delay: 90ms;
+}
+
+.polydesk-launch-identity__signal i:nth-child(3) {
+  height: 8px;
+  animation-delay: 180ms;
+}
+
+.polydesk-launch-identity__market-dot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  opacity: 0;
+  animation: polydeskMarketDot 1.9s ease-out both;
+}
+
+.polydesk-launch-identity__market-dot--one {
+  left: -2px;
+  --polydesk-market-dot-x: 34px;
+  background: #3b82f6;
+}
+
+.polydesk-launch-identity__market-dot--two {
+  right: -2px;
+  --polydesk-market-dot-x: -34px;
+  background: #8b5cf6;
+}
+
+@keyframes polydeskIdentityHuman {
+  0% { opacity: 0; transform: scale(0.72); filter: blur(5px); }
+  10%, 24% { opacity: 1; transform: scale(1); filter: blur(0); }
+  34%, 100% { opacity: 0; transform: scale(0.82); filter: blur(4px); }
+}
+
+@keyframes polydeskIdentityVoice {
+  0%, 26% { opacity: 0; transform: scale(0.68); filter: blur(5px); }
+  38%, 54% { opacity: 1; transform: scale(1.04); filter: blur(0); }
+  64%, 100% { opacity: 0; transform: scale(0.84); filter: blur(4px); }
+}
+
+@keyframes polydeskIdentityMark {
+  0%, 58% { opacity: 0; transform: scale(0.56) rotate(-7deg); filter: blur(6px); }
+  72% { opacity: 1; transform: scale(1.12) rotate(1deg); filter: blur(0); }
+  84% { transform: scale(0.96) rotate(0); }
+  100% { opacity: 1; transform: scale(1) rotate(0); filter: blur(0); }
+}
+
+@keyframes polydeskIdentityHalo {
+  0%, 30% { opacity: 0; transform: scale(0.55); }
+  45% { opacity: 0.9; transform: scale(1.1); }
+  68% { opacity: 0; transform: scale(1.45); }
+  100% { opacity: 0; }
+}
+
+@keyframes polydeskVoiceBar {
+  from { transform: scaleY(0.55); opacity: 0.45; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes polydeskMarketDot {
+  0%, 52% { opacity: 0; transform: translate(0, -50%) scale(0.5); }
+  62% { opacity: 1; }
+  78%, 100% { opacity: 0; transform: translate(var(--polydesk-market-dot-x), -50%) scale(0.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polydesk-launch-identity__human,
+  .polydesk-launch-identity__voice,
+  .polydesk-launch-identity__halo,
+  .polydesk-launch-identity__market-dot {
+    display: none;
+  }
+
+  .polydesk-launch-identity__mark {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

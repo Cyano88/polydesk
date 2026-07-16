@@ -6885,6 +6885,7 @@ export function PolyPortfolioPanel({
   initialPortfolioAction?: 'watch' | 'trading' | 'external' | 'x402' | null
   initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions'
 }) {
+  const showLegacyBack = surface !== 'standalone'
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
   const { createWallet } = useCreateWallet({
@@ -8196,7 +8197,7 @@ export function PolyPortfolioPanel({
     const selectedAction = portfolioActions.find(([key]) => key === unsignedPortfolioAction)
     return (
       <div className="mt-4 space-y-3">
-        {selectedAction && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
+        {showLegacyBack && selectedAction && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         {!selectedAction ? (
           <div className="space-y-2">
             {portfolioActions.map(([key, label, body]) => (
@@ -8234,7 +8235,7 @@ export function PolyPortfolioPanel({
   if (!sessionlessExternalMode && !privyReady && privyWaitExpired) {
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={onBack} />
+        {showLegacyBack && <PolyDeskBackButton onClick={onBack} />}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading PolyDesk session...
@@ -8276,7 +8277,7 @@ export function PolyPortfolioPanel({
 
     return (
       <div className="mt-4 space-y-3">
-        {selectedAction && <PolyDeskBackButton onClick={backHandler} />}
+        {showLegacyBack && selectedAction && <PolyDeskBackButton onClick={backHandler} />}
 
         {!selectedAction ? (
           <div className="space-y-2">
@@ -8514,7 +8515,7 @@ export function PolyPortfolioPanel({
     const externalWalletValid = /^0x[a-fA-F0-9]{40}$/.test(unsignedExternalAddress.trim())
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />
+        {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         <div className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">External account</p>
@@ -8663,7 +8664,7 @@ export function PolyPortfolioPanel({
   if (!watchedAddress && unsignedPortfolioAction === 'watch') {
     return (
       <div className="mt-4">
-        <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />
+        {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
             <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
@@ -8703,7 +8704,7 @@ export function PolyPortfolioPanel({
   if (!profile && unsignedPortfolioAction === 'trading') {
     return (
       <div className="mt-4 space-y-3">
-        <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />
+        {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Balance</p>
           <h2 className="mt-1 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Main Wallet</h2>
@@ -8773,7 +8774,7 @@ export function PolyPortfolioPanel({
 
   return (
     <div className="mt-4 space-y-4">
-      <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />
+      {showLegacyBack && <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />}
 
       {/* Watched account card */}
       {unsignedPortfolioAction === 'watch' && (
