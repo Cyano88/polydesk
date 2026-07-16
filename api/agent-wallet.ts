@@ -10,12 +10,12 @@ import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 import { withCircleSessionLock } from './circle-session-queue.js'
+import { resolveAgentWalletStorePath } from './agent-store-paths.js'
 
 const execFileAsync = promisify(execFile)
 const CIRCLE_BIN = process.platform === 'win32' ? 'circle.cmd' : 'circle'
 const DATA_PATH = process.env.DATA_PATH?.trim()
-const STORE_PATH = process.env.AGENT_WALLET_PROVISION_STORE
-  ?? (DATA_PATH ? `${DATA_PATH}/agent-wallet-provisioning.json` : './data/agent-wallet-provisioning.json')
+const STORE_PATH = resolveAgentWalletStorePath()
 const CIRCLE_SESSION_ROOT = process.env.AGENT_WALLET_CIRCLE_SESSION_PATH
   ?? (DATA_PATH ? `${DATA_PATH}/circle-web-sessions` : './data/circle-web-sessions')
 const CIRCLE_CLI_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.CIRCLE_CLI_ENABLED ?? '').toLowerCase())

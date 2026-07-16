@@ -17,6 +17,8 @@ services:
         value: "3000"
       - key: DATA_PATH
         value: /var/data
+      - key: AGENT_ACTIVITY_STORE
+        value: /var/data/agent-activity.json
       - key: VITE_AUTH_BRIDGE
         value: hybrid
       - key: VITE_PRIVY_APP_ID

@@ -3,8 +3,9 @@ import { dirname } from 'node:path'
 import crypto from 'node:crypto'
 import { archivePaymentDetailed, type ArchiveFailure } from './og-storage.js'
 import { mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
+import { resolveAgentActivityStorePath } from './agent-store-paths.js'
 
-const STORE_PATH = process.env.AGENT_WALLET_PROVISION_STORE ?? './data/agent-wallet-provisioning.json'
+const STORE_PATH = resolveAgentActivityStorePath()
 const STORE_KEY = (process.env.AGENT_ACTIVITY_STORE_KEY ?? 'polydesk:agent-activity').trim()
 
 export type AgentActivityType =

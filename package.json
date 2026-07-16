@@ -14,7 +14,7 @@
     "start": "tsx server.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
-    "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts",
+    "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts scripts/agent-store-paths.test.ts",
     "env:check": "node scripts/validate-env.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
