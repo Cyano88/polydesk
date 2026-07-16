@@ -1451,7 +1451,11 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const agentEmailConnected = Boolean(PRIVY_AUTH_ENABLED && privyAuthenticated)
   const agentWalletRestorePending = Boolean(PRIVY_AUTH_ENABLED && showAgentProfile && privyAuthenticated && privyEmail && !agentWalletRestoreChecked)
   const connectedWalletNeedsAccess = Boolean(currentAgentWallet && !agentWalletAccessConnected)
-  const showAgentWalletAccessPanel = Boolean(!agentWalletRestorePending && !agentWalletAccessConnected && (!currentAgentWallet || showWalletAccessPanel))
+  const showAgentWalletAccessPanel = Boolean(
+    !agentWalletRestorePending &&
+    !agentWalletAccessConnected &&
+    (!currentAgentWallet || showWalletAccessPanel || embeddedWalletManager)
+  )
   const sessionReconnectNeeded = Boolean(currentAgentWallet && !agentWalletAccessConnected && showAgentWalletAccessPanel)
   const lpScoutAuthorizationOpen = Boolean(hasPendingLpScoutRequest && showAgentWalletAccessPanel && !agentWalletAccessConnected && !agentWalletRestorePending)
   const x402Refreshing = Boolean(agentWalletAccessConnected && !x402BalanceChecked)

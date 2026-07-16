@@ -363,6 +363,7 @@ export default function PolyDesk() {
               />
             ) : serviceView === 'worldcup-news' ? (
               <PolyWorldCupNewsPanel
+                hideBack
                 onBack={() => backToServiceParent('worldcup')}
                 onOpenScores={() => openServiceView('worldcup-scores')}
                 onOpenLpScout={prefill => {
@@ -372,11 +373,13 @@ export default function PolyDesk() {
               />
             ) : serviceView === 'worldcup-scores' ? (
               <PolyStreamPanel
+                hideBack
                 onBack={() => backToServiceParent('worldcup')}
                 onOpenNews={() => openServiceView('worldcup-news')}
               />
             ) : (
               <LpScoutPanel
+                hideBack
                 prefill={lpScoutPrefill}
                 onPrefillConsumed={() => setLpScoutPrefill(null)}
                 onBack={closeServiceView}

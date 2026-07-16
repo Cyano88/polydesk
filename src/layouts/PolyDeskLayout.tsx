@@ -11,6 +11,7 @@ import {
   Moon,
   Newspaper,
   Radar,
+  Store,
   Sun,
   Trophy,
   UserRound,
@@ -78,7 +79,7 @@ function PolyDeskLaunchGate({
   onToggleTheme: () => void
 }) {
   return (
-    <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f9] px-5 py-24 text-gray-950 dark:bg-[#111113] dark:text-white">
+    <main className="relative isolate flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f7f7f9] text-gray-950 dark:bg-[#111113] dark:text-white">
       <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.95),transparent_38%),radial-gradient(circle_at_12%_76%,rgba(96,165,250,0.14),transparent_34%),radial-gradient(circle_at_88%_68%,rgba(167,139,250,0.13),transparent_32%)] dark:bg-[radial-gradient(ellipse_at_50%_16%,rgba(255,255,255,0.075),transparent_32%),radial-gradient(ellipse_at_50%_100%,rgba(255,255,255,0.025),transparent_44%)]" />
       <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.22] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(circle_at_center,black,transparent_76%)] dark:opacity-0" />
       <div className="pointer-events-none absolute inset-0 -z-10 hidden overflow-hidden dark:block" aria-hidden="true">
@@ -87,7 +88,7 @@ function PolyDeskLaunchGate({
         <span className="absolute -bottom-[54%] -right-[24%] h-[78%] w-[92%] rounded-[50%] border border-white/[0.03]" />
         <span className="absolute left-1/2 top-[20%] h-px w-24 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       </div>
-      <header className="absolute inset-x-0 top-0">
+      <header className="relative z-10 w-full shrink-0">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-6">
           <span className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
             <PolymarketMark className="h-5 w-5" /> PolyDesk
@@ -114,7 +115,7 @@ function PolyDeskLaunchGate({
           </div>
         </div>
       </header>
-      <section className="w-full max-w-sm text-center" aria-labelledby="polydesk-sign-in-title">
+      <section className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-12 text-center" aria-labelledby="polydesk-sign-in-title">
         <LaunchIdentitySequence />
         <h1 id="polydesk-sign-in-title" className="mt-5 text-3xl font-black tracking-tight">PolyDesk</h1>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Your intelligent desk for prediction markets.</p>
@@ -142,8 +143,15 @@ function PolyDeskLaunchGate({
         </PrivyConnectButton>
         <p className="mt-5 text-[11px] leading-5 text-gray-400 dark:text-gray-500">Secure access powered by Privy. PolyDesk never asks for your private key.</p>
       </section>
-      <footer className="absolute inset-x-0 bottom-0 border-t border-white/60 bg-white/35 py-3 text-center text-[10px] font-medium tracking-wide text-gray-400 backdrop-blur-xl dark:border-white/[0.06] dark:bg-black/10 dark:text-gray-500">
-        Powered by <span className="font-bold text-gray-600 dark:text-gray-300">Hash PayLink</span>
+      <footer className="relative z-10 flex h-[60px] shrink-0 items-center border-t border-gray-100 bg-white/50 py-0 dark:border-white/5 dark:bg-[#111113]/50">
+        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+          <p className="text-center text-xs text-gray-400">
+            <span className="polydesk-powered-footer">
+              <span>Powered by</span>
+              <strong>Hash PayLink</strong>
+            </span>
+          </p>
+        </div>
       </footer>
     </main>
   )
@@ -186,6 +194,7 @@ function PolyDeskWorkspace() {
   const { wallets } = useWallets()
   const [accountOpen, setAccountOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [marketplaceNotice, setMarketplaceNotice] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light'
     return window.localStorage.getItem('polydesk-theme') === 'dark' ? 'dark' : 'light'
@@ -195,6 +204,12 @@ function PolyDeskWorkspace() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     window.localStorage.setItem('polydesk-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (!marketplaceNotice) return undefined
+    const timer = window.setTimeout(() => setMarketplaceNotice(false), 2400)
+    return () => window.clearTimeout(timer)
+  }, [marketplaceNotice])
 
   const service = searchParams.get('service') ?? ''
   const portfolioAction = searchParams.get('portfolio') ?? 'watch'
@@ -238,7 +253,7 @@ function PolyDeskWorkspace() {
     { id: 'worldcup', label: 'World Cup', icon: Trophy, to: makeTo('worldcup-scores'), active: service === 'worldcup' || service === 'worldcup-scores' },
     { id: 'news', label: 'News', icon: Newspaper, to: makeTo('worldcup-news'), active: service === 'worldcup-news' },
     { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: service === 'lp-scout' },
-    { id: 'theme', label: 'Theme', icon: theme === 'dark' ? Sun : Moon, onClick: () => setTheme(value => value === 'dark' ? 'light' : 'dark') },
+    { id: 'marketplace', label: 'Marketplace', icon: Store, onClick: () => setMarketplaceNotice(true) },
   ]
 
   if (!ready || !authenticated) {
@@ -285,28 +300,39 @@ function PolyDeskWorkspace() {
             ))}
           </nav>
 
-          <div className="relative">
+          <div className="flex items-center gap-1.5">
             <button
+              type="button"
+              onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
+              aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+              title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 hover:text-gray-900 dark:border-white/10 dark:bg-[#1c1c20] dark:text-gray-400 dark:hover:bg-white/[0.08] dark:hover:text-white"
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+            <div className="relative">
+              <button
               type="button"
               onClick={() => setAccountOpen(value => !value)}
               aria-expanded={accountOpen}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-gray-200 bg-white py-1 pl-1 pr-2.5 text-[11px] font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-white/10 dark:bg-[#1c1c20] dark:text-gray-200 dark:hover:bg-white/[0.08]"
-            >
-              <span className="h-7 w-7 rounded-full ring-1 ring-black/5" style={{ background: avatarGradient(identitySeed) }} aria-hidden="true" />
-              <span>{shortAddress(walletAddress)}</span>
-            </button>
-            {accountOpen && (
-              <div className="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#1c1c20]">
-                {walletAddress && (
-                  <button type="button" onClick={() => void copyWallet()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.06]">
-                    <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy address'}
+              >
+                <span className="h-7 w-7 rounded-full ring-1 ring-black/5" style={{ background: avatarGradient(identitySeed) }} aria-hidden="true" />
+                <span>{shortAddress(walletAddress)}</span>
+              </button>
+              {accountOpen && (
+                <div className="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#1c1c20]">
+                  {walletAddress && (
+                    <button type="button" onClick={() => void copyWallet()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.06]">
+                      <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy address'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
+                    <LogOut className="h-3.5 w-3.5" /> Sign out
                   </button>
-                )}
-                <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
-                  <LogOut className="h-3.5 w-3.5" /> Sign out
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -326,11 +352,18 @@ function PolyDeskWorkspace() {
       </main>
 
       {workspace !== 'agent' && (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+          {marketplaceNotice && (
+            <div role="status" className="pointer-events-none absolute bottom-[calc(100%+0.4rem)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-gray-200 bg-white/95 px-3.5 py-2 text-[11px] font-bold text-gray-700 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c20]/95 dark:text-gray-200">
+              Marketplace is coming soon.
+            </div>
+          )}
+          <div className="pointer-events-auto w-full max-w-md transform-gpu">
           <WorkspaceUtilityPill
             label={workspace === 'portfolio' ? 'Portfolio tools' : 'Trade tools'}
             items={workspace === 'portfolio' ? portfolioItems : tradeItems}
           />
+          </div>
         </div>
       )}
     </div>

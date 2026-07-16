@@ -3901,10 +3901,12 @@ export function LpScoutPanel({
   prefill,
   onPrefillConsumed,
   onBack,
+  hideBack = false,
 }: {
   prefill: LpScoutPrefill | null
   onPrefillConsumed: () => void
   onBack: () => void
+  hideBack?: boolean
 }) {
   const [searchParams] = useSearchParams()
   const initialLpScoutPath = searchParams.get('lpScoutPath') === 'fund' ? 'fund' : 'access'
@@ -3988,7 +3990,7 @@ export function LpScoutPanel({
   if (path === 'fund') {
     return (
       <div className="mt-4 space-y-4">
-        <PolyDeskBackButton onClick={backFromPath} />
+        {!hideBack && <PolyDeskBackButton onClick={backFromPath} />}
         <AgentWorkspace embedded forceProfile requestParams={buildWalletFundingParams()} />
       </div>
     )
@@ -3996,7 +3998,7 @@ export function LpScoutPanel({
 
   return (
     <div className="mt-4 space-y-4">
-      <PolyDeskBackButton onClick={backFromPath} />
+      {!hideBack && <PolyDeskBackButton onClick={backFromPath} />}
 
       {step !== 'agent' && (
         <>
@@ -4154,10 +4156,12 @@ export function PolyWorldCupNewsPanel({
   onBack,
   onOpenScores,
   onOpenLpScout,
+  hideBack = false,
 }: {
   onBack: () => void
   onOpenScores: () => void
   onOpenLpScout: (prefill: LpScoutPrefill) => void
+  hideBack?: boolean
 }) {
   const [active, setActive] = useState(0)
   const [feed, setFeed] = useState<PolyWorldCupFeed | null>(null)
@@ -4222,7 +4226,7 @@ export function PolyWorldCupNewsPanel({
 
   return (
     <div className="mt-4 space-y-3">
-      <PolyDeskBackButton onClick={onBack} />
+      {!hideBack && <PolyDeskBackButton onClick={onBack} />}
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Polymarket News</p>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -5187,9 +5191,11 @@ function HashLiveScoreWidget({
 export function PolyStreamPanel({
   onBack,
   onOpenNews,
+  hideBack = false,
 }: {
   onBack: () => void
   onOpenNews: () => void
+  hideBack?: boolean
 }) {
   const { authenticated, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
@@ -5590,7 +5596,7 @@ export function PolyStreamPanel({
 
   return (
     <div className="mt-4 space-y-3">
-      <PolyDeskBackButton onClick={onBack} />
+      {!hideBack && <PolyDeskBackButton onClick={onBack} />}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">World Cup Scores</p>
         <span className={cn(
@@ -8171,7 +8177,25 @@ export function PolyPortfolioPanel({
   // ── Render ────────────────────────────────────────────────────────────
   if (unsignedPortfolioAction === 'x402') {
     return (
-      <div className="mt-4">
+      <div className="mt-4 space-y-4">
+        <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">Why x402?</p>
+              <h2 className="mt-1.5 text-base font-bold tracking-tight text-gray-950 dark:text-white">Pay only when LP Scout works for you.</h2>
+            </div>
+            <span className="shrink-0 rounded-full bg-gray-950 px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-gray-950">USDC on Arc</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+            LP Scout is a paid research agent, separate from Polymarket trading. x402 lets you approve a small USDC payment only when you request a Scout report.
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            {['Up to 0.01 USDC', 'No subscription', 'Receipt included'].map(item => (
+              <span key={item} className="rounded-2xl bg-gray-50 px-2 py-2.5 text-[10px] font-bold leading-4 text-gray-600 dark:bg-white/[0.05] dark:text-gray-300">{item}</span>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] font-medium leading-5 text-gray-400">Your portfolio and Polymarket trading do not require x402.</p>
+        </section>
         <AgentWorkspace
           embedded
           forceProfile
