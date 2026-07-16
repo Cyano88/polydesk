@@ -13,6 +13,7 @@ import {
 
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
 type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores'
+type PortfolioAction = 'watch' | 'trading' | 'external' | 'x402'
 
 function PolymarketMark({ className }: { className?: string }) {
   return (
@@ -71,11 +72,16 @@ function normalizeServiceView(value: string | null): PolyDeskServiceView {
     : ''
 }
 
+function normalizePortfolioAction(value: string | null): PortfolioAction {
+  return value === 'trading' || value === 'external' || value === 'x402' ? value : 'watch'
+}
+
 export default function PolyDesk() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeLane = normalizeLane(searchParams.get('lane'))
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
+  const portfolioAction = normalizePortfolioAction(searchParams.get('portfolio'))
   const agentRouteOpen = searchParams.get('agent') === '1'
   const lpScoutActivityId = searchParams.get('lpScoutActivity')?.trim() ?? ''
   const lpScoutReceiptId = searchParams.get('lpScoutReceipt')?.trim() ?? ''
@@ -195,6 +201,15 @@ export default function PolyDesk() {
       setAgentLane('')
     }
   }, [activeServiceView])
+
+  useEffect(() => {
+    if (activeServiceView !== 'lp-scout' || searchParams.get('lpScoutPath') !== 'fund') return
+    const next = new URLSearchParams(searchParams)
+    next.set('service', 'portfolio')
+    next.set('portfolio', 'x402')
+    next.delete('lpScoutPath')
+    setSearchParams(next, { replace: true })
+  }, [activeServiceView, searchParams, setSearchParams])
 
   function launchAgent() {
     if (!agentRouteOpen) {
@@ -337,7 +352,7 @@ export default function PolyDesk() {
                 telegramOwner={ownerKey}
                 telegramId=""
                 surface="standalone"
-                initialPortfolioAction={searchParams.get('portfolio') === 'trading' ? 'trading' : null}
+                initialPortfolioAction={portfolioAction}
                 initialTradingWalletTab={searchParams.get('wallet') === 'balance' ? 'balance' : undefined}
               />
             ) : serviceView === 'worldcup' ? (

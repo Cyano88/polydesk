@@ -5,10 +5,9 @@ import {
   x402ResourceServer,
   type HTTPAdapter,
   type HTTPRequestContext,
-  type PaymentPayload,
-  type PaymentRequirements,
   type RoutesConfig,
 } from '@okxweb3/x402-core/server'
+import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import { scoutResponse } from './x402-polymarket-scout.js'
 
@@ -165,8 +164,10 @@ async function getOkxHttpServer(req: Request) {
           resource,
           description: 'PolyDesk LP Scout report for buyer agents on OKX.AI.',
           mimeType: 'application/json',
-          serviceName: 'PolyDesk LP Scout',
-          tags: ['polymarket', 'lp-scout', 'prediction-market'],
+          extensions: {
+            serviceName: 'PolyDesk LP Scout',
+            tags: ['polymarket', 'lp-scout', 'prediction-market'],
+          },
           unpaidResponseBody: () => ({
             contentType: 'application/json',
             body: {

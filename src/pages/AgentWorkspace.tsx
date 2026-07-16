@@ -8,7 +8,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
-import { usePrivy }                     from '@privy-io/react-auth'
+import { useLinkAccount, usePrivy }     from '@privy-io/react-auth'
 import { cn }                           from '../lib/utils'
 import type { LayoutOutletContext }     from '../Layout'
 import { CHAIN_META, EVM_TREASURY }     from '../lib/chains'
@@ -435,6 +435,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const onNetworkSelect = outletContext?.onNetworkSelect ?? (() => undefined)
   const navigate = useNavigate()
   const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout: logoutPrivy, getAccessToken } = usePrivy()
+  const { linkEmail } = useLinkAccount()
   const privyEmail = emailFromPrivyUser(privyUser).trim().toLowerCase()
   const [walletEmail, setWalletEmail] = useState('')
   const params = mergedAgentRequestParams(requestParams)
@@ -2098,7 +2099,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                         }
                         if (!lpScoutX402Ready) {
                           if (!lpScoutNeedsSessionRefresh) {
-                            navigate(`${window.location.pathname}?service=lp-scout&lpScoutPath=fund`)
+                            navigate(`${window.location.pathname}?service=portfolio&portfolio=x402`)
                             return
                           }
                           setAgentWalletSessionConnected(false)
@@ -2167,7 +2168,26 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
                 </div>
               )}
 
-              {PRIVY_AUTH_ENABLED && !currentAgentWallet && !privyAuthenticated ? (
+              {PRIVY_AUTH_ENABLED && privyAuthenticated && !privyEmail ? (
+                <>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-left dark:border-amber-400/20 dark:bg-amber-400/10">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Add an email for Pocket Wallet</p>
+                    <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-200">
+                      Your external wallet is connected. Circle uses a linked email to create or recover your Arc x402 wallet.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => linkEmail()}
+                    disabled={walletBusy || !privyReady}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-6 py-3.5 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Add email
+                  </button>
+                  <p className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500">Your connected wallet remains linked to the same PolyDesk account.</p>
+                </>
+              ) : PRIVY_AUTH_ENABLED && !currentAgentWallet && !privyAuthenticated ? (
                 <>
                   <PrivyConnectButton
                     debugLabel="x402-wallet-email"

@@ -3819,7 +3819,7 @@ function TelegramX402WalletPanel({
   )
 }
 
-type LpScoutPath = '' | 'access' | 'fund'
+type LpScoutPath = 'access' | 'fund'
 type LpScoutStep = 'service' | 'agent'
 
 function PolyDeskBackButton({ onClick }: { onClick: () => void }) {
@@ -3907,7 +3907,7 @@ export function LpScoutPanel({
   onBack: () => void
 }) {
   const [searchParams] = useSearchParams()
-  const initialLpScoutPath = searchParams.get('lpScoutPath') === 'fund' ? 'fund' : ''
+  const initialLpScoutPath = searchParams.get('lpScoutPath') === 'fund' ? 'fund' : 'access'
   const [path, setPath] = useState<LpScoutPath>(initialLpScoutPath)
   const [step, setStep] = useState<LpScoutStep>('service')
   const [mode, setMode] = useState<LpScoutMode>('best')
@@ -3949,27 +3949,16 @@ export function LpScoutPanel({
     setStep('service')
   }
 
-  function startAccessFlow() {
-    setPath('access')
-    setStep('service')
-  }
-
-  function startFundingFlow() {
-    setPath('fund')
-    setStep('agent')
-  }
-
   function backFromPath() {
     if (path === 'fund') {
-      setPath('')
-      setStep('service')
+      onBack()
       return
     }
     if (step === 'agent') {
       setStep('service')
       return
     }
-    setPath('')
+    onBack()
   }
 
   function buildWalletScoutParams() {
@@ -3994,25 +3983,6 @@ export function LpScoutPanel({
       src: 'lp-scout',
       n: 'arc',
     }
-  }
-
-  if (!path) {
-    return (
-      <div className="mt-4 space-y-3">
-        <div className="space-y-2">
-          <PolyDeskMenuCard
-            title="Run LP Scout with x402"
-            body="Pay per call for live Polymarket reward, spread, depth, and risk analysis."
-            onClick={startAccessFlow}
-          />
-          <PolyDeskMenuCard
-            title="Fund x402 Pocket Wallet"
-            body="Copy your Arc wallet, fund USDC, and activate x402 before paid LP Scout calls."
-            onClick={startFundingFlow}
-          />
-        </div>
-      </div>
-    )
   }
 
   if (path === 'fund') {
@@ -6912,7 +6882,7 @@ export function PolyPortfolioPanel({
   telegramOwner?: string
   telegramId?: string
   surface?: 'telegram' | 'standalone'
-  initialPortfolioAction?: 'watch' | 'trading' | 'external' | null
+  initialPortfolioAction?: 'watch' | 'trading' | 'external' | 'x402' | null
   initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions'
 }) {
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
@@ -6983,8 +6953,7 @@ export function PolyPortfolioPanel({
   const [settingsDraft, setSettingsDraft] = useState<PolymarketAlertSettings | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [addressCopied, setAddressCopied] = useState(false)
-  const initialPortfolioActionApplied = useRef(Boolean(initialPortfolioAction))
-  const [unsignedPortfolioAction, setUnsignedPortfolioAction] = useState<'watch' | 'trading' | 'external' | null>(initialPortfolioAction)
+  const [unsignedPortfolioAction, setUnsignedPortfolioAction] = useState<'watch' | 'trading' | 'external' | 'x402' | null>(initialPortfolioAction)
   const [unsignedWatchAddress, setUnsignedWatchAddress] = useState('')
   const [unsignedExternalAddress, setUnsignedExternalAddress] = useState('')
   const [unsignedExternalAmount, setUnsignedExternalAmount] = useState('')
@@ -7085,8 +7054,7 @@ export function PolyPortfolioPanel({
   )
 
   useEffect(() => {
-    if (!initialPortfolioAction || initialPortfolioActionApplied.current) return
-    initialPortfolioActionApplied.current = true
+    if (!initialPortfolioAction) return
     setUnsignedPortfolioAction(initialPortfolioAction)
     if (initialPortfolioAction === 'trading') {
       setTradingWalletTab(initialTradingWalletTab ?? 'balance')
@@ -8200,6 +8168,23 @@ export function PolyPortfolioPanel({
   }
 
   // ── Render ────────────────────────────────────────────────────────────
+  if (unsignedPortfolioAction === 'x402') {
+    return (
+      <div className="mt-4">
+        <AgentWorkspace
+          embedded
+          forceProfile
+          requestParams={{
+            profile: 'agent',
+            walletManager: 'service',
+            src: 'portfolio',
+            n: 'arc',
+          }}
+        />
+      </div>
+    )
+  }
+
   const sessionlessExternalMode = !PRIVY_AUTH_ENABLED && unsignedPortfolioAction === 'external'
 
   if (!PRIVY_AUTH_ENABLED && !sessionlessExternalMode) {

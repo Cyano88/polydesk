@@ -22,7 +22,7 @@ const CIRCLE_CLI_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.en
 const SERVICE_SECRET = process.env.AGENT_WALLET_SERVICE_SECRET
 const DEFAULT_AGENT_SLUG = normalizeSlug(process.env.DEFAULT_AGENT_SLUG || 'polydesk-agent')
 const DEFAULT_AGENT_WALLET_ADDRESS = normalizeExpectedWallet(process.env.DEFAULT_AGENT_WALLET_ADDRESS)
-const DEFAULT_AGENT_WALLET_CHAIN = normalizeBalanceChain(process.env.DEFAULT_AGENT_WALLET_CHAIN ?? process.env.DEFAULT_AGENT_CHAIN, 'ARC-TESTNET')
+const DEFAULT_AGENT_WALLET_CHAIN = normalizeBalanceChain(process.env.DEFAULT_AGENT_WALLET_CHAIN ?? process.env.DEFAULT_AGENT_CHAIN)
 const DEFAULT_SCOUT_ORIGIN = (process.env.POLYDESK_BASE_URL ?? process.env.PUBLIC_POLYDESK_ORIGIN ?? 'https://polydesk-i96m.onrender.com').replace(/\/+$/, '')
 const DEFAULT_SCOUT_URL = `${DEFAULT_SCOUT_ORIGIN}/api/x402/polymarket-scout`
 const ALLOWED_SERVICE_URLS = new Set(
@@ -456,7 +456,7 @@ function parseEnvRegistry(): Record<string, AgentWalletRecord> {
       if (!walletAddress) continue
       registry[slug] = {
         walletAddress,
-        chain: normalizeBalanceChain(entry.chain, DEFAULT_AGENT_WALLET_CHAIN),
+        chain: normalizeBalanceChain(entry.chain),
         updatedAt: Number(entry.updatedAt) || 0,
         source: 'env',
       }

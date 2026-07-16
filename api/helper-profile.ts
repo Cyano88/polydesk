@@ -354,7 +354,7 @@ async function writeStore(store: Store) {
   }
 }
 
-function publicProfile(profile: HelperProfile | undefined) {
+function publicProfile(profile: HelperProfile | null | undefined) {
   return profile ?? null
 }
 

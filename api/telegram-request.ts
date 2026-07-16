@@ -158,7 +158,7 @@ export default async function handler(req: Request, res: Response) {
     const wallet = cleanText(body.wallet, '').slice(0, 96)
     const evmWallet = cleanText(body.evmWallet, '').slice(0, 96)
     const solanaWallet = cleanText(body.solanaWallet, '').slice(0, 96)
-    const mode = body.mode === 'group' ? 'group' : 'person'
+    const mode: TelegramRequestMode = body.mode === 'group' ? 'group' : 'person'
     const amount = cleanAmount(body.amount)
     const kind: TelegramRequestKind = body.kind === 'polymarket-funding' ? 'polymarket-funding' : 'payment-request'
     const label = cleanText(body.label, mode === 'group' ? 'Telegram collection' : 'Payment request')
