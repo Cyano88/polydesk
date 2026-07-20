@@ -85,6 +85,16 @@ function isServiceId(value: string): value is ServiceId {
   return Object.prototype.hasOwnProperty.call(services, value)
 }
 
+function responseShape(value: unknown) {
+  if (Array.isArray(value)) {
+    const first = value[0]
+    const keys = first && typeof first === 'object' ? Object.keys(first).slice(0, 20).join(',') : typeof first
+    return `array(${value.length})[${keys}]`
+  }
+  if (value && typeof value === 'object') return `object[${Object.keys(value).slice(0, 20).join(',')}]`
+  return String(value === null ? 'null' : typeof value)
+}
+
 function cleanInputs(value: unknown) {
   const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
   return Object.fromEntries(Object.entries(record).slice(0, 12).flatMap(([key, item]) => {
@@ -151,7 +161,8 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
   if (!response.ok || envelope?.code !== '0' || !paymentId) {
     const providerCode = clean(envelope?.code, 40) || `HTTP_${response.status}`
     const providerMessage = clean(envelope?.msg, 240) || 'Payment creation failed.'
-    throw new Error(`OKX payment creation failed (${providerCode}): ${providerMessage}`)
+    const shape = responseShape(envelope?.data)
+    throw new Error(`OKX payment creation failed (${providerCode}): ${providerMessage} Response shape: ${shape}.`)
   }
   const deliveries = paymentData?.deliveries
   const paymentUrl = Array.isArray(deliveries)
