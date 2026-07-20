@@ -168,10 +168,13 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
   const paymentUrl = Array.isArray(deliveries)
     ? deliveries.find(item => item.type === 'url' && /^https:\/\//i.test(item.value ?? ''))?.value
     : deliveries?.url
-  if (!paymentUrl) throw new Error('OKX created the payment but did not return a universal checkout URL.')
+  const canonicalPaymentUrl = `https://pay.okx.com/p/${encodeURIComponent(paymentId)}`
+  const universalPaymentUrl = paymentUrl && /^https:\/\/pay\.okx\.com\/p\//i.test(paymentUrl)
+    ? paymentUrl
+    : canonicalPaymentUrl
   return {
     paymentId,
-    paymentUrl,
+    paymentUrl: universalPaymentUrl,
     status: paymentData?.status || 'pending',
     createdAt: paymentData?.createdAt || paymentData?.created_at || new Date().toISOString(),
     expiresAt: paymentData?.expiresAt || paymentData?.expires_at || new Date(Date.now() + CHECKOUT_TTL_SECONDS * 1000).toISOString(),
