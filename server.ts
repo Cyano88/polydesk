@@ -1,7 +1,7 @@
 import express from 'express'
 import type { Response } from 'express'
 import { config as loadEnv } from 'dotenv'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -132,7 +132,12 @@ app.get('/api/lp-scout-report', readLimiter, lpScoutReportHandler)
 app.get('/api/x402-polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout-polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402-receipt', readLimiter, x402ReceiptHandler)
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'polydesk', ts: Date.now() }))
+app.get('/api/health', (_req, res) => res.json({
+  ok: true,
+  service: 'polydesk',
+  okxAgenticWalletReady: existsSync(join(__dirname, '.render-home', '.local', 'bin', 'onchainos')),
+  ts: Date.now(),
+}))
 
 app.use('/api', (req, res) => {
   res.status(404).json({ ok: false, error: `API route not found: ${req.method} ${req.originalUrl}` })
