@@ -154,6 +154,15 @@ CIRCLE_GATEWAY_API_BASE=
 CIRCLE_X402_RECEIPT_API_KEY=
 # or CIRCLE_GATEWAY_API_KEY=
 # or CIRCLE_API_KEY=
+
+# OKX live Agent Marketplace + per-user Agentic Wallet sessions
+OKX_PAYMENT_API_KEY=
+OKX_PAYMENT_SECRET_KEY=
+OKX_PAYMENT_PASSPHRASE=
+ONCHAINOS_BIN=/opt/render/.local/bin/onchainos
+OKX_AGENTIC_DATA_PATH=/var/data/okx-agentic-wallets
+# optional override; defaults to https://web3.okx.com
+OKX_AGENTIC_BASE_URL=
 ```
 
 Optional operational limits:
@@ -182,6 +191,8 @@ Notes:
 
 - `X402_FACILITATOR_URL` is optional unless the selected x402 network/provider gives a required facilitator endpoint.
 - `CIRCLE_GATEWAY_API_BASE` is optional for the first testnet smoke; the receipt route defaults to Circle's testnet gateway when blank.
+- Agentic Wallet sessions must use the durable per-user `OKX_AGENTIC_DATA_PATH`; never point multiple users at one shared CLI home.
+- `OKX_PAYMENT_*` can be replaced by the equivalent `OKX_API_*` or `OKX_X402_*` credential set. Keep every secret server-side.
 
 ## P1 0G Archive
 

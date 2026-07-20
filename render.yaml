@@ -3,7 +3,7 @@ services:
     name: polydesk
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && curl -fsSL https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh | sh && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     disk:
@@ -169,6 +169,10 @@ services:
         sync: false
       - key: OKX_PAYMENT_REALM
         value: polydesk.trade
+      - key: ONCHAINOS_BIN
+        value: /opt/render/.local/bin/onchainos
+      - key: OKX_AGENTIC_DATA_PATH
+        value: /var/data/okx-agentic-wallets
 
       - key: CIRCLE_GATEWAY_API_BASE
         sync: false

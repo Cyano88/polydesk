@@ -16,6 +16,7 @@ import lpScoutReportHandler from './api/lp-scout-report.js'
 import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
 import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
 import okxMarketplaceCheckoutHandler from './api/okx-marketplace-checkout.js'
+import okxAgenticMarketplaceHandler from './api/okx-agentic-marketplace.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -105,6 +106,7 @@ app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHan
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.post('/api/okx-marketplace-checkout', strictLimiter, okxMarketplaceCheckoutHandler)
+app.post('/api/okx-agentic-marketplace', strictLimiter, okxAgenticMarketplaceHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)

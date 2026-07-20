@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts scripts/agent-store-paths.test.ts",
+    "test:okx-marketplace": "node --import tsx --test scripts/okx-marketplace-security.test.ts",
     "env:check": "node scripts/validate-env.mjs",
     "smoke": "node scripts/smoke.mjs"
   },

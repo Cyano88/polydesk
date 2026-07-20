@@ -163,7 +163,7 @@ async function deleteLink(key: string): Promise<void> {
   await writeStore(store)
 }
 
-async function verifiedPrivyUser(req: Request) {
+export async function verifiedPrivyUser(req: Request) {
   const privyAppId = process.env.PRIVY_APP_ID ?? process.env.VITE_PRIVY_APP_ID
   const privyAppSecret = process.env.PRIVY_APP_SECRET
   if (!privyAppId || !privyAppSecret) {

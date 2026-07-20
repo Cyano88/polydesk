@@ -79,6 +79,19 @@ const groups = [
     ],
   },
   {
+    name: 'okx agentic marketplace',
+    alternatives: [
+      ['OKX_API_KEY', 'OKX_PAYMENT_API_KEY', 'OKX_X402_API_KEY'],
+      ['OKX_SECRET_KEY', 'OKX_PAYMENT_SECRET_KEY', 'OKX_X402_SECRET_KEY'],
+      ['OKX_PASSPHRASE', 'OKX_PAYMENT_PASSPHRASE', 'OKX_X402_PASSPHRASE'],
+    ],
+    optional: [
+      'ONCHAINOS_BIN',
+      'OKX_AGENTIC_DATA_PATH',
+      'OKX_AGENTIC_BASE_URL',
+    ],
+  },
+  {
     name: '0g archive',
     optional: [
       'OG_RPC_URL',
