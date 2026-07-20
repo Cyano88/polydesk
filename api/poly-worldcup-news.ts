@@ -302,11 +302,14 @@ export async function getPolyWorldcupNewsFeed() {
 }
 
 export default async function polyWorldcupNewsHandler(req: Request, res: Response) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET')
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
-  if (req.query.force === '1') cache = null
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+  if (req.query.force === '1' || body.force === '1') cache = null
   return res.json(await getPolyWorldcupNewsFeed())
 }

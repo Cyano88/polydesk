@@ -26,6 +26,17 @@ function clean(value: unknown, max = 120) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
+function requestValue(req: Request, ...names: string[]) {
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+  for (const name of names) {
+    const value = req.query[name] ?? body[name]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return undefined
+}
+
 function publicOrigin(req: Request) {
   const configured = clean(process.env.PUBLIC_APP_URL || process.env.VITE_PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || '', 180)
   if (configured) return configured.replace(/\/+$/, '')
@@ -91,14 +102,19 @@ function summarizePosition(position: PolymarketPosition) {
 }
 
 export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request, res: Response) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
+    return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  }
+
   try {
-    const wallet = clean(req.query.wallet || req.query.address, 64)
+    const wallet = clean(requestValue(req, 'wallet', 'address'), 64)
     if (!isAddress(wallet)) {
       return res.status(400).json({ ok: false, error: 'Provide a valid public Polymarket 0x wallet address.' })
     }
 
-    const agent = clean(req.query.agent || req.headers['x-buyer-agent'] || req.headers['x-agent-slug'] || 'external-agent', 80)
-    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 50) || 50))
+    const agent = clean(requestValue(req, 'agent') || req.headers['x-buyer-agent'] || req.headers['x-agent-slug'] || 'external-agent', 80)
+    const limit = Math.max(1, Math.min(100, Number(requestValue(req, 'limit') || 50) || 50))
     const [valueData, positionData] = await Promise.all([
       dataApiFetch<unknown>(`/value?user=${encodeURIComponent(wallet)}`),
       dataApiFetch<unknown>(`/positions?user=${encodeURIComponent(wallet)}&sizeThreshold=0&limit=${limit}`),
@@ -118,7 +134,7 @@ export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request,
       service: 'PolyDesk Polymarket Portfolio Watch',
       protocol: 'A2MCP portfolio intelligence',
       buyerAgent: agent,
-      payment: { required: false, model: 'free' },
+      payment: (req as Request & { payment?: Record<string, unknown> }).payment || { required: true, model: 'x402-fixed' },
       polymarket: {
         wallet,
         totalValue,

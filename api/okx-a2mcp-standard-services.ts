@@ -5,17 +5,50 @@ import {
   x402ResourceServer,
   type HTTPAdapter,
   type HTTPRequestContext,
+  type RouteConfig,
   type RoutesConfig,
 } from '@okxweb3/x402-core/server'
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
-import { scoutResponse } from './x402-polymarket-scout.js'
+import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
+import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
+import polyStreamHandler from './poly-stream.js'
+import polyWorldcupNewsHandler from './poly-worldcup-news.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
-const DEFAULT_PRICE = '0.3'
+const DEFAULT_STANDARD_PRICE = '0.1'
 
-let okxHttpServerPromise: Promise<x402HTTPResourceServer> | undefined
+const serviceDefinitions = {
+  '/api/a2mcp/worldcup-live-scores': {
+    name: 'World Cup Live Scores',
+    description: 'Live World Cup fixture, score, clock, status, and Polymarket market-routing feed.',
+    tags: ['world-cup', 'live-scores', 'prediction-market'],
+    deliver: polyStreamHandler,
+  },
+  '/api/a2mcp/worldcup-market-news': {
+    name: 'World Cup Market News',
+    description: 'Market-moving World Cup headlines and prediction-market context.',
+    tags: ['world-cup', 'news', 'prediction-market'],
+    deliver: polyWorldcupNewsHandler,
+  },
+  '/api/a2mcp/polymarket-portfolio-watch': {
+    name: 'Polymarket Portfolio Watch',
+    description: 'Read-only Polymarket wallet positions, value, PnL, and claimable-position intelligence.',
+    tags: ['polymarket', 'portfolio', 'monitoring'],
+    deliver: a2mcpPolymarketPortfolioWatchHandler,
+  },
+  '/api/a2mcp/polymarket-funding-link': {
+    name: 'Polymarket Funding Link',
+    description: 'Prepare a hosted checkout handoff for funding a public Polymarket wallet.',
+    tags: ['polymarket', 'funding', 'checkout'],
+    deliver: a2mcpPolymarketFundingLinkHandler,
+  },
+} as const
+
+type StandardServicePath = keyof typeof serviceDefinitions
+
+let standardServicesServerPromise: Promise<x402HTTPResourceServer> | undefined
 
 function clean(value: unknown) {
   return String(value ?? '').trim()
@@ -79,8 +112,18 @@ function adapterForRequest(req: Request): HTTPAdapter {
 }
 
 function decimalUsdtToAtomic(amount: number) {
-  if (!Number.isFinite(amount) || amount < 0) throw new Error(`Invalid OKX x402 price: ${amount}`)
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error(`Invalid OKX x402 standard-service price: ${amount}`)
   return String(Math.round(amount * 1_000_000))
+}
+
+function normalizeSupportedResponse(value: unknown) {
+  const raw = value as { kinds?: unknown; extensions?: unknown; signers?: unknown } | unknown[]
+  if (Array.isArray(raw)) return { kinds: raw, extensions: [], signers: {} }
+  return {
+    kinds: Array.isArray(raw?.kinds) ? raw.kinds : [],
+    extensions: Array.isArray(raw?.extensions) ? raw.extensions : [],
+    signers: raw?.signers && typeof raw.signers === 'object' ? raw.signers as Record<string, string[]> : {},
+  }
 }
 
 function payerFromPayload(paymentPayload: PaymentPayload) {
@@ -90,20 +133,57 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
   return clean(authorization?.from || permit2?.from || permit2?.owner || 'okx-buyer')
 }
 
-function normalizeSupportedResponse(value: unknown) {
-  const raw = value as { kinds?: unknown; extensions?: unknown; signers?: unknown } | unknown[]
-  if (Array.isArray(raw)) return { kinds: raw, extensions: [], signers: {} }
-  const kinds = Array.isArray(raw?.kinds) ? raw.kinds : []
+function routeConfig(req: Request, path: StandardServicePath, price: string, payTo: string): RouteConfig {
+  const service = serviceDefinitions[path]
   return {
-    kinds,
-    extensions: Array.isArray(raw?.extensions) ? raw.extensions : [],
-    signers: raw?.signers && typeof raw.signers === 'object' ? raw.signers as Record<string, string[]> : {},
+    accepts: {
+      scheme: 'exact',
+      network: OKX_XLAYER_NETWORK,
+      payTo,
+      price: {
+        amount: decimalUsdtToAtomic(Number(price)),
+        asset: OKX_XLAYER_USDT,
+        extra: {
+          assetTransferMethod: 'permit2',
+          tokenSymbol: 'USDT',
+          decimals: 6,
+          name: 'USDT',
+          version: '1',
+        },
+      },
+      maxTimeoutSeconds: 600,
+      extra: {
+        assetTransferMethod: 'permit2',
+        tokenSymbol: 'USDT',
+        decimals: 6,
+        name: 'USDT',
+        version: '1',
+      },
+    },
+    resource: `${publicOrigin(req)}${path}`,
+    description: service.description,
+    mimeType: 'application/json',
+    extensions: {
+      serviceName: service.name,
+      tags: service.tags,
+    },
+    unpaidResponseBody: () => ({
+      contentType: 'application/json',
+      body: {
+        ok: false,
+        error: 'payment_required',
+        service: service.name,
+        protocol: 'OKX Agent Payments Protocol',
+        payment: { network: 'X Layer', asset: 'USDT', amount: price },
+        message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the request with the payment header.',
+      },
+    }),
   }
 }
 
-async function getOkxHttpServer(req: Request) {
-  if (!okxHttpServerPromise) {
-    okxHttpServerPromise = (async () => {
+async function getStandardServicesServer(req: Request) {
+  if (!standardServicesServerPromise) {
+    standardServicesServerPromise = (async () => {
       const apiKey = env('OKX_X402_API_KEY', 'OKX_API_KEY')
       const secretKey = env('OKX_X402_SECRET_KEY', 'OKX_SECRET_KEY')
       const passphrase = env('OKX_X402_PASSPHRASE', 'OKX_PASSPHRASE')
@@ -120,83 +200,35 @@ async function getOkxHttpServer(req: Request) {
         syncSettle: env('OKX_X402_SYNC_SETTLE') === 'true',
       })
       const supported = normalizeSupportedResponse(await facilitator.getSupported())
-      if (!supported.kinds.length) {
-        throw new Error('OKX facilitator returned no supported x402 payment kinds. Check that the Render OKX API key has Payment API access.')
-      }
-      const facilitatorWithNormalizedSupported = {
+      if (!supported.kinds.length) throw new Error('OKX facilitator returned no supported x402 payment kinds.')
+
+      const resourceServer = new x402ResourceServer({
         verify: facilitator.verify.bind(facilitator),
         settle: facilitator.settle.bind(facilitator),
         getSettleStatus: facilitator.getSettleStatus.bind(facilitator),
         getSupported: async () => supported,
-      }
-
-      const resourceServer = new x402ResourceServer(facilitatorWithNormalizedSupported)
+      })
       registerExactEvmScheme(resourceServer)
 
       const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
       if (!payTo) throw new Error('OKX_X402_PAY_TO is required for OKX A2MCP x402 settlement')
-      const price = env('OKX_X402_POLYMARKET_LP_SCOUT_PRICE') || DEFAULT_PRICE
-      const resource = `${publicOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`
-      const routes: RoutesConfig = {
-        'GET /api/a2mcp/okx/polymarket-lp-scout': {
-          accepts: {
-            scheme: 'exact',
-            network: OKX_XLAYER_NETWORK,
-            payTo,
-            price: {
-              amount: decimalUsdtToAtomic(Number(price)),
-              asset: OKX_XLAYER_USDT,
-              extra: {
-                assetTransferMethod: 'permit2',
-                tokenSymbol: 'USDT',
-                decimals: 6,
-                name: 'USDT',
-                version: '1',
-              },
-            },
-            maxTimeoutSeconds: 600,
-            extra: {
-              assetTransferMethod: 'permit2',
-              tokenSymbol: 'USDT',
-              decimals: 6,
-              name: 'USDT',
-              version: '1',
-            },
-          },
-          resource,
-          description: 'PolyDesk LP Scout report for buyer agents on OKX.AI.',
-          mimeType: 'application/json',
-          extensions: {
-            serviceName: 'PolyDesk LP Scout',
-            tags: ['polymarket', 'lp-scout', 'prediction-market'],
-          },
-          unpaidResponseBody: () => ({
-            contentType: 'application/json',
-            body: {
-              ok: false,
-              error: 'payment_required',
-              service: 'PolyDesk LP Scout',
-              protocol: 'OKX Agent Payments Protocol',
-              payment: {
-                network: 'X Layer',
-                asset: 'USDT',
-                amount: price,
-              },
-              message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the same request with the payment header.',
-            },
-          }),
-        },
+      const price = env('OKX_X402_STANDARD_SERVICE_PRICE') || DEFAULT_STANDARD_PRICE
+      const routes: RoutesConfig = {}
+      for (const path of Object.keys(serviceDefinitions) as StandardServicePath[]) {
+        const config = routeConfig(req, path, price, payTo)
+        routes[`GET ${path}`] = config
+        routes[`POST ${path}`] = config
       }
 
       const httpServer = new x402HTTPResourceServer(resourceServer, routes)
       await httpServer.initialize()
       return httpServer
     })().catch(err => {
-      okxHttpServerPromise = undefined
+      standardServicesServerPromise = undefined
       throw err
     })
   }
-  return okxHttpServerPromise
+  return standardServicesServerPromise
 }
 
 function sendInstructions(res: Response, response: { status: number; headers: Record<string, string>; body?: unknown }) {
@@ -204,14 +236,21 @@ function sendInstructions(res: Response, response: { status: number; headers: Re
   return res.status(response.status).send(response.body)
 }
 
-export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res: Response) {
-  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
+export default async function okxA2mcpStandardServiceHandler(req: Request, res: Response) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
+    return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  }
+
+  const path = routePath(req) as StandardServicePath
+  const service = serviceDefinitions[path]
+  if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
+
   try {
-    const httpServer = await getOkxHttpServer(req)
-    const adapter = adapterForRequest(req)
+    const httpServer = await getStandardServicesServer(req)
     const context: HTTPRequestContext = {
-      adapter,
-      path: routePath(req),
+      adapter: adapterForRequest(req),
+      path,
       method: req.method,
     }
     const paymentResult = await httpServer.processHTTPRequest(context)
@@ -228,36 +267,22 @@ export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res
     )
     if (!settlement.success) return sendInstructions(res, settlement.response)
 
-    const paymentRequirements = paymentResult.paymentRequirements as PaymentRequirements
-    const paidReq = req as Request & {
-      payment?: {
-        verified: boolean
-        payer: string
-        amount: string
-        network: string
-        transaction?: string
-        asset?: string
-        provider?: string
-        kind?: 'okx_agent_payments_x402'
-        seller?: string
-        serviceUrl?: string
-      }
-    }
+    const requirements = paymentResult.paymentRequirements as PaymentRequirements
+    const paidReq = req as Request & { payment?: Record<string, unknown> }
     paidReq.payment = {
       verified: true,
       payer: settlement.payer || payerFromPayload(paymentResult.paymentPayload),
-      amount: settlement.amount || paymentRequirements.amount,
+      amount: settlement.amount || requirements.amount,
       network: 'X Layer',
       transaction: settlement.transaction,
       asset: 'USDT',
       provider: 'OKX Agent Payments Protocol',
       kind: 'okx_agent_payments_x402',
-      seller: paymentRequirements.payTo,
-      serviceUrl: '/api/a2mcp/okx/polymarket-lp-scout',
+      seller: requirements.payTo,
+      serviceUrl: path,
     }
-
     for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
-    return res.json(await scoutResponse(paidReq))
+    return service.deliver(paidReq, res)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'OKX A2MCP x402 route unavailable'
     const status = /OKX_X402_|OKX API|private key|RPC/i.test(message) ? 503 : 500

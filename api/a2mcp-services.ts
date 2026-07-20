@@ -122,9 +122,9 @@ const services: PolyDeskAgentService[] = [
     description: 'Agent-readable World Cup fixture, score, clock, status, and Polymarket market-routing feed.',
     category: 'sports-data',
     endpoint: '/api/a2mcp/worldcup-live-scores',
-    method: 'GET',
-    pricing: { model: 'free', amount: '0', asset: 'USDC' },
-    payment: { required: false, standard: 'none' },
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
     output: [
       'match status and score',
       'clock and kickoff context',
@@ -138,9 +138,9 @@ const services: PolyDeskAgentService[] = [
     description: 'Create a Hash PayLink hosted checkout that funds a public Polymarket wallet through the Polymarket bridge with USDC.',
     category: 'funding',
     endpoint: '/api/a2mcp/polymarket-funding-link',
-    method: 'GET',
-    pricing: { model: 'free', amount: '0', asset: 'USDC' },
-    payment: { required: false, standard: 'none' },
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
     request: {
       query: [
         { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to fund.' },
@@ -176,9 +176,9 @@ const services: PolyDeskAgentService[] = [
     description: 'Read-only public-wallet monitoring for Polymarket portfolio value, open positions, PnL, and claimable positions.',
     category: 'portfolio',
     endpoint: '/api/a2mcp/polymarket-portfolio-watch',
-    method: 'GET',
-    pricing: { model: 'free', amount: '0', asset: 'USDC' },
-    payment: { required: false, standard: 'none' },
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
     request: {
       query: [
         { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to monitor.' },
@@ -213,9 +213,9 @@ const services: PolyDeskAgentService[] = [
     description: 'Market-moving World Cup headlines and tags for agents building prediction-market context.',
     category: 'market-intelligence',
     endpoint: '/api/a2mcp/worldcup-market-news',
-    method: 'GET',
-    pricing: { model: 'free', amount: '0', asset: 'USDC' },
-    payment: { required: false, standard: 'none' },
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
     output: [
       'headline and description',
       'source and published time',
@@ -235,7 +235,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     provider: 'PolyDesk',
     protocol: 'A2MCP-ready x402 services',
     description: 'Prediction-market intelligence, World Cup live context, and paid Polymarket LP Scout services for buyer agents.',
-    baseUrl: 'https://polydesk-i96m.onrender.com',
+    baseUrl: String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, ''),
     agentEconomyPositioning: 'Other agents can pay per call, receive a receipt-backed LP Scout report, and compose or resell the intelligence with proof links intact.',
     services,
   })

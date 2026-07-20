@@ -63,6 +63,22 @@ const groups = [
     ],
   },
   {
+    name: 'okx ai lp scout',
+    required: [
+      'PUBLIC_APP_URL',
+      'OKX_X402_API_KEY',
+      'OKX_X402_SECRET_KEY',
+      'OKX_X402_PASSPHRASE',
+      'OKX_X402_PAY_TO',
+      'OKX_X402_POLYMARKET_LP_SCOUT_PRICE',
+      'OKX_X402_STANDARD_SERVICE_PRICE',
+    ],
+    optional: [
+      'OKX_X402_BASE_URL',
+      'OKX_X402_SYNC_SETTLE',
+    ],
+  },
+  {
     name: '0g archive',
     optional: [
       'OG_RPC_URL',

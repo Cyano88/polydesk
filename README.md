@@ -79,3 +79,4 @@ Hash PayLink remains the system of record for:
 - `docs/phased-plan.md` - extraction phases and acceptance gates
 - `docs/phase1-shell.md` - standalone shell verification notes
 - `docs/api-surface.md` - backend route, source file, env, and migration checklist
+- `docs/okx-ai-asp-profile.md` - prepared OKX.AI ASP listing, endpoint, and launch checks

@@ -24,6 +24,17 @@ function cleanAmount(value: unknown) {
   return raw
 }
 
+function requestValue(req: Request, ...names: string[]) {
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+  for (const name of names) {
+    const value = req.query[name] ?? body[name]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return undefined
+}
+
 function networkLabel(network: BridgeNetwork) {
   if (network === 'arbitrum') return 'Arbitrum'
   if (network === 'solana') return 'Solana'
@@ -55,17 +66,17 @@ function buildPolymarketFundingCheckout(input: {
 }
 
 export default async function a2mcpPolymarketFundingLinkHandler(req: Request, res: Response) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET')
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
   try {
-    const polymarketWallet = cleanText(req.query.wallet ?? req.query.polymarketWallet ?? req.query.pmw, 64)
-    const amount = cleanAmount(req.query.amount ?? req.query.a)
-    const network = cleanNetwork(req.query.network ?? req.query.n)
-    const fundingLabel = cleanText(req.query.label ?? req.query.funding, 80) || 'External Polymarket account'
-    const buyerAgent = cleanText(req.query.agent ?? req.headers['x-buyer-agent'] ?? req.headers['x-agent-slug'], 64) || 'external-agent'
+    const polymarketWallet = cleanText(requestValue(req, 'wallet', 'polymarketWallet', 'pmw'), 64)
+    const amount = cleanAmount(requestValue(req, 'amount', 'a'))
+    const network = cleanNetwork(requestValue(req, 'network', 'n'))
+    const fundingLabel = cleanText(requestValue(req, 'label', 'funding'), 80) || 'External Polymarket account'
+    const buyerAgent = cleanText(requestValue(req, 'agent') ?? req.headers['x-buyer-agent'] ?? req.headers['x-agent-slug'], 64) || 'external-agent'
     const minimumUsdc = minimumUsdcFor(network)
     const amountNumber = Number(amount)
 

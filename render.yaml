@@ -15,6 +15,8 @@ services:
         value: "20"
       - key: PORT
         value: "3000"
+      - key: PUBLIC_APP_URL
+        value: https://polydesk.trade
       - key: DATA_PATH
         value: /var/data
       - key: AGENT_ACTIVITY_STORE
@@ -143,14 +145,22 @@ services:
       - key: X402_POLYMARKET_SCOUT_URL
         sync: false
 
-      - key: OKX_X402_FACILITATOR_PRIVATE_KEY
+      - key: OKX_X402_API_KEY
+        sync: false
+      - key: OKX_X402_SECRET_KEY
+        sync: false
+      - key: OKX_X402_PASSPHRASE
         sync: false
       - key: OKX_X402_PAY_TO
         sync: false
-      - key: OKX_XLAYER_RPC_URL
+      - key: OKX_X402_BASE_URL
         sync: false
+      - key: OKX_X402_SYNC_SETTLE
+        value: "false"
       - key: OKX_X402_POLYMARKET_LP_SCOUT_PRICE
-        value: "0.01"
+        value: "0.3"
+      - key: OKX_X402_STANDARD_SERVICE_PRICE
+        value: "0.1"
 
       - key: CIRCLE_GATEWAY_API_BASE
         sync: false

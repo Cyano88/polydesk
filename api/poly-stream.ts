@@ -105,7 +105,11 @@ function normalizeDateKey(value: unknown) {
 }
 
 function requestDate(req: Request) {
-  const value = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+  const queryValue = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date
+  const value = queryValue ?? body.date
   return normalizeDateKey(value) || todayKey()
 }
 
@@ -1403,11 +1407,15 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
 }
 
 export default async function polyStreamHandler(req: Request, res: Response) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET')
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
   const feed = await getPolyStreamFeed(requestDate(req))
-  return res.json(req.query.debug === '1' ? feed : { ...feed, providerError: undefined })
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+  const debug = req.query.debug === '1' || body.debug === '1'
+  return res.json(debug ? feed : { ...feed, providerError: undefined })
 }

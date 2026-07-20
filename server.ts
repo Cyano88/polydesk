@@ -9,13 +9,12 @@ import agentAskHandler from './api/agent-ask.js'
 import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
 import agentWalletHandler from './api/agent-wallet.js'
-import a2mcpPolymarketFundingLinkHandler from './api/a2mcp-polymarket-funding-link.js'
-import a2mcpPolymarketPortfolioWatchHandler from './api/a2mcp-polymarket-portfolio-watch.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
 import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
+import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -104,8 +103,8 @@ app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRela
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
-app.get('/api/a2mcp/polymarket-funding-link', strictLimiter, a2mcpPolymarketFundingLinkHandler)
-app.get('/api/a2mcp/polymarket-portfolio-watch', readLimiter, a2mcpPolymarketPortfolioWatchHandler)
+app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
+app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)
@@ -120,8 +119,8 @@ app.post('/api/solana-balance', readLimiter, solanaBalanceHandler)
 app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/a2mcp/polymarket-lp-scout', strictLimiter, x402PolymarketScoutHandler)
 app.get('/api/a2mcp/okx/polymarket-lp-scout', strictLimiter, okxA2mcpPolymarketLpScoutHandler)
-app.get('/api/a2mcp/worldcup-live-scores', readLimiter, polyStreamHandler)
-app.get('/api/a2mcp/worldcup-market-news', readLimiter, polyWorldcupNewsHandler)
+app.all('/api/a2mcp/worldcup-live-scores', strictLimiter, okxA2mcpStandardServiceHandler)
+app.all('/api/a2mcp/worldcup-market-news', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
