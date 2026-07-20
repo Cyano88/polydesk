@@ -14,7 +14,7 @@ const OKX_BASE_URL = (process.env.OKX_AGENTIC_BASE_URL || 'https://web3.okx.com'
 type CliEnvelope = { ok?: boolean; error?: string; data?: Record<string, unknown> | unknown[] }
 
 function cliBinary() {
-  if (process.env.ONCHAINOS_BIN?.trim()) return process.env.ONCHAINOS_BIN.trim()
+  if (process.env.ONCHAINOS_BIN?.trim()) return resolve(process.env.ONCHAINOS_BIN.trim())
   return process.platform === 'win32' ? 'onchainos.exe' : join(process.env.HOME || '/opt/render', '.local', 'bin', 'onchainos')
 }
 
