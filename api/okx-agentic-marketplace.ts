@@ -107,7 +107,7 @@ export default async function okxAgenticMarketplaceHandler(req: Request, res: Re
     const action = text(req.body?.action, 40)
 
     if (action === 'status') {
-      const data = await runForUser(claims.userId, ['wallet', 'status'])
+      const data = await runForUser(claims.userId, ['wallet', 'status'], 12_000)
       return res.json({ ok: true, wallet: data })
     }
     if (action === 'login-init') {
