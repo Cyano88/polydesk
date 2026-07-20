@@ -157,6 +157,30 @@ function PolyDeskLaunchGate({
   )
 }
 
+function PolyDeskRestoringScreen({ theme }: { theme: 'light' | 'dark' }) {
+  return (
+    <main className="flex min-h-[100dvh] flex-col bg-[#f7f7f9] text-gray-950 dark:bg-[#111113] dark:text-white" aria-busy="true" aria-live="polite">
+      <header className="mx-auto flex w-full max-w-5xl items-center px-5 py-4 sm:px-6">
+        <span className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
+          <PolymarketMark className="h-5 w-5" /> PolyDesk
+        </span>
+      </header>
+      <section className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center px-6 pb-20 text-center">
+        <span className="relative grid h-16 w-16 place-items-center rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.05]">
+          <span className="absolute inset-0 animate-ping rounded-2xl border border-gray-300 opacity-30 dark:border-white/20" />
+          <PolymarketMark className="h-7 w-7" />
+        </span>
+        <h1 className="mt-6 text-xl font-black tracking-tight">Restoring your desk</h1>
+        <p className="mt-2 text-xs leading-5 text-gray-400 dark:text-gray-500">Loading your session, wallet and workspace.</p>
+        <div className="mt-7 w-full max-w-[220px] overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
+          <span className="block h-1 w-1/2 animate-pulse rounded-full bg-gray-900 dark:bg-white" />
+        </div>
+        <span className="sr-only">PolyDesk is restoring in {theme} mode.</span>
+      </section>
+    </main>
+  )
+}
+
 type UtilityItem = {
   id: string
   label: string
@@ -191,7 +215,7 @@ function WorkspaceUtilityPill({ label, items }: { label: string; items: UtilityI
 function PolyDeskWorkspace() {
   const [searchParams] = useSearchParams()
   const { authenticated, logout, ready, user } = usePrivy()
-  const { wallets } = useWallets()
+  const { wallets, ready: walletsReady } = useWallets()
   const [accountOpen, setAccountOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -249,10 +273,14 @@ function PolyDeskWorkspace() {
     { id: 'marketplace', label: 'Marketplace', icon: Store, to: makeTo('marketplace'), active: service === 'marketplace' },
   ]
 
-  if (!ready || !authenticated) {
+  if (!ready || (authenticated && !walletsReady)) {
+    return <PolyDeskRestoringScreen theme={theme} />
+  }
+
+  if (!authenticated) {
     return (
       <PolyDeskLaunchGate
-        ready={ready}
+        ready
         theme={theme}
         onToggleTheme={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
       />

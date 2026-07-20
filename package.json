@@ -17,6 +17,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts scripts/agent-store-paths.test.ts",
     "test:okx-marketplace": "node --import tsx --test scripts/okx-marketplace-security.test.ts",
+    "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
     "smoke:okx-public-marketplace": "node --import tsx --test scripts/okx-public-marketplace-smoke.test.ts",
     "env:check": "node scripts/validate-env.mjs",
     "smoke": "node scripts/smoke.mjs"

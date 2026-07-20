@@ -1,276 +1,78 @@
-import { useEffect, useState } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
-import { ArrowRight, ChevronLeft, Copy, ExternalLink, Loader2, Search, Wallet, X } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { ArrowUpRight, Check, ChevronLeft, Compass, LockKeyhole, Search } from 'lucide-react'
 
-type Json = Record<string, unknown>
-type Agent = { id: string; name: string; avatar: string; rating: string; minPrice: string; topService: string; raw: Json }
-type Service = { id: string; agentId: string; name: string; type: string; fee: string; endpoint: string; description: string; method: string; raw: Json }
-type QuoteChoice = { index: number; amount: string; token: string; network: string; payTo: string; raw: Json }
+const OKX_MARKETPLACE_URL = 'https://www.okx.ai/agents'
 
-function record(value: unknown): Json | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Json : undefined
-}
-
-function value(item: Json | undefined, ...keys: string[]) {
-  for (const key of keys) {
-    const next = item?.[key]
-    if (typeof next === 'string' || typeof next === 'number') return String(next)
-  }
-  return ''
-}
-
-function deepValue(root: unknown, ...keys: string[]) {
-  const queue = [root]
-  const seen = new Set<unknown>()
-  while (queue.length) {
-    const next = queue.shift()
-    if (!next || typeof next !== 'object' || seen.has(next)) continue
-    seen.add(next)
-    const item = record(next)
-    if (item) {
-      const found = value(item, ...keys)
-      if (found) return found
-      queue.push(...Object.values(item))
-    } else if (Array.isArray(next)) queue.push(...next)
-  }
-  return ''
-}
-
-function nestedArray(root: unknown, keys: string[]) {
-  const item = record(root)
-  for (const key of keys) if (Array.isArray(item?.[key])) return item[key] as unknown[]
-  const data = record(item?.data)
-  for (const key of keys) if (Array.isArray(data?.[key])) return data[key] as unknown[]
-  return Array.isArray(root) ? root : []
-}
-
-function agentsFrom(root: unknown): Agent[] {
-  return nestedArray(root, ['list', 'agents', 'items']).flatMap((entry, index) => {
-    const item = record(entry)
-    if (!item) return []
-    const cells = Array.isArray(item.cells) ? item.cells.map(String) : []
-    const id = value(item, 'agentId', 'id') || cells[0]?.replace(/^#/, '') || String(index + 1)
-    return [{
-      id: id.replace(/^#/, ''),
-      name: value(item, 'name', 'agentName') || cells[1] || `Agent #${id}`,
-      avatar: value(item, 'avatar', 'picture', 'profilePicture', 'logo'),
-      rating: value(item, 'ratingStars', 'feedbackRate', 'rating') || cells[2] || 'No rating yet',
-      minPrice: value(item, 'minPrice', 'fee') || cells[3] || '—',
-      topService: value(item, 'topService', 'serviceName') || cells[4] || 'Open services',
-      raw: item,
-    }]
-  })
-}
-
-function servicesFrom(root: unknown, agentId: string): Service[] {
-  return nestedArray(root, ['services', 'list', 'items']).flatMap((entry, index) => {
-    const item = record(entry)
-    if (!item) return []
-    const cells = Array.isArray(item.cells) ? item.cells.map(String) : []
-    const endpoint = value(item, 'endpoint', 'url') || cells[4] || ''
-    return [{
-      id: (value(item, 'id', 'serviceId') || cells[0] || `${agentId}-${index}`).replace(/^#/, ''),
-      agentId,
-      name: value(item, 'serviceName', 'name') || cells[1] || `Service ${index + 1}`,
-      type: value(item, 'serviceType', 'type') || cells[2] || 'API service',
-      fee: value(item, 'fee', 'price') || cells[3] || 'free',
-      endpoint: endpoint.replace(/^`|`$/g, ''),
-      description: value(item, 'serviceDescription', 'description') || cells[5] || 'Agent service',
-      method: (value(item, 'method') || 'GET').toUpperCase(),
-      raw: item,
-    }]
-  })
-}
-
-function quoteChoices(root: unknown): QuoteChoice[] {
-  const quote = record(root)
-  const candidates = nestedArray(quote, ['candidates', 'alternatives', 'accepts'])
-  return candidates.flatMap((entry, index) => {
-    const item = record(entry)
-    if (!item) return []
-    return [{
-      index: Number(item.acceptsIndex ?? item.index ?? index),
-      amount: deepValue(item, 'amountDisplay', 'displayAmount', 'amount', 'maxAmountRequired'),
-      token: deepValue(item, 'symbol', 'token', 'asset', 'currency'),
-      network: deepValue(item, 'networkLabel', 'network', 'chainId'),
-      payTo: deepValue(item, 'payTo', 'recipient'),
-      raw: item,
-    }]
-  })
-}
-
-async function api(token: string, body: Json) {
-  const response = await fetch('/api/okx-agentic-marketplace', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await response.json().catch(() => null) as Json | null
-  if (!response.ok || data?.ok !== true) throw new Error(value(data ?? undefined, 'error') || 'OKX marketplace request failed.')
-  return data
-}
+const steps = [
+  {
+    icon: Search,
+    title: 'Browse services',
+    body: 'See what each AI agent can do in one place.',
+  },
+  {
+    icon: Compass,
+    title: 'Compare clearly',
+    body: 'Check the service details, price and agent reputation.',
+  },
+  {
+    icon: LockKeyhole,
+    title: 'Approve on OKX',
+    body: 'Review the payment in your OKX wallet before anything is charged.',
+  },
+]
 
 export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
-  const { authenticated, getAccessToken } = usePrivy()
-  const [walletReady, setWalletReady] = useState(false)
-  const [walletChecked, setWalletChecked] = useState(false)
-  const [login, setLogin] = useState<{ sessionId: string; url: string } | null>(null)
-  const [loginForCheckout, setLoginForCheckout] = useState(false)
-  const [query, setQuery] = useState('API services')
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [total, setTotal] = useState(0)
-  const [catalogLimited, setCatalogLimited] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [services, setServices] = useState<Service[]>([])
-  const [serviceError, setServiceError] = useState('')
-  const [selected, setSelected] = useState<Service | null>(null)
-  const [paramsText, setParamsText] = useState('{}')
-  const [quote, setQuote] = useState<Json | null>(null)
-  const [choice, setChoice] = useState<QuoteChoice | null>(null)
-  const [result, setResult] = useState<unknown>(null)
-  const [busy, setBusy] = useState('')
-  const [notice, setNotice] = useState('')
-  const [copied, setCopied] = useState(false)
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 transition hover:text-gray-900 dark:hover:text-white">
+        <ChevronLeft className="h-4 w-4" /> Service Hub
+      </button>
 
-  async function withToken(body: Json) {
-    const token = await getAccessToken()
-    if (!token) throw new Error('Sign in to PolyDesk first.')
-    return api(token, body)
-  }
+      <section className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="px-5 py-7 sm:px-8 sm:py-9">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-gray-950 text-[9px] tracking-normal text-white dark:bg-white dark:text-gray-950">OKX</span>
+            Agent services
+          </div>
 
-  useEffect(() => {
-    if (!authenticated) { setWalletChecked(true); return }
-    setWalletChecked(false)
-    void withToken({ action: 'status' }).then(data => {
-      const wallet = record(data.wallet)
-      setWalletReady(wallet?.loggedIn === true)
-    }).catch(() => setWalletReady(false)).finally(() => setWalletChecked(true))
-  }, [authenticated]) // eslint-disable-line react-hooks/exhaustive-deps
+          <h1 className="mt-6 max-w-xl text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white sm:text-4xl">
+            Find the right AI service on OKX
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">
+            OKX has a growing marketplace for useful AI services. Browse the latest listings there, compare what they offer and choose only when the service feels right for you.
+          </p>
 
-  useEffect(() => {
-    if (authenticated && walletChecked) void search()
-  }, [authenticated, walletChecked]) // eslint-disable-line react-hooks/exhaustive-deps
+          <a
+            href={OKX_MARKETPLACE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+          >
+            Explore services on OKX <ArrowUpRight className="h-4 w-4" />
+          </a>
+          <p className="mt-3 text-[10px] leading-4 text-gray-400">Opens the official OKX marketplace in a new tab.</p>
+        </div>
 
-  async function beginLogin(forCheckout = false) {
-    const left = Math.max(0, window.screenX + (window.outerWidth - 480) / 2)
-    const top = Math.max(0, window.screenY + (window.outerHeight - 720) / 2)
-    const loginWindow = window.open('about:blank', 'okx-agentic-wallet', `popup=yes,width=480,height=720,left=${left},top=${top}`)
-    if (loginWindow) {
-      loginWindow.opener = null
-      loginWindow.document.title = 'OKX verification'
-      loginWindow.document.body.innerHTML = '<p style="font:600 14px system-ui;padding:24px;color:#111">Opening secure OKX verification…</p>'
-    }
-    setLoginForCheckout(forCheckout)
-    setBusy('login'); setNotice('Preparing OKX sign-in…')
-    try {
-      const data = await withToken({ action: 'login-init' })
-      const payload = record(data.login)
-      const url = value(payload, 'loginUrl')
-      const sessionId = value(payload, 'authSessionId')
-      if (!url || !sessionId) throw new Error('OKX did not return a login session.')
-      setLogin({ url, sessionId })
-      if (loginWindow) loginWindow.location.replace(url)
-      else window.open(url, 'okx-agentic-wallet', 'popup=yes,width=480,height=720,noopener=yes,noreferrer=yes')
-      setNotice('Complete the short OKX check. PolyDesk will connect automatically.')
-      await pollLogin(sessionId, forCheckout)
-    } catch (error) {
-      loginWindow?.close()
-      setNotice(error instanceof Error ? error.message : 'OKX login failed.')
-      setBusy('')
-    }
-  }
-
-  async function pollLogin(sessionId: string, continueCheckout = loginForCheckout) {
-    setBusy('poll')
-    try {
-      await withToken({ action: 'login-poll', sessionId })
-      setWalletReady(true); setLogin(null); setNotice(continueCheckout ? 'Wallet connected. Preparing the exact payment terms…' : 'OKX Agentic Wallet connected.')
-      if (continueCheckout) await createQuote()
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Login is not complete yet. Open OKX sign-in and retry.') } finally { setBusy('') }
-  }
-
-  async function search() {
-    if (!query.trim()) return
-    setBusy('search'); setNotice('Searching the live OKX agent registry…'); setSelectedAgent(null); setServices([])
-    try {
-      const data = await withToken({ action: 'search', query: query.trim() })
-      const catalog = data.catalog
-      const next = agentsFrom(catalog)
-      setAgents(next)
-      setTotal(Number(record(catalog)?.total ?? next.length))
-      setCatalogLimited(record(catalog)?.limited === true)
-      setNotice(next.length ? '' : `No OKX agents matched “${query.trim()}”. Try a broader search.`)
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Marketplace search failed.') } finally { setBusy('') }
-  }
-
-  async function openAgent(agent: Agent) {
-    setSelectedAgent(agent); setServices([]); setServiceError(''); setSelected(null); setBusy('services'); setNotice('')
-    try {
-      const data = await withToken({ action: 'services', agentId: agent.id })
-      const next = servicesFrom(data.services, agent.id)
-      setServices(next)
-    } catch (error) { setServiceError(error instanceof Error ? error.message : 'Could not load services.') } finally { setBusy('') }
-  }
-
-  function parseParams() {
-    const parsed = JSON.parse(paramsText || '{}')
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Service inputs must be a JSON object.')
-    return parsed as Json
-  }
-
-  async function createQuote() {
-    if (!selected) return
-    setBusy('quote'); setNotice('Probing the service and preparing exact OKX payment terms…'); setQuote(null); setChoice(null); setResult(null)
-    try {
-      const data = await withToken({ action: 'quote', agentId: selected.agentId, serviceId: selected.id, endpoint: selected.endpoint, method: selected.method, params: parseParams() })
-      const root = record(data.quote) ?? {}
-      const choices = quoteChoices(root)
-      const recommended = choices.find(item => record(item.raw)?.recommended === true) ?? choices[0]
-      if (!value(root, 'paymentId') || !recommended || !recommended.amount || !recommended.token || !recommended.network || !recommended.payTo || !Number.isInteger(recommended.index)) {
-        throw new Error('This endpoint did not return complete, conformant OKX payment terms. No payment was submitted.')
-      }
-      setQuote(root); setChoice(recommended); setNotice('Review the exact terms below. Payment happens only when you approve.')
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not create payment quote.') } finally { setBusy('') }
-  }
-
-  async function pay() {
-    if (!quote || !choice) return
-    setBusy('pay'); setNotice('OKX Agentic Wallet is signing in the TEE, replaying the request, and capturing the deliverable…')
-    try {
-      const data = await withToken({ action: 'pay', approved: true, paymentId: value(quote, 'paymentId'), selectedIndex: choice.index, params: parseParams() })
-      setResult(data.purchase); setNotice('Payment completed and the service deliverable was returned.')
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Payment failed.') } finally { setBusy('') }
-  }
-
-  return <div className="mx-auto w-full max-w-5xl">
-    <button type="button" onClick={onBack} className="mb-6 inline-flex items-center gap-1.5 text-xs font-bold text-gray-500"><ChevronLeft className="h-4 w-4" /> Service Hub</button>
-    <section className="overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-white to-violet-50/70 p-4 shadow-sm dark:border-white/10 dark:from-[#111216] dark:via-[#111216] dark:to-violet-500/[0.08]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">OKX agent marketplace</p>
-          <p className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-gray-950 dark:text-white">Agentic Wallet</p>
-          <p className="mt-1 text-[11px] leading-5 text-gray-500">Browse freely. Connect your wallet only when you are ready to buy.</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-bold">
-            <span className={cn('rounded-full border px-2 py-1', walletReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300' : 'border-gray-200 bg-white text-gray-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-400')}>
-              {!walletChecked ? 'Checking wallet' : walletReady ? 'Wallet connected' : 'Setup needed'}
-            </span>
+        <div className="border-t border-gray-100 bg-gray-50/70 px-5 py-6 dark:border-white/10 dark:bg-black/10 sm:px-8">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">How it works</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {steps.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                <Icon className="h-4 w-4 text-gray-900 dark:text-white" />
+                <h2 className="mt-3 text-sm font-black text-gray-950 dark:text-white">{title}</h2>
+                <p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">{body}</p>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <form onSubmit={event => { event.preventDefault(); void search() }} className="mt-6 flex gap-2"><label className="flex flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]"><Search className="h-4 w-4 text-gray-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search live OKX agents and services" className="w-full bg-transparent text-sm outline-none" /></label><button disabled={busy === 'search' || !walletChecked} className="rounded-2xl bg-gray-950 px-5 text-xs font-black text-white disabled:opacity-50 dark:bg-white dark:text-gray-950">{busy === 'search' || !walletChecked ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}</button></form>
-    {agents.length > 0 && <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">{catalogLimited ? `Featured agents from OKX · ${total} listed` : `Showing ${agents.length}${total > agents.length ? ` of ${total}` : ''} results`}</p>}
-    <div className="mt-3 grid gap-2 md:grid-cols-2">{agents.map(agent => <button key={agent.id} onClick={() => void openAgent(agent)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-gray-300 hover:shadow-md dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-white/20"><span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gray-100 text-sm font-black text-gray-400 dark:bg-white/10"><span>{agent.name.slice(0, 2).toUpperCase()}</span>{agent.avatar && <img src={agent.avatar} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" onError={event => { event.currentTarget.style.display = 'none' }} />}</span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-black text-gray-950 dark:text-white">{agent.name}</span><span className="shrink-0 text-[10px] font-bold text-gray-400">{agent.minPrice}</span></span><span className="mt-0.5 block truncate text-[11px] text-gray-500">{agent.topService}</span><span className="mt-1 flex items-center justify-between text-[9px] font-bold text-gray-400"><span>{agent.rating}</span><span className="inline-flex items-center gap-1 text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white">View <ArrowRight className="h-3 w-3" /></span></span></span></button>)}</div>
-
-    {notice && <p role="status" className="mt-4 rounded-2xl bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">{notice}</p>}
-
-    {selectedAgent && <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/55 sm:items-center sm:p-5"><div className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-t-[2rem] bg-[#f7f7f9] p-5 dark:bg-[#171719] sm:rounded-[2rem] sm:p-7"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 items-center gap-3"><span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white text-sm font-black text-gray-400 dark:bg-white/10"><span>{selectedAgent.name.slice(0, 2).toUpperCase()}</span>{selectedAgent.avatar && <img src={selectedAgent.avatar} alt="" className="absolute inset-0 h-full w-full object-cover" onError={event => { event.currentTarget.style.display = 'none' }} />}</span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">OKX agent #{selectedAgent.id}</p><h2 className="mt-1 truncate text-xl font-black">{selectedAgent.name}</h2></div></div><button onClick={() => { setSelectedAgent(null); setSelected(null); setQuote(null); setResult(null); setServiceError('') }} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white dark:bg-white/10" aria-label="Close"><X className="h-4 w-4" /></button></div>
-      <div className="mt-5 space-y-2">{busy === 'services' && <div className="flex items-center justify-center gap-2 py-8 text-xs text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading live services…</div>}{busy !== 'services' && serviceError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-200"><p className="font-bold">Services could not be loaded.</p><p className="mt-1 text-xs opacity-80">{serviceError}</p><button type="button" onClick={() => void openAgent(selectedAgent)} className="mt-3 rounded-full border border-current px-4 py-2 text-[10px] font-black">Retry</button></div>}{busy !== 'services' && !serviceError && services.length === 0 && <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-white/10 dark:bg-white/[0.04]"><p className="text-sm font-black">No callable API services listed</p><p className="mt-1 text-xs text-gray-500">This agent currently has no service endpoint available through the OKX marketplace.</p></div>}{services.map(service => <button key={service.id} onClick={() => { setSelected(service); setQuote(null); setChoice(null); setResult(null); setParamsText('{}') }} className={cn('w-full rounded-2xl border p-4 text-left', selected?.id === service.id ? 'border-gray-950 bg-white dark:border-white dark:bg-white/10' : 'border-gray-200 bg-white/70 dark:border-white/10 dark:bg-white/[0.04]')}><div className="flex justify-between gap-3"><div><p className="text-sm font-black">{service.name}</p><p className="mt-1 text-xs leading-5 text-gray-500">{service.description}</p></div><span className="shrink-0 text-xs font-black">{service.fee === 'free' ? 'Free' : `${service.fee}${/USDT/i.test(service.fee) ? '' : ' USDT'}`}</span></div><p className="mt-2 truncate font-mono text-[9px] text-gray-400">{service.endpoint || 'Negotiated service'}</p></button>)}</div>
-      {selected && <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]"><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Service inputs</p><p className="mt-1 text-[10px] text-gray-400">Enter the endpoint’s named inputs as JSON. Use {'{}'} when none are required.</p><textarea value={paramsText} onChange={event => setParamsText(event.target.value)} rows={4} className="mt-3 w-full rounded-xl border bg-transparent p-3 font-mono text-xs dark:border-white/10" />{!quote && !result && !login && <button onClick={() => void (walletReady ? createQuote() : beginLogin(true))} disabled={Boolean(busy) || !selected.endpoint || !walletChecked} className="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-950 px-5 py-3 text-xs font-black text-white disabled:opacity-40 dark:bg-white dark:text-gray-950">{busy === 'quote' || busy === 'login' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {walletReady ? 'Review payment terms' : 'Continue to payment'}</button>}{login && <div className="mt-3 grid gap-2 sm:grid-cols-2"><a href={login.url} target="okx-agentic-wallet" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-4 text-xs font-bold">Open OKX verification <ExternalLink className="h-3.5 w-3.5" /></a><button onClick={() => void pollLogin(login.sessionId, true)} disabled={busy === 'poll'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 text-xs font-bold text-white disabled:opacity-60">{busy === 'poll' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{busy === 'poll' ? 'Connecting automatically' : 'Check again'}</button></div>}</div>}
-      {quote && choice && !result && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-300/15 dark:bg-amber-300/[0.08] dark:text-amber-100"><p className="text-sm font-black">Confirm this OKX Agent Payments Protocol purchase</p><dl className="mt-3 grid gap-2 text-xs"><div className="flex justify-between gap-4"><dt>Amount</dt><dd className="font-black">{choice.amount} {choice.token}</dd></div><div className="flex justify-between gap-4"><dt>Network</dt><dd className="font-black">{choice.network}</dd></div><div className="flex justify-between gap-4"><dt>Pay to</dt><dd className="max-w-[65%] truncate font-mono text-[10px]">{choice.payTo}</dd></div></dl><p className="mt-3 text-[10px] leading-4 opacity-70">This button approves this one payment. The TEE signs, replays the service request, and returns its deliverable.</p><button onClick={() => void pay()} disabled={Boolean(busy)} className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-950 px-5 py-3 text-xs font-black text-white disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950">{busy === 'pay' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />} Approve and pay</button></div>}
-      {Boolean(result) && <div className="mt-4 overflow-hidden rounded-2xl bg-[#0b0c0e] text-white"><div className="flex justify-between border-b border-white/10 px-4 py-3"><div><p className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Deliverable</p><p className="text-xs font-bold">OKX payment result</p></div><button onClick={() => { void navigator.clipboard.writeText(JSON.stringify(result, null, 2)); setCopied(true); window.setTimeout(() => setCopied(false), 1400) }} className="inline-flex items-center gap-1 text-[10px] font-bold"><Copy className="h-3 w-3" /> {copied ? 'Copied' : 'Copy'}</button></div><pre className="max-h-72 overflow-auto p-4 text-[10px] leading-5 text-white/70">{JSON.stringify(result, null, 2)}</pre></div>}
-      <button onClick={() => { setSelectedAgent(null); setSelected(null); setQuote(null); setResult(null) }} className="mt-5 rounded-full px-5 py-3 text-xs font-bold text-gray-500">Close</button></div></div>}
-  </div>
+      <aside className="mt-4 flex items-start gap-3 rounded-2xl border border-gray-200 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"><Check className="h-3.5 w-3.5" /></span>
+        <div>
+          <p className="text-xs font-black text-gray-900 dark:text-white">Live information, directly from OKX</p>
+          <p className="mt-1 text-[11px] leading-5 text-gray-500 dark:text-gray-400">Prices, availability and service details can change. Opening OKX means you always see their current marketplace information.</p>
+        </div>
+      </aside>
+    </div>
+  )
 }
