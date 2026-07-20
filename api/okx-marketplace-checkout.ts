@@ -40,17 +40,24 @@ type MarketplaceIntent = {
 type OkxEnvelope<T> = { code?: string; msg?: string; data?: T | null }
 
 type OkxPaymentCreate = {
-  paymentId: string
-  status: string
-  createdAt: string
-  expiresAt: string
-  deliveries?: Array<{ type?: string; value?: string; description?: string }>
+  paymentId?: string
+  payment_id?: string
+  status?: string
+  createdAt?: string
+  created_at?: string
+  expiresAt?: string
+  expires_at?: string
+  deliveries?: Array<{ type?: string; value?: string; description?: string }> | { url?: string }
 }
 
 type OkxPaymentStatus = {
-  paymentId: string
+  paymentId?: string
+  payment_id?: string
   status: string
   executed?: { txHash?: string; blockNumber?: number; blockTimestamp?: string }
+  tx_hash?: string
+  block_number?: number
+  block_timestamp?: string
   failure?: { reason?: string; message?: string }
 }
 
@@ -139,14 +146,24 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
     body,
   })
   const envelope = await response.json().catch(() => null) as OkxEnvelope<OkxPaymentCreate> | null
-  if (!response.ok || envelope?.code !== '0' || !envelope.data?.paymentId) {
+  const paymentId = clean(envelope?.data?.paymentId || envelope?.data?.payment_id, 120)
+  if (!response.ok || envelope?.code !== '0' || !paymentId) {
     const providerCode = clean(envelope?.code, 40) || `HTTP_${response.status}`
     const providerMessage = clean(envelope?.msg, 240) || 'Payment creation failed.'
     throw new Error(`OKX payment creation failed (${providerCode}): ${providerMessage}`)
   }
-  const paymentUrl = envelope.data.deliveries?.find(item => item.type === 'url' && /^https:\/\//i.test(item.value ?? ''))?.value
+  const deliveries = envelope.data?.deliveries
+  const paymentUrl = Array.isArray(deliveries)
+    ? deliveries.find(item => item.type === 'url' && /^https:\/\//i.test(item.value ?? ''))?.value
+    : deliveries?.url
   if (!paymentUrl) throw new Error('OKX created the payment but did not return a universal checkout URL.')
-  return { ...envelope.data, paymentUrl }
+  return {
+    paymentId,
+    paymentUrl,
+    status: envelope.data?.status || 'pending',
+    createdAt: envelope.data?.createdAt || envelope.data?.created_at || new Date().toISOString(),
+    expiresAt: envelope.data?.expiresAt || envelope.data?.expires_at || new Date(Date.now() + CHECKOUT_TTL_SECONDS * 1000).toISOString(),
+  }
 }
 
 async function getOkxPaymentStatus(paymentId: string) {
@@ -156,8 +173,17 @@ async function getOkxPaymentStatus(paymentId: string) {
   if (!response.ok || envelope?.code !== '0' || !envelope.data) {
     throw new Error(envelope?.msg || `OKX payment status failed with HTTP ${response.status}.`)
   }
-  if (envelope.data.paymentId !== paymentId) throw new Error('OKX returned a mismatched payment identifier.')
-  return envelope.data
+  const returnedPaymentId = clean(envelope.data.paymentId || envelope.data.payment_id, 120)
+  if (returnedPaymentId !== paymentId) throw new Error('OKX returned a mismatched payment identifier.')
+  return {
+    ...envelope.data,
+    paymentId: returnedPaymentId,
+    executed: envelope.data.executed || (envelope.data.tx_hash ? {
+      txHash: envelope.data.tx_hash,
+      blockNumber: envelope.data.block_number,
+      blockTimestamp: envelope.data.block_timestamp,
+    } : undefined),
+  }
 }
 
 function durableKey(paymentId: string) {
