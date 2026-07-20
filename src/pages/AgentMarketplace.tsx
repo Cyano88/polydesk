@@ -143,25 +143,31 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
   }, [authenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function beginLogin() {
-    setBusy('login'); setNotice('Creating a secure OKX Agentic Wallet login…')
+    setBusy('login'); setNotice('Preparing OKX sign-in…')
     try {
       const data = await withToken({ action: 'login-init' })
       const payload = record(data.login)
       const url = value(payload, 'loginUrl')
       const sessionId = value(payload, 'authSessionId')
       if (!url || !sessionId) throw new Error('OKX did not return a login session.')
-      setLogin({ url, sessionId }); window.open(url, '_blank', 'noopener,noreferrer')
-      setNotice('Finish the OKX login in the new tab, then return here and confirm.')
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'OKX login failed.') } finally { setBusy('') }
+      setLogin({ url, sessionId })
+      const left = Math.max(0, window.screenX + (window.outerWidth - 480) / 2)
+      const top = Math.max(0, window.screenY + (window.outerHeight - 720) / 2)
+      window.open(url, 'okx-agentic-wallet', `popup=yes,width=480,height=720,left=${left},top=${top},noopener=yes,noreferrer=yes`)
+      setNotice('Complete the short OKX check. PolyDesk will connect automatically.')
+      await pollLogin(sessionId)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'OKX login failed.')
+      setBusy('')
+    }
   }
 
-  async function finishLogin() {
-    if (!login) return
-    setBusy('poll'); setNotice('Confirming your TEE-backed Agentic Wallet session…')
+  async function pollLogin(sessionId: string) {
+    setBusy('poll')
     try {
-      await withToken({ action: 'login-poll', sessionId: login.sessionId })
+      await withToken({ action: 'login-poll', sessionId })
       setWalletReady(true); setLogin(null); setNotice('OKX Agentic Wallet connected. Search the live marketplace.')
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Login is not complete yet.') } finally { setBusy('') }
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Login is not complete yet. Open OKX sign-in and retry.') } finally { setBusy('') }
   }
 
   async function search() {
@@ -231,7 +237,7 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
       </div>
     </section>
 
-    {!walletReady ? <section className="mt-3 w-full space-y-2 rounded-[26px] border border-gray-200 bg-[#f5f5f7]/95 p-2 shadow-[0_12px_36px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#151518]/95"><div className="px-3 pb-1 pt-2"><h2 className="text-sm font-semibold text-gray-950 dark:text-white">Connect your payment wallet</h2><p className="mt-1 text-[11px] leading-5 text-gray-500">Sign in with OKX to use your private Agentic Wallet session.</p></div><button onClick={() => void beginLogin()} disabled={Boolean(busy)} className="group relative flex min-h-14 w-full items-center justify-center rounded-full bg-gray-950 px-16 text-xs font-bold text-white transition disabled:opacity-50 dark:bg-white dark:text-gray-950"><Wallet className="absolute left-5 h-4 w-4" />{busy === 'login' ? 'Preparing login...' : 'Connect Agentic Wallet'}<span className="absolute right-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 transition group-hover:translate-x-0.5 dark:bg-gray-950/10"><ArrowRight className="h-4 w-4" /></span></button>{login && <div className="grid gap-2 sm:grid-cols-2"><a href={login.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-4 text-xs font-bold text-gray-950 dark:bg-white/10 dark:text-white">Open OKX login <ExternalLink className="h-3.5 w-3.5" /></a><button onClick={() => void finishLogin()} disabled={Boolean(busy)} className="min-h-11 rounded-full bg-emerald-600 px-4 text-xs font-bold text-white disabled:opacity-50">{busy === 'poll' ? 'Checking...' : 'I finished signing in'}</button></div>}</section> : <>
+    {!walletReady ? <section className="mt-3 w-full space-y-2 rounded-[26px] border border-gray-200 bg-[#f5f5f7]/95 p-2 shadow-[0_12px_36px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#151518]/95"><div className="px-3 pb-1 pt-2"><h2 className="text-sm font-semibold text-gray-950 dark:text-white">Connect your payment wallet</h2><p className="mt-1 text-[11px] leading-5 text-gray-500">One OKX verification step connects your private Agentic Wallet session.</p></div>{!login ? <button onClick={() => void beginLogin()} disabled={Boolean(busy)} className="group relative flex min-h-14 w-full items-center justify-center rounded-full bg-gray-950 px-16 text-xs font-bold text-white transition disabled:opacity-50 dark:bg-white dark:text-gray-950"><Wallet className="absolute left-5 h-4 w-4" />{busy === 'login' ? 'Preparing sign-in...' : 'Continue with OKX'}<span className="absolute right-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 transition group-hover:translate-x-0.5 dark:bg-gray-950/10"><ArrowRight className="h-4 w-4" /></span></button> : <div className="grid gap-2 sm:grid-cols-2"><a href={login.url} target="okx-agentic-wallet" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-4 text-xs font-bold text-gray-950 dark:bg-white/10 dark:text-white">Open OKX sign-in <ExternalLink className="h-3.5 w-3.5" /></a><button onClick={() => void pollLogin(login.sessionId)} disabled={busy === 'poll'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 text-xs font-bold text-white disabled:opacity-60">{busy === 'poll' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{busy === 'poll' ? 'Connecting automatically' : 'Check again'}</button></div>}</section> : <>
       <form onSubmit={event => { event.preventDefault(); void search() }} className="mt-6 flex gap-2"><label className="flex flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]"><Search className="h-4 w-4 text-gray-400" /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search live OKX agents and services" className="w-full bg-transparent text-sm outline-none" /></label><button disabled={busy === 'search'} className="rounded-2xl bg-gray-950 px-5 text-xs font-black text-white dark:bg-white dark:text-gray-950">{busy === 'search' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}</button></form>
       {agents.length > 0 && <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Showing {agents.length}{total > agents.length ? ` of ${total}` : ''} live results</p>}
       <div className="mt-4 grid gap-3 md:grid-cols-2">{agents.map(agent => <button key={agent.id} onClick={() => void openAgent(agent)} className="rounded-[1.5rem] border border-gray-200 bg-white p-5 text-left shadow-sm dark:border-white/10 dark:bg-white/[0.04]"><div className="flex items-start justify-between"><Store className="h-5 w-5 text-emerald-500" /><span className="text-[10px] font-black text-gray-400">#{agent.id}</span></div><h2 className="mt-4 text-lg font-black">{agent.name}</h2><p className="mt-1 text-xs text-gray-500">{agent.topService}</p><div className="mt-4 flex justify-between border-t pt-3 text-[10px] font-bold text-gray-400 dark:border-white/10"><span>{agent.rating}</span><span>{agent.minPrice}</span></div></button>)}</div>
