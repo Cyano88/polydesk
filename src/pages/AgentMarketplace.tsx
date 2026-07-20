@@ -47,6 +47,23 @@ type OkxCheckout = {
   expiresAt: string
 }
 
+type OkxChallenge = {
+  data?: {
+    expires?: string
+    request?: {
+      amount?: string
+      currency?: string
+      recipient?: string
+      methodDetails?: { chainId?: number; authorizationType?: string }
+    }
+  }
+}
+
+type EthereumProvider = {
+  isOkxWallet?: boolean
+  request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
+}
+
 const OKX_SERVICES: MarketplaceService[] = [
   {
     id: 'okx-polymarket-lp-scout',
@@ -130,7 +147,7 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
   const [selected, setSelected] = useState<MarketplaceService | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [checkout, setCheckout] = useState<OkxCheckout | null>(null)
-  const [busy, setBusy] = useState<'create' | 'status' | ''>('')
+  const [busy, setBusy] = useState<'create' | 'pay' | 'status' | ''>('')
   const [notice, setNotice] = useState('')
   const [result, setResult] = useState<Record<string, unknown> | unknown[] | null>(null)
   const [copied, setCopied] = useState(false)
@@ -181,7 +198,60 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
       const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; checkout?: OkxCheckout } | null
       if (!response.ok || !data?.ok || !data.checkout?.paymentUrl) throw new Error(data?.error || 'OKX did not return a checkout link.')
       setCheckout(data.checkout)
-      setNotice('Checkout ready. Open the official OKX page to approve payment from your Agentic Wallet.')
+      setNotice('Payment request ready. Connect OKX Wallet to review and sign the exact X Layer authorization.')
+    } catch (error) {
+      setNotice(humanPaymentError(error))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function payWithOkxWallet() {
+    if (!checkout || busy) return
+    const provider = (window as typeof window & { okxwallet?: EthereumProvider }).okxwallet
+    if (!provider?.request || !provider.isOkxWallet) {
+      setNotice('OKX Wallet was not detected. Install or open the OKX Wallet extension, then try again.')
+      return
+    }
+    setBusy('pay')
+    setNotice('Connecting OKX Wallet and loading the payment termsâ€¦')
+    try {
+      const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[]
+      const from = accounts?.[0]
+      if (!/^0x[a-fA-F0-9]{40}$/.test(from ?? '')) throw new Error('OKX Wallet did not return a valid EVM account.')
+      try {
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xc4' }] })
+      } catch (error) {
+        if ((error as { code?: number })?.code !== 4902) throw error
+        await provider.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0xc4', chainName: 'X Layer', nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 }, rpcUrls: ['https://rpc.xlayer.tech'], blockExplorerUrls: ['https://www.oklink.com/xlayer'] }] })
+      }
+      const challengeResponse = await fetch('/api/okx-marketplace-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'challenge', paymentId: checkout.paymentId }) })
+      const challengeData = await challengeResponse.json().catch(() => null) as { ok?: boolean; error?: string; challenge?: OkxChallenge } | null
+      const request = challengeData?.challenge?.data?.request
+      if (!challengeResponse.ok || !challengeData?.ok || !request?.amount || !request.currency || !request.recipient) throw new Error(challengeData?.error || 'Could not load the OKX payment terms.')
+      if (request.methodDetails?.chainId !== 196 || request.methodDetails.authorizationType !== 'eip-3009') throw new Error('OKX returned an unsupported payment authorization.')
+      const expiresAt = Date.parse(challengeData.challenge?.data?.expires ?? checkout.expiresAt)
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('This payment request expired. Create a fresh checkout.')
+      const nonceBytes = crypto.getRandomValues(new Uint8Array(32))
+      const nonce = `0x${Array.from(nonceBytes, byte => byte.toString(16).padStart(2, '0')).join('')}`
+      const authorization = { from, to: request.recipient, value: request.amount, validAfter: '0', validBefore: String(Math.floor(expiresAt / 1000)), nonce }
+      const typedData = {
+        types: {
+          EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }],
+          TransferWithAuthorization: [{ name: 'from', type: 'address' }, { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }, { name: 'validAfter', type: 'uint256' }, { name: 'validBefore', type: 'uint256' }, { name: 'nonce', type: 'bytes32' }],
+        },
+        primaryType: 'TransferWithAuthorization',
+        domain: { name: 'USD\u20AE0', version: '1', chainId: 196, verifyingContract: request.currency },
+        message: authorization,
+      }
+      setNotice(`Review the ${checkout.amount} ${checkout.asset} authorization in OKX Wallet. PolyDesk cannot sign for you.`)
+      const signature = await provider.request({ method: 'eth_signTypedData_v4', params: [from, JSON.stringify(typedData)] })
+      if (typeof signature !== 'string') throw new Error('OKX Wallet did not return a signature.')
+      const submitResponse = await fetch('/api/okx-marketplace-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'credential', paymentId: checkout.paymentId, signature, authorization }) })
+      const submitted = await submitResponse.json().catch(() => null) as { ok?: boolean; status?: string; error?: string } | null
+      if (!submitResponse.ok || !submitted?.ok) throw new Error(submitted?.error || 'OKX rejected the signed payment.')
+      setCheckout(current => current ? { ...current, status: submitted.status || 'settling' } : current)
+      setNotice('Payment signature accepted. Waiting for X Layer confirmation and service deliveryâ€¦')
     } catch (error) {
       setNotice(humanPaymentError(error))
     } finally {
@@ -244,7 +314,7 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
                 <Sparkles className="h-3 w-3" /> OKX Agent Economy
               </span>
               <h1 className="mt-5 text-3xl font-black tracking-[-0.04em] sm:text-5xl">Buy useful agent services.<br /><span className="text-white/45">Keep the deliverable.</span></h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-white/55">Choose a service, set its inputs, then approve payment through the official OKX checkout. No coding assistant, browser wallet extension or CLI required.</p>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-white/55">Choose a service, set its inputs, then review and sign payment with OKX Wallet. No coding assistant or server-side wallet session required.</p>
             </div>
             <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-[#00d68f]/15 text-[#62e6b5]"><Wallet className="h-4 w-4" /></span>
@@ -315,7 +385,7 @@ export default function AgentMarketplace({ onBack }: { onBack: () => void }) {
 
             {Boolean(result) && <div className="mt-4 overflow-hidden rounded-2xl bg-[#0b0c0e] text-white"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><div><p className="text-[9px] font-black uppercase tracking-widest text-emerald-300">Deliverable</p><p className="mt-0.5 text-xs font-bold">Reusable JSON</p></div><button type="button" onClick={() => void copyResult()} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-bold hover:bg-white/15"><Copy className="h-3 w-3" /> {copied ? 'Copied' : 'Copy JSON'}</button></div><pre className="max-h-64 overflow-auto p-4 text-[10px] leading-5 text-white/70">{JSON.stringify(result, null, 2)}</pre></div>}
 
-            {checkout && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-300/15 dark:bg-amber-300/[0.08] dark:text-amber-100"><div className="flex items-start gap-3"><CircleDollarSign className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0 flex-1"><p className="text-sm font-black">{checkout.amount} {checkout.asset} through OKX</p><p className="mt-1 text-[11px] leading-5 opacity-70">The official OKX page handles wallet access and approval. PolyDesk only receives the payment status and releases the deliverable after settlement.</p><div className="mt-3 flex flex-wrap gap-2"><a href={checkout.paymentUrl} target="_blank" rel="noreferrer" onClick={() => setNotice('OKX checkout opened. PolyDesk will detect settlement automatically.')} className="inline-flex items-center gap-2 rounded-full bg-amber-950 px-4 py-2 text-[10px] font-black text-white dark:bg-amber-200 dark:text-amber-950">Open OKX checkout <ExternalLink className="h-3.5 w-3.5" /></a><button type="button" onClick={() => void checkCheckoutStatus()} disabled={busy === 'status'} className="inline-flex items-center gap-2 rounded-full border border-amber-900/15 px-4 py-2 text-[10px] font-black disabled:opacity-50">{busy === 'status' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />} Check payment</button></div><p className="mt-2 truncate font-mono text-[9px] opacity-45">{checkout.paymentId} · {checkout.status}</p></div></div></div>}
+            {checkout && <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-300/15 dark:bg-amber-300/[0.08] dark:text-amber-100"><div className="flex items-start gap-3"><CircleDollarSign className="mt-0.5 h-5 w-5 shrink-0" /><div className="min-w-0 flex-1"><p className="text-sm font-black">{checkout.amount} {checkout.asset} through OKX</p><p className="mt-1 text-[11px] leading-5 opacity-70">OKX Wallet shows the exact amount and recipient before signing. PolyDesk receives only the public signature and releases the deliverable after settlement.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void payWithOkxWallet()} disabled={Boolean(busy) || checkout.status !== 'pending'} className="inline-flex items-center gap-2 rounded-full bg-amber-950 px-4 py-2 text-[10px] font-black text-white disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950">{busy === 'pay' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />} Connect OKX Wallet & pay</button><button type="button" onClick={() => void checkCheckoutStatus()} disabled={busy === 'status'} className="inline-flex items-center gap-2 rounded-full border border-amber-900/15 px-4 py-2 text-[10px] font-black disabled:opacity-50">{busy === 'status' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />} Check payment</button></div><p className="mt-2 truncate font-mono text-[9px] opacity-45">{checkout.paymentId} · {checkout.status}</p></div></div></div>}
 
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={closeService} className="rounded-full px-5 py-3 text-xs font-bold text-gray-500 hover:bg-gray-200/60 dark:hover:bg-white/[0.06]">Close</button>

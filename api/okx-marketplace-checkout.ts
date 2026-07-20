@@ -61,6 +61,29 @@ type OkxPaymentStatus = {
   failure?: { reason?: string; message?: string }
 }
 
+type OkxPaymentDetail = {
+  available?: boolean
+  paymentId?: string
+  status?: string
+  challenge?: {
+    type?: string
+    data?: {
+      id?: string
+      realm?: string
+      method?: string
+      intent?: string
+      expires?: string
+      request?: {
+        amount?: string
+        currency?: string
+        recipient?: string
+        description?: string
+        methodDetails?: { chainId?: number; authorizationType?: string }
+      }
+    }
+  }
+}
+
 const services: Record<ServiceId, { amount: string; title: string }> = {
   'okx-polymarket-lp-scout': { amount: '0.3', title: 'PolyDesk Polymarket LP Scout' },
   'worldcup-live-scores': { amount: '0.1', title: 'PolyDesk World Cup Live Scores' },
@@ -200,6 +223,19 @@ async function getOkxPaymentStatus(paymentId: string) {
       blockTimestamp: statusData.block_timestamp,
     } : undefined),
   }
+}
+
+async function getOkxPaymentDetail(paymentId: string) {
+  const path = `/api/v6/pay/a2a/p/${encodeURIComponent(paymentId)}`
+  const response = await fetch(`${OKX_API_ORIGIN}${path}`, {
+    headers: { Accept: 'application/json', 'User-Agent': 'A2A-Pay/1.0' },
+  })
+  const envelope = await response.json().catch(() => null) as OkxEnvelope<OkxPaymentDetail> | null
+  const detail = Array.isArray(envelope?.data) ? envelope.data[0] : envelope?.data
+  if (!response.ok || String(envelope?.code ?? '') !== '0' || !detail?.challenge?.data?.request) {
+    throw new Error(envelope?.msg || `OKX payment detail failed with HTTP ${response.status}.`)
+  }
+  return detail
 }
 
 function durableKey(paymentId: string) {
@@ -346,6 +382,58 @@ async function checkoutStatus(req: Request, res: Response) {
   }
 }
 
+async function checkoutChallenge(req: Request, res: Response) {
+  const paymentId = clean(req.body?.paymentId, 120)
+  if (!/^a2a_[A-Za-z0-9_-]{12,100}$/.test(paymentId)) return res.status(400).json({ ok: false, error: 'Invalid OKX payment identifier.' })
+  try {
+    const intent = await readDurableJson<MarketplaceIntent>(durableKey(paymentId))
+    if (!intent || intent.paymentId !== paymentId) return res.status(404).json({ ok: false, error: 'Marketplace checkout not found.' })
+    const detail = await getOkxPaymentDetail(paymentId)
+    return res.json({ ok: true, status: detail.status || 'pending', challenge: detail.challenge })
+  } catch (error) {
+    return res.status(502).json({ ok: false, error: error instanceof Error ? error.message : 'Could not load OKX payment challenge.' })
+  }
+}
+
+async function submitCheckoutCredential(req: Request, res: Response) {
+  const paymentId = clean(req.body?.paymentId, 120)
+  const signature = clean(req.body?.signature, 180)
+  const authorization = req.body?.authorization && typeof req.body.authorization === 'object' ? req.body.authorization as Record<string, unknown> : {}
+  if (!/^a2a_[A-Za-z0-9_-]{12,100}$/.test(paymentId)) return res.status(400).json({ ok: false, error: 'Invalid OKX payment identifier.' })
+  if (!/^0x[a-fA-F0-9]{130}$/.test(signature)) return res.status(400).json({ ok: false, error: 'Invalid OKX Wallet signature.' })
+  try {
+    const intent = await readDurableJson<MarketplaceIntent>(durableKey(paymentId))
+    if (!intent || intent.paymentId !== paymentId) return res.status(404).json({ ok: false, error: 'Marketplace checkout not found.' })
+    const detail = await getOkxPaymentDetail(paymentId)
+    const request = detail.challenge?.data?.request
+    const from = clean(authorization.from, 42)
+    const to = clean(authorization.to, 42)
+    const value = clean(authorization.value, 80)
+    const validAfter = clean(authorization.validAfter, 32)
+    const validBefore = clean(authorization.validBefore, 32)
+    const nonce = clean(authorization.nonce, 66)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(from) || to.toLowerCase() !== clean(request?.recipient, 42).toLowerCase() || value !== clean(request?.amount, 80)) {
+      return res.status(400).json({ ok: false, error: 'Signed payment terms do not match the OKX challenge.' })
+    }
+    if (!/^\d+$/.test(validAfter) || !/^\d+$/.test(validBefore) || !/^0x[a-fA-F0-9]{64}$/.test(nonce)) {
+      return res.status(400).json({ ok: false, error: 'Invalid EIP-3009 authorization window or nonce.' })
+    }
+    const challengeExpiry = Math.floor(Date.parse(detail.challenge?.data?.expires ?? '') / 1000)
+    if (validAfter !== '0' || !Number.isFinite(challengeExpiry) || Number(validBefore) !== challengeExpiry || challengeExpiry <= Math.floor(Date.now() / 1000)) {
+      return res.status(400).json({ ok: false, error: 'Signed authorization does not match the active OKX challenge window.' })
+    }
+    const body = JSON.stringify({ payload: { type: 'transaction', signature, authorization: { type: 'eip-3009', from, to, value, validAfter, validBefore, nonce } } })
+    const path = `/api/v6/pay/a2a/p/${encodeURIComponent(paymentId)}/credential`
+    const response = await fetch(`${OKX_API_ORIGIN}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+    const envelope = await response.json().catch(() => null) as OkxEnvelope<{ paymentId?: string; payment_id?: string; status?: string }> | null
+    const data = Array.isArray(envelope?.data) ? envelope.data[0] : envelope?.data
+    if (!response.ok || String(envelope?.code ?? '') !== '0' || !data) throw new Error(envelope?.msg || `OKX credential submission failed with HTTP ${response.status}.`)
+    return res.json({ ok: true, status: data.status || 'settling' })
+  } catch (error) {
+    return res.status(502).json({ ok: false, error: error instanceof Error ? error.message : 'Could not submit OKX Wallet payment.' })
+  }
+}
+
 export default async function okxMarketplaceCheckoutHandler(req: Request, res: Response) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -353,6 +441,8 @@ export default async function okxMarketplaceCheckoutHandler(req: Request, res: R
   }
   const action = clean(req.body?.action, 20)
   if (action === 'create') return createCheckout(req, res)
+  if (action === 'challenge') return checkoutChallenge(req, res)
+  if (action === 'credential') return submitCheckoutCredential(req, res)
   if (action === 'status') return checkoutStatus(req, res)
-  return res.status(400).json({ ok: false, error: 'Use action=create or action=status.' })
+  return res.status(400).json({ ok: false, error: 'Use action=create, action=challenge, action=credential, or action=status.' })
 }
