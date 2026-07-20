@@ -158,7 +158,7 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
   const envelope = await response.json().catch(() => null) as OkxEnvelope<OkxPaymentCreate> | null
   const paymentData = Array.isArray(envelope?.data) ? envelope.data[0] : envelope?.data
   const paymentId = clean(paymentData?.paymentId || paymentData?.payment_id, 120)
-  if (!response.ok || envelope?.code !== '0' || !paymentId) {
+  if (!response.ok || String(envelope?.code ?? '') !== '0' || !paymentId) {
     const providerCode = clean(envelope?.code, 40) || `HTTP_${response.status}`
     const providerMessage = clean(envelope?.msg, 240) || 'Payment creation failed.'
     const shape = responseShape(envelope?.data)
@@ -183,7 +183,7 @@ async function getOkxPaymentStatus(paymentId: string) {
   const response = await fetch(`${OKX_API_ORIGIN}${path}`, { headers: { Accept: 'application/json' } })
   const envelope = await response.json().catch(() => null) as OkxEnvelope<OkxPaymentStatus> | null
   const statusData = Array.isArray(envelope?.data) ? envelope.data[0] : envelope?.data
-  if (!response.ok || envelope?.code !== '0' || !statusData) {
+  if (!response.ok || String(envelope?.code ?? '') !== '0' || !statusData) {
     throw new Error(envelope?.msg || `OKX payment status failed with HTTP ${response.status}.`)
   }
   const returnedPaymentId = clean(statusData.paymentId || statusData.payment_id, 120)
