@@ -8,6 +8,7 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
+    "prebuild": "node scripts/ensure-onchainos.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

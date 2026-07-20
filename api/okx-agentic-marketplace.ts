@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,8 +15,11 @@ const OKX_BASE_URL = (process.env.OKX_AGENTIC_BASE_URL || 'https://web3.okx.com'
 type CliEnvelope = { ok?: boolean; error?: string; data?: Record<string, unknown> | unknown[] }
 
 function cliBinary() {
-  if (process.env.ONCHAINOS_BIN?.trim()) return resolve(process.env.ONCHAINOS_BIN.trim())
-  return process.platform === 'win32' ? 'onchainos.exe' : join(process.env.HOME || '/opt/render', '.local', 'bin', 'onchainos')
+  if (process.platform === 'win32') return process.env.ONCHAINOS_BIN?.trim() || 'onchainos.exe'
+  const bundled = resolve('.render-home/.local/bin/onchainos')
+  const configured = process.env.ONCHAINOS_BIN?.trim() ? resolve(process.env.ONCHAINOS_BIN.trim()) : ''
+  const homeInstall = join(process.env.HOME || '/opt/render', '.local', 'bin', 'onchainos')
+  return [bundled, configured, homeInstall].find(candidate => candidate && existsSync(candidate)) || bundled
 }
 
 function sessionHome(userId: string) {
