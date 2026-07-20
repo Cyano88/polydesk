@@ -125,7 +125,7 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
   const body = JSON.stringify({
     type: 'charge',
     amount: service.amount,
-    symbol: 'USD₮0',
+    symbol: 'USDT',
     recipient,
     description: service.title,
     externalId,
@@ -140,7 +140,9 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
   })
   const envelope = await response.json().catch(() => null) as OkxEnvelope<OkxPaymentCreate> | null
   if (!response.ok || envelope?.code !== '0' || !envelope.data?.paymentId) {
-    throw new Error(envelope?.msg || `OKX payment creation failed with HTTP ${response.status}.`)
+    const providerCode = clean(envelope?.code, 40) || `HTTP_${response.status}`
+    const providerMessage = clean(envelope?.msg, 240) || 'Payment creation failed.'
+    throw new Error(`OKX payment creation failed (${providerCode}): ${providerMessage}`)
   }
   const paymentUrl = envelope.data.deliveries?.find(item => item.type === 'url' && /^https:\/\//i.test(item.value ?? ''))?.value
   if (!paymentUrl) throw new Error('OKX created the payment but did not return a universal checkout URL.')
