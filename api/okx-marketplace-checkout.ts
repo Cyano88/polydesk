@@ -98,9 +98,9 @@ function validateInputs(serviceId: ServiceId, inputs: Record<string, string>) {
 }
 
 function okxCredentials() {
-  const apiKey = env('OKX_X402_API_KEY', 'OKX_API_KEY')
-  const secretKey = env('OKX_X402_SECRET_KEY', 'OKX_SECRET_KEY')
-  const passphrase = env('OKX_X402_PASSPHRASE', 'OKX_PASSPHRASE')
+  const apiKey = env('OKX_PAYMENT_API_KEY', 'OKX_X402_API_KEY', 'OKX_API_KEY')
+  const secretKey = env('OKX_PAYMENT_SECRET_KEY', 'OKX_X402_SECRET_KEY', 'OKX_SECRET_KEY')
+  const passphrase = env('OKX_PAYMENT_PASSPHRASE', 'OKX_X402_PASSPHRASE', 'OKX_PASSPHRASE')
   if (!apiKey || !secretKey || !passphrase) throw new Error('OKX Open API credentials are not configured.')
   return { apiKey, secretKey, passphrase }
 }
@@ -130,6 +130,7 @@ async function createOkxPayment(serviceId: ServiceId, externalId: string) {
     description: service.title,
     externalId,
     expiresIn: CHECKOUT_TTL_SECONDS,
+    realm: env('OKX_PAYMENT_REALM') || 'polydesk.trade',
     deliveries: { includeUrl: true },
   })
   const response = await fetch(`${OKX_API_ORIGIN}${OKX_CREATE_PAYMENT_PATH}`, {
@@ -220,7 +221,7 @@ async function createCheckout(req: Request, res: Response) {
   const inputs = cleanInputs(req.body?.inputs)
   try {
     validateInputs(serviceId, inputs)
-    const externalId = `polydesk-${serviceId}-${randomUUID()}`
+    const externalId = `pd-${randomUUID()}`
     const payment = await createOkxPayment(serviceId, externalId)
     const intent: MarketplaceIntent = {
       version: 1,

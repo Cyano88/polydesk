@@ -161,6 +161,14 @@ services:
         value: "0.3"
       - key: OKX_X402_STANDARD_SERVICE_PRICE
         value: "0.1"
+      - key: OKX_PAYMENT_API_KEY
+        sync: false
+      - key: OKX_PAYMENT_SECRET_KEY
+        sync: false
+      - key: OKX_PAYMENT_PASSPHRASE
+        sync: false
+      - key: OKX_PAYMENT_REALM
+        value: polydesk.trade
 
       - key: CIRCLE_GATEWAY_API_BASE
         sync: false
