@@ -168,14 +168,14 @@ type UtilityItem = {
 
 function WorkspaceUtilityPill({ label, items }: { label: string; items: UtilityItem[] }) {
   return (
-    <nav aria-label={label} className="inline-flex w-full max-w-md items-center justify-between gap-1 rounded-full border border-white/10 bg-[#0D0D0D] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <nav aria-label={label} className="grid w-full grid-cols-4 items-center gap-1">
       {items.map(item => {
         const Icon = item.icon
         const classes = cn(
-          'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-2.5 text-[10px] font-bold transition-all sm:text-[11px]',
+          'flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[9px] font-bold transition-all sm:min-h-12 sm:flex-row sm:text-[11px]',
           item.active
-            ? 'bg-white text-gray-950 shadow-sm'
-            : 'text-gray-500 hover:bg-white/[0.06] hover:text-gray-200',
+            ? 'text-gray-950 dark:text-white'
+            : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.06] dark:hover:text-gray-200',
         )
         const content = <><Icon className="h-4 w-4 shrink-0" /><span>{item.label}</span></>
         return item.to ? (
@@ -345,14 +345,14 @@ function PolyDeskWorkspace() {
       </main>
 
       {workspace !== 'agent' && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
-          <div className="pointer-events-auto w-full max-w-md transform-gpu">
+        <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/95">
+          <div className="mx-auto w-full max-w-5xl px-3 sm:px-6">
           <WorkspaceUtilityPill
             label={workspace === 'portfolio' ? 'Portfolio tools' : 'Trade tools'}
             items={workspace === 'portfolio' ? portfolioItems : tradeItems}
           />
           </div>
-        </div>
+        </footer>
       )}
     </div>
   )

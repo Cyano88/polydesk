@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
@@ -13,6 +13,8 @@ const DATA_ROOT = resolve(process.env.OKX_AGENTIC_DATA_PATH || join(process.env.
 const OKX_BASE_URL = (process.env.OKX_AGENTIC_BASE_URL || 'https://web3.okx.com').replace(/\/+$/, '')
 const OKX_AI_PUBLIC_URL = 'https://www.okx.ai'
 const PUBLIC_CACHE_MS = 60_000
+const OKX_AGENT_SEARCH_PATH = '/priapi/v5/wallet/agentic/search/agent-search'
+const OKX_AGENT_SERVICES_PATH = '/priapi/v5/wallet/agentic/agent/services'
 
 let publicCatalogueCache: { expiresAt: number; value: Record<string, unknown> } | null = null
 const publicAgentCache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>()
@@ -82,6 +84,78 @@ function text(value: unknown, max = 500) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
 
+export function okxRequestSignature(timestamp: string, method: string, requestPath: string, secret: string, body = '') {
+  return createHmac('sha256', secret).update(`${timestamp}${method.toUpperCase()}${requestPath}${body}`).digest('base64')
+}
+
+async function okxOpenApiGet(pathname: string, parameters: Record<string, string>) {
+  const apiKey = (process.env.OKX_API_KEY || process.env.OKX_PAYMENT_API_KEY || '').trim()
+  const secret = (process.env.OKX_SECRET_KEY || process.env.OKX_PAYMENT_SECRET_KEY || '').trim()
+  const passphrase = (process.env.OKX_PASSPHRASE || process.env.OKX_PAYMENT_PASSPHRASE || '').trim()
+  if (!apiKey || !secret || !passphrase) throw new Error('OKX Open API credentials are not configured.')
+
+  const query = new URLSearchParams(parameters).toString()
+  const requestPath = `${pathname}${query ? `?${query}` : ''}`
+  const timestamp = new Date().toISOString()
+  const headers: Record<string, string> = {
+    accept: 'application/json',
+    'OK-ACCESS-KEY': apiKey,
+    'OK-ACCESS-TIMESTAMP': timestamp,
+    'OK-ACCESS-PASSPHRASE': passphrase,
+    'OK-ACCESS-SIGN': okxRequestSignature(timestamp, 'GET', requestPath, secret),
+  }
+  const projectId = (process.env.OKX_AGENTIC_PROJECT_ID || process.env.OKX_PROJECT_ID || '').trim()
+  if (projectId) headers['OK-ACCESS-PROJECT'] = projectId
+
+  const response = await fetch(`${OKX_BASE_URL}${requestPath}`, { headers, signal: AbortSignal.timeout(20_000) })
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null
+  const code = text(payload?.code ?? payload?.error_code, 40)
+  if (!response.ok || !payload || (code && code !== '0')) {
+    throw new Error(text(payload?.msg ?? payload?.error_message, 300) || `OKX Open API returned HTTP ${response.status}.`)
+  }
+  return payload.data ?? payload
+}
+
+function marketplaceList(root: unknown): unknown[] {
+  if (Array.isArray(root)) return root
+  if (!root || typeof root !== 'object') return []
+  const item = root as Record<string, unknown>
+  for (const key of ['list', 'agentList', 'serviceList', 'agents', 'services', 'items']) {
+    if (Array.isArray(item[key])) return item[key] as unknown[]
+    if (item[key] && typeof item[key] === 'object') {
+      const nested: unknown[] = marketplaceList(item[key])
+      if (nested.length) return nested
+    }
+  }
+  if (item.data && typeof item.data === 'object') return marketplaceList(item.data)
+  return []
+}
+
+function marketplaceTotal(root: unknown, fallback: number): number {
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return fallback
+  const item = root as Record<string, unknown>
+  const total = Number(item.total ?? item.totalCount)
+  if (Number.isFinite(total) && total >= 0) return total
+  return item.data && typeof item.data === 'object' ? marketplaceTotal(item.data, fallback) : fallback
+}
+
+async function openApiCatalogue(query: string) {
+  const data = await okxOpenApiGet(OKX_AGENT_SEARCH_PATH, {
+    query,
+    service: 'API service',
+    page: '1',
+    pageSize: '30',
+  })
+  const list = marketplaceList(data)
+  return { list, total: marketplaceTotal(data, list.length), pageSize: list.length, source: 'okx-open-api', limited: false }
+}
+
+async function openApiServices(agentId: string) {
+  const data = await okxOpenApiGet(OKX_AGENT_SERVICES_PATH, { agentId })
+  const list = marketplaceList(data)
+  return { list, total: marketplaceTotal(data, list.length), pageSize: list.length, source: 'okx-open-api' }
+}
+
 async function publicPageState(pathname: string) {
   const response = await fetch(`${OKX_AI_PUBLIC_URL}${pathname}`, {
     headers: { accept: 'text/html', 'user-agent': 'PolyDesk/1.0 (+https://polydesk.trade)' },
@@ -124,7 +198,7 @@ export async function publicCatalogue(query: string) {
     })
     publicCatalogueCache = {
       expiresAt: Date.now() + PUBLIC_CACHE_MS,
-      value: { list, total: Number(agentList.total) || list.length, pageSize: list.length, source: 'okx-ai-public-marketplace' },
+      value: { list, total: Number(agentList.total) || list.length, pageSize: list.length, source: 'okx-ai-public-marketplace', limited: true },
     }
   }
   const value = publicCatalogueCache.value
@@ -135,7 +209,15 @@ export async function publicCatalogue(query: string) {
     const haystack = [item.name, item.description, item.categoryName, item.categories].flat().join(' ').toLowerCase()
     return terms.every(term => haystack.includes(term))
   }) : list
-  return { ...value, list: filtered, shown: filtered.length }
+  return { ...value, list: filtered, shown: filtered.length, limited: true }
+}
+
+export async function marketplaceCatalogue(query: string) {
+  try {
+    return await openApiCatalogue(query)
+  } catch {
+    return publicCatalogue(query)
+  }
 }
 
 export async function publicServices(agentId: string) {
@@ -163,6 +245,14 @@ export async function publicServices(agentId: string) {
   const value = { list, total: Number(services.total) || list.length, pageSize: list.length, source: 'okx-ai-public-marketplace' }
   publicAgentCache.set(agentId, { expiresAt: Date.now() + PUBLIC_CACHE_MS, value })
   return value
+}
+
+export async function marketplaceServices(agentId: string) {
+  try {
+    const result = await openApiServices(agentId)
+    if (result.list.length) return result
+  } catch { /* fall back to the public agent detail page */ }
+  return publicServices(agentId)
 }
 
 function params(value: unknown) {
@@ -224,13 +314,13 @@ export default async function okxAgenticMarketplaceHandler(req: Request, res: Re
     if (action === 'search') {
       const query = text(req.body?.query, 120)
       if (!query) return res.status(400).json({ ok: false, error: 'Enter a marketplace search.' })
-      const data = await publicCatalogue(query)
+      const data = await marketplaceCatalogue(query)
       return res.json({ ok: true, catalog: data })
     }
     if (action === 'services') {
       const agentId = text(req.body?.agentId, 80).replace(/^#/, '')
       if (!/^\d+$/.test(agentId)) return res.status(400).json({ ok: false, error: 'Invalid OKX agent ID.' })
-      const data = await publicServices(agentId)
+      const data = await marketplaceServices(agentId)
       return res.json({ ok: true, services: data })
     }
     if (action === 'quote') {

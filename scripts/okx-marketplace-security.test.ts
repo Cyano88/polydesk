@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { listedServiceMatches } from '../api/okx-agentic-marketplace.js'
+import { listedServiceMatches, okxRequestSignature } from '../api/okx-agentic-marketplace.js'
 import { withOkxSessionLock } from '../api/okx-session-queue.js'
 
 test('quote validation accepts only the exact current service id and endpoint', () => {
@@ -13,6 +13,13 @@ test('quote validation accepts only the exact current service id and endpoint', 
 test('quote validation supports the CLI service table shape', () => {
   const catalog = { services: [{ cells: ['#3', 'Scores', 'API service', '0.1 USDT', '`https://seller.example/scores`'] }] }
   assert.equal(listedServiceMatches(catalog, '3', 'https://seller.example/scores'), true)
+})
+
+test('Open API requests use the documented timestamp-method-path HMAC', () => {
+  assert.equal(
+    okxRequestSignature('2026-07-20T12:00:00.000Z', 'GET', '/priapi/v5/wallet/agentic/search/agent-search?query=PolyDesk&page=1', 'secret'),
+    '1GIOG/5EYEeNz6ffrnEPHfrzDcd5s7Y9PKi8c8tIycY=',
+  )
 })
 
 test('per-user OKX commands are serialized while different users can proceed', async () => {
