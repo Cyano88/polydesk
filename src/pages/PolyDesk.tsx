@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { cn } from '../lib/utils'
+import AgentMarketplace from './AgentMarketplace'
 import {
   LpScoutPanel,
   type LpScoutPrefill,
@@ -12,7 +13,7 @@ import {
 } from './TelegramPaymentLinks'
 
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
-type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores'
+type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores' | 'marketplace'
 type PortfolioAction = 'watch' | 'trading' | 'external' | 'x402'
 
 function PolymarketMark({ className }: { className?: string }) {
@@ -67,7 +68,7 @@ function normalizeLane(value: string | null): PolyDeskLane | '' {
 }
 
 function normalizeServiceView(value: string | null): PolyDeskServiceView {
-  return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' || value === 'worldcup-news' || value === 'worldcup-scores'
+  return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' || value === 'worldcup-news' || value === 'worldcup-scores' || value === 'marketplace'
     ? value
     : ''
 }
@@ -226,7 +227,7 @@ export default function PolyDesk() {
     <main className="text-gray-950 dark:text-white">
       <div className={cn(
         'mx-auto w-full space-y-5',
-        serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' ? 'max-w-2xl' : 'max-w-md',
+        serviceView === 'marketplace' ? 'max-w-5xl' : serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' ? 'max-w-2xl' : 'max-w-md',
       )}>
         {isAgentOpen && (
           <button
@@ -344,7 +345,9 @@ export default function PolyDesk() {
             data-polydesk-service-view="true"
             className="p-0"
           >
-            {serviceView === 'portfolio' ? (
+            {serviceView === 'marketplace' ? (
+              <AgentMarketplace onBack={closeServiceView} />
+            ) : serviceView === 'portfolio' ? (
               <PolyPortfolioPanel
                 onBack={closeServiceView}
                 onOpenLpScout={() => openServiceView('lp-scout')}

@@ -194,7 +194,6 @@ function PolyDeskWorkspace() {
   const { wallets } = useWallets()
   const [accountOpen, setAccountOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [marketplaceNotice, setMarketplaceNotice] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light'
     return window.localStorage.getItem('polydesk-theme') === 'dark' ? 'dark' : 'light'
@@ -205,17 +204,11 @@ function PolyDeskWorkspace() {
     window.localStorage.setItem('polydesk-theme', theme)
   }, [theme])
 
-  useEffect(() => {
-    if (!marketplaceNotice) return undefined
-    const timer = window.setTimeout(() => setMarketplaceNotice(false), 2400)
-    return () => window.clearTimeout(timer)
-  }, [marketplaceNotice])
-
   const service = searchParams.get('service') ?? ''
   const portfolioAction = searchParams.get('portfolio') ?? 'watch'
   const workspace: Workspace = service === 'portfolio'
     ? 'portfolio'
-    : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'lp-scout'
+    : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'lp-scout' || service === 'marketplace'
       ? 'trade'
       : 'agent'
 
@@ -253,7 +246,7 @@ function PolyDeskWorkspace() {
     { id: 'worldcup', label: 'World Cup', icon: Trophy, to: makeTo('worldcup-scores'), active: service === 'worldcup' || service === 'worldcup-scores' },
     { id: 'news', label: 'News', icon: Newspaper, to: makeTo('worldcup-news'), active: service === 'worldcup-news' },
     { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: service === 'lp-scout' },
-    { id: 'marketplace', label: 'Marketplace', icon: Store, onClick: () => setMarketplaceNotice(true) },
+    { id: 'marketplace', label: 'Marketplace', icon: Store, to: makeTo('marketplace'), active: service === 'marketplace' },
   ]
 
   if (!ready || !authenticated) {
@@ -353,11 +346,6 @@ function PolyDeskWorkspace() {
 
       {workspace !== 'agent' && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
-          {marketplaceNotice && (
-            <div role="status" className="pointer-events-none absolute bottom-[calc(100%+0.4rem)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-gray-200 bg-white/95 px-3.5 py-2 text-[11px] font-bold text-gray-700 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c20]/95 dark:text-gray-200">
-              Marketplace is coming soon.
-            </div>
-          )}
           <div className="pointer-events-auto w-full max-w-md transform-gpu">
           <WorkspaceUtilityPill
             label={workspace === 'portfolio' ? 'Portfolio tools' : 'Trade tools'}
