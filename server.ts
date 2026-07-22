@@ -24,6 +24,7 @@ import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-buil
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-funding.js'
+import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
 import privyCircleLinkHandler from './api/privy-circle-link.js'
@@ -88,6 +89,9 @@ app.use((_req, res, next) => {
   )
   next()
 })
+
+const hashPayLinkWebhookLimiter = rateLimit({ name: 'hashpaylink-webhook', windowMs: 60_000, max: 120 })
+app.post('/api/webhooks/hashpaylink', hashPayLinkWebhookLimiter, express.raw({ type: 'application/json', limit: '128kb' }), hashPayLinkWebhookHandler)
 
 app.use(express.json({ limit: '256kb' }))
 

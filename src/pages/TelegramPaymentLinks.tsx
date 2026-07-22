@@ -2678,6 +2678,8 @@ export function TelegramHelperPanel({
         ok?: boolean
         checkoutUrl?: string
         fundingRequestId?: string
+        checkoutId?: string
+        paymentAttemptId?: string
         funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
       }>(checkoutRes, 'Could not prepare Hash PayLink funding checkout.')
@@ -2695,6 +2697,8 @@ export function TelegramHelperPanel({
           amount: requestedAmount,
           status: 'pending',
           requestId: checkoutData.fundingRequestId ?? requestId,
+          checkoutId: checkoutData.checkoutId,
+          paymentAttemptId: checkoutData.paymentAttemptId,
         }),
       })
       const logData = await readPolyDeskJson<{ ok?: boolean; error?: string }>(logResponse, 'Could not save the funding attempt.')
@@ -7330,6 +7334,8 @@ export function PolyPortfolioPanel({
         ok?: boolean
         checkoutUrl?: string
         fundingRequestId?: string
+        checkoutId?: string
+        paymentAttemptId?: string
         funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
       }
@@ -7348,6 +7354,8 @@ export function PolyPortfolioPanel({
           amount: amt,
           status: 'pending',
           requestId: checkoutData.fundingRequestId ?? requestId,
+          checkoutId: checkoutData.checkoutId,
+          paymentAttemptId: checkoutData.paymentAttemptId,
         }),
       })
       const logData = await readPolyDeskJson<{ ok?: boolean; error?: string }>(logResponse, 'Could not save the funding attempt.')

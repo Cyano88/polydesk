@@ -37,6 +37,10 @@ services:
         value: https://app.hashpaylink.com
       - key: HASH_PAYLINK_API_KEY
         sync: false
+      - key: HASH_PAYLINK_WEBHOOK_SECRET
+        sync: false
+      - key: HASH_PAYLINK_WEBHOOK_STORE_KEY
+        value: polydesk:hashpaylink-webhooks:v1
       - key: HASH_PAYLINK_POLYDESK_SERVICE_TOKEN
         sync: false
       - key: POLYMARKET_ALERT_FROM_EMAIL

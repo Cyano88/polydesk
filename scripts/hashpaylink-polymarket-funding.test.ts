@@ -19,6 +19,7 @@ test('creates a Polymarket funding checkout using the ordinary developer API key
       upstreamUrl = String(url); upstreamInit = init
       return new Response(JSON.stringify({
         ok: true, fundingRequestId: 'pmf_11111111111111111111', checkoutId: 'chk_test12345678',
+        paymentAttemptId: 'pat_111111111111111111111111',
         checkoutUrl: '/pay/c/chk_test12345678?attempt=pat_111111111111111111111111',
         funding: { provider: 'polymarket', availableNetworks: ['base', 'arbitrum'] },
       }), { status: 201, headers: { 'content-type': 'application/json' } })
@@ -36,6 +37,8 @@ test('creates a Polymarket funding checkout using the ordinary developer API key
   } as any, res as any)
   assert.equal(res.statusCode, 201)
   assert.equal(res.body.checkoutUrl, 'https://app.hashpaylink.com/pay/c/chk_test12345678?attempt=pat_111111111111111111111111')
+  assert.equal(res.body.checkoutId, 'chk_test12345678')
+  assert.equal(res.body.paymentAttemptId, 'pat_111111111111111111111111')
   assert.equal(upstreamUrl, 'https://app.hashpaylink.com/api/v2/funding/polymarket/checkouts')
   assert.equal((upstreamInit?.headers as Record<string, string>)['X-API-Key'], 'hpl_live_portal-issued-key')
   assert.equal((upstreamInit?.headers as Record<string, string>)['Idempotency-Key'], 'polydesk:funding:request_1234567890')

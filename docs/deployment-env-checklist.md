@@ -55,6 +55,8 @@ POLYMARKET_BUILDER_PASSPHRASE=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
 HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 HASH_PAYLINK_API_KEY=
+HASH_PAYLINK_WEBHOOK_SECRET=
+HASH_PAYLINK_WEBHOOK_STORE_KEY=polydesk:hashpaylink-webhooks:v1
 ```
 
 Notes:
@@ -244,6 +246,9 @@ Rules:
 - Enable Hosted checkout and Polymarket funding on the ordinary PolyDesk developer project.
 - Allowlist `https://polydesk.trade`, enable only eligible networks, and keep the API key server-side.
 - PolyDesk must query the provider-funding status and accept only `funded` as final delivery.
+- Configure the Developer Portal webhook as `https://polydesk.trade/api/webhooks/hashpaylink`, create its signing secret, and store that exact value only in `HASH_PAYLINK_WEBHOOK_SECRET` on the PolyDesk backend.
+- Webhook `payment.confirmed` moves a funding attempt to `bridging`; only provider reconciliation may move it to `bridge_complete`.
+- Verify `X-HashPayLink-Signature` against the raw request body and deduplicate `X-HashPayLink-Event` before processing.
 - Funding from Desk Agent must return to the active agent session.
 - Funding from Portfolio must return to Portfolio.
 

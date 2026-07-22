@@ -4,6 +4,7 @@ import { isAddress } from 'viem'
 import { PrivyClient } from '@privy-io/server-auth'
 import { sendTransactionalEmail } from './email-provider.js'
 import { fetchHashPayLinkPolymarketFundingStatus } from './hashpaylink-polymarket-funding.js'
+import { latestHashPayLinkCheckoutEvent, type StoredHashPayLinkWebhookEvent } from './hashpaylink-webhook-store.js'
 
 const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
@@ -123,6 +124,12 @@ function ensureSchema() {
         updated_at timestamptz not null default now()
       );
 
+      alter table polymarket_funding_attempts
+        add column if not exists checkout_id text,
+        add column if not exists payment_attempt_id text,
+        add column if not exists webhook_event_id text,
+        add column if not exists webhook_updated_at timestamptz;
+
       create table if not exists polymarket_alert_history (
         id serial primary key,
         privy_user_id text not null,
@@ -138,6 +145,8 @@ function ensureSchema() {
 
       create index if not exists polymarket_funding_attempts_user_idx
         on polymarket_funding_attempts (privy_user_id, created_at desc);
+      create index if not exists polymarket_funding_attempts_checkout_idx
+        on polymarket_funding_attempts (checkout_id) where checkout_id is not null;
       create index if not exists polymarket_alert_history_user_idx
         on polymarket_alert_history (privy_user_id, created_at desc);
       create index if not exists polymarket_watchlist_user_idx
@@ -174,6 +183,28 @@ async function verifiedPrivyUserId(req: Request): Promise<string> {
 
 function cleanString(value: unknown, max = 96) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
+export async function applyHashPayLinkFundingEvent(event: Pick<StoredHashPayLinkWebhookEvent, 'id' | 'event' | 'checkoutId' | 'createdAt' | 'data'>) {
+  await ensureSchema()
+  const status = event.event === 'payment.failed'
+    ? 'failed'
+    : event.event === 'payment.processing' || event.event === 'payment.confirmed'
+      ? 'bridging'
+      : 'pending'
+  const transaction = cleanString(event.data.transactionHash ?? event.data.gatewayTransferId, 96) || null
+  const result = await requirePool().query(
+    `update polymarket_funding_attempts
+        set status = case when status = 'bridge_complete' then status else $1 end,
+            tx_hash = coalesce($2, tx_hash),
+            webhook_event_id = $3,
+            webhook_updated_at = $4,
+            updated_at = now()
+      where checkout_id = $5
+        and (webhook_updated_at is null or webhook_updated_at <= $4)`,
+    [status, transaction, event.id, event.createdAt, event.checkoutId],
+  )
+  return result.rowCount ?? 0
 }
 
 function cleanAmount(value: unknown) {
@@ -855,6 +886,8 @@ export default async function handler(req: Request, res: Response) {
       if (!amount) return res.status(400).json({ ok: false, error: 'Provide a valid funding amount.' })
       const status = cleanString(body.status, 24) || 'pending'
       const requestId = cleanString(body.requestId, 64) || null
+      const checkoutId = cleanString(body.checkoutId, 80) || null
+      const paymentAttemptId = cleanString(body.paymentAttemptId, 80) || null
       const txHash = cleanString(body.txHash, 96) || null
       const depositAddress = cleanString(body.depositAddress, 96) || null
       const polymarketWallet = cleanString(body.polymarketWallet, 64)
@@ -867,13 +900,19 @@ export default async function handler(req: Request, res: Response) {
       if (!profileRow?.trading_address || !fundedWallet || fundedWallet.toLowerCase() !== polymarketWallet.toLowerCase()) {
         return res.status(409).json({ ok: false, error: 'Activate this Polymarket wallet before funding.' })
       }
+      if (checkoutId && !/^chk_[a-zA-Z0-9]{8,40}$/.test(checkoutId)) return res.status(400).json({ ok: false, error: 'Invalid hosted checkout id.' })
+      if (paymentAttemptId && !/^pat_[a-f0-9]{24}$/.test(paymentAttemptId)) return res.status(400).json({ ok: false, error: 'Invalid payment attempt id.' })
       const inserted = await requirePool().query(
         `insert into polymarket_funding_attempts
-          (privy_user_id, polymarket_address, request_id, network, amount, status, tx_hash, deposit_address)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+          (privy_user_id, polymarket_address, request_id, network, amount, status, tx_hash, deposit_address, checkout_id, payment_attempt_id)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
-        [privyUserId, polymarketWallet, requestId, network, amount, status, txHash, depositAddress],
+        [privyUserId, polymarketWallet, requestId, network, amount, status, txHash, depositAddress, checkoutId, paymentAttemptId],
       )
+      if (checkoutId) {
+        const latestEvent = await latestHashPayLinkCheckoutEvent(checkoutId).catch(() => undefined)
+        if (latestEvent) await applyHashPayLinkFundingEvent(latestEvent)
+      }
       return res.json({ ok: true, fundingAttempt: inserted.rows[0] })
     }
 
