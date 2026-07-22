@@ -1,21 +1,15 @@
 import type { Request, Response } from 'express'
 import { randomUUID } from 'node:crypto'
 import { isAddress } from 'viem'
-import { cleanNetwork, createDepositAddress, minimumUsdcFor, type BridgeNetwork } from './polymarket-bridge.js'
-
-const DEFAULT_HASH_PAYLINK_ORIGIN = 'https://hashpaylink.com'
+import { cleanNetwork, minimumUsdcFor, type BridgeNetwork } from './polymarket-bridge.js'
+import { createHashPayLinkPolymarketFundingCheckout } from './hashpaylink-polymarket-funding.js'
 
 function cleanText(value: unknown, max = 120) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function paylinkOrigin() {
-  return (
-    process.env.HASH_PAYLINK_BASE_URL
-    ?? process.env.PUBLIC_PAYLINK_ORIGIN
-    ?? process.env.VITE_PUBLIC_PAYLINK_ORIGIN
-    ?? DEFAULT_HASH_PAYLINK_ORIGIN
-  ).trim().replace(/\/+$/, '')
+function polydeskOrigin() {
+  return (process.env.PUBLIC_APP_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'https://polydesk.trade').trim().replace(/\/+$/, '')
 }
 
 function cleanAmount(value: unknown) {
@@ -37,32 +31,7 @@ function requestValue(req: Request, ...names: string[]) {
 
 function networkLabel(network: BridgeNetwork) {
   if (network === 'arbitrum') return 'Arbitrum'
-  if (network === 'solana') return 'Solana'
   return 'Base'
-}
-
-function buildPolymarketFundingCheckout(input: {
-  amount: string
-  network: BridgeNetwork
-  depositAddress: string
-  polymarketWallet: string
-  requestId: string
-  fundingLabel: string
-}) {
-  const params = new URLSearchParams()
-  params.set('a', input.amount)
-  params.set('src', 'a2mcp')
-  params.set('n', input.network)
-  if (input.network === 'solana') params.set('s', input.depositAddress)
-  else params.set('e', input.depositAddress)
-  params.set('m', 'Polymarket')
-  params.set('brand', 'polymarket')
-  params.set('pm', '1')
-  params.set('bridge', 'polymarket')
-  params.set('pmw', input.polymarketWallet)
-  params.set('pmr', input.requestId)
-  params.set('funding', input.fundingLabel)
-  return `${paylinkOrigin()}/pay?${params.toString()}`
 }
 
 export default async function a2mcpPolymarketFundingLinkHandler(req: Request, res: Response) {
@@ -75,7 +44,6 @@ export default async function a2mcpPolymarketFundingLinkHandler(req: Request, re
     const polymarketWallet = cleanText(requestValue(req, 'wallet', 'polymarketWallet', 'pmw'), 64)
     const amount = cleanAmount(requestValue(req, 'amount', 'a'))
     const network = cleanNetwork(requestValue(req, 'network', 'n'))
-    const fundingLabel = cleanText(requestValue(req, 'label', 'funding'), 80) || 'External Polymarket account'
     const buyerAgent = cleanText(requestValue(req, 'agent') ?? req.headers['x-buyer-agent'] ?? req.headers['x-agent-slug'], 64) || 'external-agent'
     const minimumUsdc = minimumUsdcFor(network)
     const amountNumber = Number(amount)
@@ -93,17 +61,21 @@ export default async function a2mcpPolymarketFundingLinkHandler(req: Request, re
         minimumUsdc,
       })
     }
+    if (network !== 'base' && network !== 'arbitrum') return res.status(400).json({ ok: false, error: 'Hash PayLink Polymarket funding supports Base or Arbitrum.' })
 
-    const bridge = await createDepositAddress(polymarketWallet, network)
     const requestId = `a2mcp-${randomUUID()}`
-    const checkoutUrl = buildPolymarketFundingCheckout({
-      amount,
-      network,
-      depositAddress: bridge.depositAddress,
-      polymarketWallet,
-      requestId,
-      fundingLabel,
-    })
+    const returnUrl = `${polydeskOrigin()}/polydesk?service=portfolio&notice=polymarket-funding-complete&portfolio=external`
+    const checkout = await createHashPayLinkPolymarketFundingCheckout({ polymarketWallet, amount, networks: [network], requestId, returnUrl })
+    const checkoutData = checkout.data as { ok?: boolean; checkoutUrl?: string; fundingRequestId?: string; error?: string }
+    if (
+      checkout.statusCode < 200
+      || checkout.statusCode >= 300
+      || !checkoutData.ok
+      || !checkoutData.checkoutUrl
+      || !/^pmf_[a-zA-Z0-9_-]+$/.test(checkoutData.fundingRequestId ?? '')
+    ) {
+      return res.status(checkout.statusCode).json({ ok: false, error: checkoutData.error || 'Could not prepare Hash PayLink funding checkout.' })
+    }
 
     return res.json({
       ok: true,
@@ -121,11 +93,10 @@ export default async function a2mcpPolymarketFundingLinkHandler(req: Request, re
         bridge: 'polymarket',
       },
       checkout: {
-        url: checkoutUrl,
-        requestId,
-        depositAddress: bridge.depositAddress,
-        addressType: bridge.addressType,
-        expires: 'Use promptly; bridge status is checked by the hosted checkout.',
+        url: checkoutData.checkoutUrl,
+        requestId: checkoutData.fundingRequestId,
+        statusUrl: `/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(checkoutData.fundingRequestId ?? '')}`,
+        expires: 'Use promptly; delivery is final only when funding status is funded.',
       },
       safety: [
         'Verify the Polymarket wallet before opening the checkout.',

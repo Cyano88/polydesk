@@ -34,7 +34,9 @@ services:
       - key: VITE_PUBLIC_PAYLINK_ORIGIN
         value: https://hashpaylink.com
       - key: HASH_PAYLINK_BASE_URL
-        value: https://hashpaylink.com
+        value: https://app.hashpaylink.com
+      - key: HASH_PAYLINK_API_KEY
+        sync: false
       - key: HASH_PAYLINK_POLYDESK_SERVICE_TOKEN
         sync: false
       - key: POLYMARKET_ALERT_FROM_EMAIL
@@ -169,11 +171,6 @@ services:
         sync: false
       - key: OKX_PAYMENT_REALM
         value: polydesk.trade
-      - key: ONCHAINOS_BIN
-        value: ./.render-home/.local/bin/onchainos
-      - key: OKX_AGENTIC_DATA_PATH
-        value: /var/data/okx-agentic-wallets
-
       - key: CIRCLE_GATEWAY_API_BASE
         sync: false
       - key: CIRCLE_X402_RECEIPT_API_KEY

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { cn } from '../lib/utils'
-import AgentMarketplace from './AgentMarketplace'
+import AppPay from './AppPay'
+import TradeActivity from './TradeActivity'
 import {
   LpScoutPanel,
   type LpScoutPrefill,
@@ -13,7 +14,7 @@ import {
 } from './TelegramPaymentLinks'
 
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
-type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores' | 'marketplace'
+type PolyDeskServiceView = '' | PolyDeskLane | 'worldcup-news' | 'worldcup-scores' | 'activity' | 'app-pay' | 'marketplace'
 type PortfolioAction = 'watch' | 'trading' | 'external' | 'x402'
 
 function PolymarketMark({ className }: { className?: string }) {
@@ -46,29 +47,12 @@ function PolyDeskLiveAgentIcon({ isStatic = false }: { isStatic?: boolean }) {
   )
 }
 
-function ServiceHubIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 512 512" aria-hidden="true" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M314 64h52l10 47 39-27 37 37-27 39 47 10v52l-47 10 27 39-37 37-39-27-10 47h-52l-10-47-39 27-37-37 27-39-47-10v-52l47-10-27-39 37-37 39 27 10-47Z"
-        fill="currentColor"
-      />
-      <circle cx="340" cy="196" r="56" fill="#ffffff" />
-      <rect x="42" y="260" width="76" height="158" rx="12" fill="currentColor" />
-      <path
-        d="M138 276h65c20 0 43 8 62 19l42 24c9 5 13 15 9 24-3 7-10 12-18 12H207v12h99c10 0 19-2 27-7l113-48c14-6 30 2 34 16 3 10-1 21-11 27L297 459c-14 8-30 10-45 5l-137-44V292c7-10 14-16 23-16Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
-
 function normalizeLane(value: string | null): PolyDeskLane | '' {
   return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' ? value : ''
 }
 
 function normalizeServiceView(value: string | null): PolyDeskServiceView {
-  return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' || value === 'worldcup-news' || value === 'worldcup-scores' || value === 'marketplace'
+  return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' || value === 'worldcup-news' || value === 'worldcup-scores' || value === 'activity' || value === 'app-pay' || value === 'marketplace'
     ? value
     : ''
 }
@@ -95,17 +79,8 @@ export default function PolyDesk() {
   const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const [polyDeskResetSignal, setPolyDeskResetSignal] = useState(0)
-  const [promptIndex, setPromptIndex] = useState(0)
   const helperKey = effectiveAgentLane || 'choose-lane'
   const welcomeText = 'Welcome back, there. Ask me about Polymarket funding, portfolio, World Cup markets, LP Scout, and live market context.'
-  const introPrompts = useMemo(() => [
-    { text: 'I am Desk Agent.', delayMs: 5200 },
-    { text: 'Tap to launch me.', delayMs: 3600 },
-    { text: 'I can help with portfolio alerts.', delayMs: 6200 },
-    { text: 'I can read World Cup markets.', delayMs: 6200 },
-    { text: 'I can guide LP Scout access.', delayMs: 6200 },
-    { text: 'I can help fund Polymarket.', delayMs: 6200 },
-  ], [])
 
   const ownerKey = useMemo(() => {
     const email = searchParams.get('email')?.trim().toLowerCase()
@@ -182,15 +157,6 @@ export default function PolyDesk() {
   }
 
   useEffect(() => {
-    if (isAgentOpen) return undefined
-    const delay = introPrompts[promptIndex]?.delayMs ?? 5200
-    const timer = window.setTimeout(() => {
-      setPromptIndex(index => (index + 1) % introPrompts.length)
-    }, delay)
-    return () => window.clearTimeout(timer)
-  }, [introPrompts, isAgentOpen, promptIndex])
-
-  useEffect(() => {
     setIsAgentOpen(Boolean(activeLane || agentRouteOpen))
     setAgentLane(activeLane)
   }, [activeLane, agentRouteOpen])
@@ -206,8 +172,8 @@ export default function PolyDesk() {
   useEffect(() => {
     if (activeServiceView !== 'lp-scout' || searchParams.get('lpScoutPath') !== 'fund') return
     const next = new URLSearchParams(searchParams)
-    next.set('service', 'portfolio')
-    next.set('portfolio', 'x402')
+    next.set('service', 'app-pay')
+    next.delete('portfolio')
     next.delete('lpScoutPath')
     setSearchParams(next, { replace: true })
   }, [activeServiceView, searchParams, setSearchParams])
@@ -227,7 +193,7 @@ export default function PolyDesk() {
     <main className="text-gray-950 dark:text-white">
       <div className={cn(
         'mx-auto w-full space-y-5',
-        serviceView === 'marketplace' ? 'max-w-5xl' : serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' ? 'max-w-2xl' : 'max-w-md',
+        serviceView === 'app-pay' || serviceView === 'marketplace' ? 'max-w-3xl' : serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         {isAgentOpen && (
           <button
@@ -248,13 +214,8 @@ export default function PolyDesk() {
 
         {!isAgentOpen && !serviceView && (
           <div className="mb-1 flex flex-col items-start text-left">
-            <span className="mb-4 inline-flex items-center justify-center gap-2 text-sm font-bold leading-none text-[#0071E3] dark:text-blue-200">
-              <ServiceHubIcon className="h-7 w-7 shrink-0 text-gray-950 dark:text-white" />
-              Service Hub
-            </span>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-[2.25rem]">
-              What do you want to do today?
-            </h2>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Portfolio</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Your prediction market desk</h2>
           </div>
         )}
 
@@ -263,7 +224,7 @@ export default function PolyDesk() {
             type="button"
             onClick={launchAgent}
             className={cn(
-              'group w-full border border-gray-100 bg-white p-4 text-left shadow-card transition-all hover:border-gray-200 hover:shadow-lg active:scale-[0.995] dark:border-white/10 dark:bg-[#111114] dark:hover:bg-[#15151a]',
+              'polydesk-card group w-full p-4 text-left transition-all hover:border-gray-300 active:scale-[0.995] dark:hover:border-white/20',
               isAgentOpen ? '!mt-0 rounded-t-2xl rounded-b-none border-b-0 pb-3 shadow-none' : 'rounded-2xl',
             )}
           >
@@ -289,14 +250,8 @@ export default function PolyDesk() {
                         </span>
                       </span>
                     </div>
-                    <div className="mt-3 rounded-2xl rounded-tl-md bg-gray-100 px-4 py-3 dark:bg-white/[0.07]">
-                      <p
-                        key={promptIndex}
-                        className="telegram-agent-typewriter text-sm font-semibold leading-relaxed text-gray-800 dark:text-gray-100"
-                      >
-                        {introPrompts[promptIndex]?.text}
-                      </p>
-                    </div>
+                    <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">Ask about your balance, positions, markets or funding.</p>
+                    <span className="polydesk-primary-cta mt-4 w-full">Open Desk Agent</span>
                   </>
                 )}
               </div>
@@ -345,8 +300,10 @@ export default function PolyDesk() {
             data-polydesk-service-view="true"
             className="p-0"
           >
-            {serviceView === 'marketplace' ? (
-              <AgentMarketplace onBack={closeServiceView} />
+            {serviceView === 'app-pay' || serviceView === 'marketplace' ? (
+              <AppPay />
+            ) : serviceView === 'activity' ? (
+              <TradeActivity />
             ) : serviceView === 'portfolio' ? (
               <PolyPortfolioPanel
                 onBack={closeServiceView}
@@ -368,7 +325,6 @@ export default function PolyDesk() {
               <PolyWorldCupNewsPanel
                 hideBack
                 onBack={() => backToServiceParent('worldcup')}
-                onOpenScores={() => openServiceView('worldcup-scores')}
                 onOpenLpScout={prefill => {
                   setLpScoutPrefill(prefill)
                   openServiceView('lp-scout')
@@ -378,7 +334,6 @@ export default function PolyDesk() {
               <PolyStreamPanel
                 hideBack
                 onBack={() => backToServiceParent('worldcup')}
-                onOpenNews={() => openServiceView('worldcup-news')}
               />
             ) : (
               <LpScoutPanel

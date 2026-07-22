@@ -145,7 +145,7 @@ const services: PolyDeskAgentService[] = [
       query: [
         { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to fund.' },
         { name: 'amount', required: true, description: 'USDC amount. Minimum is currently 3 USDC.' },
-        { name: 'network', required: false, description: 'Funding network. Defaults to Base.', values: ['base', 'arbitrum', 'solana'] },
+        { name: 'network', required: false, description: 'Funding network. Defaults to Base.', values: ['base', 'arbitrum'] },
         { name: 'agent', required: false, description: 'Buyer-agent slug used for attribution in the response.' },
       ],
       headers: [
@@ -155,14 +155,14 @@ const services: PolyDeskAgentService[] = [
     },
     output: [
       'hosted Hash PayLink checkout URL',
-      'Polymarket bridge deposit address',
-      'request id for checkout tracking',
+      'provider-verified funding request id',
+      'authenticated funding status URL',
       'funding safety instructions for buyer agents',
     ],
     artifacts: [
       'Hash PayLink checkout URL',
-      'Polymarket bridge deposit address',
-      'requestId for hosted checkout bridge status',
+      'fundingRequestId for hosted checkout bridge status',
+      'receipt URL after provider-confirmed delivery',
     ],
     safety: [
       'agent must show the target Polymarket wallet before the user pays',

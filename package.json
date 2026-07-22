@@ -8,7 +8,6 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "prebuild": "node scripts/ensure-onchainos.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -16,9 +15,9 @@
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts scripts/agent-store-paths.test.ts",
-    "test:okx-marketplace": "node --import tsx --test scripts/okx-marketplace-security.test.ts",
     "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
-    "smoke:okx-public-marketplace": "node --import tsx --test scripts/okx-public-marketplace-smoke.test.ts",
+    "test:hashpaylink-funding": "node --import tsx --test scripts/hashpaylink-polymarket-funding.test.ts",
+    "test:telegram-funding": "node --import tsx --test scripts/telegram-funding-request.test.ts",
     "env:check": "node scripts/validate-env.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
@@ -46,7 +45,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "ethers": "^6.13.1",
-    "express": "^4.19.2",
+    "express": "^4.22.2",
     "lucide-react": "^0.414.0",
     "pg": "^8.22.0",
     "react": "^18.3.1",

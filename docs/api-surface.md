@@ -25,7 +25,6 @@ Mounted in `server.ts`:
 - `/api/agent-ask`
 - `/api/agent-wallet`
 - `/api/agent-profile`
-- `/api/okx-marketplace-checkout`
 - `/api/x402/polymarket-scout`
 - `/api/zeroscout/polymarket-brief`
 - `/api/x402/receipt`

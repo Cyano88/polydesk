@@ -53,7 +53,8 @@ POLYMARKET_BUILDER_API_KEY=
 POLYMARKET_BUILDER_SECRET=
 POLYMARKET_BUILDER_PASSPHRASE=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
-HASH_PAYLINK_BASE_URL=https://hashpaylink.com
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
+HASH_PAYLINK_API_KEY=
 ```
 
 Notes:
@@ -155,14 +156,10 @@ CIRCLE_X402_RECEIPT_API_KEY=
 # or CIRCLE_GATEWAY_API_KEY=
 # or CIRCLE_API_KEY=
 
-# OKX live Agent Marketplace + per-user Agentic Wallet sessions
-OKX_PAYMENT_API_KEY=
-OKX_PAYMENT_SECRET_KEY=
-OKX_PAYMENT_PASSPHRASE=
-ONCHAINOS_BIN=/opt/render/.local/bin/onchainos
-OKX_AGENTIC_DATA_PATH=/var/data/okx-agentic-wallets
-# optional override; defaults to https://web3.okx.com
-OKX_AGENTIC_BASE_URL=
+# OKX x402 facilitator credentials for listed seller endpoints
+OKX_X402_API_KEY=
+OKX_X402_SECRET_KEY=
+OKX_X402_PASSPHRASE=
 ```
 
 Optional operational limits:
@@ -191,8 +188,7 @@ Notes:
 
 - `X402_FACILITATOR_URL` is optional unless the selected x402 network/provider gives a required facilitator endpoint.
 - `CIRCLE_GATEWAY_API_BASE` is optional for the first testnet smoke; the receipt route defaults to Circle's testnet gateway when blank.
-- Agentic Wallet sessions must use the durable per-user `OKX_AGENTIC_DATA_PATH`; never point multiple users at one shared CLI home.
-- `OKX_PAYMENT_*` can be replaced by the equivalent `OKX_API_*` or `OKX_X402_*` credential set. Keep every secret server-side.
+- Keep every OKX facilitator credential server-side.
 
 ## P1 0G Archive
 
@@ -233,20 +229,21 @@ AGENT_OPERATING_AGREEMENT_HASH=
 AGENT_GOVERNANCE_UPDATED_AT=
 ```
 
-## Temporary Hash PayLink Dependency
+## Hash PayLink Developer Integration
 
-Funding checkout may still depend on Hash PayLink during transition:
+Register PolyDesk manually through the Hash PayLink Developer Portal and install the generated live server key only on the PolyDesk backend:
 
 ```env
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
-HASH_PAYLINK_BASE_URL=https://hashpaylink.com
-HASH_PAYLINK_POLYDESK_SERVICE_TOKEN=
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
+HASH_PAYLINK_API_KEY=
 ```
 
 Rules:
 
-- The service token must only create Polymarket funding checkout links and query funding status.
-- It must not allow POS, bank payout, generic payment-link, treasury, or admin receipt actions.
+- Enable Hosted checkout and Polymarket funding on the ordinary PolyDesk developer project.
+- Allowlist `https://polydesk.trade`, enable only eligible networks, and keep the API key server-side.
+- PolyDesk must query the provider-funding status and accept only `funded` as final delivery.
 - Funding from Desk Agent must return to the active agent session.
 - Funding from Portfolio must return to Portfolio.
 

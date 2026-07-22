@@ -212,6 +212,7 @@ const polymarketBridgeNetworks: Array<{ key: RequestNetwork; label: string; badg
   { key: 'solana', label: 'Solana' },
   { key: 'arbitrum', label: 'Arbitrum' },
 ]
+const polymarketFundingNetworks = polymarketBridgeNetworks.filter(network => network.key === 'base' || network.key === 'arbitrum')
 
 const requestNetworkLabels: Record<RequestNetwork, string> = {
   base: 'Base',
@@ -226,7 +227,7 @@ function isPolymarketBridgeNetwork(network: RequestNetwork | ''): network is Pol
 }
 
 function polymarketBridgeNetworkPrompt(amount: string) {
-  return `Which network should I use for this ${amount} USDC Polymarket funding checkout: Base, Arbitrum, or Solana?`
+  return `Which network should I use for this ${amount} USDC Polymarket funding checkout: Base or Arbitrum?`
 }
 
 type SavedRequest = {
@@ -1170,40 +1171,39 @@ export default function TelegramPaymentLinks() {
     }
   }
 
-  async function preparePolymarketBridge(funding: string) {
+  async function preparePolymarketBridge(_funding: string) {
     if (!canUsePolymarketFunding) return
     setPolymarketBridgeBusy(true)
     setPolymarketBridgeError('')
     try {
-      const response = await fetch('/api/polymarket-bridge', {
+      if (polymarketNetwork !== 'base' && polymarketNetwork !== 'arbitrum') throw new Error('Hash PayLink Polymarket funding supports Base and Arbitrum.')
+      const requestId = polymarketFundingRequestId()
+      const response = await fetch('/api/hashpaylink/polymarket-funding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           polymarketWallet: polymarketWallet.trim(),
-          network: polymarketNetwork,
+          amount: polymarketAmount.trim(),
+          networks: polymarketNetwork === 'base' ? ['base', 'arbitrum'] : ['arbitrum', 'base'],
+          requestId,
+          flow: 'external',
         }),
       })
       const data = await response.json() as {
         ok?: boolean
-        network?: RequestNetwork
-        depositAddress?: string
-        addressType?: 'evm' | 'svm'
-        minimumUsdc?: number
+        checkoutUrl?: string
+        fundingRequestId?: string
+        funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
       }
-      if (!response.ok || !data.ok || !data.depositAddress || !data.network) {
-        throw new Error(data.error || 'Could not prepare Polymarket bridge address.')
+      if (!response.ok || !data.ok || !data.checkoutUrl) {
+        throw new Error(data.error || 'Could not prepare Hash PayLink funding checkout.')
       }
       return {
-        network: data.network,
-        depositAddress: data.depositAddress,
-        payUrl: buildPolymarketPayLink({
-          wallet: data.depositAddress,
-          amount: polymarketAmount.trim(),
-          funding,
-          network: data.network,
-          polymarketWallet: polymarketWallet.trim(),
-        }),
+        network: (data.funding?.availableNetworks?.[0] ?? polymarketNetwork) as RequestNetwork,
+        depositAddress: polymarketWallet.trim(),
+        payUrl: data.checkoutUrl,
+        fundingRequestId: data.fundingRequestId,
       }
     } catch (err) {
       setPolymarketBridgeError(err instanceof Error ? err.message : 'Could not prepare Polymarket bridge address.')
@@ -1233,6 +1233,7 @@ export default function TelegramPaymentLinks() {
       label: 'Polymarket',
       target: polymarketFunder.trim(),
       amount: polymarketAmount.trim(),
+      payUrl: bridge.payUrl,
     })
     setPolymarketMode('')
   }
@@ -1474,7 +1475,6 @@ export default function TelegramPaymentLinks() {
           ) : activeService === 'poly-worldcup-news' ? (
             <PolyWorldCupNewsPanel
               onBack={() => backToMarketService('poly-worldcup')}
-              onOpenScores={() => openMarketService('poly-stream')}
               onOpenLpScout={prefill => {
                 setLpScoutPrefill(prefill)
                 openMarketService('lp-scout')
@@ -1483,7 +1483,6 @@ export default function TelegramPaymentLinks() {
           ) : activeService === 'poly-stream' ? (
             <PolyStreamPanel
               onBack={() => backToMarketService('poly-worldcup')}
-              onOpenNews={() => openMarketService('poly-worldcup-news')}
             />
           ) : activeService === 'hashpaylink-helper' ? (
             <TelegramHelperPanel
@@ -2644,7 +2643,7 @@ export function TelegramHelperPanel({
       if (requestedNetwork === 'arc' || requestedNetwork === 'all') {
         setPolyPortfolioFundingDraft({ amount: requestedAmount, network: '' })
         return {
-          answer: 'Polymarket bridge checkout supports Base, Arbitrum, or Solana right now. Which one should I use?',
+          answer: 'Hash PayLink Polymarket funding supports Base or Arbitrum. Which one should I use?',
           actionLink: { label: 'Portfolio', url: portfolioUrl },
         }
       }
@@ -2655,35 +2654,38 @@ export function TelegramHelperPanel({
           actionLink: { label: 'Portfolio', url: portfolioUrl },
         }
       }
-      if (!isPolymarketBridgeNetwork(requestedNetwork)) {
+      if (requestedNetwork !== 'base' && requestedNetwork !== 'arbitrum') {
         setPolyPortfolioFundingDraft({ amount: requestedAmount, network: '' })
         return {
-          answer: 'Polymarket bridge checkout supports Base, Arbitrum, or Solana right now. Which one should I use?',
+          answer: 'Hash PayLink Polymarket funding supports Base or Arbitrum. Which one should I use?',
           actionLink: { label: 'Portfolio', url: portfolioUrl },
         }
       }
       const bridgeNetwork = requestedNetwork
-      const bridgeRes = await fetch('/api/polymarket-bridge', {
+      const requestId = polymarketFundingRequestId()
+      const checkoutRes = await fetch('/api/hashpaylink/polymarket-funding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           polymarketWallet: address,
-          network: bridgeNetwork,
+          amount: requestedAmount,
+          networks: bridgeNetwork === 'base' ? ['base', 'arbitrum'] : ['arbitrum', 'base'],
+          requestId,
+          flow: 'portfolio',
         }),
       })
-      const bridgeData = await readPolyDeskJson<{
+      const checkoutData = await readPolyDeskJson<{
         ok?: boolean
-        depositAddress?: string
-        network?: PolymarketBridgeNetwork
-        minimumUsdc?: number
+        checkoutUrl?: string
+        fundingRequestId?: string
+        funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
-      }>(bridgeRes, 'Could not prepare bridge address.')
-      if (!bridgeRes.ok || !bridgeData.ok || !bridgeData.depositAddress) {
-        throw new Error(bridgeData.error || 'Could not prepare Polymarket bridge checkout.')
+      }>(checkoutRes, 'Could not prepare Hash PayLink funding checkout.')
+      if (!checkoutRes.ok || !checkoutData.ok || !checkoutData.checkoutUrl) {
+        throw new Error(checkoutData.error || 'Could not prepare Hash PayLink funding checkout.')
       }
-      const finalNetwork = (bridgeData.network ?? bridgeNetwork) as RequestNetwork
-      const requestId = polymarketFundingRequestId()
-      await fetch('/api/polymarket-portfolio', {
+      const finalNetwork = (checkoutData.funding?.availableNetworks?.[0] ?? bridgeNetwork) as RequestNetwork
+      const logResponse = await fetch('/api/polymarket-portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -2692,20 +2694,11 @@ export function TelegramHelperPanel({
           network: finalNetwork,
           amount: requestedAmount,
           status: 'pending',
-          requestId,
-          depositAddress: bridgeData.depositAddress,
+          requestId: checkoutData.fundingRequestId ?? requestId,
         }),
-      }).catch(() => undefined)
-      const payUrl = buildPolymarketPayLink({
-        wallet: bridgeData.depositAddress,
-        amount: requestedAmount,
-        funding: 'Polymarket portfolio',
-        network: finalNetwork,
-        polymarketWallet: address,
-        returnToAgentHash: true,
-        requestId,
-        helperOwner: ownerKey || fallbackOwner || payer.trim(),
       })
+      const logData = await readPolyDeskJson<{ ok?: boolean; error?: string }>(logResponse, 'Could not save the funding attempt.')
+      if (!logResponse.ok || !logData.ok) throw new Error(logData.error || 'Could not save the funding attempt.')
       setPolyPortfolioFundingDraft(null)
       return {
         answer: `Bridge checkout ready for ${requestedAmount} USDC to your Polymarket profile ${shortAddress(address)} on ${requestNetworkLabels[finalNetwork]}.`,
@@ -2713,14 +2706,14 @@ export function TelegramHelperPanel({
           kind: 'polymarket-funding' as const,
           mode: 'person' as const,
           network: finalNetwork,
-          wallet: bridgeData.depositAddress,
-          evmWallet: finalNetwork === 'solana' ? '' : bridgeData.depositAddress,
-          solanaWallet: finalNetwork === 'solana' ? bridgeData.depositAddress : '',
+          wallet: address,
+          evmWallet: address,
+          solanaWallet: '',
           polymarketWallet: address,
           label: 'Polymarket funding',
           target: 'Your Polymarket account',
           amount: requestedAmount,
-          payUrl,
+          payUrl: checkoutData.checkoutUrl,
         },
         actionLink: { label: 'Portfolio', url: portfolioUrl },
       }
@@ -3873,14 +3866,14 @@ const lpScoutOptions: LpScoutOption[] = [
   {
     id: 'best',
     title: 'Best reward markets',
-    body: 'Use x402 to buy the LP Scout service and rank live reward markets by spread, liquidity, depth, rewards, and risk.',
+    body: 'Rank live reward markets by spread, depth and risk.',
     amount: '0.01',
     icon: LineChart,
   },
   {
     id: 'theme',
     title: 'Scout a theme',
-    body: 'Focus the x402 scout on one sector, event, token, election, or sports category using live Gamma and CLOB data.',
+    body: 'Scan one sector, event or sports category.',
     amount: '0.01',
     icon: Sparkles,
     inputLabel: 'Theme',
@@ -3889,7 +3882,7 @@ const lpScoutOptions: LpScoutOption[] = [
   {
     id: 'market',
     title: 'Inspect one market',
-    body: 'Inspect one Polymarket URL or market slug for current book, maker quote, depth, and LP risk context.',
+    body: 'Inspect one market book and its LP risk.',
     amount: '0.01',
     icon: ExternalLink,
     inputLabel: 'Market URL or slug',
@@ -3914,14 +3907,12 @@ export function LpScoutPanel({
   const [step, setStep] = useState<LpScoutStep>('service')
   const [mode, setMode] = useState<LpScoutMode>('best')
   const [query, setQuery] = useState('')
-  const [budget, setBudget] = useState('')
   const [maxSpend, setMaxSpend] = useState(lpScoutOptions[0].amount)
   const [prefillNotice, setPrefillNotice] = useState('')
   const selectedOption = lpScoutOptions.find(option => option.id === mode) ?? lpScoutOptions[0]
   const needsQuery = Boolean(selectedOption.inputLabel)
   const contextReady = !needsQuery || query.trim().length > 2
-  const amountReady = Number(maxSpend) > 0
-  const canChooseAgent = contextReady && amountReady
+  const canChooseAgent = contextReady
 
   useEffect(() => {
     if (searchParams.get('lpScoutPath') === 'fund') {
@@ -3939,7 +3930,6 @@ export function LpScoutPanel({
     setQuery(prefill.query)
     setMaxSpend(option.amount)
     setPrefillNotice(prefill.query)
-    if (prefill.budget) setBudget(prefill.budget)
     onPrefillConsumed()
   }, [prefill])
 
@@ -3974,7 +3964,6 @@ export function LpScoutPanel({
       serviceUrl: '/api/x402/polymarket-scout',
       n: 'arc',
       context: query.trim() || undefined,
-      budget: budget.trim() || undefined,
     }
   }
 
@@ -4023,7 +4012,7 @@ export function LpScoutPanel({
                   type="button"
                   onClick={() => selectOption(option)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
+                    'flex w-full items-center gap-3 rounded-2xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
                     selected
                       ? 'border-gray-950 ring-2 ring-gray-950/10 dark:border-white dark:ring-white/15'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.08]',
@@ -4046,19 +4035,13 @@ export function LpScoutPanel({
             })}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+          <div className="polydesk-card space-y-3 p-4">
             {prefillNotice && (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-400/20 dark:bg-emerald-400/10">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-200">News context loaded</p>
                 <p className="mt-0.5 truncate text-xs font-medium text-emerald-800/80 dark:text-emerald-100/80">{prefillNotice}</p>
               </div>
             )}
-            <div className="flex items-center justify-between gap-3">
-              <p className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-white">{selectedOption.title}</p>
-              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.08] dark:text-gray-300">
-                max {maxSpend || selectedOption.amount} USDC
-              </span>
-            </div>
             {selectedOption.inputLabel && (
               <InputBlock
                 label={selectedOption.inputLabel}
@@ -4070,25 +4053,11 @@ export function LpScoutPanel({
                 placeholder={selectedOption.inputPlaceholder ?? 'Add context'}
               />
             )}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <InputBlock
-                label="Max spend"
-                value={maxSpend}
-                onChange={setMaxSpend}
-                placeholder="1"
-              />
-              <InputBlock
-                label="Budget"
-                value={budget}
-                onChange={setBudget}
-                placeholder="Optional"
-              />
-            </div>
             <button
               type="button"
               onClick={() => setStep('agent')}
               disabled={!canChooseAgent}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+              className="polydesk-primary-cta w-full"
             >
               <Wallet className="h-4 w-4" />
               Continue to LP Scout checkout
@@ -4154,12 +4123,10 @@ function relativeNewsTime(value?: string) {
 
 export function PolyWorldCupNewsPanel({
   onBack,
-  onOpenScores,
   onOpenLpScout,
   hideBack = false,
 }: {
   onBack: () => void
-  onOpenScores: () => void
   onOpenLpScout: (prefill: LpScoutPrefill) => void
   hideBack?: boolean
 }) {
@@ -4228,29 +4195,12 @@ export function PolyWorldCupNewsPanel({
     <div className="mt-4 space-y-3">
       {!hideBack && <PolyDeskBackButton onClick={onBack} />}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Polymarket News</p>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className={cn(
-            'rounded-full px-2 py-1 text-[10px] font-bold leading-none',
-            hasProviderFeed
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
-              : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
-          )}>
-            {statusText}
-          </span>
-          <button
-            type="button"
-            onClick={onOpenScores}
-            className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold leading-none text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
-          >
-            <Radio className="h-3 w-3" />
-            Scores
-          </button>
-        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">News</p>
+        <span className="text-[10px] font-semibold text-gray-400">{statusText}</span>
       </div>
 
       <div className="space-y-2">
-        <div className="relative h-[220px] overflow-hidden rounded-xl sm:h-[248px]">
+        <div className="relative h-[220px] overflow-hidden rounded-3xl sm:h-[248px]">
           <img
             src={brokenImages[lead.title] ? POLYMARKET_LOGO : lead.image || POLYMARKET_LOGO}
             alt=""
@@ -4933,7 +4883,7 @@ function HashLiveScoreWidget({
   return (
     <div className="space-y-2">
       {featured && (
-        <div className="relative min-h-[184px] overflow-hidden border-b border-gray-100 bg-gray-950 p-3 text-white dark:border-white/10">
+        <div className="relative min-h-[184px] overflow-hidden rounded-3xl bg-gray-950 p-3 text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10">
           {homeFlag && (
             <div
               className="absolute inset-0 bg-cover bg-center opacity-100 blur-[1px] transition-opacity duration-1000 [animation:hpFlagSwapA_10s_ease-in-out_infinite]"
@@ -5157,7 +5107,7 @@ function HashLiveScoreWidget({
         </div>
       )}
 
-      <div className="max-h-[min(44vh,460px)] divide-y divide-gray-100 overflow-y-auto overscroll-contain pr-1 [scrollbar-color:rgba(148,163,184,0.28)_transparent] [scrollbar-width:thin] dark:divide-white/10 dark:[scrollbar-color:rgba(255,255,255,0.18)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/50 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
+      <div className="polydesk-card max-h-[min(44vh,460px)] divide-y divide-gray-100 overflow-y-auto overscroll-contain [scrollbar-color:rgba(148,163,184,0.28)_transparent] [scrollbar-width:thin] dark:divide-white/10 dark:[scrollbar-color:rgba(255,255,255,0.18)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300/50 dark:[&::-webkit-scrollbar-thumb]:bg-white/20">
         {rest.map(match => {
           const [rowHome, rowAway] = splitFixtureTitle(match.title)
           return (
@@ -5190,11 +5140,9 @@ function HashLiveScoreWidget({
 
 export function PolyStreamPanel({
   onBack,
-  onOpenNews,
   hideBack = false,
 }: {
   onBack: () => void
-  onOpenNews: () => void
   hideBack?: boolean
 }) {
   const { authenticated, getAccessToken } = usePrivy()
@@ -5598,47 +5546,16 @@ export function PolyStreamPanel({
     <div className="mt-4 space-y-3">
       {!hideBack && <PolyDeskBackButton onClick={onBack} />}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">World Cup Scores</p>
-        <span className={cn(
-          'shrink-0 rounded-full px-2 py-1 text-[10px] font-bold',
-          providerReady
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
-            : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
-        )}>
-          {statusText}
-        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Markets</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-gray-400">{statusText}</span>
+          <button type="button" onClick={() => void loadStream()} className="polydesk-icon-button !h-9 !w-9" aria-label="Refresh markets">
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn(
-            'inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-[11px] font-semibold',
-            providerReady
-              ? 'bg-black text-white dark:bg-white dark:text-gray-950'
-              : 'bg-gray-100 text-gray-600 dark:bg-white/[0.08] dark:text-gray-300',
-          )}>
-            {providerReady ? 'Live feed' : 'Widget'}
-          </span>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => void loadStream()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
-            >
-              <Loader2 className={cn('h-3 w-3', loading && 'animate-spin')} />
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={onOpenNews}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
-            >
-              <Newspaper className="h-3 w-3" />
-              News
-            </button>
-          </div>
-        </div>
-
         <HashLiveScoreWidget
           matches={matches}
           loading={loading && !feed}
@@ -5777,7 +5694,7 @@ function PolymarketFundingPanel({
                 </p>
               </div>
 
-              <NetworkChipGroup value={network} onChange={setNetwork} options={polymarketBridgeNetworks} />
+              <NetworkChipGroup value={network} onChange={setNetwork} options={polymarketFundingNetworks} />
 
               <InputBlock
                 label="Profile address"
@@ -6230,58 +6147,6 @@ function SavedRequestCard({
       {shareError && <p className="text-center text-xs text-red-500 dark:text-red-300">{shareError}</p>}
     </div>
   )
-}
-
-function buildPolymarketPayLink({
-  wallet,
-  amount,
-  funding,
-  network,
-  polymarketWallet,
-  returnToPortfolio,
-  returnToStandalonePortfolio,
-  returnToAgentHash,
-  returnToTradingWallet,
-  requestId,
-  helperOwner,
-}: {
-  wallet: string
-  amount: string
-  funding?: string
-  network: RequestNetwork
-  polymarketWallet: string
-  returnToPortfolio?: boolean
-  returnToStandalonePortfolio?: boolean
-  returnToAgentHash?: boolean
-  returnToTradingWallet?: boolean
-  requestId?: string
-  helperOwner?: string
-}) {
-  const params = new URLSearchParams()
-  params.set('a', amount)
-  params.set('src', 't')
-  params.set('n', network)
-  if (network === 'solana') params.set('s', wallet)
-  else params.set('e', wallet)
-  params.set('m', 'Polymarket')
-  params.set('brand', 'polymarket')
-  params.set('pm', '1')
-  params.set('bridge', 'polymarket')
-  params.set('pmw', polymarketWallet)
-  if (requestId) params.set('pmr', requestId)
-  if (returnToAgentHash) params.set('return', 'agent-hash-polydesk-portfolio')
-  if (returnToStandalonePortfolio) {
-    params.set('return', 'polydesk-portfolio')
-    params.set('polyOrigin', window.location.origin)
-  }
-  if (returnToPortfolio) params.set('return', 'poly-portfolio')
-  if (returnToTradingWallet) {
-    params.set('portfolio', 'trading')
-    params.set('wallet', 'balance')
-  }
-  if (helperOwner) params.set('helperOwner', helperOwner)
-  if (funding) params.set('funding', funding)
-  return `${PUBLIC_PAYLINK_ORIGIN}/pay?${params.toString()}`
 }
 
 function buildRequestPayLink(request: SavedRequest) {
@@ -6892,6 +6757,7 @@ export function PolyPortfolioPanel({
   initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions'
 }) {
   const showLegacyBack = surface !== 'standalone'
+  const [portfolioSearchParams] = useSearchParams()
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
   const { createWallet } = useCreateWallet({
@@ -6927,6 +6793,10 @@ export function PolyPortfolioPanel({
   const [fundNairaAmount, setFundNairaAmount] = useState('')
   const [fundBusy, setFundBusy] = useState(false)
   const [fundError, setFundError] = useState('')
+  const [fundingReturnState, setFundingReturnState] = useState<'idle' | 'checking' | 'funded' | 'error'>('idle')
+  const [fundingReturnMessage, setFundingReturnMessage] = useState('')
+  const [fundingReturnReceiptUrl, setFundingReturnReceiptUrl] = useState('')
+  const fundingReconciliationKey = useRef('')
   const [fundResult, setFundResult] = useState<{
     depositAddress: string
     network: PolymarketBridgeNetwork
@@ -7018,7 +6888,6 @@ export function PolyPortfolioPanel({
     : tradingPusdValue !== null && Number.isFinite(tradingPusdValue)
       ? formatUsd(tradingPusdValue)
       : '--'
-  const mainWalletCopy = 'View pUSD trading cash, fund your account, withdraw as USDC, and track positions.'
 
   useEffect(() => {
     if (signingWalletAddress) setWalletConnectError('')
@@ -7156,6 +7025,39 @@ export function PolyPortfolioPanel({
   useEffect(() => {
     if (privyReady && authenticated) void fetchBundle()
   }, [privyReady, authenticated, fetchBundle])
+
+  useEffect(() => {
+    const notice = portfolioSearchParams.get('notice')
+    const requestId = portfolioSearchParams.get('fundingRequestId')?.trim() ?? ''
+    if (notice !== 'polymarket-funding-complete' || !/^pmf_[a-f0-9]{20}$/.test(requestId)) return
+    const key = `${requestId}:${authenticated ? 'account' : 'public'}`
+    if (fundingReconciliationKey.current === key) return
+    fundingReconciliationKey.current = key
+    setFundingReturnState('checking')
+    setFundingReturnMessage('Verifying final Polymarket delivery with Hash PayLink...')
+    void (async () => {
+      try {
+        const token = authenticated ? await getAccessToken() : ''
+        const response = token
+          ? await fetch('/api/polymarket-portfolio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'reconcile-funding', requestId }),
+            })
+          : await fetch(`/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(requestId)}`)
+        const data = await readPolyDeskJson<{ ok?: boolean; status?: string; receiptUrl?: string; error?: string }>(response, 'Could not verify Polymarket funding.')
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Could not verify Polymarket funding.')
+        if (data.status !== 'funded') throw new Error(data.status === 'bridging' ? 'Funding is still bridging. Refresh shortly.' : 'Polymarket funding is not complete yet.')
+        setFundingReturnReceiptUrl(data.receiptUrl ?? '')
+        setFundingReturnState('funded')
+        setFundingReturnMessage('Polymarket funding delivered and verified.')
+        if (token) await fetchBundle()
+      } catch (err) {
+        setFundingReturnState('error')
+        setFundingReturnMessage(err instanceof Error ? err.message : 'Could not verify Polymarket funding.')
+      }
+    })()
+  }, [authenticated, fetchBundle, getAccessToken, portfolioSearchParams])
 
   useEffect(() => {
     if (liveDataAddress) {
@@ -7411,57 +7313,50 @@ export function PolyPortfolioPanel({
     setFundBusy(true)
     try {
       const network = tradingWalletNetwork
-      const bridgeRes = await fetch('/api/polymarket-bridge', {
+      if (network === 'solana') throw new Error('The new Hash PayLink funding API currently supports Base and Arbitrum.')
+      const requestId = polymarketFundingRequestId()
+      const checkoutRes = await fetch('/api/hashpaylink/polymarket-funding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           polymarketWallet: polymarketDepositWallet,
-          network,
+          amount: amt,
+          networks: network === 'base' ? ['base', 'arbitrum'] : ['arbitrum', 'base'],
+          requestId,
+          flow: 'portfolio',
         }),
       })
-      const bridgeData = await bridgeRes.json() as {
+      const checkoutData = await checkoutRes.json() as {
         ok?: boolean
-        depositAddress?: string
-        network?: PolymarketBridgeNetwork
-        minimumUsdc?: number
+        checkoutUrl?: string
+        fundingRequestId?: string
+        funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
       }
-      if (!bridgeRes.ok || !bridgeData.ok || !bridgeData.depositAddress) {
-        throw new Error(bridgeData.error || 'Could not prepare bridge address.')
+      if (!checkoutRes.ok || !checkoutData.ok || !checkoutData.checkoutUrl) {
+        throw new Error(checkoutData.error || 'Could not prepare Hash PayLink funding checkout.')
       }
-      const requestId = polymarketFundingRequestId()
       const token = await getAccessToken()
-      if (token) {
-        await fetch('/api/polymarket-portfolio', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            action: 'log-funding',
-            polymarketWallet: polymarketDepositWallet,
-            network: bridgeData.network ?? network,
-            amount: amt,
-            status: 'pending',
-            requestId,
-            depositAddress: bridgeData.depositAddress,
-          }),
-        }).catch(() => undefined)
-      }
-      const payUrl = buildPolymarketPayLink({
-        wallet: bridgeData.depositAddress,
-        amount: amt,
-        funding: 'Polymarket portfolio',
-        network: (bridgeData.network ?? network) as RequestNetwork,
-        polymarketWallet: polymarketDepositWallet,
-        returnToPortfolio: surface !== 'standalone',
-        returnToStandalonePortfolio: surface === 'standalone',
-        returnToTradingWallet: true,
-        requestId,
+      if (!token) throw new Error('Sign in again before opening the funding checkout.')
+      const logResponse = await fetch('/api/polymarket-portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'log-funding',
+          polymarketWallet: polymarketDepositWallet,
+          network,
+          amount: amt,
+          status: 'pending',
+          requestId: checkoutData.fundingRequestId ?? requestId,
+        }),
       })
+      const logData = await readPolyDeskJson<{ ok?: boolean; error?: string }>(logResponse, 'Could not save the funding attempt.')
+      if (!logResponse.ok || !logData.ok) throw new Error(logData.error || 'Could not save the funding attempt.')
       setFundResult({
-        depositAddress: bridgeData.depositAddress,
-        network: (bridgeData.network ?? network) as PolymarketBridgeNetwork,
-        minimumUsdc: bridgeData.minimumUsdc ?? 3,
-        payUrl,
+        depositAddress: '',
+        network: checkoutData.funding?.availableNetworks?.[0] ?? network,
+        minimumUsdc: 3,
+        payUrl: checkoutData.checkoutUrl,
         marketUrl: marketUrlForCta || 'https://polymarket.com',
         method: 'usdc',
         amountLabel: `${amt} USDC`,
@@ -8058,38 +7953,34 @@ export function PolyPortfolioPanel({
     }
     setUnsignedExternalBusy(true)
     try {
-      const bridgeRes = await fetch('/api/polymarket-bridge', {
+      if (unsignedExternalNetwork === 'solana') throw new Error('The new Hash PayLink funding API currently supports Base and Arbitrum.')
+      const requestId = polymarketFundingRequestId()
+      const checkoutRes = await fetch('/api/hashpaylink/polymarket-funding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           polymarketWallet: wallet,
-          network: unsignedExternalNetwork,
+          amount,
+          networks: unsignedExternalNetwork === 'base' ? ['base', 'arbitrum'] : ['arbitrum', 'base'],
+          requestId,
+          flow: 'external',
         }),
       })
-      const bridgeData = await bridgeRes.json() as {
+      const checkoutData = await checkoutRes.json() as {
         ok?: boolean
-        depositAddress?: string
-        network?: PolymarketBridgeNetwork
-        minimumUsdc?: number
+        checkoutUrl?: string
+        funding?: { availableNetworks?: PolymarketBridgeNetwork[] }
         error?: string
       }
-      if (!bridgeRes.ok || !bridgeData.ok || !bridgeData.depositAddress) {
-        throw new Error(bridgeData.error || 'Could not prepare external funding.')
+      if (!checkoutRes.ok || !checkoutData.ok || !checkoutData.checkoutUrl) {
+        throw new Error(checkoutData.error || 'Could not prepare external funding checkout.')
       }
-      const network = (bridgeData.network ?? unsignedExternalNetwork) as PolymarketBridgeNetwork
+      const network = checkoutData.funding?.availableNetworks?.[0] ?? unsignedExternalNetwork
       setUnsignedExternalResult({
-        depositAddress: bridgeData.depositAddress,
+        depositAddress: '',
         network,
-        minimumUsdc: bridgeData.minimumUsdc ?? 3,
-        payUrl: buildPolymarketPayLink({
-          wallet: bridgeData.depositAddress,
-          amount,
-          funding: 'External Polymarket account',
-          network: network as RequestNetwork,
-          polymarketWallet: wallet,
-          returnToPortfolio: surface !== 'standalone',
-          returnToStandalonePortfolio: surface === 'standalone',
-        }),
+        minimumUsdc: 3,
+        payUrl: checkoutData.checkoutUrl,
       })
     } catch (err) {
       setUnsignedExternalError(err instanceof Error ? err.message : 'Could not prepare external funding.')
@@ -8175,6 +8066,31 @@ export function PolyPortfolioPanel({
   }
 
   // ── Render ────────────────────────────────────────────────────────────
+  const fundingReturnNotice = fundingReturnState === 'idle' ? null : (
+    <div className={cn(
+      'rounded-2xl border px-4 py-3',
+      fundingReturnState === 'funded'
+        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10'
+        : fundingReturnState === 'error'
+          ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
+          : 'border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/[0.04]',
+    )}>
+      <div className="flex items-center gap-2">
+        {fundingReturnState === 'checking'
+          ? <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+          : fundingReturnState === 'funded'
+            ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+            : <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-300" />}
+        <p className="text-sm font-semibold text-gray-900 dark:text-white">{fundingReturnMessage}</p>
+      </div>
+      {fundingReturnState === 'funded' && fundingReturnReceiptUrl && (
+        <a href={fundingReturnReceiptUrl} className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-200">
+          View Hash PayLink receipt <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      )}
+    </div>
+  )
+
   if (unsignedPortfolioAction === 'x402') {
     return (
       <div className="mt-4 space-y-4">
@@ -8302,6 +8218,7 @@ export function PolyPortfolioPanel({
     return (
       <div className="mt-4 space-y-3">
         {showLegacyBack && selectedAction && <PolyDeskBackButton onClick={backHandler} />}
+        {fundingReturnNotice}
 
         {!selectedAction ? (
           <div className="space-y-2">
@@ -8447,13 +8364,13 @@ export function PolyPortfolioPanel({
                         placeholder="0.00"
                         inputMode="decimal"
                       />
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {polymarketBridgeNetworks.map(network => (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {polymarketFundingNetworks.map(network => (
                           <button
                             key={network.key}
                             type="button"
                             onClick={() => {
-                              if (network.key === 'base' || network.key === 'arbitrum' || network.key === 'solana') {
+                              if (network.key === 'base' || network.key === 'arbitrum') {
                                 setUnsignedExternalNetwork(network.key)
                                 setUnsignedExternalResult(null)
                               }
@@ -8470,9 +8387,7 @@ export function PolyPortfolioPanel({
                         ))}
                       </div>
                       <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                        {unsignedExternalNetwork === 'solana'
-                          ? 'Solana checkout creates an SVM deposit address that credits the 0x Polymarket wallet above.'
-                          : `${requestNetworkLabels[unsignedExternalNetwork]} checkout creates an EVM deposit address that credits the 0x Polymarket wallet above.`}
+                        {`${requestNetworkLabels[unsignedExternalNetwork]} checkout creates a verified EVM deposit route that credits the 0x Polymarket wallet above.`}
                       </p>
                       {!unsignedExternalResult ? (
                         <button
@@ -8624,13 +8539,13 @@ export function PolyPortfolioPanel({
                   placeholder="0.00"
                   inputMode="decimal"
                 />
-                <div className="grid grid-cols-3 gap-1.5">
-                  {polymarketBridgeNetworks.map(network => (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {polymarketFundingNetworks.map(network => (
                     <button
                       key={network.key}
                       type="button"
                       onClick={() => {
-                        if (network.key === 'base' || network.key === 'arbitrum' || network.key === 'solana') {
+                        if (network.key === 'base' || network.key === 'arbitrum') {
                           setUnsignedExternalNetwork(network.key)
                           setUnsignedExternalResult(null)
                         }
@@ -8647,9 +8562,7 @@ export function PolyPortfolioPanel({
                   ))}
                 </div>
                 <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                  {unsignedExternalNetwork === 'solana'
-                    ? 'Solana checkout creates an SVM deposit address that credits the 0x Polymarket wallet above.'
-                    : `${requestNetworkLabels[unsignedExternalNetwork]} checkout creates an EVM deposit address that credits the 0x Polymarket wallet above.`}
+                  {`${requestNetworkLabels[unsignedExternalNetwork]} checkout creates a verified EVM deposit route that credits the 0x Polymarket wallet above.`}
                 </p>
                 {!unsignedExternalResult ? (
                   <button
@@ -8668,7 +8581,7 @@ export function PolyPortfolioPanel({
                         <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-300">Checkout ready</p>
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Min {unsignedExternalResult.minimumUsdc} USDC</p>
                       </div>
-                      <p className="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-200">{unsignedExternalResult.depositAddress}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">Hash PayLink verifies the Polymarket bridge destination before presenting payment routes.</p>
                     </div>
                     <a href={unsignedExternalResult.payUrl} className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
                       <ExternalLink className="h-4 w-4" /> Open checkout
@@ -8729,11 +8642,10 @@ export function PolyPortfolioPanel({
     return (
       <div className="mt-4 space-y-3">
         {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Balance</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Main Wallet</h2>
+        <div className="polydesk-card p-4">
+          <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Account</h2>
           <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            {mainWalletCopy}
+            Cash, positions and funding in one place.
           </p>
           <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">pUSD trading cash</p>
@@ -8799,11 +8711,12 @@ export function PolyPortfolioPanel({
   return (
     <div className="mt-4 space-y-4">
       {showLegacyBack && <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />}
+      {fundingReturnNotice}
 
       {/* Watched account card */}
       {unsignedPortfolioAction === 'watch' && (
       <div
-        className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f1014]"
+        className="polydesk-card p-4"
         data-polydesk-surface={surface}
       >
         <div className="flex items-start justify-between gap-3">
@@ -8812,10 +8725,10 @@ export function PolyPortfolioPanel({
               <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
                 <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
               </span>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Read-only profile</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Watch wallet</p>
             </div>
             <p className="mt-1.5 text-xs leading-snug text-gray-500 dark:text-gray-400">
-              Track a public Polymarket profile without signing trades.
+              Track any public Polymarket profile.
             </p>
             <button
               type="button"
@@ -8896,14 +8809,13 @@ export function PolyPortfolioPanel({
 
       {/* Main wallet card */}
       {unsignedPortfolioAction === 'trading' && (
-      <div className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
+      <div className="polydesk-card p-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Balance</p>
           <div className="mt-1 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Main Wallet</h2>
+              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Account</h2>
               <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                {mainWalletCopy}
+                Cash, positions and funding in one place.
               </p>
             </div>
             {signingWalletAddress && (
@@ -8971,7 +8883,7 @@ export function PolyPortfolioPanel({
           <div className="mt-3 grid gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Owner wallet</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Wallet</p>
                 <p className="mt-1 font-mono text-xs font-semibold text-gray-800 dark:text-gray-100">{shortHex(savedTradingAddress)}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
@@ -8984,7 +8896,6 @@ export function PolyPortfolioPanel({
                   {savingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   Change
                 </button>
-                <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:bg-white/[0.06] dark:text-gray-300">Signer</span>
               </div>
             </div>
             {connectedTradingWalletMismatch && (
@@ -9004,7 +8915,7 @@ export function PolyPortfolioPanel({
             )}
             <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-2 dark:border-white/10">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Polymarket wallet</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Trading account</p>
                 <p className="mt-1 font-mono text-xs font-semibold text-gray-800 dark:text-gray-100">
                   {polymarketDepositWallet
                     ? `${shortHex(polymarketDepositWallet)}${polymarketWalletReady ? '' : ' - activating'}`
@@ -9012,8 +8923,8 @@ export function PolyPortfolioPanel({
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                   {polymarketWalletReady
-                    ? 'Funding goes to this Polymarket deposit wallet, not the owner wallet.'
-                    : 'PolyDesk is activating this Polymarket wallet automatically before funding unlocks.'}
+                    ? 'Used for Polymarket positions and orders.'
+                    : 'PolyDesk is activating your trading account.'}
                 </p>
               </div>
               {!polymarketWalletReady && (
@@ -9029,12 +8940,6 @@ export function PolyPortfolioPanel({
               )}
             </div>
             {depositWalletError && <p className="text-xs text-red-500 dark:text-red-300">{depositWalletError}</p>}
-            {profile?.depositWalletStatus && polymarketDepositWallet && (
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Status: <span className="font-semibold">{profile.depositWalletStatus}</span>
-                {profile.depositWalletTxHash ? ` - ${shortHex(profile.depositWalletTxHash)}` : ''}
-              </p>
-            )}
           </div>
         )}
 
@@ -9063,8 +8968,8 @@ export function PolyPortfolioPanel({
         </div>
 
         {(tradingWalletTab === 'fund' || tradingWalletTab === 'withdraw') && (
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
-            {polymarketBridgeNetworks.map(network => (
+          <div className={cn('mt-3 grid gap-1.5', tradingWalletTab === 'withdraw' ? 'grid-cols-3' : 'grid-cols-2')}>
+            {(tradingWalletTab === 'withdraw' ? polymarketBridgeNetworks : polymarketFundingNetworks).map(network => (
               <button
                 key={network.key}
                 type="button"
@@ -9216,15 +9121,9 @@ export function PolyPortfolioPanel({
                 <p className="text-sm text-gray-700 dark:text-gray-200">
                   {fundResult.method === 'naira'
                     ? <>Pay <span className="font-semibold tabular-nums">{fundResult.amountLabel}</span> from a Nigerian bank. Paycrest sends Base USDC to the bridge address.</>
-                    : <>Send <span className="font-semibold tabular-nums">{fundResult.amountLabel}</span> via {requestNetworkLabels[fundResult.network]} to the bridge address.</>}
+                    : <>Pay <span className="font-semibold tabular-nums">{fundResult.amountLabel}</span> through Hash PayLink. The checkout verifies the bridge destination and tracks delivery into Polymarket.</>}
                 </p>
-                <a
-                  href={fundResult.payUrl}
-                  className="block truncate rounded-lg bg-gray-50 px-3 py-2 font-mono text-xs text-gray-800 dark:bg-white/[0.06] dark:text-gray-200"
-                  rel="noreferrer"
-                >
-                  {fundResult.depositAddress}
-                </a>
+                {fundResult.depositAddress && <a href={fundResult.payUrl} className="block truncate rounded-lg bg-gray-50 px-3 py-2 font-mono text-xs text-gray-800 dark:bg-white/[0.06] dark:text-gray-200" rel="noreferrer">{fundResult.depositAddress}</a>}
                 <a
                   href={fundResult.payUrl}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
@@ -9451,7 +9350,7 @@ export function PolyPortfolioPanel({
 
       {/* Alerts card */}
       {unsignedPortfolioAction === 'watch' && watchAccountTab === 'alerts' && (
-      <div className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
+      <div className="polydesk-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Alerts</p>
@@ -9608,7 +9507,7 @@ export function PolyPortfolioPanel({
 
       {/* Open positions card */}
       {unsignedPortfolioAction === 'watch' && watchAccountTab === 'positions' && (
-      <div className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
+      <div className="polydesk-card p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Open positions</p>
           {activeOpenPositions.length > 0 && <p className="text-xs text-gray-500 dark:text-gray-400">{activeOpenPositions.length}</p>}

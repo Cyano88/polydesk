@@ -17,6 +17,7 @@ import { PRIVY_AUTH_ENABLED }           from '../lib/authMode'
 import { resolvePrivyCircleLink, savePrivyCircleLink } from '../lib/privyCircleLink'
 import { PrivyConnectButton }           from '../lib/PrivyConnectButton'
 import { POLYDESK_LOGIN_OPTIONS }       from '../lib/privyLoginOptions'
+import { rememberLpScoutActivity }      from '../lib/polydeskTradeActivity'
 import ZeroScoutPowerBadge              from '../components/ZeroScoutPowerBadge'
 import {
   CheckCircle2, AlertCircle, Loader2, Send,
@@ -1319,6 +1320,11 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setReceiptsOpen(true)
       clearLpScoutIntent()
       if (data.resultActivityId) {
+        rememberLpScoutActivity({
+          resultActivityId: data.resultActivityId,
+          receiptActivityId: data.receiptActivityId,
+          agentSlug: payerAgentSlug,
+        })
         const next = new URLSearchParams()
         next.set('agent', '1')
         next.set('lane', 'lp-scout')

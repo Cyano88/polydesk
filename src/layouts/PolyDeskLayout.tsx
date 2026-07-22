@@ -2,18 +2,18 @@ import { useEffect, useState, type ComponentType } from 'react'
 import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
-  ArrowLeftRight,
-  CircleDollarSign,
   Copy,
+  CreditCard,
   Eye,
+  FlaskConical,
+  History,
   LogOut,
+  MessageCircle,
   Mic2,
   Moon,
   Newspaper,
   Radar,
-  Store,
   Sun,
-  Trophy,
   UserRound,
   Wallet,
 } from 'lucide-react'
@@ -21,7 +21,7 @@ import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { cn } from '../lib/utils'
 
-type Workspace = 'agent' | 'portfolio' | 'trade'
+type Workspace = 'portfolio' | 'trade' | 'app-pay'
 
 function PolymarketMark({ className }: { className?: string }) {
   return (
@@ -229,12 +229,12 @@ function PolyDeskWorkspace() {
   }, [theme])
 
   const service = searchParams.get('service') ?? ''
-  const portfolioAction = searchParams.get('portfolio') ?? 'watch'
-  const workspace: Workspace = service === 'portfolio'
-    ? 'portfolio'
-    : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'lp-scout' || service === 'marketplace'
+  const portfolioAction = searchParams.get('portfolio') ?? ''
+  const workspace: Workspace = service === 'app-pay' || service === 'marketplace'
+    ? 'app-pay'
+    : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'lp-scout' || service === 'activity'
       ? 'trade'
-      : 'agent'
+      : 'portfolio'
 
   const walletAddress = wallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? ''))?.address ?? ''
   const identitySeed = walletAddress || user?.id || 'polydesk'
@@ -254,23 +254,23 @@ function PolyDeskWorkspace() {
   }
 
   const navItems = [
-    { id: 'agent', label: 'Desk Agent', to: makeTo(), active: workspace === 'agent' },
-    { id: 'portfolio', label: 'Portfolio', to: makeTo('portfolio', { portfolio: 'watch' }), active: workspace === 'portfolio' },
+    { id: 'portfolio', label: 'Portfolio', to: makeTo(), active: workspace === 'portfolio' },
     { id: 'trade', label: 'Trade', to: makeTo('worldcup-scores'), active: workspace === 'trade' },
+    { id: 'app-pay', label: 'App Pay', badge: 'Experimental', to: makeTo('app-pay'), active: workspace === 'app-pay' },
   ] as const
 
   const portfolioItems: UtilityItem[] = [
-    { id: 'watch', label: 'Watch', icon: Eye, to: makeTo('portfolio', { portfolio: 'watch' }), active: portfolioAction === 'watch' },
-    { id: 'wallet', label: 'Wallet', icon: Wallet, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'balance' }), active: portfolioAction === 'trading' },
-    { id: 'external', label: 'External', icon: ArrowLeftRight, to: makeTo('portfolio', { portfolio: 'external' }), active: portfolioAction === 'external' },
-    { id: 'x402', label: 'Fund x402', icon: CircleDollarSign, to: makeTo('portfolio', { portfolio: 'x402' }), active: portfolioAction === 'x402' },
+    { id: 'agent', label: 'Desk Agent', icon: MessageCircle, to: makeTo(), active: service === '' },
+    { id: 'account', label: 'Account', icon: Wallet, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'balance' }), active: service === 'portfolio' && portfolioAction === 'trading' },
+    { id: 'watch', label: 'Watch Wallet', icon: Eye, to: makeTo('portfolio', { portfolio: 'watch' }), active: service === 'portfolio' && portfolioAction === 'watch' },
+    { id: 'tip', label: 'Tip', icon: CreditCard, to: makeTo('portfolio', { portfolio: 'external' }), active: service === 'portfolio' && portfolioAction === 'external' },
   ]
 
   const tradeItems: UtilityItem[] = [
-    { id: 'worldcup', label: 'World Cup', icon: Trophy, to: makeTo('worldcup-scores'), active: service === 'worldcup' || service === 'worldcup-scores' },
-    { id: 'news', label: 'News', icon: Newspaper, to: makeTo('worldcup-news'), active: service === 'worldcup-news' },
+    { id: 'markets', label: 'Markets', icon: FlaskConical, to: makeTo('worldcup-scores'), active: service === 'worldcup' || service === 'worldcup-scores' },
     { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: service === 'lp-scout' },
-    { id: 'marketplace', label: 'Marketplace', icon: Store, to: makeTo('marketplace'), active: service === 'marketplace' },
+    { id: 'news', label: 'News', icon: Newspaper, to: makeTo('worldcup-news'), active: service === 'worldcup-news' },
+    { id: 'activity', label: 'Activity', icon: History, to: makeTo('activity'), active: service === 'activity' },
   ]
 
   if (!ready || (authenticated && !walletsReady)) {
@@ -316,7 +316,10 @@ function PolyDeskWorkspace() {
                 )}
                 aria-current={item.active ? 'page' : undefined}
               >
-                {item.label}
+                <span className="inline-flex items-center gap-1.5">
+                  {item.label}
+                  {'badge' in item && <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide text-violet-600 dark:bg-violet-400/15 dark:text-violet-300">{item.badge}</span>}
+                </span>
               </Link>
             ))}
           </nav>
@@ -361,18 +364,21 @@ function PolyDeskWorkspace() {
           <nav aria-label="PolyDesk" className="grid w-full grid-cols-3 gap-1 rounded-full border border-gray-200 bg-gray-50/80 p-0.5 dark:border-white/10 dark:bg-[#1c1c20]">
             {navItems.map(item => (
               <Link key={item.id} to={item.to} className={cn('rounded-full px-2 py-1.5 text-center text-[10px] font-semibold transition-all', item.active ? 'bg-white text-gray-900 shadow-sm dark:text-gray-950' : 'text-gray-400')}>
-                {item.label}
+                <span className="inline-flex items-center gap-1">
+                  {item.label}
+                  {'badge' in item && <span className="h-1.5 w-1.5 rounded-full bg-violet-500" aria-label={item.badge} />}
+                </span>
               </Link>
             ))}
           </nav>
         </div>
       </header>
 
-      <main className={cn('mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10', workspace !== 'agent' && 'pb-24 sm:pb-24')}>
+      <main data-polydesk-product-ui className={cn('mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10', workspace !== 'app-pay' && 'pb-24 sm:pb-24')}>
         <Outlet />
       </main>
 
-      {workspace !== 'agent' && (
+      {workspace !== 'app-pay' && (
         <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/95">
           <div className="mx-auto w-full max-w-5xl px-3 sm:px-6">
           <WorkspaceUtilityPill

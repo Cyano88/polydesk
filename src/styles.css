@@ -1099,3 +1099,98 @@ html.dark .polydesk-launch-identity {
     filter: none;
   }
 }
+
+/* PolyDesk product system: one card hierarchy and one primary action shape. */
+.polydesk-card {
+  border: 1px solid rgb(229 231 235);
+  border-radius: 24px;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.04);
+}
+
+.dark .polydesk-card {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+}
+
+.polydesk-primary-cta {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 9999px;
+  background: rgb(17 24 39);
+  padding: 10px 20px;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.polydesk-primary-cta:hover {
+  transform: translateY(-1px);
+  background: rgb(31 41 55);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.20);
+}
+
+.polydesk-primary-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.dark .polydesk-primary-cta {
+  background: white;
+  color: rgb(17 24 39);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.34);
+}
+
+.dark .polydesk-primary-cta:hover {
+  background: rgb(243 244 246);
+}
+
+.polydesk-icon-button {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgb(229 231 235);
+  border-radius: 9999px;
+  background: white;
+  color: rgb(75 85 99);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.polydesk-icon-button:hover {
+  background: rgb(249 250 251);
+  color: rgb(17 24 39);
+}
+
+.dark .polydesk-icon-button {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(209 213 219);
+}
+
+.dark .polydesk-icon-button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: white;
+}
+
+[data-polydesk-product-ui] :is(button, a).w-full.bg-black,
+[data-polydesk-product-ui] :is(button, a).w-full.bg-gray-950 {
+  min-height: 44px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+}
+
+.dark [data-polydesk-product-ui] :is(button, a).w-full.bg-black,
+.dark [data-polydesk-product-ui] :is(button, a).w-full.bg-gray-950 {
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.32);
+}

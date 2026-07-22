@@ -1,7 +1,7 @@
 import express from 'express'
 import type { Response } from 'express'
 import { config as loadEnv } from 'dotenv'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -15,8 +15,6 @@ import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
 import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
 import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
-import okxMarketplaceCheckoutHandler from './api/okx-marketplace-checkout.js'
-import okxAgenticMarketplaceHandler from './api/okx-agentic-marketplace.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -25,6 +23,7 @@ import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
+import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-funding.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
 import privyCircleLinkHandler from './api/privy-circle-link.js'
@@ -95,6 +94,7 @@ app.use(express.json({ limit: '256kb' }))
 const strictLimiter = rateLimit({ name: 'strict', windowMs: 60_000, max: 20 })
 const readLimiter = rateLimit({ name: 'read', windowMs: 60_000, max: 120 })
 const zeroScoutLimiter = rateLimit({ name: 'zeroscout', windowMs: 60_000, max: 45 })
+const fundingCheckoutLimiter = rateLimit({ name: 'funding-checkout', windowMs: 60_000, max: 6 })
 
 app.all('/api/polymarket-bridge', strictLimiter, polymarketBridgeHandler)
 app.post('/api/polymarket-builder-handoff', strictLimiter, polymarketBuilderHandoffHandler)
@@ -104,9 +104,9 @@ app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
+app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayLinkPolymarketFundingHandler)
+app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
-app.post('/api/okx-marketplace-checkout', strictLimiter, okxMarketplaceCheckoutHandler)
-app.post('/api/okx-agentic-marketplace', strictLimiter, okxAgenticMarketplaceHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
@@ -135,7 +135,6 @@ app.get('/api/x402-receipt', readLimiter, x402ReceiptHandler)
 app.get('/api/health', (_req, res) => res.json({
   ok: true,
   service: 'polydesk',
-  okxAgenticWalletReady: existsSync(join(__dirname, '.render-home', '.local', 'bin', 'onchainos')),
   ts: Date.now(),
 }))
 

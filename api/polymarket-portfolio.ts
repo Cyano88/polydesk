@@ -3,6 +3,7 @@ import pg from 'pg'
 import { isAddress } from 'viem'
 import { PrivyClient } from '@privy-io/server-auth'
 import { sendTransactionalEmail } from './email-provider.js'
+import { fetchHashPayLinkPolymarketFundingStatus } from './hashpaylink-polymarket-funding.js'
 
 const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
@@ -568,6 +569,14 @@ export default async function handler(req: Request, res: Response) {
       const data = await dataApiFetch<unknown>(url)
       return res.json({ ok: true, positions: Array.isArray(data) ? data : [] })
     }
+    if (req.method === 'GET' && action === 'activity') {
+      const address = cleanString(req.query.address, 64)
+      if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
+      const requestedLimit = Number(req.query.limit ?? 50)
+      const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.trunc(requestedLimit))) : 50
+      const data = await dataApiFetch<unknown>(`/activity?user=${encodeURIComponent(address)}&limit=${limit}&sortBy=TIMESTAMP&sortDirection=DESC`)
+      return res.json({ ok: true, activity: Array.isArray(data) ? data : [] })
+    }
 
     // All persistence actions require Privy auth.
     let privyUserId: string
@@ -866,6 +875,50 @@ export default async function handler(req: Request, res: Response) {
         [privyUserId, polymarketWallet, requestId, network, amount, status, txHash, depositAddress],
       )
       return res.json({ ok: true, fundingAttempt: inserted.rows[0] })
+    }
+
+    if (action === 'reconcile-funding') {
+      const requestId = cleanString(body.requestId, 64)
+      if (!/^pmf_[a-f0-9]{20}$/.test(requestId)) return res.status(400).json({ ok: false, error: 'Provide a valid Hash PayLink funding request.' })
+      const attempt = (await requirePool().query(
+        `select id, request_id, network, amount, status, tx_hash, deposit_address, polymarket_address, created_at
+           from polymarket_funding_attempts
+          where privy_user_id = $1 and request_id = $2
+          order by created_at desc
+          limit 1`,
+        [privyUserId, requestId],
+      )).rows[0]
+      if (!attempt) return res.status(404).json({ ok: false, error: 'Funding attempt not found for this account.' })
+
+      const upstream = await fetchHashPayLinkPolymarketFundingStatus(requestId)
+      const funding = upstream.data
+      if (upstream.statusCode < 200 || upstream.statusCode >= 300 || !funding.ok) {
+        return res.status(502).json({ ok: false, error: funding.error || 'Hash PayLink funding status is unavailable.' })
+      }
+      if (funding.fundingRequestId !== requestId || !funding.status) {
+        return res.status(502).json({ ok: false, error: 'Hash PayLink returned an invalid funding status.' })
+      }
+      const status = funding.status === 'funded'
+        ? 'bridge_complete'
+        : funding.status === 'bridging'
+          ? 'bridging'
+          : funding.status === 'expired'
+            ? 'expired'
+            : 'pending'
+      const txHash = cleanString(funding.bridgeTransaction || funding.paymentTransaction || attempt.tx_hash, 96) || null
+      const updated = await requirePool().query(
+        `update polymarket_funding_attempts
+            set status = $1, tx_hash = $2, updated_at = now()
+          where id = $3 and privy_user_id = $4
+          returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
+        [status, txHash, attempt.id, privyUserId],
+      )
+      return res.json({
+        ok: true,
+        status: funding.status,
+        receiptUrl: funding.status === 'funded' ? funding.receiptUrl : undefined,
+        fundingAttempt: updated.rows[0],
+      })
     }
 
     if (action === 'complete-funding') {

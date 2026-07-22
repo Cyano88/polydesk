@@ -17,6 +17,7 @@ const groups = [
       'POLYMARKET_BUILDER_SECRET',
       'VITE_PUBLIC_PAYLINK_ORIGIN',
       'HASH_PAYLINK_BASE_URL',
+      'HASH_PAYLINK_API_KEY',
     ],
     alternatives: [
       ['DATABASE_URL', 'POSTGRES_URL'],
@@ -76,19 +77,6 @@ const groups = [
     optional: [
       'OKX_X402_BASE_URL',
       'OKX_X402_SYNC_SETTLE',
-    ],
-  },
-  {
-    name: 'okx agentic marketplace',
-    alternatives: [
-      ['OKX_API_KEY', 'OKX_PAYMENT_API_KEY', 'OKX_X402_API_KEY'],
-      ['OKX_SECRET_KEY', 'OKX_PAYMENT_SECRET_KEY', 'OKX_X402_SECRET_KEY'],
-      ['OKX_PASSPHRASE', 'OKX_PAYMENT_PASSPHRASE', 'OKX_X402_PASSPHRASE'],
-    ],
-    optional: [
-      'ONCHAINOS_BIN',
-      'OKX_AGENTIC_DATA_PATH',
-      'OKX_AGENTIC_BASE_URL',
     ],
   },
   {

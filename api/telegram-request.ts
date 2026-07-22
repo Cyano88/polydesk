@@ -72,6 +72,16 @@ function originFromRequest(req: Request) {
   return `${proto}://${host}`
 }
 
+function trustedHashPayLinkCheckout(value: string) {
+  try {
+    const configured = (process.env.HASH_PAYLINK_BASE_URL ?? 'https://app.hashpaylink.com').trim().replace(/\/+$/, '')
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.origin === new URL(configured).origin && /^\/pay(?:\/|$)/.test(url.pathname)
+  } catch {
+    return false
+  }
+}
+
 async function readStore(): Promise<Store> {
   try {
     const raw = await readFile(resolve(STORE_PATH), 'utf8')
@@ -163,6 +173,8 @@ export default async function handler(req: Request, res: Response) {
     const kind: TelegramRequestKind = body.kind === 'polymarket-funding' ? 'polymarket-funding' : 'payment-request'
     const label = cleanText(body.label, mode === 'group' ? 'Telegram collection' : 'Payment request')
     const target = cleanText(body.target, mode === 'group' ? 'Telegram group' : 'Payer')
+    const polymarketWallet = cleanText(body.polymarketWallet, '').slice(0, 96)
+    const hostedPayUrl = String(body.payUrl ?? '').trim().slice(0, 500)
     const inferredNetwork: TelegramRequestNetwork = wallet.startsWith('0x') ? 'base' : 'solana'
     const network = cleanNetwork(body.network, inferredNetwork)
     const primaryWallet = network === 'all'
@@ -170,14 +182,16 @@ export default async function handler(req: Request, res: Response) {
       : network === 'solana'
         ? solanaWallet || wallet
         : evmWallet || wallet
-    const validWallet = network === 'all'
-      ? isAddress(evmWallet) && isSolanaAddress(solanaWallet)
-      : network === 'solana'
-        ? isSolanaAddress(primaryWallet)
-        : isEvmNetwork(network) && isAddress(primaryWallet)
+    const validWallet = kind === 'polymarket-funding'
+      ? isAddress(polymarketWallet) && (network === 'base' || network === 'arbitrum') && trustedHashPayLinkCheckout(hostedPayUrl)
+      : network === 'all'
+        ? isAddress(evmWallet) && isSolanaAddress(solanaWallet)
+        : network === 'solana'
+          ? isSolanaAddress(primaryWallet)
+          : isEvmNetwork(network) && isAddress(primaryWallet)
 
     if (!validWallet) {
-      return res.status(400).json({ ok: false, error: network === 'all' ? 'Enter valid EVM and Solana receive wallets.' : 'Enter a valid receive wallet.' })
+      return res.status(400).json({ ok: false, error: kind === 'polymarket-funding' ? 'Prepare a valid Hash PayLink Polymarket funding checkout first.' : network === 'all' ? 'Enter valid EVM and Solana receive wallets.' : 'Enter a valid receive wallet.' })
     }
     if (!label) return res.status(400).json({ ok: false, error: 'Missing request label' })
     if (kind === 'polymarket-funding') {
@@ -192,11 +206,11 @@ export default async function handler(req: Request, res: Response) {
       eventId,
       mode,
       kind,
-      wallet: primaryWallet,
+      wallet: kind === 'polymarket-funding' ? polymarketWallet : primaryWallet,
       network,
       evmWallet: network === 'all' || isEvmNetwork(network) ? evmWallet || primaryWallet : '',
       solanaWallet: network === 'all' || network === 'solana' ? solanaWallet || primaryWallet : '',
-      polymarketWallet: cleanText(body.polymarketWallet, '').slice(0, 96),
+      polymarketWallet,
       label,
       amount,
       target,
@@ -204,7 +218,7 @@ export default async function handler(req: Request, res: Response) {
     const record: TelegramRequestRecord = {
       id,
       ...draft,
-      payUrl: buildPayUrl(req, draft),
+      payUrl: kind === 'polymarket-funding' ? hostedPayUrl : buildPayUrl(req, draft),
       dashboardUrl: buildDashboardUrl(req, draft),
       createdAt: Date.now(),
     }
