@@ -9,6 +9,7 @@ import { appendAgentActivity, listAgentActivity } from './agent-activity.js'
 import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
+import { authorizeLpScoutPayer } from './agent-wallet-authorization.js'
 import { withCircleSessionLock } from './circle-session-queue.js'
 import { resolveAgentWalletStorePath } from './agent-store-paths.js'
 
@@ -1033,9 +1034,23 @@ export default async function handler(req: Request, res: Response) {
         && secret.length === SERVICE_SECRET.length
         && crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(SERVICE_SECRET))
       if (action === 'pay-service' && !authorized) return res.status(401).json({ ok: false, error: 'Unauthorized' })
+      if (action === 'pay-lp-scout') {
+        try {
+          await authorizeLpScoutPayer(req, agentSlug)
+        } catch (err) {
+          const authorizationError = err as Error & { status?: number }
+          return res.status(authorizationError.status ?? 401).json({
+            ok: false,
+            code: 'agent_wallet_unauthorized',
+            error: authorizationError.message || 'LP Scout wallet authorization failed.',
+          })
+        }
+      }
 
       const serviceUrl = action === 'pay-lp-scout'
         ? withServiceParams(DEFAULT_SCOUT_URL, {
+            requestId: `lps_${crypto.randomUUID().replace(/-/g, '')}`,
+            network: 'arc',
             scoutMode: String(req.body?.scoutMode ?? 'best'),
             context: String(req.body?.context ?? ''),
             budget: String(req.body?.budget ?? ''),

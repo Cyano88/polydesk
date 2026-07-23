@@ -1,8 +1,9 @@
-import type { NextFunction, Request, Response } from 'express'
+import type { Request, Response } from 'express'
 import crypto from 'node:crypto'
 import { formatUnits } from 'viem'
 import { appendAgentActivity, normalizeActivitySlug } from './agent-activity.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
+import { protectLpScoutWithHashPayLink } from './hashpaylink-agentic-checkout.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -21,23 +22,7 @@ type PaidRequest = Request & {
 
 const SELLER_ADDRESS = process.env.X402_SELLER_ADDRESS ?? process.env.TREASURY_ADDRESS
 const PRICE = process.env.X402_POLYMARKET_SCOUT_PRICE ?? '$0.01'
-const ARC_TESTNET_CAIP2 = 'eip155:5042002'
-const DEFAULT_TESTNET_FACILITATOR_URL = 'https://gateway-api-testnet.circle.com'
-const RAW_ACCEPT_NETWORKS = process.env.X402_POLYMARKET_SCOUT_ACCEPT_NETWORKS?.trim()
-  || process.env.X402_ACCEPT_NETWORKS?.trim()
-  || ARC_TESTNET_CAIP2
 const REQUEST_TIMEOUT_MS = 12_000
-const ACCEPT_NETWORKS = RAW_ACCEPT_NETWORKS
-  .split(',')
-  .map(network => normalizeX402Network(network))
-  .filter(Boolean)
-const RAW_FACILITATOR_URL = process.env.X402_POLYMARKET_SCOUT_FACILITATOR_URL?.trim()
-  || process.env.X402_FACILITATOR_URL?.trim()
-  || ''
-const ACCEPTS_ARC_TESTNET = ACCEPT_NETWORKS.includes(ARC_TESTNET_CAIP2)
-const FACILITATOR_URL = ACCEPTS_ARC_TESTNET && (!RAW_FACILITATOR_URL || /gateway-api\.circle\.com\/?$/i.test(RAW_FACILITATOR_URL))
-  ? DEFAULT_TESTNET_FACILITATOR_URL
-  : RAW_FACILITATOR_URL || DEFAULT_TESTNET_FACILITATOR_URL
 
 function publicErrorMessage(err: unknown) {
   const message = err instanceof Error ? err.message : String(err ?? 'Unknown ZeroScout error')
@@ -60,16 +45,6 @@ function isTransientZeroScoutError(err: unknown) {
     || /abort|aborted|timeout|timed out|network|fetch failed|upstream|replacement fee too low|nonce too low|already known|underpriced|0G upload error/i.test(message)
   )
 }
-
-function normalizeX402Network(network: string) {
-  const clean = network.trim()
-  const key = clean.toLowerCase().replace(/[_\s]/g, '-')
-  if (!clean) return ''
-  if (key === 'arc' || key === 'arc-testnet' || key === 'arctestnet' || key === '5042002') return ARC_TESTNET_CAIP2
-  return clean
-}
-
-let gatewayMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined
 
 type PolymarketRewardMarket = Record<string, unknown>
 
@@ -129,58 +104,6 @@ type PolymarketLpOpportunity = {
   score: number
   marketUrl?: string
   scoutReason?: string
-}
-
-async function getGatewayMiddleware() {
-  if (!SELLER_ADDRESS) throw new Error('X402_SELLER_ADDRESS or TREASURY_ADDRESS is required')
-  if (!gatewayMiddleware) {
-    const { createGatewayMiddleware } = await import('@circle-fin/x402-batching/server')
-    const gateway = createGatewayMiddleware({
-      sellerAddress: SELLER_ADDRESS,
-      ...(FACILITATOR_URL ? { facilitatorUrl: FACILITATOR_URL } : {}),
-      ...(ACCEPT_NETWORKS?.length ? { networks: ACCEPT_NETWORKS } : {}),
-      description: 'PolyDesk Polymarket LP Scout x402 API',
-    })
-    gatewayMiddleware = gateway.require(PRICE)
-  }
-  return gatewayMiddleware
-}
-
-function enrichPaymentRequiredBody(req: Request, res: Response) {
-  const originalEnd = res.end.bind(res)
-  res.end = ((chunk?: unknown, encoding?: BufferEncoding | (() => void), callback?: () => void) => {
-    const statusCode = res.statusCode
-    const bodyText = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : typeof chunk === 'string' ? chunk : ''
-    if (statusCode === 402 && (!bodyText || bodyText === '{}')) {
-      const paymentRequired = String(res.getHeader('payment-required') || res.getHeader('PAYMENT-REQUIRED') || '')
-      const decoded = paymentRequired
-        ? (() => {
-            try {
-              return JSON.parse(Buffer.from(paymentRequired, 'base64').toString('utf8')) as unknown
-            } catch {
-              return undefined
-            }
-          })()
-        : undefined
-      const payload = JSON.stringify({
-        ok: false,
-        error: 'payment_required',
-        service: 'PolyDesk x402 Polymarket LP Scout',
-        serviceId: 'polymarket-lp-scout',
-        protocol: 'A2MCP x402',
-        price: PRICE,
-        seller: SELLER_ADDRESS,
-        endpoint: canonicalServiceUrl(req),
-        message: 'This endpoint sells a paid LP Scout result. Pay with an x402-compatible client, then retry the same URL with the payment header.',
-        paymentRequired,
-        payment: decoded,
-      })
-      res.setHeader('Content-Type', 'application/json')
-      res.setHeader('Content-Length', Buffer.byteLength(payload))
-      return originalEnd(payload, typeof encoding === 'function' ? encoding : callback)
-    }
-    return originalEnd(chunk as never, encoding as never, callback)
-  }) as typeof res.end
 }
 
 function sleep(ms: number) {
@@ -972,15 +895,26 @@ export async function scoutResponse(req: PaidRequest) {
   }
 }
 
-export default async function handler(req: Request, res: Response, next?: NextFunction) {
+export default async function handler(req: Request, res: Response) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
   try {
-    enrichPaymentRequiredBody(req, res)
-    const middleware = await getGatewayMiddleware()
-    return middleware(req, res, async () => res.json(await scoutResponse(req as PaidRequest)))
+    const payment = await protectLpScoutWithHashPayLink({
+      req,
+      requestId: req.query.requestId,
+      network: req.query.network ?? 'arc',
+      amount: PRICE,
+    })
+    if (payment.kind === 'challenge') {
+      res.status(402)
+      res.setHeader('PAYMENT-REQUIRED', payment.paymentRequired)
+      res.setHeader('Content-Type', 'application/json')
+      return res.end(payment.body || '{}')
+    }
+    ;(req as PaidRequest).payment = payment.payment
+    return res.json(await scoutResponse(req as PaidRequest))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'x402 scout unavailable'
-    const status = /X402_SELLER_ADDRESS|TREASURY_ADDRESS/i.test(message) ? 503 : 500
+    const status = Number((err as Error & { status?: number }).status) || 500
     return res.status(status).json({ ok: false, error: message })
   }
 }

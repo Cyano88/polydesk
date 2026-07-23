@@ -1296,9 +1296,14 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     try {
       const payerAgentSlug = normalizedAgentSlug || (embeddedWalletManager ? '' : PLATFORM_AGENT_SLUG)
       if (!payerAgentSlug) throw new Error('Sign in with email before running LP Scout.')
+      const accessToken = await getAccessToken()
+      if (!accessToken) throw new Error('Sign in again before authorizing the LP Scout payment.')
       const res = await fetch('/api/agent-wallet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           action: 'pay-lp-scout',
           agentSlug: payerAgentSlug,
