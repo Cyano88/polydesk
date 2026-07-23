@@ -10,6 +10,7 @@ import { setAgentProfileWallet } from './agent-profile.js'
 import { getAgentGovernanceProfile, getAgentLegalProfile } from './agent-legal.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 import { authorizeLpScoutPayer } from './agent-wallet-authorization.js'
+import { agentServicePolicy, polydeskServiceOrigin } from './agent-service-policy.js'
 import { withCircleSessionLock } from './circle-session-queue.js'
 import { resolveAgentWalletStorePath } from './agent-store-paths.js'
 
@@ -24,14 +25,8 @@ const SERVICE_SECRET = process.env.AGENT_WALLET_SERVICE_SECRET
 const DEFAULT_AGENT_SLUG = normalizeSlug(process.env.DEFAULT_AGENT_SLUG || 'polydesk-agent')
 const DEFAULT_AGENT_WALLET_ADDRESS = normalizeExpectedWallet(process.env.DEFAULT_AGENT_WALLET_ADDRESS)
 const DEFAULT_AGENT_WALLET_CHAIN = normalizeBalanceChain(process.env.DEFAULT_AGENT_WALLET_CHAIN ?? process.env.DEFAULT_AGENT_CHAIN)
-const DEFAULT_SCOUT_ORIGIN = (process.env.POLYDESK_BASE_URL ?? process.env.PUBLIC_POLYDESK_ORIGIN ?? 'https://polydesk-i96m.onrender.com').replace(/\/+$/, '')
-const DEFAULT_SCOUT_URL = `${DEFAULT_SCOUT_ORIGIN}/api/x402/polymarket-scout`
-const ALLOWED_SERVICE_URLS = new Set(
-  (process.env.AGENT_WALLET_ALLOWED_SERVICE_URLS ?? process.env.X402_POLYMARKET_SCOUT_URL ?? DEFAULT_SCOUT_URL)
-    .split(',')
-    .map(item => item.trim())
-    .filter(Boolean),
-)
+const DEFAULT_SCOUT_ORIGIN = polydeskServiceOrigin()
+const { defaultScoutUrl: DEFAULT_SCOUT_URL, allowedServiceUrls: ALLOWED_SERVICE_URLS } = agentServicePolicy()
 
 function publicErrorMessage(err: unknown) {
   const message = err instanceof Error ? err.message : String(err ?? 'Unknown ZeroScout error')
@@ -265,8 +260,7 @@ export async function getAgentWalletRecord(agentSlug: string) {
 }
 
 function withServiceParams(serviceUrl: string, params: Record<string, string | undefined>) {
-  const base = process.env.POLYDESK_BASE_URL ?? process.env.PUBLIC_POLYDESK_ORIGIN ?? DEFAULT_SCOUT_ORIGIN
-  const url = new URL(serviceUrl, base)
+  const url = new URL(serviceUrl, DEFAULT_SCOUT_ORIGIN)
   for (const [key, value] of Object.entries(params)) {
     const clean = String(value ?? '').trim()
     if (clean) url.searchParams.set(key, clean.slice(0, 240))

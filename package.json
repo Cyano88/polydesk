@@ -17,7 +17,7 @@
     "test:circle-session": "node --import tsx --test scripts/circle-session-queue.test.ts scripts/agent-store-paths.test.ts",
     "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
     "test:hashpaylink-funding": "node --import tsx --test scripts/hashpaylink-polymarket-funding.test.ts",
-    "test:hashpaylink-agentic": "node --import tsx --test scripts/hashpaylink-agentic-checkout.test.ts scripts/agent-wallet-authorization.test.ts",
+    "test:hashpaylink-agentic": "node --import tsx --test scripts/hashpaylink-agentic-checkout.test.ts scripts/agent-wallet-authorization.test.ts scripts/agent-service-policy.test.ts",
     "test:hashpaylink-webhook": "node --import tsx --test scripts/hashpaylink-webhook.test.ts",
     "test:telegram-funding": "node --import tsx --test scripts/telegram-funding-request.test.ts",
     "test:worldcup-summary": "node --import tsx --test scripts/worldcup-final-summary.test.ts",
