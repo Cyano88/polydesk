@@ -25,7 +25,7 @@ export async function authorizeLpScoutPayer(
     throw Object.assign(new Error('A verified Privy email is required for LP Scout payment.'), { status: 403 })
   }
   if (requestedAgentSlug !== authorizedAgentSlug) {
-    throw Object.assign(new Error('The signed-in identity does not control this paying agent wallet.'), { status: 403 })
+    throw Object.assign(new Error('This Circle wallet is linked to a different signed-in identity.'), { status: 403 })
   }
   return { ...identity, agentSlug: authorizedAgentSlug }
 }

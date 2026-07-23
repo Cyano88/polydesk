@@ -25,6 +25,9 @@ type StatusResponse = {
   checkoutMode?: string
   status?: string
   network?: string
+  paymentAttempt?: {
+    id?: string
+  }
   payment?: {
     status?: string
     payer?: string
@@ -196,7 +199,12 @@ export async function protectLpScoutWithHashPayLink(input: {
   if (!statusResponse.ok || !status?.ok || status.checkoutMode !== 'agentic' || status.status !== 'paid' || payment?.status !== 'paid') {
     throw Object.assign(new Error(status?.error || 'Hash PayLink has not confirmed the LP Scout payment.'), { status: 409 })
   }
-  if (status.checkoutId !== checkout.checkoutId || (payment.network || status.network) !== network || payment.amount !== amount) {
+  if (
+    status.checkoutId !== checkout.checkoutId
+    || status.paymentAttempt?.id !== checkout.paymentAttemptId
+    || (payment.network || status.network) !== network
+    || payment.amount !== amount
+  ) {
     throw Object.assign(new Error('Hash PayLink LP Scout payment details do not match the request.'), { status: 409 })
   }
   if (!isAddress(payment.payer ?? '') || !clean(payment.txHash, 100)) {

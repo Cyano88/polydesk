@@ -450,7 +450,11 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
   const hasPendingLpScoutRequest = pendingRun === 'polymarket-scout'
   const embeddedWalletManager = Boolean(!agentSlug && ((embedded && forceProfile) || params.get('walletManager') === 'service'))
   const isArcX402FundingSurface = Boolean(embeddedWalletManager && !hasPendingLpScoutRequest)
-  const embeddedWalletEmail = (walletEmail.trim() || privyEmail).trim().toLowerCase()
+  const embeddedWalletEmail = (
+    PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
+      ? privyEmail
+      : walletEmail.trim()
+  ).trim().toLowerCase()
   const privyManagedWalletSlug = embeddedWalletManager && embeddedWalletEmail ? stableWalletSlugFromEmail(embeddedWalletEmail) : ''
   const normalizedAgentSlug = agentSlug || privyManagedWalletSlug || (embeddedWalletManager ? '' : PLATFORM_AGENT_SLUG)
   const savedLpScoutIntent = readSavedLpScoutIntent(normalizedAgentSlug)
@@ -746,7 +750,7 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
     const runKey = `${agentNetwork}:${privyEmail}`
     agentPrivyRestoreKey.current = runKey
     setAgentWalletRestoreChecked(false)
-    setWalletEmail(current => current || privyEmail)
+    setWalletEmail(privyEmail)
     ;(async () => {
       try {
         const token = await getAccessToken()
@@ -1026,8 +1030,10 @@ export default function AgentWorkspace({ embedded = false, forceProfile = false,
       setWalletError(embeddedWalletManager ? 'Sign in with email to manage your Circle wallet.' : 'Sign in with email to manage your Circle agent wallet.')
       return
     }
-    const email = (walletEmail.trim()
-      || (PRIVY_AUTH_ENABLED && privyAuthenticated ? privyEmail : '')
+    const email = (
+      PRIVY_AUTH_ENABLED && privyAuthenticated && privyEmail
+        ? privyEmail
+        : walletEmail.trim()
     ).trim().toLowerCase()
     if (!email) {
       setWalletError(embeddedWalletManager ? 'Enter the Circle email for this wallet.' : 'Enter the Circle email for this agent wallet.')

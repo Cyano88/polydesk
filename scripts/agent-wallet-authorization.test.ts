@@ -22,7 +22,7 @@ test('authorizes only the paying wallet derived from the verified Privy email', 
 
   await assert.rejects(
     authorizeLpScoutPayer(request(), 'polydesk-agent', verify as never),
-    /does not control this paying agent wallet/,
+    /Circle wallet is linked to a different signed-in identity/,
   )
 })
 

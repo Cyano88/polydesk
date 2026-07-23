@@ -73,6 +73,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
       checkoutMode: 'agentic',
       status: 'paid',
       network: 'base',
+      paymentAttempt: { id: paymentAttemptId },
       payment: { status: 'paid', payer, amount: '0.01', network: 'base', txHash: transaction },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
@@ -122,7 +123,7 @@ test('rejects a payment URL outside the configured Hash PayLink origin', async (
   }, dependencies(fetcher as typeof fetch)), /invalid agent payment URL/)
 })
 
-test('rejects paid status whose network or amount differs from the checkout', async () => {
+test('rejects paid status whose attempt, network, or amount differs from the checkout', async () => {
   let call = 0
   const fetcher = async () => {
     call += 1
@@ -140,6 +141,7 @@ test('rejects paid status whose network or amount differs from the checkout', as
       checkoutMode: 'agentic',
       status: 'paid',
       network: 'arc',
+      paymentAttempt: { id: paymentAttemptId },
       payment: { status: 'paid', payer, amount: '1.00', network: 'arc', txHash: transaction },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
@@ -147,6 +149,37 @@ test('rejects paid status whose network or amount differs from the checkout', as
   await assert.rejects(protectLpScoutWithHashPayLink({
     req: request({ 'payment-signature': 'signed-payment' }),
     requestId: 'lps_5555555555555555',
+    network: 'base',
+    amount: '0.01',
+  }, dependencies(fetcher as typeof fetch, 'hpl_live_private')), /details do not match/)
+})
+
+test('rejects paid status for a different payment attempt', async () => {
+  let call = 0
+  const fetcher = async () => {
+    call += 1
+    if (call === 1) return new Response(JSON.stringify({
+      ok: true,
+      checkoutId,
+      paymentAttemptId,
+      network: 'base',
+      agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
+    }), { status: 201, headers: { 'content-type': 'application/json' } })
+    if (call === 2) return new Response(JSON.stringify({ ok: true, status: 'paid' }), { status: 200 })
+    return new Response(JSON.stringify({
+      ok: true,
+      checkoutId,
+      checkoutMode: 'agentic',
+      status: 'paid',
+      network: 'base',
+      paymentAttempt: { id: 'pat_222222222222222222222222' },
+      payment: { status: 'paid', payer, amount: '0.01', network: 'base', txHash: transaction },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+
+  await assert.rejects(protectLpScoutWithHashPayLink({
+    req: request({ 'payment-signature': 'signed-payment' }),
+    requestId: 'lps_6666666666666666',
     network: 'base',
     amount: '0.01',
   }, dependencies(fetcher as typeof fetch, 'hpl_live_private')), /details do not match/)
