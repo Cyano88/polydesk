@@ -12,8 +12,8 @@ import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/typ
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
-import polyStreamHandler from './poly-stream.js'
 import polyWorldcupNewsHandler from './poly-worldcup-news.js'
+import worldCupFinalSummaryHandler from './worldcup-final-summary.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
@@ -21,10 +21,10 @@ const DEFAULT_STANDARD_PRICE = '0.1'
 
 const serviceDefinitions = {
   '/api/a2mcp/worldcup-live-scores': {
-    name: 'World Cup Live Scores',
-    description: 'Live World Cup fixture, score, clock, status, and Polymarket market-routing feed.',
-    tags: ['world-cup', 'live-scores', 'prediction-market'],
-    deliver: polyStreamHandler,
+    name: 'World Cup 2026 Final Standings',
+    description: 'Verified World Cup 2026 final standings, podium, final result, and upcoming live football data roadmap.',
+    tags: ['world-cup', 'final-standings', 'football-data'],
+    deliver: worldCupFinalSummaryHandler,
   },
   '/api/a2mcp/worldcup-market-news': {
     name: 'World Cup Market News',

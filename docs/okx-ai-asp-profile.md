@@ -45,12 +45,14 @@ Optional SDK overrides are `OKX_X402_BASE_URL` and `OKX_X402_SYNC_SETTLE`.
 
 The remaining A2MCP services use the same `0.1 USDT` X Layer payment contract:
 
-- World Cup Live Scores
+- World Cup 2026 Final Standings
 - World Cup Market News
 - Polymarket Portfolio Watch
 - Polymarket Funding Link
 
 Both unpaid GET probes and POST calls must return `402` with a non-empty `accepts` array. After the buyer signs, the replay returns the JSON deliverable and settlement response header.
+
+The World Cup service now returns the completed 2026 tournament result: Spain first, Argentina second, and England third, together with the final and bronze-final scores and FIFA source links. Its response also marks live English Premier League, La Liga, Bundesliga, Serie A, and Ligue 1 scores and data as coming soon.
 
 ## Registration Boundary
 
