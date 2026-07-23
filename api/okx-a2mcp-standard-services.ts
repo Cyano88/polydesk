@@ -133,7 +133,7 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
   return clean(authorization?.from || permit2?.from || permit2?.owner || 'okx-buyer')
 }
 
-function routeConfig(req: Request, path: StandardServicePath, price: string, payTo: string): RouteConfig {
+export function buildStandardServiceRouteConfig(req: Request, path: StandardServicePath, price: string, payTo: string): RouteConfig {
   const service = serviceDefinitions[path]
   return {
     accepts: {
@@ -144,7 +144,6 @@ function routeConfig(req: Request, path: StandardServicePath, price: string, pay
         amount: decimalUsdtToAtomic(Number(price)),
         asset: OKX_XLAYER_USDT,
         extra: {
-          assetTransferMethod: 'permit2',
           tokenSymbol: 'USDT',
           decimals: 6,
           name: 'USDT',
@@ -153,7 +152,6 @@ function routeConfig(req: Request, path: StandardServicePath, price: string, pay
       },
       maxTimeoutSeconds: 600,
       extra: {
-        assetTransferMethod: 'permit2',
         tokenSymbol: 'USDT',
         decimals: 6,
         name: 'USDT',
@@ -215,7 +213,7 @@ async function getStandardServicesServer(req: Request) {
       const price = env('OKX_X402_STANDARD_SERVICE_PRICE') || DEFAULT_STANDARD_PRICE
       const routes: RoutesConfig = {}
       for (const path of Object.keys(serviceDefinitions) as StandardServicePath[]) {
-        const config = routeConfig(req, path, price, payTo)
+        const config = buildStandardServiceRouteConfig(req, path, price, payTo)
         routes[`GET ${path}`] = config
         routes[`POST ${path}`] = config
       }
