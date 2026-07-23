@@ -140,8 +140,8 @@ const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
   'agent-wallets': [
     {
       id: 'agent-dashboard',
-      title: 'x402 Wallet Manager',
-      body: 'Sign in with email, fund Circle wallet balance, activate x402, and view receipts.',
+      title: 'Hash PayLink checkout',
+      body: 'Open the hosted wallet, payment, and receipt flow.',
       icon: Wallet,
       status: 'Open',
       active: true,
@@ -186,13 +186,13 @@ const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
 
 const sectionDescriptions: Record<TelegramSectionId, string> = {
   'payment-links': 'Create normal USDC requests and share them into Telegram.',
-  'agent-wallets': 'Manage Circle wallet balance, x402 service balance, and receipts.',
+  'agent-wallets': 'Continue payment and wallet actions on Hash PayLink.',
   'market-tools': 'PolyDesk for Polymarket funding, portfolio alerts, LP Scout, and live market context.',
 }
 
 const telegramSections: Array<{ id: TelegramSectionId; title: string; icon: typeof Coins }> = [
   { id: 'payment-links', title: 'Payment Links', icon: Coins },
-  { id: 'agent-wallets', title: 'Agent Wallets', icon: Bot },
+  { id: 'agent-wallets', title: 'Hash PayLink', icon: Bot },
   { id: 'market-tools', title: 'PolyDesk', icon: LineChart },
 ]
 
@@ -1649,6 +1649,7 @@ export function TelegramHelperPanel({
   autoQuestionKey,
   lpScoutActivityId,
   lpScoutReceiptId,
+  lpScoutReceiptUrl,
   lpScoutAgentSlug,
 }: {
   telegramName: string
@@ -1673,6 +1674,7 @@ export function TelegramHelperPanel({
   autoQuestionKey?: string
   lpScoutActivityId?: string
   lpScoutReceiptId?: string
+  lpScoutReceiptUrl?: string
   lpScoutAgentSlug?: string
 }) {
   const cleanTelegramName = telegramName === 'there' ? '' : telegramName
@@ -2928,13 +2930,12 @@ export function TelegramHelperPanel({
     if (polyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
       setAgentStatus('Reading paid LP Scout report...')
       const requestedAgentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
-      const agentSlugCandidates = Array.from(new Set([requestedAgentSlug, 'polydesk-agent'].filter(Boolean)))
       try {
-        const loadActivity = async (slug: string) => {
+        const loadActivity = async () => {
           const controller = new AbortController()
           const timeout = window.setTimeout(() => controller.abort(), 30_000)
           try {
-            const res = await fetch(`/api/agent-wallet?agent=${encodeURIComponent(slug)}`, { signal: controller.signal })
+            const res = await fetch(`/api/agent-activity?id=${encodeURIComponent(lpScoutActivityId)}`, { signal: controller.signal })
             const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
             if (!res.ok) {
               throw new Error(res.status === 429
@@ -2958,25 +2959,23 @@ export function TelegramHelperPanel({
           return Boolean(item.result?.retryable || status === 'queued' || /abort|aborted|timeout|timed out|network|fetch failed|upstream|too many requests|replacement fee too low|nonce too low|already known|underpriced|0G upload error/i.test(message))
         }
         const readPaidScoutState = async () => {
-          for (const candidate of agentSlugCandidates) {
-            const candidateActivity = await loadActivity(candidate)
-            const candidateScout = candidateActivity.find(item => item.id === lpScoutActivityId)
-            if (candidateScout) {
-              const failed = candidateActivity.find(item => (
-                item.type === 'scout_verification_failed'
-                && item.result?.sourceActivityId === lpScoutActivityId
-                && !isTransientScoutFailure(item)
-              ))
-              const verified = candidateActivity.find(item => (
-                item.type === 'scout_returned'
-                && item.result?.zeroscout
-                && item.result?.sourceActivityId === lpScoutActivityId
-              ))
-              return {
-                scout: candidateScout,
-                zeroScout: candidateScout.result?.zeroscout || verified?.result?.zeroscout,
-                failedVerification: failed,
-              }
+          const activity = await loadActivity()
+          const scout = activity.find(item => item.id === lpScoutActivityId)
+          if (scout) {
+            const failed = activity.find(item => (
+              item.type === 'scout_verification_failed'
+              && item.result?.sourceActivityId === lpScoutActivityId
+              && !isTransientScoutFailure(item)
+            ))
+            const verified = activity.find(item => (
+              item.type === 'scout_returned'
+              && item.result?.zeroscout
+              && item.result?.sourceActivityId === lpScoutActivityId
+            ))
+            return {
+              scout,
+              zeroScout: scout.result?.zeroscout || verified?.result?.zeroscout,
+              failedVerification: failed,
             }
           }
           throw new Error('Paid LP Scout activity was not found for this wallet.')
@@ -3037,7 +3036,16 @@ export function TelegramHelperPanel({
           const proofUrl = /^0x[a-fA-F0-9]{64}$/.test(proofTxHash)
             ? `https://chainscan.0g.ai/tx/${proofTxHash}`
             : proofRoot ? `https://storagescan.0g.ai/file?root=${encodeURIComponent(proofRoot)}` : ''
-          const reportUrl = `/report/lp-scout/${encodeURIComponent(lpScoutActivityId)}${lpScoutReceiptId ? `?receipt=${encodeURIComponent(lpScoutReceiptId)}` : ''}`
+          const reportUrl = `/report/lp-scout/${encodeURIComponent(lpScoutActivityId)}`
+          const authoritativeReceiptUrl = (() => {
+            if (!lpScoutReceiptUrl) return ''
+            try {
+              const url = new URL(lpScoutReceiptUrl)
+              return url.protocol === 'https:' && url.hostname === 'app.hashpaylink.com' ? url.toString() : ''
+            } catch {
+              return ''
+            }
+          })()
           const answerLines = zeroScoutRecord ? [
             `ZeroScout verified LP Scout result (${ageText}).`,
             zeroScoutSummary,
@@ -3061,7 +3069,7 @@ export function TelegramHelperPanel({
             id: `lp-scout-result:${lpScoutActivityId}`,
             answer: answerLines.join('\n\n'),
             actionLinks: [
-              ...(lpScoutReceiptId ? [{ label: 'x402 receipt', url: `/receipt/${encodeURIComponent(lpScoutReceiptId)}` }] : []),
+              ...(authoritativeReceiptUrl ? [{ label: 'View details', url: authoritativeReceiptUrl }] : []),
               { label: 'LP Scout report', url: reportUrl },
               ...(proofUrl ? [{ label: '0G proof', url: proofUrl }] : []),
               ...marketLinks,
@@ -3794,7 +3802,7 @@ function TelegramX402WalletPanel({
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-gray-200"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Agent Wallets
+        Hash PayLink
       </button>
 
       <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/[0.04]">
@@ -3803,9 +3811,9 @@ function TelegramX402WalletPanel({
             <Wallet className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">x402 Wallet Manager</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Hash PayLink checkout</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Telegram uses the same wallet flow as Create Link: sign in with email, fund Circle wallet balance, activate x402 service balance, then use paid services.
+              Wallet access, x402 payment, and receipt actions continue on Hash PayLink.
             </p>
           </div>
         </div>

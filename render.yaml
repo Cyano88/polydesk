@@ -109,51 +109,15 @@ services:
 
       - key: DEFAULT_AGENT_SLUG
         value: polydesk-agent
-      - key: DEFAULT_AGENT_WALLET_CHAIN
-        value: ARC-TESTNET
-      - key: DEFAULT_AGENT_CHAIN
-        value: ARC-TESTNET
-      - key: DEFAULT_AGENT_WALLET_ADDRESS
-        sync: false
-      - key: AGENT_WALLET_SERVICE_SECRET
-        sync: false
       - key: AGENT_ACTIVITY_STORE_KEY
         value: polydesk:agent-activity
-      - key: AGENT_WALLET_ALLOWED_SERVICE_URLS
-        sync: false
-      - key: AGENT_WALLET_MAX_SERVICE_AMOUNT
-        value: "0.01"
-      - key: AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT
-        value: "5"
-      - key: AGENT_WALLET_GATEWAY_BALANCE_CHAIN
-        value: ARC-TESTNET
-      - key: AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_ATTEMPTS
-        value: "6"
-      - key: AGENT_WALLET_GATEWAY_DEPOSIT_VERIFY_DELAY_MS
-        value: "5000"
       - key: AGENT_PROFILE_STORE
         sync: false
       - key: AGENT_PROFILE_STORE_KEY
         sync: false
-      - key: PRIVY_CIRCLE_LINK_STORE
-        sync: false
-      - key: CIRCLE_CLI_ENABLED
-        value: "true"
-      - key: CIRCLE_API_KEY
-        sync: false
-      - key: CIRCLE_TEST_API_KEY
-        sync: false
 
-      - key: X402_SELLER_ADDRESS
-        sync: false
-      - key: X402_POLYMARKET_SCOUT_PRICE
+      - key: HASH_PAYLINK_LP_SCOUT_PRICE
         value: "$0.01"
-      - key: X402_FACILITATOR_URL
-        sync: false
-      - key: X402_ACCEPT_NETWORKS
-        sync: false
-      - key: X402_POLYMARKET_SCOUT_URL
-        sync: false
 
       - key: OKX_X402_API_KEY
         sync: false
@@ -179,7 +143,3 @@ services:
         sync: false
       - key: OKX_PAYMENT_REALM
         value: polydesk.trade
-      - key: CIRCLE_GATEWAY_API_BASE
-        sync: false
-      - key: CIRCLE_X402_RECEIPT_API_KEY
-        sync: false

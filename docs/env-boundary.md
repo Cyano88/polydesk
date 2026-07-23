@@ -15,7 +15,7 @@ VITE_PRIVY_APP_ID=
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
-HASH_PAYLINK_BASE_URL=https://hashpaylink.com
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 
 DATABASE_URL=
 POSTGRES_URL=
@@ -80,27 +80,18 @@ POLY_NEWS_API_KEY_PARAM=
 
 These should move with the World Cup market discovery and news APIs.
 
-## PolyDesk LP Scout / x402 Env
+## PolyDesk LP Scout / Hash PayLink Env
 
-Verified in `api/x402-polymarket-scout.ts`, `api/x402-receipt.ts`, and related agent wallet references:
+PolyDesk delegates checkout, wallet access, payment verification, and the canonical receipt to Hash PayLink:
 
 ```env
-X402_SELLER_ADDRESS=
-X402_POLYMARKET_SCOUT_PRICE=
-X402_POLYMARKET_SCOUT_MAX_AMOUNT=
-X402_FACILITATOR_URL=
-X402_ACCEPT_NETWORKS=
-X402_POLYMARKET_SCOUT_URL=
-CIRCLE_GATEWAY_API_BASE=
-CIRCLE_X402_RECEIPT_API_KEY=
-CIRCLE_GATEWAY_API_KEY=
-CIRCLE_API_KEY=
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
+HASH_PAYLINK_AGENTIC_TEST_API_KEY=
+HASH_PAYLINK_AGENTIC_LIVE_API_KEY=
+HASH_PAYLINK_LP_SCOUT_PRICE=$0.01
 ```
 
-Decision needed:
-
-- If LP Scout is billed by PolyDesk directly, move these to PolyDesk.
-- If LP Scout is billed by Hash PayLink or OKX.AI during transition, keep billing env in the billing owner and expose a service-call API to PolyDesk.
+The older direct facilitator, seller-address, Gateway receipt, and agent-wallet service envs are not part of the Hash PayLink LP Scout checkout.
 
 ## PolyDesk Alert Email Env
 
@@ -185,7 +176,7 @@ During Phase 2 frontend extraction, PolyDesk may only need:
 ```env
 VITE_PRIVY_APP_ID=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
-HASH_PAYLINK_BASE_URL=https://hashpaylink.com
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 ```
 
 During Phase 3 API extraction, add only the PolyDesk-owned API envs actually moved in that phase.

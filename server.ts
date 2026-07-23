@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import agentAskHandler from './api/agent-ask.js'
 import agentProfileHandler from './api/agent-profile.js'
 import agentVerifyHandler from './api/agent-verify.js'
-import agentWalletHandler from './api/agent-wallet.js'
+import agentActivityReadHandler from './api/agent-activity-read.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
@@ -27,12 +27,10 @@ import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-fu
 import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
-import privyCircleLinkHandler from './api/privy-circle-link.js'
 import { rateLimit } from './api/rate-limit.js'
 import solanaBalanceHandler from './api/solana-balance.js'
 import telegramRequestHandler from './api/telegram-request.js'
 import x402PolymarketScoutHandler from './api/x402-polymarket-scout.js'
-import x402ReceiptHandler from './api/x402-receipt.js'
 import zeroScoutPolymarketBriefHandler from './api/zeroscout-polymarket-brief.js'
 
 loadEnv({ path: '.env.local', override: false })
@@ -117,11 +115,9 @@ app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)
 app.post('/api/agent-ask', strictLimiter, agentAskHandler)
-app.get('/api/agent-wallet', readLimiter, agentWalletHandler)
-app.post('/api/agent-wallet', strictLimiter, agentWalletHandler)
+app.get('/api/agent-activity', readLimiter, agentActivityReadHandler)
 app.all('/api/agent-profile', strictLimiter, agentProfileHandler)
 app.all('/api/helper-profile', readLimiter, helperProfileHandler)
-app.post('/api/privy-circle-link', strictLimiter, privyCircleLinkHandler)
 app.post('/api/evm-balance', readLimiter, evmBalanceHandler)
 app.post('/api/solana-balance', readLimiter, solanaBalanceHandler)
 app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
@@ -131,11 +127,9 @@ app.all('/api/a2mcp/worldcup-live-scores', strictLimiter, okxA2mcpStandardServic
 app.all('/api/a2mcp/worldcup-market-news', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
-app.get('/api/x402/receipt', readLimiter, x402ReceiptHandler)
 app.get('/api/lp-scout-report', readLimiter, lpScoutReportHandler)
 app.get('/api/x402-polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout-polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
-app.get('/api/x402-receipt', readLimiter, x402ReceiptHandler)
 app.get('/api/health', (_req, res) => res.json({
   ok: true,
   service: 'polydesk',

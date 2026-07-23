@@ -43,25 +43,13 @@ const groups = [
     name: 'desk agent and lp scout',
     recommended: [
       'DEFAULT_AGENT_SLUG',
-      'DEFAULT_AGENT_WALLET_ADDRESS',
-      'AGENT_WALLET_SERVICE_SECRET',
-      'X402_SELLER_ADDRESS',
-      'X402_POLYMARKET_SCOUT_PRICE',
+      'HASH_PAYLINK_AGENTIC_LIVE_API_KEY',
+      'HASH_PAYLINK_AGENTIC_TEST_API_KEY',
+      'HASH_PAYLINK_LP_SCOUT_PRICE',
       'ZEROSCOUT_API_URL',
       'ZEROSCOUT_INTEGRATION_SECRET',
     ],
-    optional: [
-      'X402_FACILITATOR_URL',
-    ],
-  },
-  {
-    name: 'x402 receipt lookup',
-    alternatives: [
-      ['CIRCLE_X402_RECEIPT_API_KEY', 'CIRCLE_GATEWAY_API_KEY', 'CIRCLE_API_KEY'],
-    ],
-    optional: [
-      'CIRCLE_GATEWAY_API_BASE',
-    ],
+    optional: [],
   },
   {
     name: 'okx ai lp scout',

@@ -70,6 +70,7 @@ export default function PolyDesk() {
   const agentRouteOpen = searchParams.get('agent') === '1'
   const lpScoutActivityId = searchParams.get('lpScoutActivity')?.trim() ?? ''
   const lpScoutReceiptId = searchParams.get('lpScoutReceipt')?.trim() ?? ''
+  const lpScoutReceiptUrl = searchParams.get('lpScoutReceiptUrl')?.trim() ?? ''
   const lpScoutAgentSlug = searchParams.get('lpScoutAgent')?.trim() ?? ''
   const agentMessage = searchParams.get('agentMessage')?.trim() ?? ''
   const effectiveAgentLane = activeLane || (lpScoutActivityId ? 'lp-scout' : '')
@@ -282,6 +283,7 @@ export default function PolyDesk() {
               autoQuestionKey={lpScoutActivityId ? `lp-scout:${lpScoutActivityId}` : undefined}
               lpScoutActivityId={lpScoutActivityId || undefined}
               lpScoutReceiptId={lpScoutReceiptId || undefined}
+              lpScoutReceiptUrl={lpScoutReceiptUrl || undefined}
               lpScoutAgentSlug={lpScoutAgentSlug || undefined}
               onRecoverTelegramName={() => undefined}
               onBack={() => {

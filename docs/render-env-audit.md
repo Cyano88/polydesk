@@ -21,7 +21,7 @@ These appear in the Hash PayLink `render.yaml` and should be recreated in the st
 | `PRIVY_APP_ID` | `sync: false` | Server Privy app id for authenticated APIs. |
 | `PRIVY_APP_SECRET` | `sync: false` | Server Privy verification secret. |
 | `DATABASE_URL` | `sync: false` | Durable portfolio/profile/agent state. Use a PolyDesk-owned DB for standalone production. |
-| `HASH_PAYLINK_BASE_URL` | fixed `https://hashpaylink.com` | Temporary funding/agent service origin during bridge phase. |
+| `HASH_PAYLINK_BASE_URL` | fixed `https://app.hashpaylink.com` | Authoritative hosted checkout and payment API origin. |
 | `ZEROSCOUT_API_URL` | fixed `https://zeroscout.app` | ZeroScout intelligence endpoint. |
 | `ZEROSCOUT_INTEGRATION_SECRET` | `sync: false` | Server-only ZeroScout secret. |
 | `ZEROSCOUT_HASHWATCH_MEDIA_MODEL` | fixed | Optional copied agent helper behavior. |
@@ -51,15 +51,9 @@ These are required or strongly recommended by the standalone PolyDesk backend bu
 | `POLYMARKET_RELAYER_URL` or `RELAYER_URL` | Required | Deposit wallet derivation, bridge config, and builder/relayer-backed flows need the relayer endpoint. |
 | `POLYMARKET_RPC_URL` or `POLYGON_RPC_URL` | Recommended | Stable Polygon RPC for portfolio/bridge calls. Code can fall back to viem default when blank, but production should not rely on that. |
 | `VITE_PUBLIC_PAYLINK_ORIGIN` | Required | Frontend funding links and Hash PayLink bridge origin. Set to `https://hashpaylink.com` during transition. |
-| `DEFAULT_AGENT_WALLET_ADDRESS` | Recommended | Agent wallet identity shown by Desk Agent. |
-| `AGENT_WALLET_SERVICE_SECRET` | Recommended | Protects agent wallet service operations. |
-| `X402_SELLER_ADDRESS` or `TREASURY_ADDRESS` | Required for LP Scout x402 | Seller address for x402 paid LP Scout. |
-| `X402_POLYMARKET_SCOUT_PRICE` | Required for LP Scout x402 | Paid scout price, for example `$0.01`. |
-| `X402_FACILITATOR_URL` | Optional unless a selected x402 network requires it | Circle facilitator endpoint. The current LP Scout code only passes it when configured. |
-| `X402_ACCEPT_NETWORKS` | Recommended | Network allowlist for x402 payments. |
-| `X402_POLYMARKET_SCOUT_URL` | Recommended | Exact x402 LP Scout service URL for agent allowlists. |
-| `CIRCLE_GATEWAY_API_BASE` | Optional | x402 receipt verification endpoint base. The receipt route defaults to Circle testnet gateway when blank. |
-| `CIRCLE_X402_RECEIPT_API_KEY` or `CIRCLE_GATEWAY_API_KEY` or `CIRCLE_API_KEY` | Recommended | x402 receipt verification. Existing Hash PayLink Render has `CIRCLE_API_KEY`, but standalone PolyDesk should prefer a narrower key if available. |
+| `HASH_PAYLINK_AGENTIC_TEST_API_KEY` | Required for Arc LP Scout | Hash PayLink test project key. |
+| `HASH_PAYLINK_AGENTIC_LIVE_API_KEY` | Required for Base LP Scout | Hash PayLink live project key. |
+| `HASH_PAYLINK_LP_SCOUT_PRICE` | Required | LP Scout checkout price, for example `$0.01`. |
 | `POLY_STREAM_BASE_URL` | Optional | The feed route defaults to SportMonks when blank; configure only if the provider gives a custom base URL. |
 
 ## Deploy Env Set
@@ -76,7 +70,7 @@ PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 DATABASE_URL=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
-HASH_PAYLINK_BASE_URL=https://hashpaylink.com
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 
 POLYMARKET_CHAIN_ID=137
 POLYMARKET_RELAYER_URL=
@@ -100,20 +94,9 @@ ZEROSCOUT_API_URL=https://zeroscout.app
 ZEROSCOUT_INTEGRATION_SECRET=
 
 DEFAULT_AGENT_SLUG=polydesk-agent
-DEFAULT_AGENT_WALLET_CHAIN=BASE
-DEFAULT_AGENT_CHAIN=BASE
-DEFAULT_AGENT_WALLET_ADDRESS=
-AGENT_WALLET_SERVICE_SECRET=
-AGENT_WALLET_ALLOWED_SERVICE_URLS=
-
-X402_SELLER_ADDRESS=
-X402_POLYMARKET_SCOUT_PRICE=$0.01
-X402_FACILITATOR_URL=
-X402_ACCEPT_NETWORKS=
-X402_POLYMARKET_SCOUT_URL=
-
-CIRCLE_GATEWAY_API_BASE=
-CIRCLE_X402_RECEIPT_API_KEY=
+HASH_PAYLINK_AGENTIC_TEST_API_KEY=
+HASH_PAYLINK_AGENTIC_LIVE_API_KEY=
+HASH_PAYLINK_LP_SCOUT_PRICE=$0.01
 ```
 
 Optional after the first live smoke:

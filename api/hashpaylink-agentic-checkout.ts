@@ -14,6 +14,7 @@ type CheckoutResponse = {
   ok?: boolean
   checkoutId?: string
   paymentAttemptId?: string
+  checkoutUrl?: string
   agentPaymentUrl?: string
   network?: string
   error?: string
@@ -27,6 +28,8 @@ type StatusResponse = {
   network?: string
   paymentAttempt?: {
     id?: string
+    receiptId?: string
+    receiptUrl?: string
   }
   payment?: {
     status?: string
@@ -39,7 +42,7 @@ type StatusResponse = {
 }
 
 export type HashPayLinkAgenticResult =
-  | { kind: 'challenge'; status: 402; paymentRequired: string; body: string }
+  | { kind: 'challenge'; status: 402; paymentRequired: string; body: string; checkoutUrl: string }
   | {
       kind: 'paid'
       checkoutId: string
@@ -54,6 +57,7 @@ export type HashPayLinkAgenticResult =
         provider: 'Hash PayLink · Circle Gateway x402'
         kind: 'circle_gateway_x402'
         serviceUrl: string
+        receiptUrl: string
       }
     }
 
@@ -136,7 +140,7 @@ export async function protectLpScoutWithHashPayLink(input: {
   if (!apiKey || !/^https:\/\//i.test(apiOrigin)) {
     throw Object.assign(new Error(`Hash PayLink ${network === 'arc' ? 'test' : 'live'} agentic checkout is not configured.`), { status: 503 })
   }
-  const returnUrl = `${dependencies.publicOrigin(input.req).replace(/\/+$/, '')}/polydesk?service=lp-scout&requestId=${encodeURIComponent(id)}`
+  const returnUrl = `${dependencies.publicOrigin(input.req).replace(/\/+$/, '')}/polydesk?service=lp-scout&run=polymarket-scout&requestId=${encodeURIComponent(id)}&network=${encodeURIComponent(network)}&maxAmount=${encodeURIComponent(amount)}`
   const created = await dependencies.fetch(`${apiOrigin}/api/v2/checkouts`, {
     method: 'POST',
     headers: {
@@ -165,6 +169,11 @@ export async function protectLpScoutWithHashPayLink(input: {
     throw Object.assign(new Error('Hash PayLink returned an invalid LP Scout checkout.'), { status: 502 })
   }
   if (checkout.network !== network) throw Object.assign(new Error('Hash PayLink returned the wrong LP Scout network.'), { status: 502 })
+  const checkoutUrl = sameOriginUrl(
+    apiOrigin,
+    checkout.checkoutUrl || `/pay/a/${encodeURIComponent(checkout.checkoutId!)}?attempt=${encodeURIComponent(checkout.paymentAttemptId!)}`,
+  )
+  if (!checkoutUrl) throw Object.assign(new Error('Hash PayLink returned an invalid hosted checkout URL.'), { status: 502 })
   const paymentUrl = sameOriginUrl(apiOrigin, checkout.agentPaymentUrl)
   if (!paymentUrl) throw Object.assign(new Error('Hash PayLink returned an invalid agent payment URL.'), { status: 502 })
 
@@ -182,7 +191,7 @@ export async function protectLpScoutWithHashPayLink(input: {
   if (paidResponse.status === 402) {
     const paymentRequired = clean(paidResponse.headers.get('payment-required'), 24_000)
     if (!paymentRequired) throw Object.assign(new Error('Hash PayLink returned an incomplete payment challenge.'), { status: 502 })
-    return { kind: 'challenge', status: 402, paymentRequired, body: responseBody }
+    return { kind: 'challenge', status: 402, paymentRequired, body: responseBody, checkoutUrl }
   }
   if (!paidResponse.ok) {
     const errorBody = (() => { try { return JSON.parse(responseBody) as { error?: string } } catch { return undefined } })()
@@ -210,6 +219,8 @@ export async function protectLpScoutWithHashPayLink(input: {
   if (!isAddress(payment.payer ?? '') || !clean(payment.txHash, 100)) {
     throw Object.assign(new Error('Hash PayLink returned incomplete LP Scout payment proof.'), { status: 502 })
   }
+  const receiptUrl = sameOriginUrl(apiOrigin, status.paymentAttempt?.receiptUrl || checkoutUrl)
+  if (!receiptUrl) throw Object.assign(new Error('Hash PayLink returned an invalid LP Scout receipt URL.'), { status: 502 })
   return {
     kind: 'paid',
     checkoutId: checkout.checkoutId!,
@@ -224,6 +235,7 @@ export async function protectLpScoutWithHashPayLink(input: {
       provider: 'Hash PayLink · Circle Gateway x402',
       kind: 'circle_gateway_x402',
       serviceUrl: paymentUrl,
+      receiptUrl,
     },
   }
 }

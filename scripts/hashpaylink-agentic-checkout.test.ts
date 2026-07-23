@@ -37,6 +37,7 @@ test('relays the Hash PayLink payment challenge without signing', async () => {
       checkoutId,
       paymentAttemptId,
       network: 'arc',
+      checkoutUrl: `/pay/a/${checkoutId}?attempt=${paymentAttemptId}`,
       agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
     }), { status: 201, headers: { 'content-type': 'application/json' } })
     return new Response('{}', { status: 402, headers: { 'PAYMENT-REQUIRED': challenge } })
@@ -49,6 +50,7 @@ test('relays the Hash PayLink payment challenge without signing', async () => {
   }, dependencies(fetcher as typeof fetch))
   assert.equal(result.kind, 'challenge')
   assert.equal(result.paymentRequired, challenge)
+  assert.equal(result.checkoutUrl, `https://app.hashpaylink.com/pay/a/${checkoutId}?attempt=${paymentAttemptId}`)
   assert.equal(calls.length, 2)
   assert.equal((calls[0].init?.headers as Record<string, string>)['X-API-Key'], 'hpl_test_private')
   assert.equal(JSON.parse(String(calls[0].init?.body)).network, 'arc')
@@ -64,6 +66,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
       checkoutId,
       paymentAttemptId,
       network: 'base',
+      checkoutUrl: `/pay/a/${checkoutId}?attempt=${paymentAttemptId}`,
       agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
     }), { status: 201, headers: { 'content-type': 'application/json' } })
     if (calls.length === 2) return new Response(JSON.stringify({ ok: true, status: 'paid' }), { status: 200 })
@@ -73,7 +76,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
       checkoutMode: 'agentic',
       status: 'paid',
       network: 'base',
-      paymentAttempt: { id: paymentAttemptId },
+      paymentAttempt: { id: paymentAttemptId, receiptUrl: `/pay/a/${checkoutId}?attempt=${paymentAttemptId}` },
       payment: { status: 'paid', payer, amount: '0.01', network: 'base', txHash: transaction },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
@@ -86,6 +89,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
   assert.equal(result.kind, 'paid')
   assert.equal(result.payment.amount, '10000')
   assert.equal(result.payment.payer, payer)
+  assert.equal(result.payment.receiptUrl, `https://app.hashpaylink.com/pay/a/${checkoutId}?attempt=${paymentAttemptId}`)
   assert.equal((calls[1].init?.headers as Record<string, string>)['PAYMENT-SIGNATURE'], 'signed-payment')
   assert.match(calls[2].url, /purpose=status/)
 })

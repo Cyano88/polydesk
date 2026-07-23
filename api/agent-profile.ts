@@ -8,7 +8,6 @@ const STORE_PATH = process.env.AGENT_PROFILE_STORE
   ?? (process.env.DATA_PATH ? `${process.env.DATA_PATH}/agent-profiles.json` : './data/agent-profiles.json')
 const AGENT_PROFILE_STORE_KEY = (process.env.AGENT_PROFILE_STORE_KEY ?? 'polydesk:agent-profiles').trim()
 const PLATFORM_AGENT_SLUG = (process.env.DEFAULT_AGENT_SLUG ?? '').trim().toLowerCase() || 'polydesk-agent'
-const PLATFORM_AGENT_WALLET_ADDRESS = (process.env.DEFAULT_AGENT_WALLET_ADDRESS ?? '').trim()
 const MAX_OWNER_AGENTS = 3
 
 export type AgentProfile = {
@@ -76,7 +75,6 @@ function platformAgentProfile(): AgentProfile {
     name: 'PolyDesk Agent',
     purpose: 'Owner-managed PolyDesk agent for Polymarket trading context, x402, and LP Scout services.',
     ownerKey: 'platform',
-    walletAddress: PLATFORM_AGENT_WALLET_ADDRESS || undefined,
     profileImage: agentProfileImage(PLATFORM_AGENT_SLUG, 'PolyDesk Agent'),
     createdAt: 0,
     updatedAt: 0,

@@ -24,8 +24,7 @@ Render can use the committed `render.yaml` blueprint:
 - Start command: `npm run start`
 - Health route: `/api/health`
 - Fill every `sync: false` value in Render before live smoke testing.
-- Keep the `polydesk-data` disk mounted at `/var/data`. `DATA_PATH=/var/data` makes Circle CLI sessions and file-backed wallet state survive restarts and keeps OTP-completed Arc x402 sessions on the same durable volume.
-- Keep activity history separate from wallet provisioning. The blueprint sets `AGENT_ACTIVITY_STORE=/var/data/agent-activity.json`; never point it at `AGENT_WALLET_PROVISION_STORE`, because activity writes must not replace Circle session records.
+- Keep the `polydesk-data` disk mounted at `/var/data`. `DATA_PATH=/var/data` keeps LP Scout result activity durable across restarts.
 
 Expected server:
 
@@ -130,33 +129,17 @@ Validation:
 
 ## P0 Desk Agent And LP Scout
 
-Required for the Desk Agent tab, agent wallet, paid LP Scout, ZeroScout brief, and x402 receipt paths.
+Required for the Desk Agent tab, Hash PayLink-hosted LP Scout checkout, and ZeroScout brief.
 
 ```env
 DEFAULT_AGENT_SLUG=polydesk-agent
-DEFAULT_AGENT_WALLET_ADDRESS=
-DEFAULT_AGENT_WALLET_CHAIN=BASE
-DEFAULT_AGENT_CHAIN=BASE
-AGENT_WALLET_SERVICE_SECRET=
-AGENT_WALLET_ALLOWED_SERVICE_URLS=
-AGENT_WALLET_MAX_SERVICE_AMOUNT=
-AGENT_WALLET_MAX_GATEWAY_DEPOSIT_AMOUNT=
-AGENT_WALLET_GATEWAY_BALANCE_CHAIN=MATIC
-AGENT_WALLET_GATEWAY_DEPOSIT_CHAIN=BASE
-X402_SELLER_ADDRESS=
-TREASURY_ADDRESS=
-X402_POLYMARKET_SCOUT_PRICE=
-X402_POLYMARKET_SCOUT_MAX_AMOUNT=
-X402_FACILITATOR_URL=
-X402_ACCEPT_NETWORKS=
-X402_POLYMARKET_SCOUT_URL=
+HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
+HASH_PAYLINK_AGENTIC_TEST_API_KEY=
+HASH_PAYLINK_AGENTIC_LIVE_API_KEY=
+HASH_PAYLINK_LP_SCOUT_PRICE=$0.01
 ZEROSCOUT_API_URL=
 ZEROSCOUT_INTELLIGENCE_PATH=
 ZEROSCOUT_INTEGRATION_SECRET=
-CIRCLE_GATEWAY_API_BASE=
-CIRCLE_X402_RECEIPT_API_KEY=
-# or CIRCLE_GATEWAY_API_KEY=
-# or CIRCLE_API_KEY=
 
 # OKX x402 facilitator credentials for listed seller endpoints
 OKX_X402_API_KEY=
@@ -181,15 +164,16 @@ ZEROSCOUT_HELPER_GUIDANCE_TIMEOUT_MS=
 
 Validation:
 
-- `/api/agent-wallet?agent=polydesk-agent` returns configured wallet metadata.
+- `/api/agent-wallet` returns 404 because wallet management is hosted by Hash PayLink.
+- `/api/agent-activity?agent=polydesk-agent` cannot enumerate an agent activity feed.
+- `/api/agent-activity?id=<saved-scout-id>` returns only that LP Scout activity bundle.
 - `/api/x402/polymarket-scout` returns a payment-required response when unpaid and a scout result when paid.
 - `/api/zeroscout/polymarket-brief` accepts a saved scout activity and returns a ZeroScout proof.
-- `/api/x402/receipt?id=...` returns agent activity receipts.
+- The paid result links to the canonical receipt actions on Hash PayLink.
 
 Notes:
 
-- `X402_FACILITATOR_URL` is optional unless the selected x402 network/provider gives a required facilitator endpoint.
-- `CIRCLE_GATEWAY_API_BASE` is optional for the first testnet smoke; the receipt route defaults to Circle's testnet gateway when blank.
+- PolyDesk does not hold facilitator credentials or generate a second payment receipt for this flow.
 - Keep every OKX facilitator credential server-side.
 
 ## P1 0G Archive
@@ -295,7 +279,7 @@ Smoke routes:
 - `GET /polydesk?service=worldcup`
 - `GET /api/poly-stream`
 - `GET /api/poly-worldcup-news`
-- `GET /api/agent-wallet?agent=polydesk-agent`
+- `GET /api/agent-activity?id=<saved-scout-id>`
 - `GET /api/x402/polymarket-scout`
 
 Manual product checks:

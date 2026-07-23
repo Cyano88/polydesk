@@ -862,7 +862,7 @@ function fallbackHelperAnswer(question: string) {
     return 'After a PayLink is paid, the payer success screen shows the transaction, then the 0G archive and receipt actions appear once the proof is ready.'
   }
   if (/\b(x402|activate x402|service balance|wallet balance|circle balance)\b/i.test(question)) {
-    return 'Circle wallet balance is the USDC in your wallet. x402 service balance is the amount activated for paid services. Fund the wallet first, then activate x402 before using paid services.'
+    return 'PolyDesk no longer manages an embedded x402 wallet or service balance. Continue through the hosted Hash PayLink checkout, which owns wallet access, payment verification, and receipt actions.'
   }
   if (/\b(paylink|payment link|request|invoice|collect|charge|receive (?:a )?payment|get paid)\b/i.test(question)) {
     return 'Tell me the payer, amount, network, purpose, and receive wallet. I can then prepare a clean PayLink for sharing.'

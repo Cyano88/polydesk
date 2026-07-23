@@ -150,7 +150,15 @@ export default async function handler(req: Request, res: Response) {
           asset: x402.asset,
           createdAt: x402.createdAt,
           proof: x402.proof,
-          receiptUrl: `/receipt/${encodeURIComponent(x402.id)}`,
+          receiptUrl: x402.proof?.receiptUrl,
+        } : scout.proof ? {
+          id: scout.id,
+          title: 'Hash PayLink checkout',
+          amount: scout.proof.amount,
+          asset: 'USDC',
+          createdAt: scout.createdAt,
+          proof: scout.proof,
+          receiptUrl: scout.proof.receiptUrl,
         } : undefined,
         retryState: failed ? {
           detail: failed.detail,

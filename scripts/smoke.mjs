@@ -16,7 +16,7 @@ const checks = [
   { path: '/api/a2mcp/polymarket-portfolio-watch', method: 'POST', body: {}, expect: [402, 503], label: 'portfolio watch POST payment gate' },
   { path: '/api/a2mcp/polymarket-funding-link', expect: [402, 503], label: 'funding link payment gate' },
   { path: '/api/a2mcp/polymarket-funding-link', method: 'POST', body: {}, expect: [402, 503], label: 'funding link POST payment gate' },
-  { path: '/api/agent-wallet?agent=polydesk-agent', expect: [200, 400, 404, 503], label: 'agent wallet mounted' },
+  { path: '/api/agent-activity?id=missing-scout-id', expect: [404], label: 'agent activity is ID scoped' },
   { path: '/api/x402/polymarket-scout', expect: [200, 400, 402, 500, 503], label: 'lp scout mounted' },
 ]
 

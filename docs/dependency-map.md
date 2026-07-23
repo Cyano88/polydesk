@@ -68,7 +68,7 @@ Source: `src/pages/PolyDesk.tsx`
 | `api/poly-worldcup-news.ts` | `MOVE` | Polymarket/World Cup content belongs to PolyDesk. |
 | `api/x402-polymarket-scout.ts` | `MOVE` | Polymarket scout service belongs to PolyDesk, while x402 billing may call Hash PayLink/OKX.AI later. |
 | `api/zeroscout-polymarket-brief.ts` | `MOVE` | Polymarket intelligence service belongs to PolyDesk. |
-| `api/agent-wallet.ts` | `KEEP_CORE` / `CALL_CORE_API` | Core x402 wallet infrastructure should not move. PolyDesk may call it through stable APIs. |
+| `api/agent-wallet.ts` | `RETIRED_IN_POLYDESK` | Hash PayLink checkout owns wallet access and funding; PolyDesk receives only checkout status and trusted receipt links. |
 | `api/receipt.ts` | `KEEP_CORE` / `CALL_CORE_API` | Core receipt system should remain in Hash PayLink. |
 | POS, Monnify, Paycrest, bank APIs | `KEEP_CORE` | Never copy into PolyDesk. |
 

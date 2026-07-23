@@ -12,6 +12,7 @@ type PaidRequest = Request & {
     amount: string
     network: string
     transaction?: string
+    receiptUrl?: string
     asset?: string
     provider?: string
     kind?: 'circle_gateway_x402' | 'okx_agent_payments_x402'
@@ -20,8 +21,7 @@ type PaidRequest = Request & {
   }
 }
 
-const SELLER_ADDRESS = process.env.X402_SELLER_ADDRESS ?? process.env.TREASURY_ADDRESS
-const PRICE = process.env.X402_POLYMARKET_SCOUT_PRICE ?? '$0.01'
+const PRICE = process.env.HASH_PAYLINK_LP_SCOUT_PRICE ?? '$0.01'
 const REQUEST_TIMEOUT_MS = 12_000
 
 function publicErrorMessage(err: unknown) {
@@ -146,7 +146,6 @@ function proofForPayment(req: PaidRequest, amount: string) {
   const payment = req.payment
   if (!payment) return undefined
   const provider = payment.provider || 'Circle Gateway x402'
-  const seller = payment.seller || SELLER_ADDRESS
   const proof = {
     kind: payment.kind || 'circle_gateway_x402',
     provider,
@@ -154,11 +153,11 @@ function proofForPayment(req: PaidRequest, amount: string) {
     buyerAgent: normalizeActivitySlug(cleanHeader(req.headers['x-buyer-agent']) || cleanHeader(req.headers['x-agent-slug']) || String(req.query.agent ?? '') || payment.payer || 'a2mcp-buyer'),
     sellerAgent: 'polydesk',
     payer: payment.payer,
-    seller,
     amount,
     network: payment.network,
     transaction: payment.transaction,
     serviceUrl: canonicalServiceUrl(req),
+    receiptUrl: payment.receiptUrl,
     generatedAt: new Date().toISOString(),
   }
   const proofHash = crypto.createHash('sha256').update(JSON.stringify({
@@ -168,7 +167,6 @@ function proofForPayment(req: PaidRequest, amount: string) {
     buyerAgent: proof.buyerAgent,
     sellerAgent: proof.sellerAgent,
     payer: proof.payer,
-    seller: proof.seller,
     amount: proof.amount,
     network: proof.network,
     transaction: proof.transaction,
@@ -182,19 +180,6 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
   if (!proof) return undefined
   const agentSlug = proof.buyerAgent || 'a2mcp-buyer'
   const serviceUrl = canonicalServiceUrl(req)
-  const spend = await appendAgentActivity({
-    agentSlug,
-    type: 'x402_spent',
-    title: 'Bought PolyDesk LP Scout API',
-    amount,
-    asset: req.payment?.asset || 'USDC',
-    direction: 'out',
-    network: req.payment?.provider || 'Circle Gateway x402',
-    wallet: proof.payer,
-    serviceUrl,
-    detail: 'Buyer agent paid PolyDesk for a Polymarket LP Scout result.',
-    proof,
-  })
   const result = await appendAgentActivity({
     agentSlug,
     type: 'scout_returned',
@@ -219,7 +204,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
       detail: 'PolyDesk queued ZeroScout verification for the paid A2MCP LP Scout result.',
       result: {
         sourceActivityId: result.id,
-        receiptActivityId: spend?.id,
+        receiptUrl: req.payment?.receiptUrl,
         proofHash: proof.proofHash,
         status: 'queued',
       },
@@ -244,7 +229,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
           : detail,
         result: {
           sourceActivityId: result.id,
-          receiptActivityId: spend?.id,
+          receiptUrl: req.payment?.receiptUrl,
           proofHash: proof.proofHash,
           status: transient ? 'queued' : 'failed',
           error: transient ? undefined : detail,
@@ -257,7 +242,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
   }
   return {
     agentSlug,
-    receiptActivityId: spend?.id,
+    receiptUrl: req.payment?.receiptUrl,
     resultActivityId: result?.id,
     proofHash: proof.proofHash,
     zeroscoutQueued: Boolean(result?.id),
@@ -837,11 +822,9 @@ export async function scoutResponse(req: PaidRequest) {
     budget: cleanContext(req.query.budget),
   })
   const activity = payment ? await recordPaidScout(req, scout, amount) : undefined
-  const receiptUrl = activity?.receiptActivityId
-    ? `/receipt/${encodeURIComponent(activity.receiptActivityId)}`
-    : undefined
+  const receiptUrl = activity?.receiptUrl
   const reportUrl = activity?.resultActivityId
-    ? `/report/lp-scout/${encodeURIComponent(activity.resultActivityId)}${activity.receiptActivityId ? `?receipt=${encodeURIComponent(activity.receiptActivityId)}` : ''}`
+    ? `/report/lp-scout/${encodeURIComponent(activity.resultActivityId)}`
     : undefined
   return {
     ok: true,
@@ -864,14 +847,13 @@ export async function scoutResponse(req: PaidRequest) {
       provider: 'Circle Gateway x402',
       ...(payment?.provider ? { provider: payment.provider } : {}),
       price: PRICE,
-      seller: payment?.seller || SELLER_ADDRESS,
       generatedAt: new Date().toISOString(),
       activity,
     },
     artifacts: {
-      receiptActivityId: activity?.receiptActivityId,
+      receiptUrl,
       resultActivityId: activity?.resultActivityId,
-      x402ReceiptUrl: receiptUrl ? absoluteUrl(req, receiptUrl) : undefined,
+      x402ReceiptUrl: receiptUrl,
       lpScoutReportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
       proofHash: activity?.proofHash,
       zeroScoutStatus: activity?.zeroscoutQueued ? 'queued' : 'not_queued',
@@ -880,7 +862,7 @@ export async function scoutResponse(req: PaidRequest) {
     agentHandoff: {
       recommendedMessage: 'View LP Scout result',
       reportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
-      receiptUrl: receiptUrl ? absoluteUrl(req, receiptUrl) : undefined,
+      receiptUrl,
       note: 'The LP Scout result is delivered after payment. ZeroScout / 0G proof is archived in the background and appears on the report when ready.',
     },
     safety: {
@@ -907,8 +889,12 @@ export default async function handler(req: Request, res: Response) {
     if (payment.kind === 'challenge') {
       res.status(402)
       res.setHeader('PAYMENT-REQUIRED', payment.paymentRequired)
-      res.setHeader('Content-Type', 'application/json')
-      return res.end(payment.body || '{}')
+      return res.json({
+        ok: false,
+        paymentRequired: true,
+        checkoutUrl: payment.checkoutUrl,
+        requestId: req.query.requestId,
+      })
     }
     ;(req as PaidRequest).payment = payment.payment
     return res.json(await scoutResponse(req as PaidRequest))

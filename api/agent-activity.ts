@@ -31,6 +31,7 @@ export type AgentActivityProof = {
   network?: string
   transaction?: string
   serviceUrl?: string
+  receiptUrl?: string
   generatedAt?: string
   receiptHash?: string
   circleOutputHash?: string
