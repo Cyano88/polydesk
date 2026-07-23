@@ -17,6 +17,7 @@
     "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
     "test:hashpaylink-funding": "node --import tsx --test scripts/hashpaylink-polymarket-funding.test.ts",
     "test:hashpaylink-agentic": "node --import tsx --test scripts/hashpaylink-agentic-checkout.test.ts",
+    "test:hashpaylink-url": "node --import tsx --test scripts/hashpaylink-url.test.ts",
     "test:hashpaylink-webhook": "node --import tsx --test scripts/hashpaylink-webhook.test.ts",
     "test:telegram-funding": "node --import tsx --test scripts/telegram-funding-request.test.ts",
     "test:worldcup-summary": "node --import tsx --test scripts/worldcup-final-summary.test.ts",

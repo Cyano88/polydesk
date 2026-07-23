@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, CheckCircle2, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'
 import { rememberLpScoutActivity } from '../lib/polydeskTradeActivity'
 
 type AgentWorkspaceProps = {
@@ -38,15 +39,6 @@ function mergedParams(requestParams?: AgentWorkspaceProps['requestParams']) {
   return params
 }
 
-function trustedHashPayLinkUrl(value: string) {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && url.hostname === 'app.hashpaylink.com' ? url.toString() : ''
-  } catch {
-    return ''
-  }
-}
-
 export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = {}) {
   const navigate = useNavigate()
   const params = useMemo(() => mergedParams(requestParams), [requestParams])
@@ -81,7 +73,7 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
       })
       const body = await response.json().catch(() => ({})) as LpScoutResponse
       if (response.status === 402) {
-        const checkoutUrl = trustedHashPayLinkUrl(body.checkoutUrl || '')
+        const checkoutUrl = trustedHashPayLinkUrl(body.checkoutUrl || '', '/pay/')
         if (!checkoutUrl) throw new Error('Hash PayLink returned an invalid checkout URL.')
         window.location.assign(checkoutUrl)
         return

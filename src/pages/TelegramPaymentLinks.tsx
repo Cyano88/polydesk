@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { EVM_TREASURY } from '../lib/chains'
+import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'
 import AgentWorkspace from './AgentWorkspace'
 import ZeroScoutPowerBadge from '../components/ZeroScoutPowerBadge'
 import PayLinkShareSheet from '../components/PayLinkShareSheet'
@@ -3041,7 +3042,7 @@ export function TelegramHelperPanel({
             if (!lpScoutReceiptUrl) return ''
             try {
               const url = new URL(lpScoutReceiptUrl)
-              return url.protocol === 'https:' && url.hostname === 'app.hashpaylink.com' ? url.toString() : ''
+              return trustedHashPayLinkUrl(url.toString())
             } catch {
               return ''
             }
