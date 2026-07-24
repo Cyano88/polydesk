@@ -332,7 +332,7 @@ function helperModeInstructions(input: ZeroScoutHelperGuidanceInput) {
   }
   if (mode === 'polydesk') {
     return [
-      'PolyDesk mode is only for Polymarket users: portfolio tracking, World Cup market context, funding, and LP Scout access.',
+      'PolyDesk mode is only for Polymarket users: portfolio tracking, verified football market context, funding, and LP Scout access.',
       'Do not answer unrelated daily-life or generic product strategy questions in PolyDesk mode.',
       'For portfolio value, positions, scores, news, market data, LP Scout access, x402, or paid proof claims, rely only on verified app state and supplied backend context.',
       'Keep LP Scout x402 proof separate from normal USDC access payments.',

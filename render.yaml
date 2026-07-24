@@ -85,10 +85,10 @@ services:
         value: auto
       - key: POLY_STREAM_LIMIT
         value: "64"
-      - key: POLY_STREAM_LEAGUE_ID
-        value: "732"
+      - key: POLY_STREAM_LEAGUE_IDS
+        sync: false
       - key: POLY_STREAM_SEASON
-        value: "2026"
+        sync: false
       - key: POLY_STREAM_BASE_URL
         sync: false
       - key: POLY_STREAM_API_KEY
@@ -97,8 +97,6 @@ services:
         value: "1"
       - key: POLYMARKET_LOOKUP_LIMIT
         value: "20"
-      - key: POLYMARKET_WORLD_CUP_LIMIT
-        value: "100"
       - key: POLYMARKET_MATCH_URLS
         sync: false
 

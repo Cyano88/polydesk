@@ -26,7 +26,7 @@ type CacheEntry = {
   }
 }
 
-const DEFAULT_QUERY = 'World Cup 2026 OR FIFA World Cup'
+const DEFAULT_QUERY = '(football OR soccer) AND (match OR league OR tournament)'
 const DEFAULT_CACHE_MS = 15 * 60 * 1000
 const FALLBACK_IMAGE = '/brand/world-globe.png'
 const DEFAULT_NEWS_API_URL = 'https://gnews.io/api/v4/search'
@@ -51,8 +51,8 @@ const OFFICIAL_OKX_NEWS: PolyWorldCupArticle[] = [
     tag: 'Infrastructure',
   },
   {
-    title: 'World Cup market context needs live news checks before quoting',
-    description: 'Use football headlines, squad context, and current Polymarket order-book depth before placing maker quotes in World Cup markets.',
+    title: 'Football market context needs live news checks before quoting',
+    description: 'Use verified team news and current Polymarket order-book depth before placing maker quotes in football markets.',
     source: 'PolyDesk',
     image: FALLBACK_IMAGE,
     url: '',
@@ -114,7 +114,7 @@ function tagFor(title: string, description: string) {
   if (/(injury|injured|squad|roster|lineup|selection)/.test(text)) return 'Squads'
   if (/(qualif|draw|fixture|schedule|group|match)/.test(text)) return 'Fixtures'
   if (/(ticket|stadium|venue|host|city)/.test(text)) return 'Venues'
-  return 'World Cup'
+  return 'Football'
 }
 
 function dedupeArticles(articles: PolyWorldCupArticle[]) {
@@ -156,7 +156,7 @@ function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null 
     asString(article.description)
     || asString(article.summary)
     || asString(article.content)
-    || 'World Cup update for market context.'
+    || 'Football update for market context.'
   return {
     title,
     description,
@@ -194,9 +194,9 @@ function fallbackArticles(): PolyWorldCupArticle[] {
   const now = Date.now()
   return mergeOfficialNews([
     {
-      title: 'World Cup outright markets need fresh news checks before quoting',
-      description: 'Use team news, injury context, and current order-book depth before placing maker orders in World Cup markets.',
-      source: 'Hash PayLink desk',
+      title: 'Football markets need fresh news checks before quoting',
+      description: 'Use team news, injury context, and current order-book depth before placing maker orders in football markets.',
+      source: 'PolyDesk',
       image: FALLBACK_IMAGE,
       url: '',
       publishedAt: new Date(now).toISOString(),
@@ -212,9 +212,9 @@ function fallbackArticles(): PolyWorldCupArticle[] {
       tag: 'Squads',
     },
     {
-      title: 'Fixture and venue context matters for longer World Cup positions',
-      description: 'Longer campaigns may be safer for LP rewards, but every quote should still be reviewed against schedule and volatility.',
-      source: 'Hash PayLink desk',
+      title: 'Fixture context matters for longer football positions',
+      description: 'Every quote should be reviewed against the current schedule, team news, and market volatility.',
+      source: 'PolyDesk',
       image: FALLBACK_IMAGE,
       url: '',
       publishedAt: new Date(now - 120_000).toISOString(),

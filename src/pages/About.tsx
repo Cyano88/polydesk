@@ -4,7 +4,7 @@ import { ArrowRight, Bot, CircleDollarSign, LineChart, ShieldCheck, Trophy, Wall
 const cards = [
   { icon: Bot, title: 'Desk Agent', body: 'Negotiates tasks, guides funding, and helps users understand market state before signing.' },
   { icon: Wallet, title: 'Portfolio', body: 'Tracks deposit wallet state, pUSD, positions, alerts, withdrawals, and claimable outcomes.' },
-  { icon: Trophy, title: 'World Cup', body: 'Connects live match data with Polymarket markets so users see more than one stale market.' },
+  { icon: Trophy, title: 'Football', body: 'Connects verified football data with matched Polymarket markets without presenting stale fixtures.' },
   { icon: LineChart, title: 'LP Scout', body: 'Packages reward, spread, depth, and risk checks as an OKX.AI service.' },
   { icon: CircleDollarSign, title: 'Revenue', body: 'Supports A2A negotiated tasks and future A2MCP fixed-price calls.' },
   { icon: ShieldCheck, title: 'Boundary', body: 'Keeps Hash PayLink payment infrastructure isolated behind a scoped service API.' },

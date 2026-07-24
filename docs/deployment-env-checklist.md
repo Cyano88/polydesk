@@ -65,15 +65,17 @@ Notes:
 - Use a PolyDesk-owned database, not the Hash PayLink core database, once migration is complete.
 - Use a PolyDesk-owned Privy app after cutover. During transition, a shared Privy app is acceptable only if callback domains are explicitly configured.
 
-## P0 World Cup Market Feed
+## P0 Football Market Feed
 
-Required for the World Cup tab to avoid stale or single-market behavior.
+Required for the Football view to avoid stale or single-market behavior. Use only active league IDs supplied by the configured football provider.
 
 ```env
 POLY_STREAM_FIXTURE_MODE=
 POLY_STREAM_LIMIT=
+POLY_STREAM_LEAGUE_IDS=
 POLY_STREAM_LEAGUE_ID=
 POLY_STREAM_SEASON=
+POLY_STREAM_FANVIBE_FEED_URL=
 POLY_STREAM_BASE_URL=
 POLY_STREAM_INCLUDE=
 POLY_STREAM_LIVE_INCLUDE=
@@ -82,7 +84,6 @@ POLY_STREAM_START_DATE=
 POLY_STREAM_DETAIL_LIMIT=
 POLYMARKET_MATCH_URLS=
 POLYMARKET_ALLOW_GENERIC_URLS=
-POLYMARKET_WORLD_CUP_LIMIT=
 POLYMARKET_LOOKUP_LIMIT=
 POLYMARKET_MARKET_LOOKUP=
 POLY_NEWS_QUERY_PARAM=

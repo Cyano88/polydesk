@@ -49,15 +49,17 @@ Rules:
 - Data provider keys should be scoped to PolyDesk only.
 - `DATABASE_URL` should point to a PolyDesk database, not the Hash PayLink core database, after migration.
 
-## PolyDesk World Cup / Market Data Env
+## PolyDesk Football / Market Data Env
 
 Verified in `api/poly-stream.ts` and `api/poly-worldcup-news.ts`:
 
 ```env
 POLY_STREAM_FIXTURE_MODE=
 POLY_STREAM_LIMIT=
+POLY_STREAM_LEAGUE_IDS=
 POLY_STREAM_LEAGUE_ID=
 POLY_STREAM_SEASON=
+POLY_STREAM_FANVIBE_FEED_URL=
 POLY_STREAM_BASE_URL=
 POLY_STREAM_INCLUDE=
 POLY_STREAM_LIVE_INCLUDE=
@@ -67,7 +69,6 @@ POLY_STREAM_DETAIL_LIMIT=
 
 POLYMARKET_MATCH_URLS=
 POLYMARKET_ALLOW_GENERIC_URLS=
-POLYMARKET_WORLD_CUP_LIMIT=
 POLYMARKET_LOOKUP_LIMIT=
 POLYMARKET_MARKET_LOOKUP=
 
@@ -78,7 +79,7 @@ POLY_NEWS_API_AUTH_HEADER=
 POLY_NEWS_API_KEY_PARAM=
 ```
 
-These should move with the World Cup market discovery and news APIs.
+These belong to PolyDesk football market discovery and news APIs. `POLY_STREAM_LEAGUE_IDS` must contain current provider league IDs; there is no tournament-specific fallback.
 
 ## PolyDesk LP Scout / Hash PayLink Env
 

@@ -8,7 +8,7 @@ PolyDesk is being separated from the core Hash PayLink platform so Polymarket-sp
 
 Current phase: Phase 2 - source-cloned frontend plus standalone PolyDesk backend shell.
 
-The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server now mounts the Polymarket portfolio, bridge, order, builder, relayer-builder, submit-order fallback, World Cup stream/news, Desk Agent, agent wallet/profile/verify, ZeroScout brief, LP Scout x402, and x402 receipt APIs. Streampay creator/checkpoint receipt fallbacks remain intentionally outside the PolyDesk backend boundary.
+The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server mounts the Polymarket portfolio, bridge, signed order, football market/news, Desk Agent, ZeroScout, LP Scout x402, and receipt APIs. Hash PayLink remains the checkout and payment-verification system of record.
 
 ## Local Development
 
@@ -56,7 +56,7 @@ PolyDesk owns:
 
 - Polymarket wallet activation and portfolio UX
 - Polymarket buy/sell workflows
-- World Cup market discovery
+- Verified football market discovery
 - LP Scout and ZeroScout Polymarket intelligence
 - Polymarket funding UX and status tracking
 - OKX.AI ASP positioning and agent-service interfaces

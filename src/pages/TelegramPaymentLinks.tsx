@@ -44,6 +44,11 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
+import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
+import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+
+export { LpScoutPanel } from './LpScoutPanel'
+export type { LpScoutPrefill } from './LpScoutPanel'
 
 const TELEGRAM_BOT_URL = import.meta.env.VITE_TELEGRAM_AGENT_URL || 'https://t.me/HashPayLinkBot'
 const PUBLIC_PAYLINK_ORIGIN = (import.meta.env.VITE_PUBLIC_PAYLINK_ORIGIN || 'https://hashpaylink.com').replace(/\/+$/, '')
@@ -120,13 +125,6 @@ type TelegramService = {
   brand?: 'polymarket'
 }
 
-type LpScoutMode = 'best' | 'theme' | 'market'
-export type LpScoutPrefill = {
-  mode: LpScoutMode
-  query: string
-  budget?: string
-}
-
 const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
   'payment-links': [
     {
@@ -168,7 +166,7 @@ const sectionServices: Record<TelegramSectionId, TelegramService[]> = {
     },
     {
       id: 'poly-worldcup',
-      title: 'World Cup Markets',
+      title: 'Football Markets',
       body: 'Live scores, market odds, and direct trade routes.',
       icon: Radio,
       status: 'Open',
@@ -572,7 +570,7 @@ const helperModes: Array<{ id: HelperMode; label: string; intro: string }> = [
   {
     id: 'polydesk',
     label: 'PolyDesk',
-    intro: 'PolyDesk is ready. Choose Portfolio, World Cup, or LP Scout so I can use the right Polymarket flow.',
+    intro: 'PolyDesk is ready. Choose Portfolio, Football, or LP Scout so I can use the right Polymarket flow.',
   },
   {
     id: 'support',
@@ -590,8 +588,8 @@ const polyDeskSubModes: Array<{ id: PolyDeskSubMode; label: string; intro: strin
   },
   {
     id: 'worldcup',
-    label: 'World Cup',
-    intro: 'World Cup mode is ready. I can read live score feeds, fixture context, market routes, and latest World Cup news.',
+    label: 'Football',
+    intro: 'Football mode is ready. I can read verified score feeds, fixture context, market routes, and football news.',
     icon: Radio,
   },
   {
@@ -605,7 +603,7 @@ const polyDeskSubModes: Array<{ id: PolyDeskSubMode; label: string; intro: strin
 function inferPolyDeskSubMode(text: string): PolyDeskSubMode | '' {
   const value = text.toLowerCase()
   if (/\b(lp scout|liquidity|reward market|maker|spread|depth|scout|lp\b)\b/.test(value)) return 'lp-scout'
-  if (/\b(world cup|score|fixture|match|game|news|headline|argentina|jordan|fifa|market odds|live board)\b/.test(value)) return 'worldcup'
+  if (/\b(world cup|football|soccer|score|fixture|match|game|news|headline|fifa|market odds|live board)\b/.test(value)) return 'worldcup'
   if (/\b(portfolio|position|positions|claimable|claim|pnl|value|balance|exposure|fund polymarket|polymarket profile|open positions)\b/.test(value)) return 'portfolio'
   return ''
 }
@@ -2756,24 +2754,24 @@ export function TelegramHelperPanel({
     if (wantsNews) {
       const response = await fetch('/api/poly-worldcup-news')
       const data = await response.json() as PolyWorldCupFeed
-      if (!response.ok || !data.ok) throw new Error('World Cup news is unavailable right now.')
+      if (!response.ok || !data.ok) throw new Error('Football news is unavailable right now.')
       const articles = (data.articles ?? []).slice(0, 3)
       if (!articles.length) {
         return {
-          answer: 'I do not have verified World Cup news from the feed right now.',
+          answer: 'I do not have verified football news from the feed right now.',
           actionLink: { label: 'News', url: newsUrl },
         }
       }
       const lines = articles.map((article, index) => `${index + 1}. ${article.title}${article.source ? ` (${article.source})` : ''}`)
       return {
-        answer: `Latest verified World Cup market news:\n${lines.join('\n')}`,
+        answer: `Latest verified football market news:\n${lines.join('\n')}`,
         actionLink: { label: 'News', url: newsUrl },
       }
     }
 
     const response = await fetch('/api/poly-stream')
     const data = await response.json() as PolyStreamFeed
-    if (!response.ok || !data.ok) throw new Error('World Cup live board is unavailable right now.')
+    if (!response.ok || !data.ok) throw new Error('The football match board is unavailable right now.')
     const matches = data.matches ?? []
     const wantsToday = /\b(today|tonight|now|live|playing)\b/i.test(nextQuestion)
     const wantsUpcoming = /\b(upcoming|next|schedule|fixtures|all fixtures|all upcoming)\b/i.test(nextQuestion)
@@ -2803,7 +2801,7 @@ export function TelegramHelperPanel({
         return `${match.title}: ${state.tag}${state.phase ? `, ${state.phase}` : ''}. ${score}. ${state.sub || match.time}.`
       })
       return {
-        answer: `Today's verified World Cup matches:\n${lines.join('\n')}`,
+        answer: `Today's verified football matches:\n${lines.join('\n')}`,
         actionLink: { label: 'Live board', url: scoresUrl },
       }
     }
@@ -2890,13 +2888,13 @@ export function TelegramHelperPanel({
         return `${match.title}: ${state.sub || match.time}.`
       })
       return {
-        answer: `Upcoming verified World Cup fixtures:\n${lines.join('\n')}`,
+        answer: `Upcoming verified football fixtures:\n${lines.join('\n')}`,
         actionLink: { label: 'Live board', url: scoresUrl },
       }
     }
     if (!match) {
       return {
-        answer: 'I do not have verified World Cup match data from the feed right now.',
+        answer: 'I do not have verified football match data from the feed right now.',
         actionLink: { label: 'Live board', url: scoresUrl },
       }
     }
@@ -3177,7 +3175,7 @@ export function TelegramHelperPanel({
       return
     }
     if (helperMode === 'polydesk' && !polyDeskSubMode) {
-      setAskError('Choose Portfolio, World Cup, or LP Scout first.')
+      setAskError('Choose Portfolio, Football, or LP Scout first.')
       return
     }
     setQuestion('')
@@ -3834,9 +3832,6 @@ function TelegramX402WalletPanel({
   )
 }
 
-type LpScoutPath = 'access' | 'fund'
-type LpScoutStep = 'service' | 'agent'
-
 function PolyDeskBackButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -3874,229 +3869,6 @@ function PolyDeskMenuCard({ title, body, onClick }: { title: string; body: strin
   )
 }
 
-type LpScoutOption = {
-  id: LpScoutMode
-  title: string
-  body: string
-  amount: string
-  icon: typeof LineChart
-  inputLabel?: string
-  inputPlaceholder?: string
-}
-
-const lpScoutOptions: LpScoutOption[] = [
-  {
-    id: 'best',
-    title: 'Best reward markets',
-    body: 'Rank live reward markets by spread, depth and risk.',
-    amount: '0.01',
-    icon: LineChart,
-  },
-  {
-    id: 'theme',
-    title: 'Scout a theme',
-    body: 'Scan one sector, event or sports category.',
-    amount: '0.01',
-    icon: Sparkles,
-    inputLabel: 'Theme',
-    inputPlaceholder: 'crypto, AI, election, football...',
-  },
-  {
-    id: 'market',
-    title: 'Inspect one market',
-    body: 'Inspect one market book and its LP risk.',
-    amount: '0.01',
-    icon: ExternalLink,
-    inputLabel: 'Market URL or slug',
-    inputPlaceholder: 'https://polymarket.com/event/...',
-  },
-]
-
-export function LpScoutPanel({
-  prefill,
-  onPrefillConsumed,
-  onBack,
-  hideBack = false,
-}: {
-  prefill: LpScoutPrefill | null
-  onPrefillConsumed: () => void
-  onBack: () => void
-  hideBack?: boolean
-}) {
-  const [searchParams] = useSearchParams()
-  const initialLpScoutPath = searchParams.get('lpScoutPath') === 'fund' ? 'fund' : 'access'
-  const [path, setPath] = useState<LpScoutPath>(initialLpScoutPath)
-  const [step, setStep] = useState<LpScoutStep>('service')
-  const [mode, setMode] = useState<LpScoutMode>('best')
-  const [query, setQuery] = useState('')
-  const [maxSpend, setMaxSpend] = useState(lpScoutOptions[0].amount)
-  const [prefillNotice, setPrefillNotice] = useState('')
-  const selectedOption = lpScoutOptions.find(option => option.id === mode) ?? lpScoutOptions[0]
-  const needsQuery = Boolean(selectedOption.inputLabel)
-  const contextReady = !needsQuery || query.trim().length > 2
-  const canChooseAgent = contextReady
-
-  useEffect(() => {
-    if (searchParams.get('lpScoutPath') === 'fund') {
-      setPath('fund')
-      setStep('agent')
-    }
-  }, [searchParams])
-
-  useEffect(() => {
-    if (!prefill) return
-    const option = lpScoutOptions.find(item => item.id === prefill.mode) ?? lpScoutOptions[0]
-    setPath('access')
-    setStep('service')
-    setMode(option.id)
-    setQuery(prefill.query)
-    setMaxSpend(option.amount)
-    setPrefillNotice(prefill.query)
-    onPrefillConsumed()
-  }, [prefill])
-
-  function selectOption(option: LpScoutOption) {
-    setMode(option.id)
-    setMaxSpend(option.amount)
-    setQuery('')
-    setPrefillNotice('')
-    setStep('service')
-  }
-
-  function backFromPath() {
-    if (path === 'fund') {
-      onBack()
-      return
-    }
-    if (step === 'agent') {
-      setStep('service')
-      return
-    }
-    onBack()
-  }
-
-  function buildWalletScoutParams() {
-    return {
-      profile: 'agent',
-      walletManager: 'service',
-      src: 'lp-scout',
-      run: 'polymarket-scout',
-      scoutMode: selectedOption.id,
-      maxAmount: maxSpend.trim(),
-      serviceUrl: '/api/x402/polymarket-scout',
-      n: 'arc',
-      context: query.trim() || undefined,
-    }
-  }
-
-  function buildWalletFundingParams() {
-    return {
-      profile: 'agent',
-      walletManager: 'service',
-      src: 'lp-scout',
-      n: 'arc',
-    }
-  }
-
-  if (path === 'fund') {
-    return (
-      <div className="mt-4 space-y-4">
-        {!hideBack && <PolyDeskBackButton onClick={backFromPath} />}
-        <AgentWorkspace embedded forceProfile requestParams={buildWalletFundingParams()} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="mt-4 space-y-4">
-      {!hideBack && <PolyDeskBackButton onClick={backFromPath} />}
-
-      {step !== 'agent' && (
-        <>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-                  <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
-                </span>
-                <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Choose a scout, set a max spend, then pay with x402.</h2>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            {lpScoutOptions.map(option => {
-              const Icon = option.icon
-              const selected = option.id === mode
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => selectOption(option)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-2xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
-                    selected
-                      ? 'border-gray-950 ring-2 ring-gray-950/10 dark:border-white dark:ring-white/15'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.08]',
-                  )}
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-700 shadow-sm dark:bg-white/[0.08] dark:text-gray-200">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center justify-between gap-3">
-                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{option.title}</span>
-                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                        max {option.amount} USDC
-                      </span>
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">{option.body}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="polydesk-card space-y-3 p-4">
-            {prefillNotice && (
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-400/20 dark:bg-emerald-400/10">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-200">News context loaded</p>
-                <p className="mt-0.5 truncate text-xs font-medium text-emerald-800/80 dark:text-emerald-100/80">{prefillNotice}</p>
-              </div>
-            )}
-            {selectedOption.inputLabel && (
-              <InputBlock
-                label={selectedOption.inputLabel}
-                value={query}
-                onChange={value => {
-                  setQuery(value)
-                  if (prefillNotice) setPrefillNotice('')
-                }}
-                placeholder={selectedOption.inputPlaceholder ?? 'Add context'}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => setStep('agent')}
-              disabled={!canChooseAgent}
-              className="polydesk-primary-cta w-full"
-            >
-              <Wallet className="h-4 w-4" />
-              Continue to LP Scout checkout
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'agent' && (
-        <div className="animate-slide-up">
-          <AgentWorkspace embedded forceProfile requestParams={buildWalletScoutParams()} />
-        </div>
-      )}
-    </div>
-  )
-}
-
 type PolyWorldCupArticle = {
   title: string
   description: string
@@ -4120,9 +3892,9 @@ type PolyWorldCupFeed = {
 
 const fallbackWorldCupArticles: PolyWorldCupArticle[] = [
   {
-    title: 'World Cup market context is ready',
-    description: 'Connect a provider feed to follow World Cup headlines, then use LP Scout before placing maker orders.',
-    source: 'Hash PayLink desk',
+    title: 'Football market context is ready',
+    description: 'Connect a verified football provider, then use LP Scout before placing maker orders.',
+    source: 'PolyDesk',
     image: POLYMARKET_LOGO,
     url: '',
     publishedAt: new Date().toISOString(),
@@ -4209,7 +3981,7 @@ export function PolyWorldCupNewsPanel({
   function askLpScout() {
     const headline = lead.title.replace(/\s+/g, ' ').trim()
     const source = lead.source ? ` (${lead.source})` : ''
-    const query = `World Cup: ${headline}${source}`.slice(0, 170)
+    const query = `Football: ${headline}${source}`.slice(0, 170)
     onOpenLpScout({ mode: 'theme', query })
   }
 
@@ -4235,7 +4007,7 @@ export function PolyWorldCupNewsPanel({
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/10" />
           <div className="relative flex h-full flex-col justify-end p-3 sm:p-4">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-gray-950">{lead.tag || 'World Cup'}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-gray-950">{lead.tag || 'Football'}</span>
               <span className="max-w-[180px] truncate rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white ring-1 ring-white/20">{lead.source}</span>
               {relativeNewsTime(lead.publishedAt) && (
                 <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white ring-1 ring-white/20">{relativeNewsTime(lead.publishedAt)}</span>
@@ -4300,7 +4072,7 @@ export function PolyWorldCupNewsPanel({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                    <span className="shrink-0">{article.tag || 'World Cup'}</span>
+                    <span className="shrink-0">{article.tag || 'Football'}</span>
                     <span className="truncate">{article.source}</span>
                   </span>
                   <span className="mt-0.5 block truncate text-xs font-semibold text-gray-900 dark:text-white">{article.title}</span>
@@ -4561,7 +4333,7 @@ function compactMatchTime(match: PolyStreamMatch) {
 function detailItems(match: PolyStreamMatch) {
   const items: ScoreDetailItem[] = []
   const [home, away] = splitFixtureTitle(match.title)
-  if (match.venue && match.venue !== 'World Cup venue') items.push({ type: 'text', label: 'Stadium', value: match.venue })
+  if (match.venue && match.venue !== 'Venue unavailable' && match.venue !== 'World Cup venue') items.push({ type: 'text', label: 'Stadium', value: match.venue })
   const goals = (match.goalScorers || []).map(goal => formatGoalScorer(goal, home, away)).filter(Boolean)
   if (goals.length) items.push({ type: 'goals', label: 'Goals', goals })
   if (match.homeCoach && match.awayCoach) items.push({ type: 'text', label: 'Coaches', value: [match.homeCoach, match.awayCoach].join(' vs ') })
@@ -4687,7 +4459,7 @@ function friendlyTradeError(err: unknown) {
   if (/^(available pusd is|pusd approval is still pending|pusd is funded|polymarket wallet is not deployed|connected owner wallet does not control)/i.test(cleanMessage)) {
     return cleanMessage
   }
-  if (/^(signed order|polydesk|polymarket|user polymarket|world cup|this polymarket|unsupported|buying is temporarily|this market is not ready)/i.test(cleanMessage)) {
+  if (/^(signed order|polydesk|polymarket|user polymarket|world cup|football|this polymarket|unsupported|buying is temporarily|this market is not ready)/i.test(cleanMessage)) {
     return cleanMessage
   }
   if (/\b(reject|rejected|denied|cancel|cancelled|user rejected)\b/.test(message)) {
@@ -4798,7 +4570,7 @@ function HashLiveScoreWidget({
   const [, setCountdownTick] = useState(0)
   const featured = matches.find(match => matchKey(match) === selectedMatchKey) || matches[0]
   const rest = featured ? matches.filter(match => matchKey(match) !== matchKey(featured)) : []
-  const [home, away] = featured ? splitFixtureTitle(featured.title) : ['World Cup', 'Scores']
+  const [home, away] = featured ? splitFixtureTitle(featured.title) : ['Football', 'Matches']
   const featuredState = featured ? matchDisplayState(featured) : null
   const homeFlag = flagUrlForTeam(home)
   const awayFlag = flagUrlForTeam(away)
@@ -4854,14 +4626,7 @@ function HashLiveScoreWidget({
   }, [])
 
   if (loading) {
-    return (
-      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading live board
-        </div>
-      </div>
-    )
+    return <PolyDeskLoadingState label="Syncing football markets" />
   }
 
   if (error) {
@@ -4869,7 +4634,7 @@ function HashLiveScoreWidget({
       <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-4 text-center dark:border-rose-400/20 dark:bg-rose-400/10">
         <p className="text-sm font-semibold text-rose-700 dark:text-rose-200">Live scores temporarily unavailable</p>
         <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-rose-600/80 dark:text-rose-100/70">
-          Refresh in a moment. We do not show stale World Cup rows.
+          Refresh in a moment. We do not show stale football rows.
         </p>
         <button
           type="button"
@@ -5244,7 +5009,7 @@ export function PolyStreamPanel({
       return
     }
     if (profileLoading) {
-      setTradeNotice('Loading your PolyDesk trading wallet. Try again in a moment.')
+      setTradeNotice('Your PolyDesk trading wallet is still syncing. Try again in a moment.')
       return
     }
     if (!savedTradingAddress || !polymarketDepositWallet || !polymarketWalletReady) {
@@ -6278,7 +6043,7 @@ function buildTelegramBotStartUrl(payload: string) {
   return `${base}?start=${encodeURIComponent(cleanPayload)}`
 }
 
-// ── Polymarket Portfolio + World Cup hub ──────────────────────────────────────
+// ── Polymarket Portfolio + football hub ───────────────────────────────────────
 
 type PolymarketBridgeNetwork = 'base' | 'arbitrum' | 'solana'
 
@@ -8203,9 +7968,7 @@ export function PolyPortfolioPanel({
       <div className="mt-4 space-y-3">
         {showLegacyBack && <PolyDeskBackButton onClick={onBack} />}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading PolyDesk session...
-          </div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">Session is taking longer than expected</p>
           <div className="mt-3 space-y-3">
             <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               PolyDesk is still waiting for the wallet session. Refresh this page if it does not continue.
@@ -8225,11 +7988,7 @@ export function PolyPortfolioPanel({
   }
 
   if (!sessionlessExternalMode && !privyReady) {
-    return (
-      <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-      </div>
-    )
+    return <PolyDeskLoadingState label="Restoring your session" />
   }
 
   if (!sessionlessExternalMode && !authenticated) {
@@ -8450,11 +8209,7 @@ export function PolyPortfolioPanel({
   }
 
   if (bundleLoading && !bundle) {
-    return (
-      <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading portfolio…
-      </div>
-    )
+    return <PolyDeskLoadingState label="Syncing portfolio" />
   }
 
   // Connect screen — no saved profile yet
@@ -9264,9 +9019,7 @@ export function PolyPortfolioPanel({
               ))}
             </div>
             {liveLoading && livePositions.length === 0 ? (
-              <div className="mt-3 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin" /> Fetching positions...
-              </div>
+              <PolyDeskLoadingState label="Syncing positions" />
             ) : positionsByStatus.length === 0 ? (
               <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No {positionStatusTab.replace('-', ' ')} positions in this wallet.</p>
             ) : (
@@ -9539,9 +9292,7 @@ export function PolyPortfolioPanel({
           {activeOpenPositions.length > 0 && <p className="text-xs text-gray-500 dark:text-gray-400">{activeOpenPositions.length}</p>}
         </div>
         {liveLoading && livePositions.length === 0 ? (
-          <div className="mt-2.5 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Fetching positions…
-          </div>
+          <PolyDeskLoadingState label="Syncing positions" />
         ) : activeOpenPositions.length === 0 ? (
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">No open positions on this address.</p>
         ) : (
@@ -9658,12 +9409,12 @@ export function PolyWorldCupHubPanel({
     <div className="mt-4 space-y-3">
       <div className="space-y-2">
         <PolyDeskMenuCard
-          title="World Cup markets"
+          title="Football markets"
           body="Live match centre with exact Polymarket fixture routing."
           onClick={onOpenScores}
         />
         <PolyDeskMenuCard
-          title="World Cup news"
+          title="Football news"
           body="Headlines that move Polymarket prices and LP risk."
           onClick={onOpenNews}
         />

@@ -868,7 +868,7 @@ function fallbackHelperAnswer(question: string) {
     return 'Tell me the payer, amount, network, purpose, and receive wallet. I can then prepare a clean PayLink for sharing.'
   }
   if (/\b(what can you do|help me|how can you help|what do you help with)\b/i.test(question)) {
-    return 'I can help with PolyDesk, Polymarket funding, portfolio checks, World Cup markets, LP Scout x402, wallet setup, and support questions.'
+    return 'I can help with PolyDesk, Polymarket funding, portfolio checks, football markets, LP Scout x402, wallet setup, and support questions.'
   }
   if (isPersonalContextQuestion(question)) {
     return personalContextFallback(question)
@@ -1156,7 +1156,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
     if (helperMode === 'streampay') {
       return `Hey${knownName ? ` ${knownName}` : ''}. I am Agent Hash for HashpayStream. I can help with creator posts, HashWatch, books, World Cup news, live scores, x402 unlocks, pay-as-you-read/watch checkpoints, receipts, earnings, and unlocked-content summaries.`
     }
-    return `Hey${knownName ? ` ${knownName}` : ''}. I can help with PolyDesk funding, portfolio checks, World Cup markets, LP Scout x402, wallet setup, and Polymarket workflows.`
+    return `Hey${knownName ? ` ${knownName}` : ''}. I can help with PolyDesk funding, portfolio checks, football markets, LP Scout x402, wallet setup, and Polymarket workflows.`
   }
 
   if (isHashpayStreamMediaInspection && zeroScoutAnswer && !isUnusableHashpayStreamMediaGuidance(zeroScoutAnswer, zeroScoutGuidance)) return zeroScoutAnswer
@@ -1176,7 +1176,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
   if (fallbackAnswer) return fallbackAnswer
 
   if (helperMode === 'services') {
-    return 'I can help with PolyDesk services. Tell me if you mean Polymarket funding, Portfolio, World Cup markets, LP Scout x402, Circle wallet setup, or support.'
+    return 'I can help with PolyDesk services. Tell me if you mean Polymarket funding, Portfolio, football markets, LP Scout x402, Circle wallet setup, or support.'
   }
 
   if (helperMode === 'streampay') {
@@ -1188,7 +1188,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
   }
 
   if (helperMode === 'polydesk') {
-    return 'I could not complete the PolyDesk answer just now. Open Portfolio, World Cup, or LP Scout and I will use that exact Polymarket path.'
+    return 'I could not complete the PolyDesk answer just now. Open Portfolio, Football, or LP Scout and I will use that exact Polymarket path.'
   }
 
   if (accessMode !== HELPER_FREE_ACCESS_MODE) {
@@ -1264,7 +1264,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({
         error: usageTier === 'deep'
           ? 'Deep research limit reached for today. Upgrade to Agent Hash Pro to continue deeper Ask Hash research.'
-          : 'Daily PolyDesk chat limit reached. Portfolio, funding, World Cup markets, and LP Scout tools remain available.',
+          : 'Daily PolyDesk chat limit reached. Portfolio, funding, football markets, and LP Scout tools remain available.',
         cooldown: true,
         upgradeRequired: usageTier === 'deep',
         upgradeAmount: usageTier === 'deep' ? '10' : undefined,
@@ -1445,7 +1445,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({
         error: usageTier === 'deep'
           ? 'Deep research limit reached for today. Upgrade to Agent Hash Pro to continue deeper Ask Hash research.'
-          : 'Daily PolyDesk chat limit reached. Portfolio, funding, World Cup markets, and LP Scout tools remain available.',
+          : 'Daily PolyDesk chat limit reached. Portfolio, funding, football markets, and LP Scout tools remain available.',
         cooldown: true,
         upgradeRequired: usageTier === 'deep',
         upgradeAmount: usageTier === 'deep' ? '10' : undefined,

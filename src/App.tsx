@@ -1,19 +1,28 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import PolyDeskLayout from './layouts/PolyDeskLayout'
-import About from './pages/About'
-import PolyDesk from './pages/PolyDesk'
-import LPScoutReport from './pages/LPScoutReport'
+import { PolyDeskLoadingState } from './components/PolyDeskLoadState'
+
+const About = lazy(() => import('./pages/About'))
+const PolyDesk = lazy(() => import('./pages/PolyDesk'))
+const LPScoutReport = lazy(() => import('./pages/LPScoutReport'))
+
+function RouteLoading() {
+  return <PolyDeskLoadingState fullScreen label="Opening PolyDesk" />
+}
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<PolyDeskLayout />}>
-        <Route path="/" element={<PolyDesk />} />
-        <Route path="/polydesk" element={<PolyDesk />} />
-      </Route>
-      <Route path="/about" element={<About />} />
-      <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<RouteLoading />}>
+      <Routes>
+        <Route element={<PolyDeskLayout />}>
+          <Route path="/" element={<PolyDesk />} />
+          <Route path="/polydesk" element={<PolyDesk />} />
+        </Route>
+        <Route path="/about" element={<About />} />
+        <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }

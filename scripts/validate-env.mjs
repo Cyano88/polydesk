@@ -28,11 +28,10 @@ const groups = [
     ],
   },
   {
-    name: 'world cup feed',
+    name: 'football feed',
     recommended: [
-      'POLY_STREAM_LEAGUE_ID',
+      'POLY_STREAM_LEAGUE_IDS',
       'POLY_STREAM_SEASON',
-      'POLYMARKET_MATCH_URLS',
       'POLYMARKET_MARKET_LOOKUP',
     ],
     optional: [

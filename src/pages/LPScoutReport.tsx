@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Copy, Download, ExternalLink, FileText, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 
 type ReportResponse = {
   ok?: boolean
@@ -153,11 +154,8 @@ export default function LPScoutReport() {
         </button>
 
         {busy ? (
-          <section className="flex flex-1 items-center justify-center rounded-2xl border border-gray-100 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="flex items-center gap-3 text-sm font-semibold text-gray-500 dark:text-gray-300">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading LP Scout report
-            </div>
+          <section className="flex flex-1 items-center justify-center">
+            <PolyDeskLoadingState label="Opening LP Scout report" />
           </section>
         ) : !data?.ok || !report ? (
           <section className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm dark:border-red-900/40 dark:bg-white/[0.04]">

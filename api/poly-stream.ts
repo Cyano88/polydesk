@@ -67,8 +67,6 @@ type FixtureMode = 'auto' | 'live' | 'next' | 'last'
 const DEFAULT_FIXTURE_LIMIT = 64
 const DEFAULT_SPORTMONKS_BASE = 'https://api.sportmonks.com/v3/football'
 const DEFAULT_API_FOOTBALL_BASE = 'https://v3.football.api-sports.io'
-const DEFAULT_WORLD_CUP_START_DATE = '2026-06-11'
-const DEFAULT_FANVIBE_WORLD_CUP_FEED_URL = 'https://xcup-fanvibe-production.up.railway.app/worldcup/feed'
 
 let cache: CacheEntry | null = null
 let lastProviderError = ''
@@ -91,6 +89,13 @@ function fixtureLimit() {
   const configured = Number(process.env.POLY_STREAM_LIMIT?.trim())
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_FIXTURE_LIMIT
   return Math.max(DEFAULT_FIXTURE_LIMIT, Math.floor(configured))
+}
+
+function configuredLeagueIds() {
+  return (envValue('POLY_STREAM_LEAGUE_IDS') || envValue('POLY_STREAM_LEAGUE_ID'))
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
 }
 
 function todayKey() {
@@ -176,7 +181,8 @@ function isAllowedPolymarketMatchUrl(value: string) {
   if (!url.startsWith('https://polymarket.com/')) return false
   if (isExactScoreMarketText(url)) return false
   if (process.env.POLYMARKET_ALLOW_GENERIC_URLS?.trim() === '1') return true
-  return /^https:\/\/polymarket\.com\/sports\/world-cup\/[a-z0-9-]+\/?$/i.test(url)
+  const parsed = new URL(url)
+  return /^\/(?:event|sports\/(?:soccer|football))\/[a-z0-9-]+\/?$/i.test(parsed.pathname)
 }
 
 function exactPolymarketUrl(title: string, ids: string[] = []) {
@@ -418,7 +424,7 @@ function sportmonksStats(match: ProviderMatch) {
 }
 
 function publicMarketContext(title: string, status: string) {
-  return `${title}. ${status}. Live World Cup board with Polymarket prices when the main match market is confidently matched.`
+  return `${title}. ${status}. Verified football board with Polymarket prices only when the main match market is confidently matched.`
 }
 
 function withMarketStatus(match: ScoreMatch): ScoreMatch {
@@ -490,7 +496,7 @@ function normalizeSportmonks(match: ProviderMatch): ScoreMatch | null {
   const startingAt = Number.isFinite(timestamp) && timestamp > 0
     ? new Date(timestamp * 1000).toISOString()
     : utcDateString(match.starting_at)
-  const venue = asString(asRecord(match.venue).name) || 'World Cup venue'
+  const venue = asString(asRecord(match.venue).name) || 'Venue unavailable'
   const leagueId = String(match.league_id ?? '')
   const fixtureId = String(match.id ?? '')
   const clock = sportmonksClock(match)
@@ -550,7 +556,7 @@ function normalizeApiFootball(match: ProviderMatch): ScoreMatch | null {
     title,
     time: readableTime(date),
     kickoffAt: date,
-    venue: asString(asRecord(fixture.venue).name) || 'World Cup venue',
+    venue: asString(asRecord(fixture.venue).name) || 'Venue unavailable',
     status: statusText,
     homeScore: exposeScore ? asScore(goals.home) : undefined,
     awayScore: exposeScore ? asScore(goals.away) : undefined,
@@ -562,7 +568,7 @@ function normalizeApiFootball(match: ProviderMatch): ScoreMatch | null {
 }
 
 function fanVibeFeedUrl() {
-  return envValue('FANVIBE_WORLD_CUP_FEED_URL') || DEFAULT_FANVIBE_WORLD_CUP_FEED_URL
+  return envValue('POLY_STREAM_FANVIBE_FEED_URL') || envValue('FANVIBE_WORLD_CUP_FEED_URL')
 }
 
 function fanVibeStatusText(fixtureStatus: string, stateStatus: string) {
@@ -652,7 +658,7 @@ function normalizeFanVibeFixture(fixture: ProviderMatch, matchStates: Record<str
     title,
     time: readableTime(kickoffAt),
     kickoffAt,
-    venue: asString(fixture.venue) || 'World Cup venue',
+    venue: asString(fixture.venue) || 'Venue unavailable',
     status,
     homeScore: exposeScore ? homeScore : undefined,
     awayScore: exposeScore ? awayScore : undefined,
@@ -673,15 +679,18 @@ function normalizeFanVibeFixture(fixture: ProviderMatch, matchStates: Record<str
 function apiFootballUrls(mode: FixtureMode) {
   const explicit = envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
   if (explicit) return [explicit]
-  const league = process.env.POLY_STREAM_LEAGUE_ID?.trim() || '1'
+  const leagues = configuredLeagueIds()
+  if (!leagues.length) return []
   const season = process.env.POLY_STREAM_SEASON?.trim() || '2026'
-  const url = new URL(`${DEFAULT_API_FOOTBALL_BASE}/fixtures`)
-  url.searchParams.set('league', league)
-  url.searchParams.set('season', season)
-  if (mode === 'live' || mode === 'auto') url.searchParams.set('live', 'all')
-  if (mode === 'next') url.searchParams.set('next', String(fixtureLimit()))
-  if (mode === 'last') url.searchParams.set('last', String(fixtureLimit()))
-  return [url.toString()]
+  return leagues.map(league => {
+    const url = new URL(`${DEFAULT_API_FOOTBALL_BASE}/fixtures`)
+    url.searchParams.set('league', league)
+    url.searchParams.set('season', season)
+    if (mode === 'live' || mode === 'auto') url.searchParams.set('live', 'all')
+    if (mode === 'next') url.searchParams.set('next', String(fixtureLimit()))
+    if (mode === 'last') url.searchParams.set('last', String(fixtureLimit()))
+    return url.toString()
+  })
 }
 
 function isoDate(offsetDays = 0) {
@@ -693,7 +702,8 @@ function isoDate(offsetDays = 0) {
 function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
   const explicit = envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
   if (explicit) return [explicit]
-  const league = process.env.POLY_STREAM_LEAGUE_ID?.trim() || '732'
+  const leagues = configuredLeagueIds()
+  if (!leagues.length) return []
   const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
   const baseInclude = 'participants;state;scores;venue;periods;events;league'
   const liveInclude = process.env.POLY_STREAM_LIVE_INCLUDE?.trim() || baseInclude
@@ -702,20 +712,20 @@ function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
     : mode === 'live'
       ? liveInclude
       : process.env.POLY_STREAM_INCLUDE?.trim() || baseInclude
-  const withCommonParams = (path: string) => {
+  const withCommonParams = (path: string, league: string) => {
     const url = new URL(`${base}${path}`)
     url.searchParams.set('include', include)
     url.searchParams.set('includes', include)
     url.searchParams.set('filters', `fixtureLeagues:${league}`)
     return url.toString()
   }
-  if (mode === 'live') return [withCommonParams('/livescores')]
-  if (mode === 'last') return [withCommonParams('/fixtures/latest')]
-  const startDate = process.env.POLY_STREAM_START_DATE?.trim() || DEFAULT_WORLD_CUP_START_DATE
-  return [
-    withCommonParams(`/fixtures/between/${startDate}/${isoDate(21)}`),
-    withCommonParams('/fixtures/upcoming'),
-  ]
+  if (mode === 'live') return leagues.map(league => withCommonParams('/livescores', league))
+  if (mode === 'last') return leagues.map(league => withCommonParams('/fixtures/latest', league))
+  const startDate = process.env.POLY_STREAM_START_DATE?.trim() || isoDate()
+  return leagues.flatMap(league => [
+    withCommonParams(`/fixtures/between/${startDate}/${isoDate(21)}`, league),
+    withCommonParams('/fixtures/upcoming', league),
+  ])
 }
 
 function sportmonksFixtureDetailUrl(fixtureId: string) {
@@ -812,22 +822,11 @@ function scorePolymarketCandidate(candidate: ProviderMatch, home: string, away: 
   if (!hasHome || !hasAway) return 0
   let score = 50
   if (eventTitle && homeTerms.some(term => eventTitle.startsWith(term)) && awayTerms.some(term => eventTitle.endsWith(term))) score += 20
-  if (/\bworld cup\b|\bfifa\b|\b2026\b/.test(text)) score += 18
+  if (/\bfootball\b|\bsoccer\b|\bmoneyline\b/.test(text)) score += 12
   if (/\bvs\b|\bv\b|\bversus\b|\bbeat\b|\bwin\b/.test(text)) score += 8
   if (/winner|match|game|group|advance|qualif|score/.test(text)) score += 6
   if (!allowClosed && isClosedMarket(candidate)) score -= 40
   return score
-}
-
-function hasWorldCupSeries(candidate: ProviderMatch) {
-  const record = asRecord(candidate)
-  const direct = asString(record.seriesSlug) || asString(record.series_slug)
-  if (direct === 'soccer-fifwc') return true
-  const series = Array.isArray(record.series) ? record.series : []
-  return series.some(item => {
-    const seriesRecord = asRecord(item)
-    return asString(seriesRecord.slug) === 'soccer-fifwc' || asString(seriesRecord.ticker) === 'soccer-fifwc'
-  })
 }
 
 function readMarketSlug(candidate: ProviderMatch) {
@@ -842,7 +841,6 @@ function readPolymarketUrl(candidate: ProviderMatch, kind: 'event' | 'market') {
   const directUrl = asString(record.marketUrl) || asString(record.url)
   if (isAllowedPolymarketMatchUrl(directUrl)) return directUrl
   const slug = readMarketSlug(candidate)
-  if (slug && kind === 'event' && hasWorldCupSeries(candidate)) return `https://polymarket.com/sports/world-cup/${slug}`
   return slug ? `https://polymarket.com/${kind}/${slug}` : ''
 }
 
@@ -1013,26 +1011,12 @@ async function fetchPolymarketJson(url: string) {
   }
 }
 
-async function fetchPolymarketWorldCupEvents() {
-  return fetchPolymarketWorldCupEventsByClosed(false)
-}
-
-async function fetchPolymarketWorldCupEventsByClosed(closed: boolean) {
-  const params = new URLSearchParams({
-    active: 'true',
-    closed: closed ? 'true' : 'false',
-    limit: process.env.POLYMARKET_WORLD_CUP_LIMIT?.trim() || '100',
-    series_slug: 'soccer-fifwc',
-  })
-  return fetchPolymarketJson(`https://gamma-api.polymarket.com/events?${params.toString()}`).catch(() => [])
-}
-
 function polymarketMatchFromCandidates(match: ScoreMatch, candidates: Array<{ kind: 'event' | 'market'; item: ProviderMatch }>) {
   const [home, away] = splitFixtureTitle(match.title)
   if (!home || !away) return null
   const allowClosed = isResultMatch(match)
   const ranked = candidates
-    .filter(candidate => candidate.kind === 'event' && hasWorldCupSeries(candidate.item))
+    .filter(candidate => candidate.kind === 'event')
     .map(candidate => ({ ...candidate, score: scorePolymarketCandidate(candidate.item, home, away, allowClosed) }))
     .filter(candidate => candidate.score >= 50)
     .sort((a, b) => b.score - a.score)
@@ -1061,7 +1045,7 @@ function polymarketMatchFromCandidates(match: ScoreMatch, candidates: Array<{ ki
 async function findPolymarketMatch(match: ScoreMatch) {
   const [home, away] = splitFixtureTitle(match.title)
   if (!home || !away) return null
-  const query = `${home} ${away} World Cup`
+  const query = `${home} ${away} soccer`
   const params = new URLSearchParams({
     active: 'true',
     closed: 'false',
@@ -1080,19 +1064,10 @@ function isResultMatch(match: ScoreMatch) {
 
 async function enrichMatchesWithPolymarket(matches: ScoreMatch[]) {
   if (process.env.POLYMARKET_MARKET_LOOKUP?.trim() === '0') return matches
-  const worldCupEvents = await fetchPolymarketWorldCupEvents()
-  const closedWorldCupEvents = matches.some(isResultMatch)
-    ? await fetchPolymarketWorldCupEventsByClosed(true)
-    : []
-  const worldCupCandidates = worldCupEvents.map(item => ({ kind: 'event' as const, item }))
-  const closedWorldCupCandidates = closedWorldCupEvents.map(item => ({ kind: 'event' as const, item }))
   const enriched = await Promise.all(matches.map(async match => {
     const configuredUrl = match.polymarketUrl && isAllowedPolymarketMatchUrl(match.polymarketUrl) ? match.polymarketUrl : ''
     const searchableMatch = { ...match, polymarketUrl: '' }
-    const candidatePool = isResultMatch(match)
-      ? [...worldCupCandidates, ...closedWorldCupCandidates]
-      : worldCupCandidates
-    const found = polymarketMatchFromCandidates(match, candidatePool) || await findPolymarketMatch(match).catch(() => null)
+    const found = await findPolymarketMatch(match).catch(() => null)
     if (!found?.url) {
       return withMarketStatus(configuredUrl
         ? { ...searchableMatch, polymarketUrl: configuredUrl }
@@ -1335,10 +1310,10 @@ async function fetchProviderMatches(selectedDate: string): Promise<ScoreMatch[]>
     try {
       const matches = await fetchFanVibeMatches(selectedDate)
       if (matches.length) {
-        lastProviderSource = 'fanvibe-worldcup'
+        lastProviderSource = 'fanvibe-football'
         return matches
       }
-      lastProviderError = 'FanVibe feed returned no World Cup fixtures.'
+      lastProviderError = 'FanVibe feed returned no football fixtures.'
     } catch (err) {
       lastProviderError = err instanceof Error ? err.message : 'FanVibe feed failed.'
     }
@@ -1376,7 +1351,11 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
     lastProviderSource = ''
     const matches = providerConfigured ? await fetchProviderMatches(selectedDate) : []
     if (matches.length) lastProviderError = ''
-    else if (providerConfigured && !lastProviderError) lastProviderError = 'Provider returned no live or upcoming World Cup matches.'
+    else if (providerConfigured && !lastProviderError) {
+      lastProviderError = configuredLeagueIds().length || envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
+        ? 'Provider returned no live or upcoming football matches.'
+        : 'Set POLY_STREAM_LEAGUE_IDS to active football league IDs from your provider.'
+    }
     const feed: ScoreFeed = {
       ok: true,
       providerConfigured,

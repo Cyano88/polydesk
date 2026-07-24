@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { ArrowUpRight, CircleDollarSign, History, Loader2, Radar, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, CircleDollarSign, History, Radar, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { readSavedLpScoutActivity, type SavedLpScoutActivity } from '../lib/polydeskTradeActivity'
+import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 
 type PolymarketActivity = {
   transactionHash?: string
@@ -217,9 +218,8 @@ export default function TradeActivity() {
       )}
 
       {loading ? (
-        <section className="polydesk-card mt-6 px-5 py-12 text-center">
-          <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
-          <p className="mt-3 text-xs font-semibold text-gray-500 dark:text-gray-400">Loading your activity…</p>
+        <section className="mt-6">
+          <PolyDeskLoadingState label="Syncing activity" />
         </section>
       ) : rows.length > 0 ? (
         <section className="polydesk-card mt-6 overflow-hidden" aria-label="Recent activity">
