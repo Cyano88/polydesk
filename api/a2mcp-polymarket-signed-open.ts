@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
-import { createBuilderSession } from './polymarket-builder-session.js'
 
 type RecordValue = Record<string, unknown>
 
@@ -102,7 +101,7 @@ export type SignedOpenValidation =
     }
   | { ok: false; status: number; error: string }
 
-export function validateSignedOpenInput(body: unknown, nowSeconds = Math.floor(Date.now() / 1000)): SignedOpenValidation {
+export function validateSignedOpenInput(body: unknown, nowMs = Date.now()): SignedOpenValidation {
   if (!isRecord(body)) return { ok: false, status: 400, error: 'Signed OPEN request must be a JSON object.' }
   if (!hasOnlyKeys(body, [
     'externalOrderId',
@@ -192,11 +191,11 @@ export function validateSignedOpenInput(body: unknown, nowSeconds = Math.floor(D
 
   const timestamp = Number(clean(order.timestamp, 32))
   const expiration = Number(clean(order.expiration, 32))
-  if (!Number.isSafeInteger(timestamp) || timestamp < nowSeconds - 900 || timestamp > nowSeconds + 120) {
+  if (!Number.isSafeInteger(timestamp) || timestamp < nowMs - 900_000 || timestamp > nowMs + 120_000) {
     return { ok: false, status: 400, error: 'Signed OPEN timestamp must be within the current 15-minute window.' }
   }
-  if (!Number.isSafeInteger(expiration) || expiration < 0 || (expiration !== 0 && expiration <= nowSeconds)) {
-    return { ok: false, status: 400, error: 'Signed OPEN order is expired or has an invalid expiration.' }
+  if (!Number.isSafeInteger(expiration) || expiration !== 0) {
+    return { ok: false, status: 400, error: 'Immediate FAK/FOK OPEN orders must use expiration 0.' }
   }
   if (!exactOrderPayload(orderPayload, order, orderType)) {
     return { ok: false, status: 400, error: 'Polymarket order payload does not exactly match the signed OPEN order.' }
@@ -222,12 +221,7 @@ export function validateSignedOpenInput(body: unknown, nowSeconds = Math.floor(D
 }
 
 function builderReady() {
-  return Boolean(
-    /^0x[a-fA-F0-9]{64}$/.test(env('POLYMARKET_BUILDER_CODE'))
-    && env('POLYMARKET_BUILDER_API_KEY')
-    && env('POLYMARKET_BUILDER_SECRET')
-    && env('POLYMARKET_BUILDER_PASSPHRASE'),
-  )
+  return /^0x[a-fA-F0-9]{64}$/.test(env('POLYMARKET_BUILDER_CODE'))
 }
 
 export function polymarketSignedOpenValidationHandler(req: Request, res: Response) {
@@ -271,7 +265,6 @@ export default async function a2mcpPolymarketSignedOpenHandler(req: Request, res
     return res.status(400).json({ ok: false, error: 'Signed OPEN builder does not match the PolyDesk builder code.' })
   }
 
-  const session = createBuilderSession(validation.orderBody)
   return res.status(200).json({
     ok: true,
     service: 'PolyDesk Signed OPEN Handoff',
@@ -296,6 +289,9 @@ export default async function a2mcpPolymarketSignedOpenHandler(req: Request, res
       clobApiKeyIdentifierReceived: true,
       clobSecretReceived: false,
       clobPassphraseReceived: false,
+      signatureShapeValidated: true,
+      signatureCryptographicallyVerified: false,
+      finalSignatureAuthority: 'Polymarket CLOB',
       submittedByPolyDesk: false,
     },
     submission: {
@@ -304,18 +300,13 @@ export default async function a2mcpPolymarketSignedOpenHandler(req: Request, res
       method: 'POST',
       orderType: validation.orderType,
       orderPayload: validation.orderPayload,
-      builderSigner: {
-        url: `/api/polymarket-builder-signer?id=${session.id}`,
-        token: session.token,
-        expiresAt: new Date(session.expiresAt).toISOString(),
-        oneTime: true,
-      },
     },
     instructions: [
       'The order payload contains the buyer CLOB API-key identifier as owner; never send its secret or passphrase to PolyDesk.',
       'Generate the buyer CLOB submission headers locally.',
-      'Use the one-time builder signer for this exact order body.',
       'Submit the exact order payload directly to Polymarket CLOB /order.',
+      'Polymarket CLOB performs the final cryptographic signature and wallet-authority verification.',
+      'Builder attribution is already bound into the signed order.builder field; no separate builder headers are used in CLOB V2.',
       'The buyer agent remains the only wallet signer and order executor.',
     ],
     paymentProof: {

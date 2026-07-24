@@ -12,7 +12,9 @@ identifier in its `owner` field.
 - PolyDesk's funding-link service can create a Base or Arbitrum Hash PayLink
   checkout for that public wallet.
 - The buyer creates and signs the Polymarket v2 BUY order locally.
-- PolyDesk validates the exact signed order after the OKX x402 service payment.
+- PolyDesk validates the exact signed-order payload constraints after the OKX
+  x402 service payment. Polymarket CLOB remains the final cryptographic
+  signature and wallet-authority verifier.
 - The buyer creates its own CLOB submission headers locally and submits the
   exact payload directly to `https://clob.polymarket.com/order`.
 
@@ -24,13 +26,14 @@ integration does not bypass that limitation.
 - BUY only.
 - Immediate `FAK` or `FOK` orders only; no persistent `GTC` or `GTD`.
 - Default maximum maker amount: 25 USDC.
-- Signature timestamp must be no more than 15 minutes old.
+- Signature timestamp must be a CLOB V2 millisecond timestamp no more than 15
+  minutes old.
 - Declared token, signer, side, order type, and exact payload must all match.
 - Only the official v2 request and order fields are accepted; embedded secret
   or passphrase fields are rejected.
 - The signed builder code must match PolyDesk.
-- Builder-signing sessions are exact-body, single-use, and expire after five
-  minutes.
+- Builder attribution is bound into the signed CLOB V2 `order.builder` field.
+  CLOB V2 does not use separate builder HMAC headers.
 
 ## End-to-end flow
 
@@ -48,11 +51,9 @@ integration does not bypass that limitation.
    `POST /api/a2mcp/polymarket-signed-open`
 
 5. Complete the returned OKX HTTP 402 payment and replay the exact request.
-6. Use `submission.builderSigner` once to obtain PolyDesk builder headers for
-   the exact serialized `submission.orderPayload`.
-7. Create the buyer's CLOB submission headers locally.
-8. Combine the buyer headers and builder headers, then submit the exact body
-   directly to Polymarket.
+6. Create the buyer's CLOB submission headers locally.
+7. Submit the exact `submission.orderPayload` directly to Polymarket. The CLOB
+   performs final cryptographic signature and wallet-authority verification.
 
 ## Request body
 
@@ -74,7 +75,7 @@ integration does not bypass that limitation.
     "takerAmount": "...",
     "side": "BUY",
     "signatureType": "3",
-    "timestamp": "...",
+    "timestamp": "MILLISECONDS_SINCE_UNIX_EPOCH",
     "expiration": "0",
     "metadata": "0x...",
     "builder": "0xPOLYDESK_BUILDER_CODE",
@@ -94,3 +95,7 @@ integration does not bypass that limitation.
 
 Never send a private key, seed phrase, CLOB API secret, or CLOB passphrase to
 either PolyDesk endpoint.
+
+The free validator and paid handoff validate shape, freshness, caps, and exact
+payload binding. They do not claim that a signature will settle; only the
+Polymarket CLOB can give that final result.

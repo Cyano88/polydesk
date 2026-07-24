@@ -4,7 +4,7 @@ import a2mcpPolymarketSignedOpenHandler, { validateSignedOpenInput } from '../ap
 import { buildStandardServiceRouteConfig } from '../api/okx-a2mcp-standard-services.js'
 import type { Request, Response } from 'express'
 
-const now = 1_800_000_000
+const now = 1_800_000_000_000
 const signer = '0x1111111111111111111111111111111111111111'
 
 function validBody(overrides: Record<string, unknown> = {}) {
@@ -68,9 +68,19 @@ test('rejects SELL, persistent orders, overspend, stale signatures, and payload 
   assert.equal(validateSignedOpenInput(overspend, now).ok, false)
 
   const stale = validBody()
-  ;(stale.order as Record<string, unknown>).timestamp = String(now - 901)
-  ;(stale.orderPayload as { order: Record<string, unknown> }).order.timestamp = String(now - 901)
+  ;(stale.order as Record<string, unknown>).timestamp = String(now - 900_001)
+  ;(stale.orderPayload as { order: Record<string, unknown> }).order.timestamp = String(now - 900_001)
   assert.equal(validateSignedOpenInput(stale, now).ok, false)
+
+  const secondsTimestamp = validBody()
+  ;(secondsTimestamp.order as Record<string, unknown>).timestamp = String(Math.floor(now / 1000))
+  ;(secondsTimestamp.orderPayload as { order: Record<string, unknown> }).order.timestamp = String(Math.floor(now / 1000))
+  assert.equal(validateSignedOpenInput(secondsTimestamp, now).ok, false)
+
+  const persistentExpiration = validBody()
+  ;(persistentExpiration.order as Record<string, unknown>).expiration = String(now + 60_000)
+  ;(persistentExpiration.orderPayload as { order: Record<string, unknown> }).order.expiration = String(now + 60_000)
+  assert.equal(validateSignedOpenInput(persistentExpiration, now).ok, false)
 
   const drift = validBody()
   ;(drift.orderPayload as { order: Record<string, unknown> }).order.tokenId = '999'
@@ -107,7 +117,7 @@ test('OKX route advertises exact EIP-3009 payment for signed OPEN', () => {
   assert.equal(accepts.price.extra?.assetTransferMethod, undefined)
 })
 
-test('paid replay returns a one-time direct-submit handoff without buyer credentials', async () => {
+test('paid replay returns a direct-submit handoff without buyer credentials', async () => {
   const previous = {
     code: process.env.POLYMARKET_BUILDER_CODE,
     key: process.env.POLYMARKET_BUILDER_API_KEY,
@@ -115,14 +125,11 @@ test('paid replay returns a one-time direct-submit handoff without buyer credent
     passphrase: process.env.POLYMARKET_BUILDER_PASSPHRASE,
   }
   process.env.POLYMARKET_BUILDER_CODE = '0x' + 'ab'.repeat(32)
-  process.env.POLYMARKET_BUILDER_API_KEY = 'test-builder-key'
-  process.env.POLYMARKET_BUILDER_SECRET = 'test-builder-secret'
-  process.env.POLYMARKET_BUILDER_PASSPHRASE = 'test-builder-passphrase'
 
   let statusCode = 200
   let responseBody: Record<string, any> = {}
   const requestBody = validBody()
-  const freshTimestamp = String(Math.floor(Date.now() / 1000))
+  const freshTimestamp = String(Date.now())
   ;(requestBody.order as Record<string, unknown>).timestamp = freshTimestamp
   ;(requestBody.orderPayload as { order: Record<string, unknown> }).order.timestamp = freshTimestamp
   const res = {
@@ -150,9 +157,11 @@ test('paid replay returns a one-time direct-submit handoff without buyer credent
     assert.equal(responseBody.safety.clobSecretReceived, false)
     assert.equal(responseBody.safety.clobPassphraseReceived, false)
     assert.equal(responseBody.safety.submittedByPolyDesk, false)
-    assert.equal(responseBody.submission.builderSigner.oneTime, true)
-    assert.match(responseBody.submission.builderSigner.token, /^[a-f0-9]{64}$/)
+    assert.equal(responseBody.safety.signatureShapeValidated, true)
+    assert.equal(responseBody.safety.signatureCryptographicallyVerified, false)
+    assert.equal(responseBody.safety.finalSignatureAuthority, 'Polymarket CLOB')
     assert.equal(responseBody.submission.orderPayload.order.side, 'BUY')
+    assert.equal('builderSigner' in responseBody.submission, false)
     assert.equal('userHeaders' in responseBody, false)
   } finally {
     if (previous.code === undefined) delete process.env.POLYMARKET_BUILDER_CODE
