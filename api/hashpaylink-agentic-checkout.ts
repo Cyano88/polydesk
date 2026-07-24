@@ -56,7 +56,6 @@ export type HashPayLinkAgenticResult =
         asset: 'USDC'
         provider: 'Hash PayLink · Circle Gateway x402'
         kind: 'circle_gateway_x402'
-        serviceUrl: string
         receiptUrl: string
       }
     }
@@ -232,7 +231,6 @@ export async function protectLpScoutWithHashPayLink(input: {
       asset: 'USDC',
       provider: 'Hash PayLink · Circle Gateway x402',
       kind: 'circle_gateway_x402',
-      serviceUrl: paymentUrl,
       receiptUrl,
     },
   }

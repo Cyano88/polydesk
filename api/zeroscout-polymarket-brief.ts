@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import crypto from 'node:crypto'
 import { appendAgentActivity, findAgentActivity, listAgentActivity, normalizeActivitySlug, type AgentActivity } from './agent-activity.js'
 import { callZeroScoutIntelligence } from './zeroscout-intelligence.js'
 
@@ -71,7 +72,76 @@ function getScoutPath(serviceUrl: string | undefined) {
 }
 
 function isPolymarketScoutPath(serviceUrl: string | undefined) {
-  return POLYMARKET_SCOUT_PATHS.has(getScoutPath(serviceUrl))
+  if (!serviceUrl) return false
+  if (!/^https?:\/\//i.test(serviceUrl)) return POLYMARKET_SCOUT_PATHS.has(getScoutPath(serviceUrl))
+  try {
+    const url = new URL(serviceUrl)
+    const allowedOrigins = [
+      process.env.PUBLIC_APP_URL,
+      process.env.RENDER_EXTERNAL_URL,
+      'https://polydesk.trade',
+    ].flatMap(value => {
+      try {
+        return value ? [new URL(value).origin] : []
+      } catch {
+        return []
+      }
+    })
+    return allowedOrigins.includes(url.origin) && POLYMARKET_SCOUT_PATHS.has(url.pathname)
+  } catch {
+    return false
+  }
+}
+
+function hashPayLinkOrigin() {
+  try {
+    return new URL(process.env.HASH_PAYLINK_BASE_URL || 'https://app.hashpaylink.com').origin
+  } catch {
+    return 'https://app.hashpaylink.com'
+  }
+}
+
+export function isTrustedLegacyHashPayLinkScout(activity: AgentActivity | undefined) {
+  if (!activity?.proof || activity.proof.kind !== 'circle_gateway_x402') return false
+  if (activity.proof.service !== 'polymarket-lp-scout' || activity.proof.sellerAgent !== 'polydesk') return false
+  if (!/hash paylink|circle gateway/i.test(String(activity.proof.provider ?? ''))) return false
+  try {
+    const service = new URL(String(activity.serviceUrl ?? ''))
+    const receipt = new URL(String(activity.proof.receiptUrl ?? ''))
+    return (
+      service.origin === hashPayLinkOrigin()
+      && service.pathname === '/api/v2/checkouts/agent'
+      && receipt.origin === hashPayLinkOrigin()
+      && receipt.pathname.startsWith('/pay/a/')
+    )
+  } catch {
+    return false
+  }
+}
+
+export function hasIntactAttachedPaymentProof(activity: AgentActivity) {
+  const proof = activity.proof
+  if (!proof?.proofHash || !/^[a-f0-9]{64}$/i.test(proof.proofHash)) return false
+  if (!proof.payer || !proof.amount || !proof.network || !proof.transaction || !proof.serviceUrl) return false
+  const expected = crypto.createHash('sha256').update(JSON.stringify({
+    kind: proof.kind,
+    provider: proof.provider,
+    service: proof.service,
+    buyerAgent: proof.buyerAgent,
+    sellerAgent: proof.sellerAgent,
+    payer: proof.payer,
+    amount: proof.amount,
+    network: proof.network,
+    transaction: proof.transaction,
+    serviceUrl: proof.serviceUrl,
+  })).digest('hex')
+  return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(proof.proofHash, 'hex'))
+}
+
+export function canonicalScoutServiceUrl(activity: AgentActivity) {
+  return isPolymarketScoutPath(activity.serviceUrl)
+    ? String(activity.serviceUrl)
+    : '/api/x402/polymarket-scout'
 }
 
 function requestFromServiceUrl(serviceUrl: string | undefined) {
@@ -88,27 +158,60 @@ function requestFromServiceUrl(serviceUrl: string | undefined) {
   }
 }
 
-function isStoredPolymarketScoutActivity(activity: AgentActivity | undefined) {
+export function isStoredPolymarketScoutActivity(activity: AgentActivity | undefined) {
   return Boolean(
     activity
     && activity.type === 'scout_returned'
     && !activity.result?.zeroscout
-    && isPolymarketScoutPath(activity.serviceUrl)
+    && (isPolymarketScoutPath(activity.serviceUrl) || isTrustedLegacyHashPayLinkScout(activity))
     && activity.result
     && typeof activity.result === 'object',
   )
 }
 
 function findMatchingPaidScoutProof(activity: AgentActivity, items: AgentActivity[]) {
-  const serviceUrl = String(activity.serviceUrl ?? '')
+  const receiptActivityId = String(activity.result?.receiptActivityId ?? '')
+  const proofHash = String(activity.proof?.proofHash ?? '')
+  const serviceUrl = canonicalScoutServiceUrl(activity)
   return items.find(item => (
     item.type === 'x402_spent'
     && item.proof?.proofHash
+    && item.proof.service === 'polymarket-lp-scout'
+    && item.proof.sellerAgent === 'polydesk'
     && isPolymarketScoutPath(item.serviceUrl)
-    && String(item.serviceUrl ?? '') === serviceUrl
-    && item.createdAt <= activity.createdAt
-    && activity.createdAt - item.createdAt < 15 * 60 * 1000
+    && (!proofHash || item.proof.proofHash === proofHash)
+    && (
+      (receiptActivityId && item.id === receiptActivityId)
+      || (proofHash && item.proof.proofHash === proofHash)
+      || (
+        String(item.serviceUrl ?? '') === serviceUrl
+        && item.createdAt <= activity.createdAt
+        && activity.createdAt - item.createdAt < 15 * 60 * 1000
+      )
+    )
   ))
+}
+
+async function recoverAttachedPaidScoutProof(activity: AgentActivity, items: AgentActivity[]) {
+  const existing = findMatchingPaidScoutProof(activity, items)
+  if (existing) return existing
+  if (!activity.proof || !hasIntactAttachedPaymentProof(activity)) return undefined
+  if (!isPolymarketScoutPath(activity.serviceUrl) && !isTrustedLegacyHashPayLinkScout(activity)) return undefined
+  const amount = String(activity.proof.amount ?? '').trim()
+  return appendAgentActivity({
+    agentSlug: activity.agentSlug,
+    type: 'x402_spent',
+    title: 'PolyDesk LP Scout payment',
+    amount: amount.replace(/\s+USDC$/i, ''),
+    asset: 'USDC',
+    direction: 'out',
+    network: activity.proof.network,
+    wallet: activity.proof.payer,
+    txHash: activity.proof.transaction,
+    serviceUrl: canonicalScoutServiceUrl(activity),
+    detail: 'Recovered the verified Hash PayLink payment proof attached to this saved LP Scout result.',
+    proof: activity.proof,
+  })
 }
 
 function topOpportunitySummary(scout: ReturnType<typeof safeScout>) {
@@ -131,10 +234,12 @@ function topOpportunitySummary(scout: ReturnType<typeof safeScout>) {
   }
 }
 
-export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, activityIdInput: unknown, options: {
+type ZeroScoutBriefOptions = {
   includeClaudeReview?: boolean
   includeOpenAiReview?: boolean
-} = {}) {
+}
+
+async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, activityIdInput: unknown, options: ZeroScoutBriefOptions = {}) {
   const agentSlug = normalizeActivitySlug(agentSlugInput)
   const activityId = String(activityIdInput ?? '').trim()
   if (!agentSlug || !activityId) {
@@ -151,7 +256,7 @@ export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, 
   }
 
   const activity = await listAgentActivity(agentSlug, 80)
-  const paidScout = findMatchingPaidScoutProof(scoutActivity, activity)
+  const paidScout = await recoverAttachedPaidScoutProof(scoutActivity, activity)
   if (!paidScout?.proof?.proofHash) {
     const error = new Error('No matching x402 payment proof was found for this LP Scout result.') as Error & { status?: number }
     error.status = 403
@@ -248,12 +353,27 @@ export async function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, 
     detail: result.summary || 'ZeroScout generated a stored LP intelligence signal.',
     result: {
       sourceActivityId: scoutActivity.id,
+      receiptActivityId: paidScout.id,
       x402ProofHash: paidScout.proof.proofHash,
       zeroscout: result,
     } as Record<string, unknown>,
   })
 
   return { result, existed: false }
+}
+
+const pendingZeroScoutBriefs = new Map<string, ReturnType<typeof generateZeroScoutPolymarketBriefOnce>>()
+
+export function generateZeroScoutPolymarketBrief(agentSlugInput: unknown, activityIdInput: unknown, options: ZeroScoutBriefOptions = {}) {
+  const key = `${normalizeActivitySlug(agentSlugInput)}:${String(activityIdInput ?? '').trim()}`
+  const pending = pendingZeroScoutBriefs.get(key)
+  if (pending) return pending
+  const started = generateZeroScoutPolymarketBriefOnce(agentSlugInput, activityIdInput, options)
+  pendingZeroScoutBriefs.set(key, started)
+  void started.finally(() => {
+    if (pendingZeroScoutBriefs.get(key) === started) pendingZeroScoutBriefs.delete(key)
+  }).catch(() => undefined)
+  return started
 }
 
 export default async function zeroScoutPolymarketBriefHandler(req: Request, res: Response) {

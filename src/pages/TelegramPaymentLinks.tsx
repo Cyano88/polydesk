@@ -3078,13 +3078,20 @@ export function TelegramHelperPanel({
           }
         }
         let state = await readPaidScoutState()
-        if (!state.zeroScout && !state.failedVerification) {
+        let verificationRetryError = ''
+        if (!state.zeroScout) {
           setAgentStatus('Receipt verified. This could take up to 2-3 mins, please be patient.')
-          fetch('/api/zeroscout/polymarket-brief', {
+          void fetch('/api/zeroscout/polymarket-brief', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agentSlug: requestedAgentSlug, activityId: lpScoutActivityId }),
-          }).catch(() => undefined)
+          }).then(async response => {
+            if (response.ok) return
+            const body = await response.json().catch(() => ({})) as { error?: string }
+            verificationRetryError = String(body.error || 'ZeroScout could not finalize this saved LP Scout result.')
+          }).catch(() => {
+            verificationRetryError = 'ZeroScout could not be reached for this saved LP Scout result.'
+          })
           const statusSteps = [
             'Receipt verified. This could take up to 2-3 mins, please be patient.',
             'ZeroScout is checking the paid scout data against the candidate audit...',
@@ -3095,11 +3102,13 @@ export function TelegramHelperPanel({
             setAgentStatus(statusSteps[Math.min(statusSteps.length - 1, Math.floor(attempt / 6))])
             await sleepForScout(attempt < 2 ? 6000 : 10000)
             state = await readPaidScoutState()
-            if (state.zeroScout || state.failedVerification) break
+            if (state.zeroScout || verificationRetryError) break
           }
         }
         const zeroScoutError = state.zeroScout
           ? ''
+          : verificationRetryError
+          ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Diagnostic: ${verificationRetryError.slice(0, 180)}`
           : state.failedVerification
           ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Diagnostic: ${String(state.failedVerification.result?.error || state.failedVerification.detail || 'verification still processing').slice(0, 180)}`
           : 'ZeroScout is still preparing the verified brief. You can return to this receipt later; Agent Hash will read the saved result when ZeroScout stores it.'

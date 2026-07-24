@@ -180,6 +180,20 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
   if (!proof) return undefined
   const agentSlug = proof.buyerAgent || 'a2mcp-buyer'
   const serviceUrl = canonicalServiceUrl(req)
+  const paidActivity = await appendAgentActivity({
+    agentSlug,
+    type: 'x402_spent',
+    title: 'PolyDesk LP Scout payment',
+    amount: amount.replace(/\s+USDC$/i, ''),
+    asset: 'USDC',
+    direction: 'out',
+    network: proof.network,
+    wallet: proof.payer,
+    txHash: proof.transaction,
+    serviceUrl,
+    detail: 'Hash PayLink verified the Circle Gateway x402 payment for PolyDesk LP Scout.',
+    proof,
+  })
   const result = await appendAgentActivity({
     agentSlug,
     type: 'scout_returned',
@@ -189,7 +203,10 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
     wallet: proof.payer,
     serviceUrl,
     detail: scout.summary || 'PolyDesk returned a paid LP Scout result.',
-    result: scout,
+    result: {
+      ...scout,
+      receiptActivityId: paidActivity?.id,
+    },
     proof,
   })
   if (result?.id) {
@@ -204,6 +221,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
       detail: 'PolyDesk queued ZeroScout verification for the paid A2MCP LP Scout result.',
       result: {
         sourceActivityId: result.id,
+        receiptActivityId: paidActivity?.id,
         receiptUrl: req.payment?.receiptUrl,
         proofHash: proof.proofHash,
         status: 'queued',
@@ -229,6 +247,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
           : detail,
         result: {
           sourceActivityId: result.id,
+          receiptActivityId: paidActivity?.id,
           receiptUrl: req.payment?.receiptUrl,
           proofHash: proof.proofHash,
           status: transient ? 'queued' : 'failed',
@@ -243,6 +262,7 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
   return {
     agentSlug,
     receiptUrl: req.payment?.receiptUrl,
+    receiptActivityId: paidActivity?.id,
     resultActivityId: result?.id,
     proofHash: proof.proofHash,
     zeroscoutQueued: Boolean(result?.id),
@@ -852,6 +872,7 @@ export async function scoutResponse(req: PaidRequest) {
     },
     artifacts: {
       receiptUrl,
+      receiptActivityId: activity?.receiptActivityId,
       resultActivityId: activity?.resultActivityId,
       x402ReceiptUrl: receiptUrl,
       lpScoutReportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,

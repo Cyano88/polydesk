@@ -90,6 +90,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
   assert.equal(result.payment.amount, '10000')
   assert.equal(result.payment.payer, payer)
   assert.equal(result.payment.receiptUrl, `https://app.hashpaylink.com/pay/a/${checkoutId}?attempt=${paymentAttemptId}`)
+  assert.equal(result.payment.serviceUrl, undefined)
   assert.equal((calls[1].init?.headers as Record<string, string>)['PAYMENT-SIGNATURE'], 'signed-payment')
   assert.match(calls[2].url, /purpose=status/)
 })

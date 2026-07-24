@@ -19,6 +19,7 @@ type LpScoutResponse = {
   }
   artifacts?: {
     resultActivityId?: string
+    receiptActivityId?: string
     x402ReceiptUrl?: string
     zeroScoutStatus?: string
   }
@@ -82,7 +83,11 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
       const resultActivityId = body.artifacts?.resultActivityId || ''
       if (!resultActivityId) throw new Error('LP Scout returned no saved result.')
       const receiptUrl = trustedHashPayLinkUrl(body.artifacts?.x402ReceiptUrl || '')
-      rememberLpScoutActivity({ resultActivityId, agentSlug: 'polydesk-agent' })
+      rememberLpScoutActivity({
+        resultActivityId,
+        receiptActivityId: body.artifacts?.receiptActivityId,
+        agentSlug: 'polydesk-agent',
+      })
       setComplete(true)
       const next = new URLSearchParams({
         agent: '1',
