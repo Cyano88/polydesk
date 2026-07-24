@@ -4,7 +4,7 @@ type PolyDeskAgentService = {
   id: string
   title: string
   description: string
-  category: 'prediction-market' | 'sports-data' | 'market-intelligence' | 'funding' | 'portfolio'
+  category: 'prediction-market' | 'sports-data' | 'market-intelligence' | 'funding' | 'portfolio' | 'trading'
   endpoint: string
   method: 'GET' | 'POST'
   pricing: {
@@ -18,6 +18,11 @@ type PolyDeskAgentService = {
     standard: 'x402' | 'none'
   }
   request?: {
+    preflight?: {
+      endpoint: string
+      method: 'POST'
+      description: string
+    }
     query?: Array<{
       name: string
       required: boolean
@@ -28,6 +33,12 @@ type PolyDeskAgentService = {
       name: string
       required: boolean
       description: string
+    }>
+    body?: Array<{
+      name: string
+      required: boolean
+      description: string
+      values?: string[]
     }>
   }
   output: string[]
@@ -168,6 +179,55 @@ const services: PolyDeskAgentService[] = [
       'agent must show the target Polymarket wallet before the user pays',
       'funding is complete only after the hosted checkout confirms bridge settlement',
       'PolyDesk creates the funding handoff and does not custody buyer-agent funds',
+    ],
+  },
+  {
+    id: 'polymarket-signed-open',
+    title: 'Polymarket Signed OPEN Handoff',
+    description: 'Validate a buyer-signed, capped Polymarket BUY order and return a one-time direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
+    category: 'trading',
+    endpoint: '/api/a2mcp/polymarket-signed-open',
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
+    request: {
+      preflight: {
+        endpoint: '/api/polymarket-signed-open/validate',
+        method: 'POST',
+        description: 'Free validation of the exact request body before paying the OKX x402 challenge.',
+      },
+      body: [
+        { name: 'externalOrderId', required: true, description: 'Caller-generated correlation identifier, 8-80 safe characters.' },
+        { name: 'marketUrl', required: true, description: 'Canonical polymarket.com event or sports market URL.' },
+        { name: 'marketTitle', required: true, description: 'Human-readable market title shown to the buyer.' },
+        { name: 'outcome', required: true, description: 'Outcome being bought.' },
+        { name: 'tokenId', required: true, description: 'Exact numeric Polymarket CLOB token ID.' },
+        { name: 'signer', required: true, description: 'Buyer-controlled Polymarket signer address.' },
+        { name: 'orderType', required: true, description: 'Immediate order type.', values: ['FAK', 'FOK'] },
+        { name: 'order', required: true, description: 'Exact buyer-signed Polymarket v2 BUY order.' },
+        { name: 'orderPayload', required: true, description: 'Exact CLOB submission payload matching the signed order.' },
+      ],
+    },
+    output: [
+      'validated buyer and market binding',
+      'deterministic handoff correlation id',
+      'exact direct-submit CLOB payload',
+      'single-use builder-signing session',
+      'X Layer service-payment proof',
+    ],
+    artifacts: [
+      'one-time builder signer URL and token',
+      'exact Polymarket CLOB order payload',
+      'handoffId and externalOrderId for correlation',
+    ],
+    safety: [
+      'BUY only; FAK or FOK only',
+      'default maximum maker amount is 25 USDC',
+      'signature must be fresh and match the exact payload',
+      'buyer can use the free preflight endpoint before paying',
+      'buyer generates CLOB submission headers locally and submits directly to Polymarket',
+      'the serialized order payload contains the buyer API-key identifier as owner',
+      'PolyDesk never receives a private key, CLOB API secret, or CLOB passphrase',
     ],
   },
   {

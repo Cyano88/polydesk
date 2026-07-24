@@ -15,6 +15,7 @@ import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
 import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
 import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
+import { polymarketSignedOpenValidationHandler } from './api/a2mcp-polymarket-signed-open.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -111,6 +112,8 @@ app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarke
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
+app.post('/api/a2mcp/polymarket-signed-open', strictLimiter, okxA2mcpStandardServiceHandler)
+app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)

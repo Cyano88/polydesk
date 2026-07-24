@@ -64,6 +64,7 @@ const groups = [
     optional: [
       'OKX_X402_BASE_URL',
       'OKX_X402_SYNC_SETTLE',
+      'POLYDESK_EXTERNAL_OPEN_MAX_USDC',
     ],
   },
   {

@@ -12,6 +12,7 @@ import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/typ
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
+import a2mcpPolymarketSignedOpenHandler from './a2mcp-polymarket-signed-open.js'
 import polyWorldcupNewsHandler from './poly-worldcup-news.js'
 import worldCupFinalSummaryHandler from './worldcup-final-summary.js'
 
@@ -43,6 +44,12 @@ const serviceDefinitions = {
     description: 'Prepare a hosted checkout handoff for funding a public Polymarket wallet.',
     tags: ['polymarket', 'funding', 'checkout'],
     deliver: a2mcpPolymarketFundingLinkHandler,
+  },
+  '/api/a2mcp/polymarket-signed-open': {
+    name: 'Polymarket Signed OPEN Handoff',
+    description: 'Validate a buyer-signed, capped Polymarket BUY order and return a one-time direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
+    tags: ['polymarket', 'signed-order', 'buyer-controlled'],
+    deliver: a2mcpPolymarketSignedOpenHandler,
   },
 } as const
 
