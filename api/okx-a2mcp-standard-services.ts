@@ -47,8 +47,8 @@ const serviceDefinitions = {
   },
   '/api/a2mcp/polymarket-signed-open': {
     name: 'Polymarket Signed OPEN Handoff',
-    description: 'Validate a buyer-signed, capped Polymarket BUY order and return a one-time direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
-    tags: ['polymarket', 'signed-order', 'buyer-controlled'],
+    description: 'Validate the constraints of a buyer-signed, capped Polymarket BUY payload and return a direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
+    tags: ['polymarket', 'intent-to-sign', 'signed-order', 'buyer-controlled'],
     deliver: a2mcpPolymarketSignedOpenHandler,
   },
 } as const

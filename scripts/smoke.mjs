@@ -17,6 +17,7 @@ const checks = [
   { path: '/api/a2mcp/polymarket-funding-link', expect: [402, 503], label: 'funding link payment gate' },
   { path: '/api/a2mcp/polymarket-funding-link', method: 'POST', body: {}, expect: [402, 503], label: 'funding link POST payment gate' },
   { path: '/api/a2mcp/polymarket-signed-open', method: 'POST', body: {}, expect: [402, 503], label: 'signed open POST payment gate' },
+  { path: '/api/polymarket-open/prepare', method: 'POST', body: {}, expect: [400], label: 'signed open intent preparation' },
   { path: '/api/polymarket-signed-open/validate', method: 'POST', body: {}, expect: [400], label: 'signed open free validation' },
   { path: '/api/agent-activity?id=missing-scout-id', expect: [404], label: 'agent activity is ID scoped' },
   { path: '/api/x402/polymarket-scout', expect: [200, 400, 402, 500, 503], label: 'lp scout mounted' },

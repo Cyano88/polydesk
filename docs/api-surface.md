@@ -35,6 +35,7 @@ CLI payment, or generate a second payment receipt.
 | `POST /api/webhooks/hashpaylink` | Raw-body, signed Hash PayLink webhook receiver |
 | `POST /api/a2mcp/polymarket-funding-link` | OKX-paid handoff to a Hash PayLink Base/Arbitrum Polymarket funding checkout |
 | `POST /api/a2mcp/polymarket-signed-open` | OKX-paid constraint validation and direct-submit handoff for a buyer-signed, capped BUY order |
+| `POST /api/polymarket-open/prepare` | Free intent-to-sign plan with live market resolution and public deposit-wallet readiness checks |
 | `POST /api/polymarket-signed-open/validate` | Free validation of the exact signed OPEN body before the buyer pays |
 | `GET /api/health` | Service health |
 
@@ -89,6 +90,7 @@ npm run test:hashpaylink-agentic
 npm run test:hashpaylink-webhook
 npm run test:hashpaylink-funding
 npm run test:signed-open
+npm run test:open-prepare
 npm run build
 ```
 
@@ -102,6 +104,9 @@ After deployment:
 - A fresh unpaid LP Scout request returns 402 with an
   `https://app.hashpaylink.com/...` checkout URL.
 - An unpaid signed OPEN request returns an OKX HTTP 402 challenge.
+- A preparation request resolves a unique active market and returns public
+  wallet readiness plus official local-signing arguments; ambiguous events
+  return choices instead of guessing.
 - A paid valid signed OPEN replay returns the exact CLOB payload; invalid,
   stale, SELL, GTC/GTD, oversized, or mutated orders are rejected. Polymarket
   CLOB remains the final cryptographic signature and wallet-authority verifier.

@@ -41,19 +41,108 @@ integration does not bypass that limitation.
 
    `POST /api/a2mcp/polymarket-funding-link`
 
-2. Build and sign a Polymarket v2 BUY order locally.
-3. Validate the exact request for free:
+2. Send only the simple public intent to the free preparation endpoint:
+
+   `POST /api/polymarket-open/prepare`
+
+   PolyDesk resolves the exact token, order book, tick size, negative-risk
+   exchange, V2 builder code, public pUSD balance, and public allowance.
+
+3. If `readyForLocalSigning` is true, build and sign the returned
+   `signingPlan` locally with `@polymarket/clob-client-v2`. PolyDesk never
+   receives the signer or CLOB secrets.
+4. Validate the exact signed request for free:
 
    `POST /api/polymarket-signed-open/validate`
 
-4. Send the same body to the paid endpoint:
+5. Send the same body to the paid endpoint:
 
    `POST /api/a2mcp/polymarket-signed-open`
 
-5. Complete the returned OKX HTTP 402 payment and replay the exact request.
-6. Create the buyer's CLOB submission headers locally.
-7. Submit the exact `submission.orderPayload` directly to Polymarket. The CLOB
+6. Complete the returned OKX HTTP 402 payment and replay the exact request.
+7. Create the buyer's CLOB submission headers locally.
+8. Submit the exact `submission.orderPayload` directly to Polymarket. The CLOB
    performs final cryptographic signature and wallet-authority verification.
+
+## Simple preparation request
+
+```json
+{
+  "externalOrderId": "conviction:open:001",
+  "marketUrl": "https://polymarket.com/event/example-market",
+  "outcome": "Yes",
+  "maxSpendUsdc": "5",
+  "wallet": "0xPUBLIC_DEPOSIT_WALLET",
+  "orderType": "FAK"
+}
+```
+
+That request contains only public information. If an event contains several
+markets and the outcome is ambiguous, the endpoint returns the available
+market slugs instead of choosing one. Repeat the request with `marketSlug` or
+`tokenId`.
+
+The response includes:
+
+- `readyForLocalSigning`
+- exact market, condition, outcome token, tick size and negative-risk flag
+- current execution boundary from the live order book
+- deposit-wallet deployment state
+- pUSD balance and allowance to the correct V2 exchange
+- official SDK client arguments and `createMarketOrder` arguments
+- a 60-second plan expiry and order-book hash
+- explicit unresolved checks for buyer-local CLOB credentials and signature
+
+Try it without installing a wallet library:
+
+```powershell
+node examples/polymarket-open-prepare.mjs `
+  "https://polymarket.com/event/example-market" `
+  "Yes" `
+  "5" `
+  "0xPUBLIC_DEPOSIT_WALLET"
+```
+
+## Local signing sketch
+
+The buyer converts the returned strings to the official SDK enums locally:
+
+```js
+import {
+  ClobClient,
+  OrderType,
+  Side,
+  SignatureTypeV2,
+} from '@polymarket/clob-client-v2'
+
+const client = new ClobClient({
+  host: plan.signingPlan.client.host,
+  chain: plan.signingPlan.client.chain,
+  signer: buyerLocalSigner,
+  creds: buyerLocalClobCredentials,
+  signatureType: SignatureTypeV2.POLY_1271,
+  funderAddress: plan.wallet.address,
+  builderConfig: plan.signingPlan.client.builderConfig,
+})
+
+const signedOrder = await client.createMarketOrder({
+  tokenID: plan.market.tokenId,
+  amount: Number(plan.wallet.collateral.required),
+  price: Number(plan.market.executionPrice),
+  side: Side.BUY,
+  orderType: plan.signingPlan.submit.orderType === 'FOK'
+    ? OrderType.FOK
+    : OrderType.FAK,
+  userUSDCBalance: Number(plan.wallet.collateral.balance),
+}, {
+  tickSize: plan.market.tickSize,
+  negRisk: plan.market.negRisk,
+  version: 2,
+})
+```
+
+`buyerLocalSigner` and `buyerLocalClobCredentials` stay inside the buyer
+agent. They are never sent to PolyDesk.
 
 ## Request body
 

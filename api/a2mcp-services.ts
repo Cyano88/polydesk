@@ -18,6 +18,17 @@ type PolyDeskAgentService = {
     standard: 'x402' | 'none'
   }
   request?: {
+    preparation?: {
+      endpoint: string
+      method: 'POST'
+      description: string
+      body: Array<{
+        name: string
+        required: boolean
+        description: string
+        values?: string[]
+      }>
+    }
     preflight?: {
       endpoint: string
       method: 'POST'
@@ -191,6 +202,21 @@ const services: PolyDeskAgentService[] = [
     pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
     payment: { required: true, standard: 'x402' },
     request: {
+      preparation: {
+        endpoint: '/api/polymarket-open/prepare',
+        method: 'POST',
+        description: 'Resolve a simple BUY intent into a live CLOB V2 signing plan and public deposit-wallet readiness report before any key or payment is involved.',
+        body: [
+          { name: 'externalOrderId', required: true, description: 'Caller-generated correlation identifier, 8-80 safe characters.' },
+          { name: 'marketUrl', required: true, description: 'Canonical polymarket.com event URL.' },
+          { name: 'outcome', required: true, description: 'Requested outcome. Ambiguous events return market choices instead of guessing.' },
+          { name: 'maxSpendUsdc', required: true, description: 'Maximum pUSD spend, capped by the service safety ceiling.' },
+          { name: 'wallet', required: true, description: 'Public Polymarket deposit-wallet address. No private key.' },
+          { name: 'orderType', required: false, description: 'Immediate order type. Defaults to FAK.', values: ['FAK', 'FOK'] },
+          { name: 'marketSlug', required: false, description: 'Exact market slug for multi-market events.' },
+          { name: 'tokenId', required: false, description: 'Exact token ID for multi-market events.' },
+        ],
+      },
       preflight: {
         endpoint: '/api/polymarket-signed-open/validate',
         method: 'POST',
@@ -209,6 +235,9 @@ const services: PolyDeskAgentService[] = [
       ],
     },
     output: [
+      'live market, token, order-book, tick-size, and negative-risk resolution',
+      'public deposit-wallet deployment, pUSD balance, and exchange-allowance checks',
+      'official CLOB V2 local-signing arguments',
       'validated buyer and market binding',
       'deterministic handoff correlation id',
       'exact direct-submit CLOB payload',
@@ -225,6 +254,7 @@ const services: PolyDeskAgentService[] = [
       'millisecond timestamp must be fresh and match the exact payload',
       'buyer can use the free preflight endpoint before paying',
       'buyer generates CLOB submission headers locally and submits directly to Polymarket',
+      'CLOB credentials remain buyer-local and are never claimed as server-verified',
       'the serialized order payload contains the buyer API-key identifier as owner',
       'Polymarket CLOB performs final cryptographic signature verification',
       'PolyDesk never receives a private key, CLOB API secret, or CLOB passphrase',

@@ -20,6 +20,7 @@ import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
+import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
@@ -103,6 +104,7 @@ app.all('/api/polymarket-bridge', strictLimiter, polymarketBridgeHandler)
 app.post('/api/polymarket-builder-handoff', strictLimiter, polymarketBuilderHandoffHandler)
 app.post('/api/polymarket-builder-signer', strictLimiter, polymarketBuilderSignerHandler)
 app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
+app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
 app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
