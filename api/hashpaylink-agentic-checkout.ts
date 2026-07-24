@@ -1,7 +1,7 @@
 import type { Request } from 'express'
 import { isAddress, parseUnits } from 'viem'
 
-type AgenticNetwork = 'arc' | 'base'
+type AgenticNetwork = 'arc'
 
 type Dependencies = {
   fetch: typeof fetch
@@ -84,9 +84,7 @@ function configuredPublicOrigin(req: Request) {
 const defaults: Dependencies = {
   fetch,
   apiOrigin: () => env('HASH_PAYLINK_BASE_URL') || 'https://app.hashpaylink.com',
-  apiKey: network => network === 'arc'
-    ? env('HASH_PAYLINK_AGENTIC_TEST_API_KEY')
-    : env('HASH_PAYLINK_AGENTIC_LIVE_API_KEY', 'HASH_PAYLINK_API_KEY'),
+  apiKey: () => env('HASH_PAYLINK_AGENTIC_TEST_API_KEY'),
   publicOrigin: configuredPublicOrigin,
 }
 
@@ -109,7 +107,7 @@ function requestId(value: unknown) {
 
 function selectedNetwork(value: unknown): AgenticNetwork | '' {
   const network = clean(value, 20).toLowerCase()
-  return network === 'arc' || network === 'base' ? network : ''
+  return network === 'arc' ? network : ''
 }
 
 function selectedAmount(value: unknown) {
@@ -132,13 +130,13 @@ export async function protectLpScoutWithHashPayLink(input: {
   const network = selectedNetwork(input.network)
   const amount = selectedAmount(input.amount)
   if (!id) throw Object.assign(new Error('LP Scout requires a unique requestId between 16 and 64 characters.'), { status: 400 })
-  if (!network) throw Object.assign(new Error('LP Scout network must be arc or base.'), { status: 400 })
+  if (!network) throw Object.assign(new Error('PolyDesk LP Scout supports Arc Testnet only.'), { status: 400 })
   if (!amount) throw Object.assign(new Error('LP Scout price is invalid.'), { status: 503 })
 
   const apiOrigin = dependencies.apiOrigin().replace(/\/+$/, '')
   const apiKey = dependencies.apiKey(network)
   if (!apiKey || !/^https:\/\//i.test(apiOrigin)) {
-    throw Object.assign(new Error(`Hash PayLink ${network === 'arc' ? 'test' : 'live'} agentic checkout is not configured.`), { status: 503 })
+    throw Object.assign(new Error('Hash PayLink Arc Testnet agentic checkout is not configured.'), { status: 503 })
   }
   const returnUrl = `${dependencies.publicOrigin(input.req).replace(/\/+$/, '')}/polydesk?service=lp-scout&run=polymarket-scout&requestId=${encodeURIComponent(id)}&network=${encodeURIComponent(network)}&maxAmount=${encodeURIComponent(amount)}`
   const created = await dependencies.fetch(`${apiOrigin}/api/v2/checkouts`, {

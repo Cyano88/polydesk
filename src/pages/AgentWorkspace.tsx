@@ -48,7 +48,7 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
   const budget = params.get('budget') || ''
   const maxAmount = params.get('maxAmount') || '0.01'
   const returnRequestId = params.get('requestId') || ''
-  const network = params.get('network') || params.get('n') || 'arc'
+  const network = 'arc'
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [complete, setComplete] = useState(false)
@@ -62,7 +62,7 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
       const requestId = returnRequestId || window.crypto.randomUUID()
       const query = new URLSearchParams({
         requestId,
-        network: network === 'base' ? 'base' : 'arc',
+        network,
         scoutMode,
         agent: 'polydesk-agent',
       })

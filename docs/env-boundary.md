@@ -87,7 +87,6 @@ PolyDesk delegates checkout, wallet access, payment verification, and the canoni
 ```env
 HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 HASH_PAYLINK_AGENTIC_TEST_API_KEY=
-HASH_PAYLINK_AGENTIC_LIVE_API_KEY=
 HASH_PAYLINK_LP_SCOUT_PRICE=$0.01
 ```
 

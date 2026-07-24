@@ -65,7 +65,7 @@ test('forwards the signature and accepts only authoritative paid status', async 
       ok: true,
       checkoutId,
       paymentAttemptId,
-      network: 'base',
+      network: 'arc',
       checkoutUrl: `/pay/a/${checkoutId}?attempt=${paymentAttemptId}`,
       agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
     }), { status: 201, headers: { 'content-type': 'application/json' } })
@@ -75,17 +75,17 @@ test('forwards the signature and accepts only authoritative paid status', async 
       checkoutId,
       checkoutMode: 'agentic',
       status: 'paid',
-      network: 'base',
+      network: 'arc',
       paymentAttempt: { id: paymentAttemptId, receiptUrl: `/pay/a/${checkoutId}?attempt=${paymentAttemptId}` },
-      payment: { status: 'paid', payer, amount: '0.01', network: 'base', txHash: transaction },
+      payment: { status: 'paid', payer, amount: '0.01', network: 'arc', txHash: transaction },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
   const result = await protectLpScoutWithHashPayLink({
     req: request({ 'payment-signature': 'signed-payment' }),
     requestId: 'lps_2222222222222222',
-    network: 'base',
+    network: 'arc',
     amount: '0.01',
-  }, dependencies(fetcher as typeof fetch, 'hpl_live_private'))
+  }, dependencies(fetcher as typeof fetch, 'hpl_test_private'))
   assert.equal(result.kind, 'paid')
   assert.equal(result.payment.amount, '10000')
   assert.equal(result.payment.payer, payer)
@@ -107,7 +107,14 @@ test('fails closed for invalid correlation and missing network key', async () =>
     requestId: 'lps_3333333333333333',
     network: 'arc',
     amount: '0.01',
-  }, dependencies(fetch as typeof fetch, '')), /test agentic checkout is not configured/)
+  }, dependencies(fetch as typeof fetch, '')), /Arc Testnet agentic checkout is not configured/)
+
+  await assert.rejects(protectLpScoutWithHashPayLink({
+    req: request(),
+    requestId: 'lps_3333333333333334',
+    network: 'base',
+    amount: '0.01',
+  }, dependencies(fetch as typeof fetch)), /supports Arc Testnet only/)
 })
 
 test('rejects a payment URL outside the configured Hash PayLink origin', async () => {
@@ -135,7 +142,7 @@ test('rejects paid status whose attempt, network, or amount differs from the che
       ok: true,
       checkoutId,
       paymentAttemptId,
-      network: 'base',
+      network: 'arc',
       agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
     }), { status: 201, headers: { 'content-type': 'application/json' } })
     if (call === 2) return new Response(JSON.stringify({ ok: true, status: 'paid' }), { status: 200 })
@@ -153,9 +160,9 @@ test('rejects paid status whose attempt, network, or amount differs from the che
   await assert.rejects(protectLpScoutWithHashPayLink({
     req: request({ 'payment-signature': 'signed-payment' }),
     requestId: 'lps_5555555555555555',
-    network: 'base',
+    network: 'arc',
     amount: '0.01',
-  }, dependencies(fetcher as typeof fetch, 'hpl_live_private')), /details do not match/)
+  }, dependencies(fetcher as typeof fetch, 'hpl_test_private')), /details do not match/)
 })
 
 test('rejects paid status for a different payment attempt', async () => {
@@ -166,7 +173,7 @@ test('rejects paid status for a different payment attempt', async () => {
       ok: true,
       checkoutId,
       paymentAttemptId,
-      network: 'base',
+      network: 'arc',
       agentPaymentUrl: `/api/v2/checkouts/agent?id=${checkoutId}&attempt=${paymentAttemptId}`,
     }), { status: 201, headers: { 'content-type': 'application/json' } })
     if (call === 2) return new Response(JSON.stringify({ ok: true, status: 'paid' }), { status: 200 })
@@ -175,16 +182,16 @@ test('rejects paid status for a different payment attempt', async () => {
       checkoutId,
       checkoutMode: 'agentic',
       status: 'paid',
-      network: 'base',
+      network: 'arc',
       paymentAttempt: { id: 'pat_222222222222222222222222' },
-      payment: { status: 'paid', payer, amount: '0.01', network: 'base', txHash: transaction },
+      payment: { status: 'paid', payer, amount: '0.01', network: 'arc', txHash: transaction },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
 
   await assert.rejects(protectLpScoutWithHashPayLink({
     req: request({ 'payment-signature': 'signed-payment' }),
     requestId: 'lps_6666666666666666',
-    network: 'base',
+    network: 'arc',
     amount: '0.01',
-  }, dependencies(fetcher as typeof fetch, 'hpl_live_private')), /details do not match/)
+  }, dependencies(fetcher as typeof fetch, 'hpl_test_private')), /details do not match/)
 })

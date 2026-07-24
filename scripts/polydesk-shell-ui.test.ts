@@ -7,6 +7,7 @@ const appPay = readFileSync(new URL('../src/pages/AppPay.tsx', import.meta.url),
 const tradeActivity = readFileSync(new URL('../src/pages/TradeActivity.tsx', import.meta.url), 'utf8')
 const portfolioApi = readFileSync(new URL('../api/polymarket-portfolio.ts', import.meta.url), 'utf8')
 const agentWorkspace = readFileSync(new URL('../src/pages/AgentWorkspace.tsx', import.meta.url), 'utf8')
+const polyDeskPage = readFileSync(new URL('../src/pages/PolyDesk.tsx', import.meta.url), 'utf8')
 const productStyles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const server = readFileSync(new URL('../server.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -47,6 +48,14 @@ test('Trade Activity uses the saved account feed and completed LP Scout records'
   assert.match(tradeActivity, /lp-scout-report/)
   assert.match(agentWorkspace, /rememberLpScoutActivity/)
   assert.doesNotMatch(tradeActivity, /records<\/p>|row\.status/)
+})
+
+test('LP Scout checkout returns through the paid-result continuation on Arc Testnet', () => {
+  assert.match(polyDeskPage, /import AgentWorkspace from '\.\/AgentWorkspace'/)
+  assert.match(polyDeskPage, /serviceView === 'lp-scout' && searchParams\.get\('run'\) === 'polymarket-scout'/)
+  assert.match(polyDeskPage, /<AgentWorkspace \/>/)
+  assert.match(agentWorkspace, /const network = 'arc'/)
+  assert.doesNotMatch(agentWorkspace, /network === 'base'/)
 })
 
 test('active product surfaces share the premium CTA system without the legacy server marketplace', () => {

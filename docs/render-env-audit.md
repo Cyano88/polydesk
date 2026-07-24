@@ -52,7 +52,6 @@ These are required or strongly recommended by the standalone PolyDesk backend bu
 | `POLYMARKET_RPC_URL` or `POLYGON_RPC_URL` | Recommended | Stable Polygon RPC for portfolio/bridge calls. Code can fall back to viem default when blank, but production should not rely on that. |
 | `VITE_PUBLIC_PAYLINK_ORIGIN` | Required | Frontend funding links and Hash PayLink bridge origin. Set to `https://hashpaylink.com` during transition. |
 | `HASH_PAYLINK_AGENTIC_TEST_API_KEY` | Required for Arc LP Scout | Hash PayLink test project key. |
-| `HASH_PAYLINK_AGENTIC_LIVE_API_KEY` | Required for Base LP Scout | Hash PayLink live project key. |
 | `HASH_PAYLINK_LP_SCOUT_PRICE` | Required | LP Scout checkout price, for example `$0.01`. |
 | `POLY_STREAM_BASE_URL` | Optional | The feed route defaults to SportMonks when blank; configure only if the provider gives a custom base URL. |
 
@@ -95,7 +94,6 @@ ZEROSCOUT_INTEGRATION_SECRET=
 
 DEFAULT_AGENT_SLUG=polydesk-agent
 HASH_PAYLINK_AGENTIC_TEST_API_KEY=
-HASH_PAYLINK_AGENTIC_LIVE_API_KEY=
 HASH_PAYLINK_LP_SCOUT_PRICE=$0.01
 ```
 

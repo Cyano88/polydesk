@@ -43,7 +43,6 @@ const groups = [
     name: 'desk agent and lp scout',
     recommended: [
       'DEFAULT_AGENT_SLUG',
-      'HASH_PAYLINK_AGENTIC_LIVE_API_KEY',
       'HASH_PAYLINK_AGENTIC_TEST_API_KEY',
       'HASH_PAYLINK_LP_SCOUT_PRICE',
       'ZEROSCOUT_API_URL',

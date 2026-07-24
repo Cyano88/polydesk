@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { cn } from '../lib/utils'
 import AppPay from './AppPay'
+import AgentWorkspace from './AgentWorkspace'
 import TradeActivity from './TradeActivity'
 import {
   LpScoutPanel,
@@ -337,6 +338,8 @@ export default function PolyDesk() {
                 hideBack
                 onBack={() => backToServiceParent('worldcup')}
               />
+            ) : serviceView === 'lp-scout' && searchParams.get('run') === 'polymarket-scout' ? (
+              <AgentWorkspace />
             ) : (
               <LpScoutPanel
                 hideBack
