@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import type { AgentActivity, AgentActivityProof } from '../api/agent-activity.ts'
+import { authorizedLpScoutReceipt } from '../api/lp-scout-access.ts'
 import {
   canonicalScoutServiceUrl,
   hasIntactAttachedPaymentProof,
@@ -48,11 +49,25 @@ function scout(serviceUrl: string, proof = paymentProof(serviceUrl)): AgentActiv
     title: 'PolyDesk LP Scout result returned',
     direction: 'result',
     serviceUrl,
-    result: { summary: 'Saved result' },
+    result: { summary: 'Saved result', receiptActivityId: 'receipt-activity-1234' },
     proof,
     createdAt: 1,
   }
 }
+
+test('paid LP Scout access requires the receipt capability linked to that report', () => {
+  const savedScout = scout('/api/x402/polymarket-scout?requestId=lps_1234567890123456')
+  const receipt: AgentActivity = {
+    id: 'receipt-activity-1234',
+    agentSlug: savedScout.agentSlug,
+    type: 'x402_spent',
+    title: 'PolyDesk LP Scout payment',
+    createdAt: 1,
+  }
+  assert.equal(authorizedLpScoutReceipt(savedScout, [receipt], receipt.id)?.id, receipt.id)
+  assert.equal(authorizedLpScoutReceipt(savedScout, [receipt], 'receipt-activity-wrong'), undefined)
+  assert.equal(authorizedLpScoutReceipt(savedScout, [{ ...receipt, type: 'funded' }], receipt.id), undefined)
+})
 
 test('new LP Scout results remain eligible only on the PolyDesk service path', () => {
   const activity = scout('/api/x402/polymarket-scout?requestId=lps_1234567890123456')
@@ -91,6 +106,7 @@ test('paid fulfillment records a dedicated receipt activity before ZeroScout is 
   assert.ok(scoutIndex > paymentIndex)
   assert.ok(queueIndex > scoutIndex)
   assert.match(source, /receiptActivityId: paidActivity\?\.id/)
+  assert.match(source, /report\/lp-scout\/.*receipt=/)
 })
 
 test('ZeroScout finalization is single-flight for each saved scout activity', () => {

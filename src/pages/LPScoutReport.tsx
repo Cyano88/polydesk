@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Copy, Download, ExternalLink, FileText, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Download, ExternalLink, FileText, Loader2, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+import { PolymarketLimitOrderTicket } from '../components/PolymarketLimitOrderTicket'
+import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOpportunityShareImage'
 
 type ReportResponse = {
   ok?: boolean
@@ -70,6 +72,11 @@ function metricLabel(value: unknown, suffix: string) {
   return text ? `${text} ${suffix}` : ''
 }
 
+function numericMetric(value: unknown) {
+  const parsed = Number.parseFloat(clean(value).replace(/,/g, ''))
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function reportText(report: NonNullable<ReportResponse['report']>) {
   return [
     'PolyDesk LP Scout Report',
@@ -92,7 +99,9 @@ export default function LPScoutReport() {
   const navigate = useNavigate()
   const [data, setData] = useState<ReportResponse | null>(null)
   const [busy, setBusy] = useState(true)
-  const [copied, setCopied] = useState('')
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareNotice, setShareNotice] = useState('')
+  const [orderMarketIndex, setOrderMarketIndex] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -124,12 +133,6 @@ export default function LPScoutReport() {
   const displayProofUrl = proofUrl || archiveUrl
   const copyText = useMemo(() => report ? reportText(report) : '', [report])
 
-  async function copy(value: string, label: string) {
-    await navigator.clipboard?.writeText(value)
-    setCopied(label)
-    window.setTimeout(() => setCopied(''), 1400)
-  }
-
   function downloadTxt() {
     if (!report) return
     const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' })
@@ -139,6 +142,57 @@ export default function LPScoutReport() {
     link.download = `polydesk-lp-scout-${report.id}.txt`
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function shareInsight() {
+    const market = report?.marketLinks?.[0]
+    if (!verified) {
+      setShareNotice('Sharing unlocks after ZeroScout verification.')
+      return
+    }
+    if (!report || !market) {
+      setShareNotice('This report does not contain a market to share.')
+      return
+    }
+    setShareBusy(true)
+    setShareNotice('')
+    try {
+      const safeLandingUrl = `${window.location.origin}/?service=lp-scout`
+      const blob = await renderLpOpportunityPng({
+        variant: 'report',
+        slug: report.id,
+        title: clean(market.label) || clean(report.title) || 'PolyDesk LP Scout brief',
+        insight: clean(report.summary),
+        footerUrl: 'polydesk.trade/?service=lp-scout',
+        verificationLabel: 'ZeroScout verified LP brief',
+        dailyReward: numericMetric(market.rewardDaily),
+        liveSpread: numericMetric(market.spread),
+        depthAtTwoCents: numericMetric(market.depth),
+        daysToResolve: numericMetric(market.daysLeft),
+        suggestedYesBid: numericMetric(market.yesQuote),
+        suggestedNoBid: numericMetric(market.noQuote),
+      })
+      const file = new File([blob], `polydesk-lp-brief-${report.id}.png`, { type: 'image/png' })
+      const shareNavigator = navigator as Navigator & { canShare?: (data: ShareData) => boolean }
+      if (navigator.share && shareNavigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: clean(market.label) || 'PolyDesk LP Scout brief',
+          text: 'A market-liquidity insight from PolyDesk LP Scout.',
+          url: safeLandingUrl,
+          files: [file],
+        })
+        setShareNotice('LP insight shared.')
+        return
+      }
+      downloadLpOpportunityPng(blob, `brief-${report.id}`)
+      await navigator.clipboard?.writeText(safeLandingUrl)
+      setShareNotice('Image downloaded. LP Scout link copied.')
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      setShareNotice(error instanceof Error ? error.message : 'The LP insight could not be shared.')
+    } finally {
+      setShareBusy(false)
+    }
   }
 
   return (
@@ -201,21 +255,18 @@ export default function LPScoutReport() {
                       const yesQuote = clean(market.yesQuote)
                       const noQuote = clean(market.noQuote)
                       return (
-                      <a
+                      <div
                         key={`${market.url}-${index}`}
-                        href={market.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group block rounded-xl border border-gray-100 p-3.5 transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.04]"
+                        className="rounded-xl border border-gray-100 p-3.5 dark:border-white/10"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-[11px] font-semibold uppercase text-gray-400">Market {index + 1}</p>
                             <p className="mt-1 text-sm font-semibold leading-5 text-gray-900 dark:text-white">{market.label}</p>
                           </div>
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gray-950 px-2.5 py-1 text-[11px] font-semibold text-white dark:bg-white dark:text-gray-950">
-                            Open <ExternalLink className="h-3 w-3" />
-                          </span>
+                          <a href={market.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">
+                            Market <ExternalLink className="h-3 w-3" />
+                          </a>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
                           {reward && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{reward}</span>}
@@ -229,7 +280,24 @@ export default function LPScoutReport() {
                             {noQuote && <div className="rounded-lg bg-gray-100 px-3 py-2 font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">NO quote near {noQuote}</div>}
                           </div>
                         )}
-                      </a>
+                        <button
+                          type="button"
+                          onClick={() => setOrderMarketIndex(value => value === index ? null : index)}
+                          className="mt-3 w-full rounded-lg bg-gray-950 px-3 py-2 text-xs font-semibold text-white dark:bg-white dark:text-gray-950"
+                        >
+                          {orderMarketIndex === index ? 'Close order ticket' : 'Place limit order'}
+                        </button>
+                        {orderMarketIndex === index && (
+                          <div className="mt-3">
+                            <PolymarketLimitOrderTicket
+                              marketTitle={market.label}
+                              marketUrl={market.url}
+                              yesQuote={market.yesQuote}
+                              noQuote={market.noQuote}
+                            />
+                          </div>
+                        )}
+                      </div>
                     )})}
                   </div>
                 </div>
@@ -289,14 +357,16 @@ export default function LPScoutReport() {
                 <ShieldCheck className="h-4 w-4" />
                 Human review required before quoting
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => copy(window.location.href, 'link')} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/10">
-                  <Copy className="h-3.5 w-3.5" /> {copied === 'link' ? 'Copied' : 'Copy link'}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={() => void shareInsight()} disabled={shareBusy || !verified || !report.marketLinks?.length} className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                  {shareBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                  {shareBusy ? 'Creating' : 'Share insight'}
                 </button>
-                <button type="button" onClick={downloadTxt} className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
-                  <Download className="h-3.5 w-3.5" /> Export
+                <button type="button" onClick={downloadTxt} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/10">
+                  <Download className="h-3.5 w-3.5" /> Export report
                 </button>
               </div>
+              {shareNotice && <p className="w-full text-right text-[11px] font-medium text-gray-500 dark:text-gray-400">{shareNotice}</p>}
             </footer>
           </article>
         )}

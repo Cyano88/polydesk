@@ -6,6 +6,7 @@ import { PolyDeskLoadingState } from './components/PolyDeskLoadState'
 const About = lazy(() => import('./pages/About'))
 const PolyDesk = lazy(() => import('./pages/PolyDesk'))
 const LPScoutReport = lazy(() => import('./pages/LPScoutReport'))
+const Opportunity = lazy(() => import('./pages/Opportunity'))
 
 function RouteLoading() {
   return <PolyDeskLoadingState fullScreen label="Opening PolyDesk" />
@@ -21,6 +22,7 @@ export default function App() {
         </Route>
         <Route path="/about" element={<About />} />
         <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />
+        <Route path="/opportunity/:slug" element={<Opportunity />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

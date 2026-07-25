@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { findAgentActivity, listAgentActivity } from './agent-activity.js'
+import { authorizedLpScoutReceipt } from './lp-scout-access.js'
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {}
@@ -70,6 +71,7 @@ function scoutFallbackRiskFlags(result: Record<string, unknown>) {
 }
 
 export default async function handler(req: Request, res: Response) {
+  res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
   const id = String(req.query.id ?? req.query.activityId ?? '').trim()
   const receiptId = String(req.query.receipt ?? req.query.receiptId ?? '').trim()
@@ -82,6 +84,10 @@ export default async function handler(req: Request, res: Response) {
     }
 
     const activity = await listAgentActivity(scout.agentSlug, 80)
+    const x402 = authorizedLpScoutReceipt(scout, activity, receiptId)
+    if (!x402) {
+      return res.status(404).json({ ok: false, error: 'LP Scout report not found.' })
+    }
     const verified = activity.find(item => (
       item.type === 'scout_returned'
       && asObject(item.result).sourceActivityId === scout.id
@@ -95,13 +101,6 @@ export default async function handler(req: Request, res: Response) {
       item.type === 'scout_verification_failed'
       && asObject(item.result).sourceActivityId === scout.id
     ))
-    const x402 = receiptId
-      ? activity.find(item => item.id === receiptId && item.type === 'x402_spent')
-      : activity.find(item => item.id === asObject(verified?.result).receiptActivityId && item.type === 'x402_spent')
-        ?? activity.find(item => item.id === asObject(queued?.result).receiptActivityId && item.type === 'x402_spent')
-        ?? activity.find(item => item.type === 'x402_spent' && item.proof?.proofHash === asObject(verified?.result).x402ProofHash)
-        ?? activity.find(item => item.type === 'x402_spent' && item.serviceUrl === scout.serviceUrl)
-
     const zeroScout = asObject(asObject(scout.result).zeroscout || asObject(verified?.result).zeroscout)
     const proof = asObject(zeroScout.proof)
     const zeroScoutProofUrl = proofUrl(proof)
@@ -127,15 +126,12 @@ export default async function handler(req: Request, res: Response) {
         riskFlags: zeroScoutRisks.length ? zeroScoutRisks : scoutFallbackRiskFlags({ result: scoutResult }),
         safetyBoundaries: Array.isArray(zeroScout.safetyBoundaries) ? zeroScout.safetyBoundaries : [],
         marketLinks: marketLinksFromScout({ result: scoutResult }),
-        scout: scoutResult,
-        zeroscout: zeroScout,
         proof: {
-          ...proof,
+          proofHash: proof.proofHash,
           url: zeroScoutProofUrl,
         },
         archive: {
           status: localArchive || zeroScoutProofUrl ? 'archived' : localArchiveStatus?.status ?? 'archiving',
-          proof: localArchive,
           url: localArchiveUrl || zeroScoutProofUrl,
           lastError: zeroScoutProofUrl ? undefined : localArchiveStatus?.lastError,
           lastStage: zeroScoutProofUrl ? undefined : localArchiveStatus?.lastStage,
@@ -149,7 +145,9 @@ export default async function handler(req: Request, res: Response) {
           amount: x402.amount,
           asset: x402.asset,
           createdAt: x402.createdAt,
-          proof: x402.proof,
+          proof: {
+            proofHash: x402.proof?.proofHash,
+          },
           receiptUrl: x402.proof?.receiptUrl,
         } : scout.proof ? {
           id: scout.id,
@@ -157,12 +155,13 @@ export default async function handler(req: Request, res: Response) {
           amount: scout.proof.amount,
           asset: 'USDC',
           createdAt: scout.createdAt,
-          proof: scout.proof,
+          proof: {
+            proofHash: scout.proof.proofHash,
+          },
           receiptUrl: scout.proof.receiptUrl,
         } : undefined,
         retryState: failed ? {
           detail: failed.detail,
-          result: failed.result,
         } : undefined,
       },
     })

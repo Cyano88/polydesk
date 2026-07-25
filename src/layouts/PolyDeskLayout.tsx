@@ -2,10 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
+  Activity as PulseIcon,
+  ArrowRight,
   Copy,
+  LayoutDashboard,
+  Loader2,
   LogOut,
   Mic2,
   Moon,
+  Radar,
   Sun,
   UserRound,
 } from 'lucide-react'
@@ -13,8 +18,9 @@ import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { cn } from '../lib/utils'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+import PolyDeskAgentIcon from '../components/PolyDeskAgentIcon'
 
-type Workspace = 'overview' | 'scout' | 'activity'
+type Workspace = 'overview' | 'agent' | 'scout' | 'pulse'
 
 function PolymarketMark({ className }: { className?: string }) {
   return (
@@ -109,9 +115,12 @@ function PolyDeskLaunchGate({
           loginOptions={{ loginMethods: ['email', 'wallet'] }}
           logoutOnAuthenticated={false}
           disabled={!ready}
-          className="mx-auto mt-7 flex min-h-11 w-full max-w-xs items-center justify-center rounded-full bg-gray-950 px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-gray-800 hover:shadow-[0_14px_34px_rgba(15,23,42,0.22)] disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:shadow-[0_10px_34px_rgba(0,0,0,0.35)] dark:hover:bg-gray-100"
+          aria-busy={!ready}
+          className="polydesk-primary-cta mx-auto mt-7 w-full max-w-xs"
         >
-          {ready ? 'Continue' : 'Preparing sign in…'}
+          {!ready && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          Continue
+          {ready && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
         </PrivyConnectButton>
 
         <p className="mt-4 text-[11px] leading-5 text-gray-400 dark:text-gray-500">Continue with email or your existing wallet. PolyDesk never asks for your private key.</p>
@@ -147,11 +156,17 @@ function PolyDeskWorkspace() {
   }, [theme])
 
   const service = searchParams.get('service') ?? ''
-  const workspace: Workspace = service === 'activity'
-    ? 'activity'
+  const agentOpen = searchParams.get('agent') === '1' || Boolean(searchParams.get('lane'))
+  const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
+  const workspace: Workspace = agentOpen
+    ? 'agent'
+    : service === 'pulse'
+      ? 'pulse'
     : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'football' || service === 'lp-scout'
       ? 'scout'
-      : 'overview'
+      : service === 'portfolio' || service === 'activity'
+        ? 'overview'
+        : 'pulse'
 
   const walletAddress = wallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? ''))?.address ?? ''
   const identitySeed = walletAddress || user?.id || 'polydesk'
@@ -170,17 +185,30 @@ function PolyDeskWorkspace() {
     return `/polydesk${query ? `?${query}` : ''}`
   }
 
+  function makeAgentTo() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('service')
+    next.delete('lane')
+    next.delete('lpScoutPath')
+    next.delete('portfolio')
+    next.delete('wallet')
+    next.set('agent', '1')
+    const query = next.toString()
+    return `/polydesk${query ? `?${query}` : ''}`
+  }
+
   const navItems = [
-    { id: 'overview', label: 'Overview', to: makeTo('portfolio', { portfolio: 'trading', wallet: 'balance' }), active: workspace === 'overview' },
-    { id: 'scout', label: 'LP Scout', to: makeTo('lp-scout'), active: workspace === 'scout' },
-    { id: 'activity', label: 'Activity', to: makeTo('activity'), active: workspace === 'activity' },
+    { id: 'pulse', label: 'Pulse', icon: PulseIcon, to: makeTo('pulse'), active: workspace === 'pulse' },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'balance' }), active: workspace === 'overview' },
+    { id: 'agent', label: 'Agent', icon: null, to: makeAgentTo(), active: workspace === 'agent' },
+    { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: workspace === 'scout' },
   ] as const
 
-  if (!ready || (authenticated && !walletsReady)) {
+  if (!localPreview && (!ready || (authenticated && !walletsReady))) {
     return <PolyDeskLoadingState fullScreen label="Restoring your desk" />
   }
 
-  if (!authenticated) {
+  if (!localPreview && !authenticated) {
     return (
       <PolyDeskLaunchGate
         ready
@@ -201,30 +229,12 @@ function PolyDeskWorkspace() {
     <div className="flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]">
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/80 backdrop-blur-xl dark:border-white/5 dark:bg-[#111113]/90">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
-          <Link to="/polydesk?service=portfolio&portfolio=trading&wallet=balance" className="group flex items-center gap-2.5 focus:outline-none">
+          <Link to={makeTo('portfolio', { portfolio: localPreview ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
               <PolymarketMark className="h-5 w-5" />
             </span>
             <span className="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">PolyDesk</span>
           </Link>
-
-          <nav aria-label="PolyDesk" className="hidden items-center rounded-full border border-gray-200 bg-gray-50/80 p-0.5 dark:border-white/10 dark:bg-[#1c1c20] sm:flex">
-            {navItems.map(item => (
-              <Link
-                key={item.id}
-                to={item.to}
-                className={cn(
-                  'rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all',
-                  item.active ? 'bg-white text-gray-900 shadow-sm dark:text-gray-950' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200',
-                )}
-                aria-current={item.active ? 'page' : undefined}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </nav>
 
           <div className="flex items-center gap-1.5">
             <button
@@ -236,6 +246,7 @@ function PolyDeskWorkspace() {
             >
               {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
+            {!localPreview && (
             <div className="relative">
               <button
               type="button"
@@ -259,25 +270,44 @@ function PolyDeskWorkspace() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
 
-        <div className="mx-auto flex max-w-5xl px-4 pb-3 sm:hidden">
-          <nav aria-label="PolyDesk" className="grid w-full grid-cols-3 gap-1 rounded-full border border-gray-200 bg-gray-50/80 p-0.5 dark:border-white/10 dark:bg-[#1c1c20]">
-            {navItems.map(item => (
-              <Link key={item.id} to={item.to} className={cn('rounded-full px-2 py-1.5 text-center text-[10px] font-semibold transition-all', item.active ? 'bg-white text-gray-900 shadow-sm dark:text-gray-950' : 'text-gray-400')}>
-                <span className="inline-flex items-center gap-1">
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </nav>
-        </div>
       </header>
 
-      <main data-polydesk-product-ui className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <main data-polydesk-product-ui className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28">
         <Outlet />
       </main>
+
+      <footer className="fixed inset-x-0 bottom-0 z-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <nav
+          aria-label="PolyDesk workspace"
+          className="mx-auto grid w-[min(26rem,calc(100%-2rem))] grid-cols-4 gap-1 rounded-2xl border border-gray-200/80 bg-white/90 p-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-[#17171b]/92 dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+        >
+          {navItems.map(item => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.id}
+                to={item.to}
+                aria-current={item.active ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-950 dark:focus-visible:outline-white',
+                  item.active
+                    ? 'bg-gray-950 text-white shadow-sm dark:bg-white dark:text-gray-950 dark:shadow-[0_6px_20px_rgba(0,0,0,0.28)]'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-white/[0.07] dark:hover:text-gray-200',
+                )}
+              >
+                {Icon
+                  ? <Icon className="h-[17px] w-[17px]" strokeWidth={item.active ? 2.3 : 1.9} />
+                  : <PolyDeskAgentIcon header isStatic className="!h-[17px] !w-[17px]" />}
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+      </footer>
     </div>
   )
 }

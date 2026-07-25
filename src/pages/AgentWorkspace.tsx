@@ -96,6 +96,7 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
         lpScoutAgent: 'polydesk-agent',
         agentMessage: 'View LP Scout result',
       })
+      if (body.artifacts?.receiptActivityId) next.set('lpScoutReceipt', body.artifacts.receiptActivityId)
       if (receiptUrl) next.set('lpScoutReceiptUrl', receiptUrl)
       navigate(`/?${next.toString()}`)
     } catch (cause) {
@@ -161,7 +162,8 @@ export default function AgentWorkspace({ requestParams }: AgentWorkspaceProps = 
         type="button"
         onClick={() => void runLpScout()}
         disabled={busy || complete}
-        className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-gray-950"
+        aria-busy={busy}
+        className="polydesk-primary-cta mt-4 w-full"
       >
         {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Confirming with Hash PayLink</> : complete ? <><CheckCircle2 className="h-4 w-4" /> Payment confirmed</> : <>Continue to Hash PayLink <ArrowRight className="h-4 w-4" /></>}
       </button>

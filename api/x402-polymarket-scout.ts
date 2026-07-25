@@ -4,6 +4,7 @@ import { formatUnits } from 'viem'
 import { appendAgentActivity, normalizeActivitySlug } from './agent-activity.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 import { protectLpScoutWithHashPayLink } from './hashpaylink-agentic-checkout.js'
+import { getPolyStreamFeed } from './poly-stream.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -68,12 +69,14 @@ type PolymarketBookSummary = {
   depthAtTwoCents?: number
 }
 
-type ScoutMode = 'best' | 'theme' | 'market'
+type ScoutMode = 'best' | 'news' | 'market' | 'football'
 
 type ScoutOptions = {
   mode: ScoutMode
   context?: string
   budget?: string
+  candidateLimit?: number
+  opportunityLimit?: number
 }
 
 type PolymarketLpOpportunity = {
@@ -103,7 +106,18 @@ type PolymarketLpOpportunity = {
   outcomeRisk: 'medium' | 'high'
   score: number
   marketUrl?: string
+  image?: string
+  description?: string
   scoutReason?: string
+  footballContext?: {
+    fixture: string
+    status: string
+    kickoffAt?: string
+    goalScorers?: string[]
+    stats?: string[]
+    sourceUrl?: string
+    provider: string
+  }
 }
 
 function sleep(ms: number) {
@@ -376,8 +390,9 @@ function cleanContext(value: unknown) {
 
 function normalizeScoutMode(value: unknown): ScoutMode {
   const mode = String(value ?? '').trim().toLowerCase()
-  if (mode === 'theme') return 'theme'
+  if (mode === 'news' || mode === 'theme') return 'news'
   if (mode === 'market') return 'market'
+  if (mode === 'football') return 'football'
   return 'best'
 }
 
@@ -492,9 +507,19 @@ async function fetchGammaMarketBySlug(slug: string) {
   ]
   for (const url of urls) {
     const data = await fetchPolymarketJson(url)
-    const items = Array.isArray(data)
+    const topLevelItems = Array.isArray(data)
       ? data.map(asRecord).filter((item): item is PolymarketRewardMarket => Boolean(item))
       : extractRewardMarkets(data)
+    const items = topLevelItems.flatMap(item => {
+      const nested = Array.isArray(item.markets)
+        ? item.markets.map(asRecord).filter((market): market is PolymarketRewardMarket => Boolean(market))
+        : []
+      if (!nested.length) return [item]
+      const eventSlug = readString(item, ['slug', 'event_slug', 'eventSlug'])
+      return nested.map(market => eventSlug && !readString(market, ['event_slug', 'eventSlug'])
+        ? { ...market, event_slug: eventSlug }
+        : market)
+    })
     if (items.length) {
       const direct = items.find(item => readString(item, ['slug', 'market_slug', 'event_slug']) === slug)
       return direct ?? items[0]
@@ -578,8 +603,28 @@ function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportun
     readNestedNumber(market, [['reward_config', 'min_size'], ['rewardConfig', 'minSize']])
   const liquidity = readNumber(market, ['liquidity', 'volume_24hr', 'volume24hr', 'volume', 'oneDayVolume'])
   const endDate = readString(market, ['end_date', 'endDate', 'resolution_date', 'resolutionDate', 'closed_time'])
-  const slug = readString(market, ['slug', 'market_slug', 'event_slug'])
-  const marketUrl = readString(market, ['marketUrl', 'url']) ?? (slug ? `https://polymarket.com/market/${slug}` : undefined)
+  const slug = readString(market, ['slug', 'market_slug'])
+  const eventSlug = readString(market, ['event_slug', 'eventSlug']) ?? slug
+  const suppliedUrl = readString(market, ['marketUrl', 'url'])
+  const image = readString(market, ['image', 'icon'])
+  const description = readString(market, ['description', 'resolutionSource', 'rules'])
+  const marketUrl = suppliedUrl?.startsWith('https://polymarket.com/event/')
+    ? suppliedUrl
+    : eventSlug
+      ? `https://polymarket.com/event/${eventSlug}`
+      : undefined
+  const footballContextRecord = asRecord(market.footballContext)
+  const footballContext = footballContextRecord
+    ? {
+        fixture: readString(footballContextRecord, ['fixture']) ?? title,
+        status: readString(footballContextRecord, ['status']) ?? 'Scheduled',
+        kickoffAt: readString(footballContextRecord, ['kickoffAt']),
+        goalScorers: readStringArray(footballContextRecord, ['goalScorers']),
+        stats: readStringArray(footballContextRecord, ['stats']),
+        sourceUrl: readString(footballContextRecord, ['sourceUrl']),
+        provider: readString(footballContextRecord, ['provider']) ?? 'verified football provider',
+      }
+    : undefined
 
   return {
     title,
@@ -597,6 +642,9 @@ function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportun
     score: 0,
     marketUrl,
     sourceUrl: marketUrl,
+    image,
+    description,
+    footballContext,
   }
 }
 
@@ -675,9 +723,37 @@ function rounded(value: number | undefined, digits = 4) {
 }
 
 function scoutModeTitle(mode: ScoutMode) {
-  if (mode === 'theme') return 'theme scout'
+  if (mode === 'news') return 'news-market scout'
   if (mode === 'market') return 'single market inspection'
+  if (mode === 'football') return 'football-market scout'
   return 'best reward markets'
+}
+
+async function loadFootballMarkets(): Promise<PolymarketRewardMarket[]> {
+  const feed = await getPolyStreamFeed(new Date().toISOString().slice(0, 10))
+  if (feed.providerStatus !== 'connected') return []
+  const matches = feed.matches
+    .filter(match => typeof match.polymarketUrl === 'string' && match.polymarketUrl.startsWith('https://polymarket.com/event/'))
+    .slice(0, 12)
+  const markets = await Promise.all(matches.map(async match => {
+    const slug = parseMarketSlug(match.polymarketUrl)
+    const market = await fetchGammaMarketBySlug(slug)
+    if (!market) return undefined
+    return {
+      ...market,
+      event_slug: readString(market, ['event_slug', 'eventSlug']) ?? slug,
+      footballContext: {
+        fixture: match.title,
+        status: match.status,
+        kickoffAt: match.kickoffAt,
+        goalScorers: match.goalScorers ?? [],
+        stats: match.stats ?? [],
+        sourceUrl: match.sourceUrl,
+        provider: feed.source,
+      },
+    }
+  }))
+  return markets.filter(Boolean) as PolymarketRewardMarket[]
 }
 
 async function loadScoutMarkets(options: ScoutOptions) {
@@ -687,7 +763,7 @@ async function loadScoutMarkets(options: ScoutOptions) {
     return exact ? [exact] : []
   }
 
-  if (options.mode === 'theme') {
+  if (options.mode === 'news') {
     const query = cleanContext(options.context)
     const [rewardMarkets, gammaMarkets] = await Promise.all([
       fetchPolymarketRewardMarkets(query),
@@ -702,6 +778,8 @@ async function loadScoutMarkets(options: ScoutOptions) {
     })
   }
 
+  if (options.mode === 'football') return loadFootballMarkets()
+
   return fetchPolymarketRewardMarkets()
 }
 
@@ -709,7 +787,13 @@ function formatOpportunitySignal(opportunity: ReturnType<typeof serializeOpportu
   const depth = typeof opportunity.depthAtTwoCents === 'number' ? ` | depth ${opportunity.depthAtTwoCents}` : ''
   const spread = typeof opportunity.liveSpread === 'number' ? `${(opportunity.liveSpread * 100).toFixed(1)}c` : 'n/a'
   const reward = opportunity.dailyReward ?? 'n/a'
-  const prefix = mode === 'market' ? 'Market checked' : mode === 'theme' ? 'Best match for this request' : 'Best current LP candidate'
+  const prefix = mode === 'market'
+    ? 'Market checked'
+    : mode === 'news'
+      ? 'Best news-market match'
+      : mode === 'football'
+        ? 'Best verified football-market match'
+        : 'Best current LP candidate'
   const days = typeof opportunity.daysToResolve === 'number' ? ` | ${opportunity.daysToResolve}d left` : ''
   return `${prefix}: ${opportunity.title.slice(0, 82)} | reward/day ${reward} USDC | spread ${spread}${depth}${days} | risk ${opportunity.lpExecutionRisk}`
 }
@@ -718,6 +802,8 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
   return {
     title: opportunity.title,
     marketUrl: opportunity.marketUrl,
+    image: opportunity.image,
+    description: opportunity.description,
     daysToResolve: opportunity.daysToResolve,
     dailyReward: rounded(opportunity.dailyReward, 2),
     maxSpread: rounded(opportunity.maxSpread),
@@ -737,6 +823,7 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     score: rounded(opportunity.score, 2),
     scoutReason: opportunity.scoutReason,
     executionPlan: buildExecutionPlan(opportunity, budget),
+    footballContext: opportunity.footballContext,
   }
 }
 
@@ -757,7 +844,16 @@ function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
     lpExecutionRisk: opportunity.lpExecutionRisk,
     score: rounded(opportunity.score, 2),
     scoutReason: opportunity.scoutReason,
+    footballContext: opportunity.footballContext,
   }
+}
+
+function passesScoutSafety(mode: ScoutMode, opportunity: PolymarketLpOpportunity) {
+  if (mode !== 'football') return isConservativeCandidate(opportunity)
+  const confirmedSpread = typeof opportunity.spread === 'number' && opportunity.spread <= Math.min(opportunity.maxSpread ?? 0.03, 0.025)
+  const confirmedDepth = typeof opportunity.depthAtTwoCents === 'number' && opportunity.depthAtTwoCents >= 5_000
+  const tradableMid = typeof opportunity.midpoint === 'number' && opportunity.midpoint >= 0.15 && opportunity.midpoint <= 0.85
+  return opportunity.lpExecutionRisk !== 'high' && confirmedSpread && confirmedDepth && tradableMid
 }
 
 export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
@@ -766,23 +862,33 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const budget = cleanContext(options.budget)
   const markets = await loadScoutMarkets({ mode, context, budget })
   if (!markets.length) {
-    const requestText = mode === 'theme' && context ? ` for "${context}"` : mode === 'market' && context ? ` for "${context}"` : ''
+    const requestText = mode === 'news' && context ? ` for "${context}"` : mode === 'market' && context ? ` for "${context}"` : ''
     return {
       summary: `Live Polymarket ${scoutModeTitle(mode)} data is unavailable${requestText} right now.`,
-      signals: ['No paid pick was forced. Retry shortly and confirm the market page plus order book before quoting.'],
+      signals: [mode === 'football'
+        ? 'No paid pick was forced. A verified football fixture and a confidently matched live Polymarket book are both required.'
+        : 'No paid pick was forced. Retry shortly and confirm the market page plus order book before quoting.'],
       opportunities: [],
-      nextAction: 'Retry LP Scout after Polymarket public APIs are available.',
+      nextAction: mode === 'football'
+        ? 'Retry after the football provider and a matched Polymarket market are both available.'
+        : 'Retry LP Scout after Polymarket public APIs are available.',
       disclaimer: 'Educational product signal only. Not financial advice.',
-      source: 'Polymarket Gamma and CLOB public APIs',
+      source: mode === 'football'
+        ? 'Verified football provider plus Polymarket Gamma and CLOB public APIs'
+        : 'Polymarket Gamma and CLOB public APIs',
       request: { mode, context, budget },
     }
   }
 
-  const candidates = markets.slice(0, mode === 'market' ? 4 : 80)
+  const requestedCandidateLimit = Number(options.candidateLimit)
+  const candidateLimit = Number.isFinite(requestedCandidateLimit)
+    ? Math.max(1, Math.min(80, Math.floor(requestedCandidateLimit)))
+    : mode === 'market' ? 4 : 80
+  const candidates = markets.slice(0, candidateLimit)
   const analyzed = (await Promise.all(candidates.map(analyzePolymarketLpMarket)))
-  const conservative = analyzed.filter(isConservativeCandidate)
+  const conservative = analyzed.filter(opportunity => passesScoutSafety(mode, opportunity))
   if (mode !== 'market' && !conservative.length) {
-    const themeText = mode === 'theme' && context ? ` for "${context}"` : ''
+    const themeText = mode === 'news' && context ? ` for "${context}"` : ''
     return {
       summary: `Live LP Scout did not find a clean conservative Polymarket LP candidate${themeText} right now.`,
       signals: [
@@ -798,20 +904,26 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const ranked = (conservative.length ? conservative : analyzed)
     .sort((a, b) => b.score - a.score)
   const rejected = analyzed
-    .filter(opportunity => !isConservativeCandidate(opportunity))
+    .filter(opportunity => !passesScoutSafety(mode, opportunity))
     .sort((a, b) => b.score - a.score)
     .slice(0, 8)
     .map(serializeCandidateAudit)
+  const requestedOpportunityLimit = Number(options.opportunityLimit)
+  const opportunityLimit = Number.isFinite(requestedOpportunityLimit)
+    ? Math.max(1, Math.min(12, Math.floor(requestedOpportunityLimit)))
+    : mode === 'market' ? 1 : 3
   const opportunities = ranked
-    .slice(0, mode === 'market' ? 1 : 3)
+    .slice(0, opportunityLimit)
     .map(opportunity => serializeOpportunity(opportunity, budget))
 
-  const themeText = mode === 'theme' && context ? ` for "${context}"` : ''
+  const themeText = mode === 'news' && context ? ` for "${context}"` : ''
   const marketText = mode === 'market' && context ? ` for "${context}"` : ''
   const summary = mode === 'market'
     ? `Live LP Scout checked the requested Polymarket market${marketText} using current book, spread, depth, and maker-order risk.`
-    : mode === 'theme'
+    : mode === 'news'
     ? `Live LP Scout selected ${opportunities.length === 1 ? 'one conservative Polymarket LP candidate' : `${opportunities.length} conservative Polymarket LP candidates`}${themeText} after checking rewards, spread, depth, time left, and volatility.`
+    : mode === 'football'
+      ? `Live LP Scout cross-checked verified football fixtures with confidently matched Polymarket books and selected ${opportunities.length === 1 ? 'one candidate' : `${opportunities.length} candidates`} after checking spread, depth and maker-order risk.`
     : `Live LP Scout selected ${opportunities.length === 1 ? 'one conservative Polymarket reward market' : `${opportunities.length} conservative Polymarket reward markets`} after checking rewards, spread, depth, time left, and volatility.`
 
   return {
@@ -821,13 +933,17 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
     candidateAudit: {
       scanned: analyzed.length,
       conservativePassed: conservative.length,
-      rankingBasis: 'Score blends rewards, spread, book depth, liquidity, time-to-resolution, tradable midpoint, volatility, and headline-risk filters.',
+      rankingBasis: mode === 'football'
+        ? 'Verified fixture matching is required first; ranking then blends spread, book depth, liquidity, tradable midpoint and maker-order risk.'
+        : 'Score blends rewards, spread, book depth, liquidity, time-to-resolution, tradable midpoint, volatility, and headline-risk filters.',
       reviewedCandidates: ranked.slice(0, 12).map(serializeCandidateAudit),
       rejectedCandidates: rejected,
     },
     nextAction: 'Human action only: open the market, confirm the live book still matches this scout, then place a small maker quote inside the spread. Do not use market orders.',
     disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
-    source: 'Polymarket Gamma markets/events plus CLOB rewards and order book APIs',
+    source: mode === 'football'
+      ? 'Verified football provider context plus Polymarket Gamma markets/events and CLOB order book APIs'
+      : 'Polymarket Gamma markets/events plus CLOB rewards and order book APIs',
     request: { mode, context, budget },
   }
 }
@@ -843,8 +959,8 @@ export async function scoutResponse(req: PaidRequest) {
   })
   const activity = payment ? await recordPaidScout(req, scout, amount) : undefined
   const receiptUrl = activity?.receiptUrl
-  const reportUrl = activity?.resultActivityId
-    ? `/report/lp-scout/${encodeURIComponent(activity.resultActivityId)}`
+  const reportUrl = activity?.resultActivityId && activity.receiptActivityId
+    ? `/report/lp-scout/${encodeURIComponent(activity.resultActivityId)}?receipt=${encodeURIComponent(activity.receiptActivityId)}`
     : undefined
   return {
     ok: true,

@@ -100,6 +100,7 @@ function validOrderPayload(value: unknown, signedOrder: unknown, orderType: stri
 function isAllowedSourceMarket(source: string, marketUrl: string) {
   if (source === 'world-cup-moneyline') return marketUrl.startsWith('https://polymarket.com/sports/world-cup/')
   if (source === 'portfolio-position-sell') return marketUrl.startsWith('https://polymarket.com/')
+  if (source === 'lp-scout-limit') return marketUrl.startsWith('https://polymarket.com/event/')
   return false
 }
 
@@ -151,7 +152,7 @@ export default async function handler(req: Request, res: Response) {
     httpMethod: 'POST',
     orderType,
     deferExec: false,
-    postOnly: false,
+    postOnly: orderPayload?.postOnly === true,
     builderCodeConfigured: true,
     builderCode,
     builderCodePreview: builderCodePreview(builderCode as string),

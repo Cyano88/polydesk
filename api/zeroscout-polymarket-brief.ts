@@ -325,7 +325,7 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
         'Explain the reward/spread/depth tradeoff in plain language.',
         'Call out shallow books, stale data, high headline risk, wide spread, and time-to-resolution risk.',
         'Tell the user to re-open the Polymarket market and confirm the live order book before placing any maker quote.',
-        'Do not recommend market orders. Do not imply PolyDesk will place, cancel, or manage LP orders.',
+        'Do not recommend market orders or imply automatic execution. PolyDesk may offer a separate human-initiated GTC maker-order ticket, but the user must recheck the live book and approve a distinct wallet signature.',
         'If the supplied data is insufficient, say what is missing instead of forcing a recommendation.',
       ],
       desiredFields: {

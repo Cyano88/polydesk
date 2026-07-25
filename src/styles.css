@@ -407,6 +407,58 @@ html.dark .gradient-border {
 }
 
 /* Ask Hash live agent signal */
+.polydesk-chat-icon {
+  position: relative;
+  display: inline-flex;
+  width: 1.2rem;
+  height: 1.2rem;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.polydesk-chat-icon__bubble {
+  position: relative;
+  display: inline-flex;
+  width: 1.05rem;
+  height: 0.76rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.11rem;
+  border: 1.7px solid currentColor;
+  border-radius: 0.38rem;
+}
+
+.polydesk-chat-icon__bubble::after {
+  content: '';
+  position: absolute;
+  left: 0.18rem;
+  bottom: -0.18rem;
+  width: 0.31rem;
+  height: 0.31rem;
+  border-bottom: 1.7px solid currentColor;
+  border-left: 1.7px solid currentColor;
+  background: inherit;
+  transform: skewY(-34deg);
+}
+
+.polydesk-chat-icon__bubble span {
+  position: relative;
+  z-index: 1;
+  width: 0.12rem;
+  height: 0.12rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: askHashBubbleDot 1.4s ease-in-out infinite;
+}
+
+.polydesk-chat-icon__bubble span:nth-child(2) { animation-delay: 0.16s; }
+.polydesk-chat-icon__bubble span:nth-child(3) { animation-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .polydesk-chat-icon__bubble span { animation: none; }
+}
+
 .ask-hash-live-agent {
   position: relative;
   display: inline-flex;
@@ -1115,6 +1167,7 @@ html.dark .polydesk-launch-identity {
 }
 
 .polydesk-primary-cta {
+  border: 0;
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -1137,10 +1190,27 @@ html.dark .polydesk-launch-identity {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.20);
 }
 
+.polydesk-primary-cta:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.polydesk-primary-cta:focus-visible {
+  outline: 2px solid rgb(17 24 39);
+  outline-offset: 3px;
+}
+
 .polydesk-primary-cta:disabled {
   cursor: not-allowed;
   opacity: 0.5;
   transform: none;
+  box-shadow: none;
+}
+
+.polydesk-primary-cta--compact {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 10px;
+  box-shadow: none;
 }
 
 .dark .polydesk-primary-cta {
@@ -1151,6 +1221,16 @@ html.dark .polydesk-launch-identity {
 
 .dark .polydesk-primary-cta:hover {
   background: rgb(243 244 246);
+}
+
+.dark .polydesk-primary-cta:focus-visible {
+  outline-color: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polydesk-primary-cta {
+    transition: none;
+  }
 }
 
 .polydesk-icon-button {

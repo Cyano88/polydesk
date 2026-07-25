@@ -197,3 +197,26 @@ test('uses current asks instead of a stale last-trade quote and enforces minimum
     assert.match(belowMinimum.error, /minimum order size/i)
   }
 })
+
+test('prepares a post-only GTC maker order at the user limit without crossing the live asks', async () => {
+  const result = await preparePolymarketOpen(input({
+    orderType: 'GTC',
+    limitPrice: '0.49',
+    maxSpendUsdc: '4.9',
+  }), dependencies())
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.market.executionPrice, '0.49')
+  assert.equal(result.data.market.executionPriceSource, 'user-limit')
+  assert.equal(result.data.signingPlan.createMarketOrder, undefined)
+  assert.equal(result.data.signingPlan.createOrder?.size, 10)
+  assert.equal(result.data.signingPlan.submit.orderType, 'GTC')
+  assert.equal(result.data.signingPlan.submit.postOnly, true)
+
+  const offTick = await preparePolymarketOpen(input({
+    orderType: 'GTC',
+    limitPrice: '0.495',
+  }), dependencies())
+  assert.equal(offTick.ok, false)
+  if (!offTick.ok) assert.match(offTick.error, /tick size/i)
+})

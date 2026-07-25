@@ -40,6 +40,8 @@ import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'
 import AgentWorkspace from './AgentWorkspace'
 import ZeroScoutPowerBadge from '../components/ZeroScoutPowerBadge'
 import PayLinkShareSheet from '../components/PayLinkShareSheet'
+import DynamicSendButton from '../components/DynamicSendButton'
+import PolyDeskAgentIcon from '../components/PolyDeskAgentIcon'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
@@ -836,7 +838,11 @@ function isMoodName(value: string) {
 
 function usableHelperName(value: string) {
   const clean = normalizeHelperName(value)
-  return isMoodName(clean) ? '' : clean
+  const technicalIdentity = clean.includes('@')
+    || /^0x[a-fA-F0-9]{40}$/.test(clean)
+    || /^(identity|wallet|email):/i.test(clean)
+    || /^polydesk-(preview|web)(?:$|[-:])/i.test(clean)
+  return isMoodName(clean) || technicalIdentity ? '' : clean
 }
 
 function isNameCorrectionMessage(text: string) {
@@ -1298,7 +1304,7 @@ export default function TelegramPaymentLinks() {
       >
         <div className="flex items-start gap-3">
           <div className="flex shrink-0 items-start pt-0.5 text-gray-700 dark:text-gray-300">
-            <AskHashLiveAgentIcon header isStatic={isAgentHashOpen} />
+            <PolyDeskAgentIcon header isStatic={isAgentHashOpen} />
           </div>
           <div className="min-w-0 flex-1">
             {isAgentHashOpen ? (
@@ -1543,7 +1549,7 @@ function TelegramServiceCard({
       )}
     >
       {service.id === 'hashpaylink-helper' ? (
-        <AskHashLiveAgentIcon />
+        <PolyDeskAgentIcon />
       ) : (
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-700 shadow-sm dark:bg-white/[0.08] dark:text-gray-200">
           {service.brand === 'polymarket'
@@ -1565,24 +1571,6 @@ function TelegramServiceCard({
       </span>
       {service.active ? <ArrowRight className="h-4 w-4 text-gray-400" /> : <CheckCircle2 className="h-4 w-4 text-gray-300" />}
     </button>
-  )
-}
-
-function AskHashLiveAgentIcon({ isStatic = false, header = false }: { isStatic?: boolean; header?: boolean }) {
-  return (
-    <div className={cn('ask-hash-live-agent shrink-0', isStatic && 'ask-hash-live-agent--static', header && 'ask-hash-live-agent--header')} aria-hidden="true">
-      <span className="ask-hash-live-agent__head">
-        <span className="ask-hash-live-agent__eye ask-hash-live-agent__eye--left" />
-        <span className="ask-hash-live-agent__eye ask-hash-live-agent__eye--right" />
-        <span className="ask-hash-live-agent__mouth" />
-      </span>
-      <span className="ask-hash-live-agent__antenna" />
-      <span className="ask-hash-live-agent__bubble">
-        <span />
-        <span />
-        <span />
-      </span>
-    </div>
   )
 }
 
@@ -1650,6 +1638,7 @@ export function TelegramHelperPanel({
   lpScoutReceiptId,
   lpScoutReceiptUrl,
   lpScoutAgentSlug,
+  singlePolyDeskAgent = false,
 }: {
   telegramName: string
   ownerKey: string
@@ -1675,6 +1664,7 @@ export function TelegramHelperPanel({
   lpScoutReceiptId?: string
   lpScoutReceiptUrl?: string
   lpScoutAgentSlug?: string
+  singlePolyDeskAgent?: boolean
 }) {
   const cleanTelegramName = telegramName === 'there' ? '' : telegramName
   const helperSessionKeyBase = (ownerKey || telegramId || initialPayer || cleanTelegramName || 'local-helper').trim().toLowerCase()
@@ -1782,15 +1772,15 @@ export function TelegramHelperPanel({
       .slice(-8)
       .map(message => [
         `User: ${message.question.replace(/\s+/g, ' ').slice(0, 220)}`,
-        `Agent Hash: ${message.answer.replace(/\s+/g, ' ').slice(0, 320)}`,
+        `PolyDesk Agent: ${message.answer.replace(/\s+/g, ' ').slice(0, 320)}`,
       ].join('\n'))
       .join('\n')
     return [
-      activeMode ? `Agent Hash mode is ${activeMode.label}. Route the answer for this mode.` : '',
+      activeMode ? `PolyDesk Agent mode is ${activeMode.label}. Route the answer for this mode.` : '',
       activePolyDeskSubMode ? `PolyDesk submode is ${activePolyDeskSubMode.label}. Only answer tasks for this PolyDesk lane.` : '',
       profileName ? `User is known as ${friendlyName(profileName)}.` : '',
       cleanTelegramName ? `Telegram context is ${cleanTelegramName}. Do not use it as the user's name if a known name is provided.` : '',
-      recentThread ? `Recent Agent Hash thread:\n${recentThread}` : '',
+      recentThread ? `Recent PolyDesk Agent thread:\n${recentThread}` : '',
       memoryDraft.trim() || profile?.memorySummary || '',
     ].filter(Boolean).join('\n').slice(0, 2400)
   }
@@ -1874,7 +1864,7 @@ export function TelegramHelperPanel({
           return
         }
         if (freshThreadIdsRef.current.has(activeHelperThreadId)) return
-        if (helperMode && data.profile?.helperThread?.length && !(lockedHelperMode === 'polydesk' && helperMode === 'polydesk' && !polyDeskSubMode)) {
+        if (helperMode && data.profile?.helperThread?.length && !(lockedHelperMode === 'polydesk' && helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent)) {
           const lpScoutResultMessagePrefix = lpScoutActivityId ? `lp-scout-result:${lpScoutActivityId}` : ''
           const storedMessages = data.profile.helperThread.map(item => ({
             id: item.id,
@@ -2573,7 +2563,14 @@ export function TelegramHelperPanel({
     params.set('walletManager', 'service')
     params.set('src', 'lp-scout')
     params.set('run', 'polymarket-scout')
-    params.set('scoutMode', /\b(url|market|slug|theme|specific|this)\b/i.test(context) ? 'theme' : 'best')
+    const scoutMode = /https?:\/\/polymarket\.com\/event\/|\bslug\b/i.test(context)
+      ? 'market'
+      : /\b(football|soccer|fixture|match|goal scorer)\b/i.test(context)
+        ? 'football'
+        : context.trim()
+          ? 'news'
+          : 'best'
+    params.set('scoutMode', scoutMode)
     params.set('maxAmount', lpScoutOptions[0]?.amount ?? '0.01')
     params.set('serviceUrl', '/api/x402/polymarket-scout')
     params.set('n', 'arc')
@@ -2910,23 +2907,32 @@ export function TelegramHelperPanel({
   }
 
   async function handlePolyDeskConversation(nextQuestion: string) {
-    if (helperMode !== 'polydesk' || !polyDeskSubMode) return false
-    setThinkingState(polyDeskSubMode === 'lp-scout' ? 'deep-research' : 'light')
-    setAgentStatus(polyDeskSubMode === 'lp-scout' ? 'Preparing LP Scout access...' : 'Reading PolyDesk data...')
+    if (helperMode !== 'polydesk') return false
+    const inferredPolyDeskSubMode: PolyDeskSubMode | '' = /\b(lp scout|liquidity|maker|reward pool|order book|quote)\b/i.test(nextQuestion)
+      ? 'lp-scout'
+      : /\b(football|soccer|fixture|match|score|goal|league)\b/i.test(nextQuestion)
+        ? 'worldcup'
+        : /\b(portfolio|balance|position|claimable|wallet|funding|account)\b/i.test(nextQuestion)
+          ? 'portfolio'
+          : ''
+    const activePolyDeskSubMode = polyDeskSubMode || (singlePolyDeskAgent ? inferredPolyDeskSubMode : '')
+    if (!activePolyDeskSubMode) return false
+    setThinkingState(activePolyDeskSubMode === 'lp-scout' ? 'deep-research' : 'light')
+    setAgentStatus(activePolyDeskSubMode === 'lp-scout' ? 'Preparing LP Scout access...' : 'Reading PolyDesk data...')
 
-    if (polyDeskSubMode === 'portfolio') {
+    if (activePolyDeskSubMode === 'portfolio') {
       const result = await portfolioAnswer(nextQuestion)
       finishHelperMessage(nextQuestion, result)
       return true
     }
 
-    if (polyDeskSubMode === 'worldcup') {
+    if (activePolyDeskSubMode === 'worldcup') {
       const result = await worldCupAnswer(nextQuestion)
       finishHelperMessage(nextQuestion, result)
       return true
     }
 
-    if (polyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
+    if (activePolyDeskSubMode === 'lp-scout' && lpScoutActivityId && /view|result|scout|lp/i.test(nextQuestion)) {
       setAgentStatus('Reading paid LP Scout report...')
       const requestedAgentSlug = (lpScoutAgentSlug || 'polydesk-agent').trim().toLowerCase()
       try {
@@ -2934,7 +2940,8 @@ export function TelegramHelperPanel({
           const controller = new AbortController()
           const timeout = window.setTimeout(() => controller.abort(), 30_000)
           try {
-            const res = await fetch(`/api/agent-activity?id=${encodeURIComponent(lpScoutActivityId)}`, { signal: controller.signal })
+            const receiptQuery = lpScoutReceiptId ? `&receipt=${encodeURIComponent(lpScoutReceiptId)}` : ''
+            const res = await fetch(`/api/agent-activity?id=${encodeURIComponent(lpScoutActivityId)}${receiptQuery}`, { signal: controller.signal })
             const data = await res.json() as { activity?: Array<Record<string, any>>; error?: string }
             if (!res.ok) {
               throw new Error(res.status === 429
@@ -3035,7 +3042,7 @@ export function TelegramHelperPanel({
           const proofUrl = /^0x[a-fA-F0-9]{64}$/.test(proofTxHash)
             ? `https://chainscan.0g.ai/tx/${proofTxHash}`
             : proofRoot ? `https://storagescan.0g.ai/file?root=${encodeURIComponent(proofRoot)}` : ''
-          const reportUrl = `/report/lp-scout/${encodeURIComponent(lpScoutActivityId)}`
+          const reportUrl = `/report/lp-scout/${encodeURIComponent(lpScoutActivityId)}${lpScoutReceiptId ? `?receipt=${encodeURIComponent(lpScoutReceiptId)}` : ''}`
           const authoritativeReceiptUrl = (() => {
             if (!lpScoutReceiptUrl) return ''
             try {
@@ -3060,7 +3067,7 @@ export function TelegramHelperPanel({
               : `ZeroScout is preparing this paid LP Scout result (${ageText}).`,
             failedVerification
               ? 'Payment is verified and saved. Your x402 receipt and LP Scout report are still valid; retrying ZeroScout is safe and does not require paying again for this saved scout.'
-              : 'Payment is verified and saved. Agent Hash will show the verified brief as soon as ZeroScout stores it.',
+              : 'Payment is verified and saved. PolyDesk Agent will show the verified brief as soon as ZeroScout stores it.',
             statusText ? `Status: ${statusText}` : '',
             'Proof: Circle Gateway receipt is attached; ZeroScout / 0G proof will appear when final verification lands.',
           ].filter(Boolean)
@@ -3094,7 +3101,7 @@ export function TelegramHelperPanel({
             'Receipt verified. This could take up to 2-3 mins, please be patient.',
             'ZeroScout is checking the paid scout data against the candidate audit...',
             'ZeroScout is preparing the verified brief. Keeping the receipt attached...',
-            'Still connected. Agent Hash will reveal the result as soon as ZeroScout stores it...',
+            'Still connected. PolyDesk Agent will reveal the result as soon as ZeroScout stores it...',
           ]
           for (let attempt = 0; attempt < 24; attempt += 1) {
             setAgentStatus(statusSteps[Math.min(statusSteps.length - 1, Math.floor(attempt / 6))])
@@ -3109,7 +3116,7 @@ export function TelegramHelperPanel({
           ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Diagnostic: ${verificationRetryError.slice(0, 180)}`
           : state.failedVerification
           ? `ZeroScout could not finalize this LP Scout yet. Payment is saved and receipts remain valid. Diagnostic: ${String(state.failedVerification.result?.error || state.failedVerification.detail || 'verification still processing').slice(0, 180)}`
-          : 'ZeroScout is still preparing the verified brief. You can return to this receipt later; Agent Hash will read the saved result when ZeroScout stores it.'
+          : 'ZeroScout is still preparing the verified brief. You can return to this receipt later; PolyDesk Agent will read the saved result when ZeroScout stores it.'
         setAgentStatus(state.zeroScout ? 'Delivering verified LP Scout result...' : state.failedVerification ? 'ZeroScout returned a retry state.' : 'ZeroScout is still preparing; receipt remains saved.')
         finishHelperMessage(nextQuestion, buildLpScoutMessage(state.scout, state.zeroScout, zeroScoutError, state.failedVerification))
         return true
@@ -3174,7 +3181,7 @@ export function TelegramHelperPanel({
       setAskError('Choose a mode to start.')
       return
     }
-    if (helperMode === 'polydesk' && !polyDeskSubMode) {
+    if (helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent) {
       setAskError('Choose Portfolio, Football, or LP Scout first.')
       return
     }
@@ -3371,8 +3378,8 @@ export function TelegramHelperPanel({
       } catch {
         data = {
           error: rawHelperResponse.trim().startsWith('<')
-            ? 'Agent Hash is temporarily receiving a service page instead of an API response. Please try again shortly.'
-            : 'Agent Hash returned an unreadable response. Please try again shortly.',
+            ? 'PolyDesk Agent is temporarily receiving a service page instead of an API response. Please try again shortly.'
+            : 'PolyDesk Agent returned an unreadable response. Please try again shortly.',
         }
       }
       if (!data.answer) {
@@ -3389,7 +3396,10 @@ export function TelegramHelperPanel({
       finishHelperMessage(nextQuestion, { answer: data.answer!, proof: data.proof, zeroscoutSponsorship: data.zeroscoutSponsorship })
       void saveProfile({ question: nextQuestion, answer: data.answer } as Partial<HelperProfile>)
       if (!memoryDraft.trim()) {
-        setMemoryDraft(`User is known as ${helperName || payer}. They use PolyDesk Agent and may ask about Polymarket funding, LP Scout, x402, agents, research, planning, and daily questions.`)
+        const knownName = usableHelperName(helperName || payer)
+        setMemoryDraft(knownName
+          ? `User is known as ${knownName}. They use PolyDesk Agent for Polymarket portfolio, football markets, LP Scout, and live market context.`
+          : 'Uses PolyDesk Agent for Polymarket portfolio, football markets, LP Scout, and live market context.')
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
@@ -3468,7 +3478,7 @@ export function TelegramHelperPanel({
                   </div>
                 )}
 
-                {helperMode === 'polydesk' && !polyDeskSubMode && (
+                {helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent && (
                   <div className="max-w-[92%] rounded-[18px] rounded-bl-md bg-[#f0f0f0] px-3.5 py-3 text-sm text-gray-900 shadow-sm dark:bg-white/[0.08] dark:text-gray-100">
                     <p className="mb-2 font-medium">Choose your Desk Agent lane.</p>
                     <div className="grid gap-2 sm:grid-cols-3">
@@ -3490,7 +3500,7 @@ export function TelegramHelperPanel({
                   </div>
                 )}
 
-                {helperMode === 'polydesk' && polyDeskSubMode && (
+                {helperMode === 'polydesk' && polyDeskSubMode && !singlePolyDeskAgent && (
                   <div className="flex flex-wrap justify-center gap-2">
                     <button
                       type="button"
@@ -3576,31 +3586,32 @@ export function TelegramHelperPanel({
                 )}
               </div>
 
-              <div className="border-t border-gray-100 p-3 dark:border-white/10">
-                <div className="flex items-center gap-2">
+              <div className="bg-white p-3 dark:bg-[#111114]">
+                <div className="relative">
                   <input
                     data-agent-hash-input="true"
                     value={question}
                     onChange={event => setQuestion(event.target.value)}
                     onKeyDown={event => event.key === 'Enter' && !event.shiftKey && !asking && askHelper()}
-                    placeholder={helperMode === 'polydesk' && !polyDeskSubMode ? 'Choose a Desk Agent lane' : helperMode ? inputPlaceholder ?? 'Ask Hash...' : 'Choose a mode to start'}
-                    disabled={!helperMode || (helperMode === 'polydesk' && !polyDeskSubMode)}
-                    className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-white"
+                    onFocus={() => {
+                      window.requestAnimationFrame(() => {
+                        const node = helperScrollRef.current
+                        if (node) node.scrollTop = node.scrollHeight
+                      })
+                    }}
+                    placeholder={helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent ? 'Choose a Desk Agent lane' : helperMode ? inputPlaceholder ?? 'Ask Hash...' : 'Choose a mode to start'}
+                    disabled={!helperMode || (helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent)}
+                    className="h-14 w-full min-w-0 rounded-[28px] border border-gray-200 bg-gray-50 py-3 pl-4 pr-[4.25rem] text-sm text-gray-900 outline-none transition-shadow placeholder:text-gray-400 focus:border-gray-300 focus:ring-2 focus:ring-gray-200/80 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:focus:border-white/20 dark:focus:ring-white/10"
                   />
-                  <button
-                    type="button"
-                    onClick={asking ? stopHelperResponse : askHelper}
-                    disabled={!asking && (!question.trim() || !helperMode || (helperMode === 'polydesk' && !polyDeskSubMode))}
-                    aria-label={asking ? 'Stop response' : 'Send message'}
-                    className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all active:scale-95 disabled:opacity-40',
-                      asking
-                        ? 'border border-gray-200 bg-white text-gray-900 shadow-sm hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]'
-                        : 'bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950',
-                    )}
-                  >
-                    {asking ? <span className="h-3.5 w-3.5 rounded-[4px] bg-current" /> : <Send className="h-4 w-4" />}
-                  </button>
+                  <DynamicSendButton
+                    inputText={question}
+                    isLoading={asking}
+                    onSend={askHelper}
+                    onStop={stopHelperResponse}
+                    onAddAttachment={() => document.querySelector<HTMLInputElement>('[data-agent-hash-input="true"]')?.focus()}
+                    disabled={!asking && (!helperMode || (helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent))}
+                    className="absolute bottom-1 right-1"
+                  />
                 </div>
               </div>
         </div>
@@ -3614,11 +3625,11 @@ const helperThinkingCopy: Record<HelperThinkingState, string[]> = {
   'payment-draft': ['Matching details...', 'Holding the draft...', 'Preparing reply...', 'Polishing wording...'],
   'payment-wallet': ['Checking wallet...', 'Validating flow...', 'Matching details...', 'Preparing reply...'],
   'paylink-build': ['Building PayLink...', 'Validating flow...', 'Polishing wording...', 'Almost ready...'],
-  'deep-research': ['Reading this...', 'Checking context...', 'This could take up to 2-3 mins, please be patient.', 'Preparing reply...', 'Almost ready...'],
+  'deep-research': ['Reading this...', 'Checking context...', 'Preparing reply...', 'Almost ready...'],
   proof: ['Polishing wording...', 'Validating flow...', 'Almost ready...'],
 }
 
-const helperSlowThinkingCopy = ['Putting things in order...', 'This could take up to 2-3 mins, please be patient.', 'Almost ready...']
+const helperSlowThinkingCopy = ['Putting things in order...', 'Almost ready...', 'Please be patient...']
 
 function helperSlowThinkingDelays(state: HelperThinkingState) {
   if (state === 'deep-research') return [10000, 18000, 26000]
@@ -3660,7 +3671,7 @@ function HelperThinkingIndicator({ statusText, state }: { statusText: string; st
         </span>
       </div>
       <p className="ml-3 mt-1 text-xs italic text-[#8e8e93] dark:text-gray-400">
-        {statusText || (slowPhase >= 0 ? helperSlowThinkingCopy[slowPhase] : steps[stepIndex])}
+        {slowPhase >= 0 ? helperSlowThinkingCopy[slowPhase] : steps[stepIndex]}
       </p>
     </div>
   )
@@ -3982,7 +3993,7 @@ export function PolyWorldCupNewsPanel({
     const headline = lead.title.replace(/\s+/g, ' ').trim()
     const source = lead.source ? ` (${lead.source})` : ''
     const query = `Football: ${headline}${source}`.slice(0, 170)
-    onOpenLpScout({ mode: 'theme', query })
+    onOpenLpScout({ mode: 'news', query })
   }
 
   return (
@@ -4880,10 +4891,12 @@ function HashLiveScoreWidget({
                       type="button"
                       onClick={() => onSubmitTrade(featured, selectedTradeOption)}
                       disabled={Boolean(tradeBusyKey)}
-                      className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md bg-emerald-300 px-2 text-[10px] font-black text-emerald-950 transition hover:bg-emerald-200 disabled:cursor-wait disabled:opacity-60"
+                      aria-busy={Boolean(tradeBusyKey)}
+                      className="polydesk-primary-cta polydesk-primary-cta--compact shrink-0"
                     >
                       {tradeBusyKey ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                       Continue
+                      {!tradeBusyKey && <ArrowRight className="h-3 w-3" aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
@@ -5522,9 +5535,14 @@ function PolymarketFundingPanel({
                 type="button"
                 onClick={mode === 'self' ? onFundSelf : onSaveRequest}
                 disabled={!canContinue}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white shadow-button transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                aria-busy={busy}
+                className="polydesk-primary-cta w-full"
               >
-                <Send className="h-4 w-4" />
+                {busy
+                  ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  : mode === 'self'
+                    ? <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    : <Send className="h-4 w-4" aria-hidden="true" />}
                 {busy ? 'Preparing bridge...' : mode === 'self' ? 'Continue to checkout' : 'Save funding request'}
               </button>
             </div>
@@ -6264,7 +6282,7 @@ function polyDeskProviderRequest(provider: unknown) {
   return request.bind(provider) as (args: { method: string; params?: unknown[] }) => Promise<unknown>
 }
 
-async function polyDeskProviderAccount(provider: unknown) {
+export async function polyDeskProviderAccount(provider: unknown) {
   const request = polyDeskProviderRequest(provider)
   const accounts = await request({ method: 'eth_accounts' }).catch(() => [])
   const account = Array.isArray(accounts) && typeof accounts[0] === 'string' ? accounts[0].trim() : ''
@@ -6274,13 +6292,13 @@ async function polyDeskProviderAccount(provider: unknown) {
   return account
 }
 
-async function polyDeskProviderChainId(provider: unknown) {
+export async function polyDeskProviderChainId(provider: unknown) {
   const request = polyDeskProviderRequest(provider)
   const value = await request({ method: 'eth_chainId' }).catch(() => '')
   return typeof value === 'string' ? value.toLowerCase() : ''
 }
 
-async function polyDeskEnsurePolygonProvider(provider: unknown) {
+export async function polyDeskEnsurePolygonProvider(provider: unknown) {
   const request = polyDeskProviderRequest(provider)
   async function chainId() {
     const value = await request({ method: 'eth_chainId' }).catch(() => '')
@@ -6295,7 +6313,7 @@ async function polyDeskEnsurePolygonProvider(provider: unknown) {
   }
 }
 
-function polyDeskValidClobCreds(value: unknown): value is { key: string; secret: string; passphrase: string } {
+export function polyDeskValidClobCreds(value: unknown): value is { key: string; secret: string; passphrase: string } {
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return typeof record.key === 'string' && record.key.trim().length > 0
@@ -6321,7 +6339,7 @@ function polyDeskAuthError(value: unknown) {
   return typeof message === 'string' ? message.replace(/\s+/g, ' ').trim() : ''
 }
 
-async function polyDeskCreateOwnerApiKey(
+export async function polyDeskCreateOwnerApiKey(
   createL1Headers: (...args: any[]) => Promise<Record<string, string | number | boolean>>,
   walletClient: unknown,
   debug?: { providerChainId?: string; ownerAddress?: string; funderAddress?: string },
@@ -6408,7 +6426,7 @@ function polyDeskBundleHash() {
   return match?.[1] || ''
 }
 
-function polyDeskOrderSubmitDebug({
+export function polyDeskOrderSubmitDebug({
   providerChainId,
   ownerAddress,
   l2PolyAddress,
@@ -6465,7 +6483,7 @@ async function loadPolymarketBuilderHeaders(remoteBuilderSigner: { url?: string;
   return polyDeskStringRecord(data)
 }
 
-async function submitPolymarketOrderFromBrowser({
+export async function submitPolymarketOrderFromBrowser({
   orderBody,
   userHeaders,
   remoteBuilderSigner,
@@ -8043,9 +8061,10 @@ export function PolyPortfolioPanel({
                       void openPolyDeskLogin()
                     }}
                     disabled={!/^0x[a-fA-F0-9]{40}$/.test(unsignedWatchAddress.trim())}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                    className="polydesk-primary-cta w-full"
                   >
-                    <ArrowRight className="h-4 w-4" /> Continue to watch setup
+                    Continue to watch setup
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -9367,9 +9386,10 @@ export function PolyPortfolioPanel({
                   setPendingSellPosition(null)
                   void sellPosition(position)
                 }}
-                className="flex min-h-[42px] items-center justify-center rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+                className="polydesk-primary-cta w-full"
               >
                 Continue
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>

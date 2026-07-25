@@ -29,6 +29,8 @@ import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-fu
 import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
+import pulseHandler from './api/pulse.js'
+import pulseOpportunityHandler, { getPulseOpportunity } from './api/pulse-opportunity.js'
 import { rateLimit } from './api/rate-limit.js'
 import solanaBalanceHandler from './api/solana-balance.js'
 import telegramRequestHandler from './api/telegram-request.js'
@@ -40,6 +42,8 @@ loadEnv({ path: '.env', override: false })
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
+app.set('trust proxy', 1)
+app.disable('x-powered-by')
 
 function publicEnv(...names: string[]) {
   for (const name of names) {
@@ -49,32 +53,56 @@ function publicEnv(...names: string[]) {
   return ''
 }
 
-function runtimePublicConfigScript() {
+function runtimePublicConfig() {
   const privyAppId = publicEnv('VITE_PRIVY_APP_ID', 'PRIVY_APP_ID')
   const authBridge = publicEnv('VITE_AUTH_BRIDGE', 'AUTH_BRIDGE') || 'hybrid'
-  const payload = JSON.stringify({
+  return JSON.stringify({
     auth: {
       authBridge,
       privyAppId,
       privyEnabled: Boolean(privyAppId && authBridge !== 'legacy'),
     },
   }).replace(/</g, '\\u003c')
-  return `<script>window.__HASH_PAYLINK_CONFIG__=${payload};</script>`
 }
 
-function sendSpaIndex(res: Response) {
+function escapeMeta(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function sendSpaIndex(res: Response, meta?: { title?: string; description?: string; image?: string; url?: string }) {
   const indexPath = join(__dirname, 'dist', 'index.html')
   const html = readFileSync(indexPath, 'utf8')
-  res.type('html').send(html.replace('</head>', `${runtimePublicConfigScript()}</head>`))
+  const tags = meta
+    ? [
+        `<meta name="description" content="${escapeMeta(meta.description || 'Live Polymarket liquidity intelligence from PolyDesk.')}">`,
+        `<meta property="og:type" content="website">`,
+        `<meta property="og:title" content="${escapeMeta(meta.title || 'PolyDesk LP opportunity')}">`,
+        `<meta property="og:description" content="${escapeMeta(meta.description || 'Live Polymarket liquidity intelligence from PolyDesk.')}">`,
+        meta.url ? `<meta property="og:url" content="${escapeMeta(meta.url)}">` : '',
+        meta.image ? `<meta property="og:image" content="${escapeMeta(meta.image)}">` : '',
+        `<meta name="twitter:card" content="${meta.image ? 'summary_large_image' : 'summary'}">`,
+      ].filter(Boolean).join('')
+    : ''
+  const titledHtml = meta?.title
+    ? html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeMeta(meta.title)}</title>`)
+    : html
+  res.type('html').send(titledHtml.replace('</head>', `${tags}<script src="/runtime-config.js"></script></head>`))
 }
 
 app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   res.setHeader(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+      "script-src 'self' https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
@@ -118,6 +146,8 @@ app.post('/api/a2mcp/polymarket-signed-open', strictLimiter, okxA2mcpStandardSer
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
+app.get('/api/pulse', readLimiter, pulseHandler)
+app.get('/api/pulse/opportunity/:slug', readLimiter, pulseOpportunityHandler)
 app.all('/api/agent-verify', strictLimiter, agentVerifyHandler)
 app.post('/api/agent-ask', strictLimiter, agentAskHandler)
 app.get('/api/agent-activity', readLimiter, agentActivityReadHandler)
@@ -145,7 +175,31 @@ app.use('/api', (req, res) => {
   res.status(404).json({ ok: false, error: `API route not found: ${req.method} ${req.originalUrl}` })
 })
 
+app.get('/runtime-config.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  res.type('application/javascript').send(`window.__HASH_PAYLINK_CONFIG__=${runtimePublicConfig()};`)
+})
+
 app.use(express.static(join(__dirname, 'dist'), { index: false }))
+
+app.get('/opportunity/:slug', async (req, res) => {
+  const opportunity = await getPulseOpportunity(req.params.slug).catch(() => null)
+  const origin = publicEnv('PUBLIC_APP_URL', 'VITE_PUBLIC_APP_URL') || `${req.protocol}://${req.get('host')}`
+  const reward = Number(opportunity?.dailyReward)
+  const spread = Number(opportunity?.liveSpread)
+  const depth = Number(opportunity?.depthAtTwoCents)
+  const description = [
+    Number.isFinite(reward) ? `Daily market rewards: ${reward.toLocaleString()} USDC shared by qualifying orders` : '',
+    Number.isFinite(spread) ? `${(spread * 100).toFixed(1)}c price gap` : '',
+    Number.isFinite(depth) ? `${Math.round(depth).toLocaleString()} shares near the current price` : '',
+  ].filter(Boolean).join(' · ')
+  sendSpaIndex(res, opportunity ? {
+    title: `${opportunity.title} · PolyDesk market rewards`,
+    description: description || opportunity.scoutReason || opportunity.description || 'Live Polymarket liquidity intelligence from PolyDesk.',
+    image: opportunity.image,
+    url: `${origin}/opportunity/${encodeURIComponent(req.params.slug)}`,
+  } : undefined)
+})
 
 app.get('*', (_req, res) => {
   sendSpaIndex(res)

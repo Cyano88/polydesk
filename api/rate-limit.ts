@@ -12,9 +12,7 @@ type Bucket = {
 }
 
 function clientKey(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for']
-  const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]
-  return (ip ?? req.ip ?? req.socket.remoteAddress ?? 'unknown').trim()
+  return (req.ip ?? req.socket.remoteAddress ?? 'unknown').trim()
 }
 
 export function rateLimit({ windowMs, max, name }: RateLimitOptions) {

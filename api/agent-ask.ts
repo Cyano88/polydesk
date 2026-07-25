@@ -756,6 +756,7 @@ function isLikelyIdentifier(value: string) {
     || value.includes('@')
     || /^0x[a-fA-F0-9]{40}$/.test(value)
     || /^helper-free-/i.test(value)
+    || /^(identity:|wallet:|email:|polydesk-(preview|web)(?:$|[-:]))/i.test(value)
 }
 
 function titleName(value: string) {

@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     nodePolyfills({
+      exclude: ['vm'],
       globals: {
         Buffer: true,
         global: true,

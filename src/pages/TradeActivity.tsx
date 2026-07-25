@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { ArrowUpRight, CircleDollarSign, History, Radar, RefreshCw } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { ChevronDown, CircleDollarSign, ExternalLink, History, Radar, RefreshCw } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { readSavedLpScoutActivity, type SavedLpScoutActivity } from '../lib/polydeskTradeActivity'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 
@@ -91,6 +91,12 @@ function relativeTime(value: number) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: new Date(value).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })
 }
 
+function fullTime(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return ''
+  const timestamp = new Date(value)
+  return `${timestamp.toLocaleDateString()} at ${timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}))
   return data as T
@@ -105,14 +111,22 @@ async function loadScoutReport(item: SavedLpScoutActivity): Promise<ScoutReport 
 
 export default function TradeActivity() {
   const { ready, authenticated, getAccessToken } = usePrivy()
+  const [searchParams] = useSearchParams()
+  const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
   const [marketActivity, setMarketActivity] = useState<PolymarketActivity[]>([])
   const [scoutReports, setScoutReports] = useState<ScoutReport[]>([])
   const [tradingAddress, setTradingAddress] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!localPreview)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [expandedActivityId, setExpandedActivityId] = useState('')
 
   const load = useCallback(async (manual = false) => {
+    if (localPreview) {
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
     if (!ready || !authenticated) return
     manual ? setRefreshing(true) : setLoading(true)
     setError('')
@@ -161,7 +175,7 @@ export default function TradeActivity() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [authenticated, getAccessToken, ready])
+  }, [authenticated, getAccessToken, localPreview, ready])
 
   useEffect(() => {
     void load()
@@ -199,8 +213,9 @@ export default function TradeActivity() {
     <div className="mx-auto w-full max-w-2xl">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Trade</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Overview</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Activity</h1>
+          {!loading && <p className="mt-1 text-xs text-gray-400">{rows.length} record{rows.length === 1 ? '' : 's'}</p>}
         </div>
         <button
           type="button"
@@ -222,35 +237,61 @@ export default function TradeActivity() {
           <PolyDeskLoadingState label="Syncing activity" />
         </section>
       ) : rows.length > 0 ? (
-        <section className="polydesk-card mt-6 overflow-hidden" aria-label="Recent activity">
-          <div className="divide-y divide-gray-100 dark:divide-white/10">
-            {rows.map(row => {
-              const Icon = row.kind === 'scout' ? Radar : CircleDollarSign
-              const content = (
-                <>
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${row.kind === 'scout' ? 'bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300' : 'bg-gray-100 text-gray-600 dark:bg-white/[0.07] dark:text-gray-300'}`}><Icon className="h-4 w-4" /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-start justify-between gap-3">
+        <section className="mt-6 space-y-2" aria-label="Recent activity">
+          {rows.map(row => {
+            const Icon = row.kind === 'scout' ? Radar : CircleDollarSign
+            const expanded = expandedActivityId === row.id
+            return (
+              <article key={row.id} className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm dark:border-white/10 dark:bg-[#111216]">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedActivityId(current => current === row.id ? '' : row.id)}
+                    aria-expanded={expanded}
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${row.kind === 'scout' ? 'bg-violet-50 text-violet-600 dark:bg-violet-400/10 dark:text-violet-300' : 'bg-gray-100 text-gray-600 dark:bg-white/[0.07] dark:text-gray-300'}`}>
+                        <Icon className="h-4 w-4" />
+                      </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-gray-950 dark:text-white">{row.title}</span>
-                        <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{row.detail}</span>
-                      </span>
-                      <span className="shrink-0 text-right">
-                        {row.amount && <span className="block text-xs font-black text-gray-950 dark:text-white">{row.amount}</span>}
-                        <span className="mt-0.5 block text-[10px] text-gray-400">{relativeTime(row.createdAt)}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-gray-500 dark:text-gray-400">{row.detail}</span>
                       </span>
                     </span>
-                  </span>
-                  {row.href && <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300" />}
-                </>
-              )
-              return row.href ? (
-                <a key={row.id} href={row.href} target={row.external ? '_blank' : undefined} rel={row.external ? 'noreferrer' : undefined} className="flex items-center gap-3 px-5 py-4 transition hover:bg-gray-50 dark:hover:bg-white/[0.03]">{content}</a>
-              ) : (
-                <div key={row.id} className="flex items-center gap-3 px-5 py-4">{content}</div>
-              )
-            })}
-          </div>
+                    <span className="shrink-0 text-right">
+                      {row.amount && <span className="block text-xs font-black tabular-nums text-gray-950 dark:text-white">{row.amount}</span>}
+                      <span className="mt-0.5 block text-[10px] text-gray-400">{relativeTime(row.createdAt)}</span>
+                      <ChevronDown className={`ml-auto mt-1 h-3.5 w-3.5 text-gray-300 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    </span>
+                  </button>
+
+                  {expanded && (
+                    <div className="mt-3 border-t border-gray-100 pt-3 dark:border-white/10">
+                      {fullTime(row.createdAt) && <p className="text-[10px] font-medium text-gray-400">{fullTime(row.createdAt)}</p>}
+                      {row.href && (
+                        row.external ? (
+                          <a
+                            href={row.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-gray-200 px-3 text-[11px] font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-950 dark:border-white/10 dark:text-gray-200 dark:hover:border-white/20 dark:hover:text-white"
+                          >
+                            Open on Polymarket <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <Link
+                            to={row.href}
+                            className="mt-3 inline-flex min-h-9 items-center justify-center rounded-full border border-gray-200 px-3 text-[11px] font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-950 dark:border-white/10 dark:text-gray-200 dark:hover:border-white/20 dark:hover:text-white"
+                          >
+                            View report
+                          </Link>
+                        )
+                      )}
+                    </div>
+                  )}
+              </article>
+            )
+          })}
         </section>
       ) : (
         <section className="polydesk-card mt-6 px-5 py-12 text-center">
@@ -258,7 +299,7 @@ export default function TradeActivity() {
           <h2 className="mt-4 text-sm font-black text-gray-950 dark:text-white">No recent activity</h2>
           <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Your completed market actions and LP Scout requests will appear here.</p>
           {!tradingAddress && (
-            <Link to="/polydesk?service=portfolio&portfolio=trading&wallet=balance" className="polydesk-primary-cta mt-4">Set up Account</Link>
+            <Link to={localPreview ? '/polydesk?preview=1&service=portfolio&portfolio=preview' : '/polydesk?service=portfolio&portfolio=trading&wallet=balance'} className="polydesk-primary-cta mt-4">Set up Account</Link>
           )}
         </section>
       )}

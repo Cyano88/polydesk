@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ExternalLink, LineChart, Sparkles, Wallet, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Check, ExternalLink, LineChart, Newspaper, Trophy, type LucideIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
 import AgentWorkspace from './AgentWorkspace'
 
-const POLYMARKET_LOGO = '/brand/polymarket-logo.png'
-
-export type LpScoutMode = 'best' | 'theme' | 'market'
+export type LpScoutMode = 'best' | 'news' | 'market' | 'football'
 
 export type LpScoutPrefill = {
   mode: LpScoutMode
@@ -30,28 +28,35 @@ export type LpScoutOption = {
 export const lpScoutOptions: LpScoutOption[] = [
   {
     id: 'best',
-    title: 'Best reward markets',
-    body: 'Rank live reward markets by spread, depth and risk.',
+    title: 'Best markets',
+    body: 'Rank live reward markets by spread, depth, time and risk.',
     amount: '0.01',
     icon: LineChart,
   },
   {
-    id: 'theme',
-    title: 'Scout a theme',
-    body: 'Scan one sector, event or football category.',
+    id: 'news',
+    title: 'News markets',
+    body: 'Match a news topic against active markets and their live books.',
     amount: '0.01',
-    icon: Sparkles,
-    inputLabel: 'Theme',
-    inputPlaceholder: 'crypto, AI, election, football...',
+    icon: Newspaper,
+    inputLabel: 'News topic',
+    inputPlaceholder: 'Election, regulation, company or event...',
   },
   {
     id: 'market',
-    title: 'Inspect one market',
-    body: 'Inspect one market book and its LP risk.',
+    title: 'Inspect market',
+    body: 'Inspect one exact market, its live book and LP risk.',
     amount: '0.01',
     icon: ExternalLink,
     inputLabel: 'Market URL or slug',
     inputPlaceholder: 'https://polymarket.com/event/...',
+  },
+  {
+    id: 'football',
+    title: 'Football markets',
+    body: 'Cross-check verified fixture context with matched Polymarket books.',
+    amount: '0.01',
+    icon: Trophy,
   },
 ]
 
@@ -102,13 +107,11 @@ export function LpScoutPanel({
   prefill,
   onPrefillConsumed,
   onBack,
-  onOpenFootball,
   hideBack = false,
 }: {
   prefill: LpScoutPrefill | null
   onPrefillConsumed: () => void
   onBack: () => void
-  onOpenFootball?: () => void
   hideBack?: boolean
 }) {
   const [searchParams] = useSearchParams()
@@ -189,24 +192,12 @@ export function LpScoutPanel({
 
       {step !== 'agent' && (
         <>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-2">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-                <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
-              </span>
-              <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
-                Choose a scout, set a max spend, then pay with x402.
-              </h2>
-            </div>
-            {onOpenFootball && (
-              <button
-                type="button"
-                onClick={onOpenFootball}
-                className="shrink-0 text-xs font-semibold text-gray-500 transition hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-              >
-                Football markets
-              </button>
-            )}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Intelligence</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">LP Scout</h1>
+            <p className="mt-1 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
+              Live market context for safer maker-order decisions.
+            </p>
           </div>
 
           <div className="grid gap-2">
@@ -218,24 +209,25 @@ export function LpScoutPanel({
                   key={option.id}
                   type="button"
                   onClick={() => selectOption(option)}
+                  aria-pressed={selected}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-2xl border bg-white px-3 py-3 text-left transition-all active:scale-[0.99] dark:bg-white/[0.05]',
+                    'polydesk-card relative flex w-full items-start gap-3 p-4 text-left transition-all active:scale-[0.99]',
                     selected
-                      ? 'border-gray-950 ring-2 ring-gray-950/10 dark:border-white dark:ring-white/15'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.08]',
+                      ? '!border-2 !border-gray-950 !bg-gray-50 shadow-sm dark:!border-white dark:!bg-white/[0.08]'
+                      : 'hover:border-gray-300 dark:hover:border-white/20',
                   )}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-700 shadow-sm dark:bg-white/[0.08] dark:text-gray-200">
-                    <Icon className="h-4 w-4" />
-                  </span>
+                  <Icon className={cn(
+                    'mt-0.5 h-4 w-4 shrink-0',
+                    selected ? 'text-gray-950 dark:text-white' : 'text-gray-400',
+                  )} />
                   <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center justify-between gap-3">
-                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{option.title}</span>
-                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                        max {option.amount} USDC
-                      </span>
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">{option.body}</span>
+                    <span className="block text-sm font-semibold text-gray-950 dark:text-white">{option.title}</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">{option.body}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 pt-0.5">
+                    <span className="text-[10px] font-bold uppercase text-gray-400">{option.amount} USDC</span>
+                    {selected && <Check className="h-4 w-4 text-gray-950 dark:text-white" aria-hidden="true" />}
                   </span>
                 </button>
               )
@@ -266,8 +258,8 @@ export function LpScoutPanel({
               disabled={!canChooseAgent}
               className="polydesk-primary-cta w-full"
             >
-              <Wallet className="h-4 w-4" />
-              Continue to LP Scout checkout
+              Continue
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </>
