@@ -881,7 +881,7 @@ function fallbackHelperAnswer(question: string) {
 }
 
 function isGreetingQuestion(question: string) {
-  return /^\s*(hi|hello|hey|yo|gm|good morning|good afternoon|good evening)\b/i.test(question)
+  return /^\s*(hi|hello|hey|yo|ho|gm|good morning|good afternoon|good evening)\b/i.test(question)
 }
 
 function cleanQuestionForFallback(question: string) {
@@ -931,7 +931,11 @@ function classifyHelperRequest(question: string, helperMode = ''): { helperInten
   const value = question.toLowerCase()
   if (isNameQuestion(question)) return { helperIntent: 'personal-memory', qualityMode: 'fast' }
   if (isGreetingQuestion(question)) return { helperIntent: 'greeting', qualityMode: 'fast' }
-  if (helperMode === 'polydesk') return { helperIntent: 'polydesk', qualityMode: 'deep' }
+  if (helperMode === 'polydesk') {
+    const deepPolyDeskRequest = /\b(research|analyze|analysis|strategy|compare|proposal|lp scout|liquidity|order book|market structure)\b/i.test(question)
+      || question.trim().length > 220
+    return { helperIntent: deepPolyDeskRequest ? 'polydesk-research' : 'polydesk', qualityMode: deepPolyDeskRequest ? 'deep' : 'standard' }
+  }
   if (helperMode === 'daily') return { helperIntent: 'daily-assistant', qualityMode: 'fast' }
   if (helperMode === 'services') return { helperIntent: 'hashpaylink-services', qualityMode: 'standard' }
   if (helperMode === 'support') return { helperIntent: 'support', qualityMode: 'standard' }
@@ -1277,6 +1281,34 @@ export default async function handler(req: Request, res: Response) {
       })
     }
 
+    if (helperMode === 'polydesk' && helperRouting.qualityMode === 'fast') {
+      const answer = getHelperResponse(
+        question,
+        access.payment.payer,
+        access.payment.chain,
+        access.payment.amount,
+        memorySummary,
+        undefined,
+        accessMode,
+        helperMode,
+      )
+      const usage = await consumeHelperPrompt(eventId, access.payment.payer, usageTier)
+      return res.json({
+        answer,
+        accessMode,
+        paymentVerified: false,
+        zeroScoutDeferred: true,
+        helperMode,
+        helperIntent: helperRouting.helperIntent,
+        usage: {
+          remaining: usage.remaining,
+          limit: usage.limit,
+          resetAt: usage.resetAt,
+          tier: usageTier,
+        },
+      })
+    }
+
     const memorySummaryHash = memorySummary
       ? crypto.createHash('sha256').update(memorySummary).digest('hex')
       : undefined
@@ -1425,7 +1457,7 @@ export default async function handler(req: Request, res: Response) {
       console.warn('[agent-ask] ZeroScout response sponsorship failed:', safeZeroScoutGuidanceError(err))
       if (strictSponsorshipRequired) {
         return res.status(503).json({
-          error: 'ZeroScout sponsorship is required before helper responses are returned. Try again shortly.',
+          error: 'Deep market research is temporarily unavailable. Try again shortly; live scores, news, portfolio, and saved LP Scout results are still available.',
           zeroscoutRequired: true,
         })
       }
@@ -1434,7 +1466,7 @@ export default async function handler(req: Request, res: Response) {
       const strictSponsorshipRequired = helperRouting.qualityMode === 'deep' || accessMode !== HELPER_FREE_ACCESS_MODE
       if (strictSponsorshipRequired) {
         return res.status(503).json({
-          error: 'ZeroScout sponsorship is required before helper responses are returned. Try again shortly.',
+          error: 'Deep market research is temporarily unavailable. Try again shortly; live scores, news, portfolio, and saved LP Scout results are still available.',
           zeroscoutRequired: true,
         })
       }

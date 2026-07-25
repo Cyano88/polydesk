@@ -7,7 +7,6 @@ const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
 const CLOB_ORIGIN = 'https://clob.polymarket.com'
 const REQUEST_TIMEOUT_MS = 12_000
 const PLAN_TTL_MS = 60_000
-const DEFAULT_MAX_USDC = '25'
 const PUSD_DECIMALS = 6
 
 const PUSD = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB' as const
@@ -95,7 +94,6 @@ export type PrepareOpenDependencies = {
   }>
   now: () => number
   builderCode: () => string
-  maxUsdc: () => string
 }
 
 function clean(value: unknown, max = 280) {
@@ -121,17 +119,12 @@ function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-function configuredMaxUsdc() {
-  const value = clean(process.env.POLYDESK_EXTERNAL_OPEN_MAX_USDC || DEFAULT_MAX_USDC, 32)
-  return /^\d+(?:\.\d{1,6})?$/.test(value) && Number(value) > 0 ? value : DEFAULT_MAX_USDC
-}
-
 function usdcAtomic(value: string) {
   const [whole, fraction = ''] = value.split('.')
   return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'))
 }
 
-function parseInput(value: unknown, maxUsdc: string): { ok: true; value: PrepareOpenInput } | { ok: false; status: number; error: string } {
+function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { ok: false; status: number; error: string } {
   if (!isRecord(value)) return { ok: false, status: 400, error: 'OPEN preparation request must be a JSON object.' }
   const externalOrderId = clean(value.externalOrderId, 80)
   const marketUrl = clean(value.marketUrl, 320)
@@ -165,15 +158,12 @@ function parseInput(value: unknown, maxUsdc: string): { ok: true; value: Prepare
   if (!/^\d+(?:\.\d{1,6})?$/.test(maxSpendUsdc) || Number(maxSpendUsdc) <= 0) {
     return { ok: false, status: 400, error: 'maxSpendUsdc must be a positive amount with at most 6 decimals.' }
   }
-  if (usdcAtomic(maxSpendUsdc) > usdcAtomic(maxUsdc)) {
-    return { ok: false, status: 400, error: `maxSpendUsdc exceeds the ${maxUsdc} USDC safety ceiling.` }
-  }
   if (!isAddress(wallet)) return { ok: false, status: 400, error: 'A valid public Polymarket deposit-wallet address is required.' }
   if (orderType !== 'FAK' && orderType !== 'FOK' && orderType !== 'GTC') {
     return { ok: false, status: 400, error: 'orderType must be FAK, FOK, or GTC.' }
   }
   if (orderType === 'GTC' && (!/^\d+(?:\.\d{1,6})?$/.test(limitPrice) || Number(limitPrice) <= 0 || Number(limitPrice) >= 1)) {
-    return { ok: false, status: 400, error: 'GTC limitPrice must be greater than 0 and less than 1.' }
+    return { ok: false, status: 400, error: 'Limit price must be greater than 0 and less than 1.' }
   }
   if (tokenId && !/^\d+$/.test(tokenId)) return { ok: false, status: 400, error: 'tokenId must be a numeric CLOB token ID.' }
   return {
@@ -241,7 +231,6 @@ const defaultDependencies: PrepareOpenDependencies = {
   readWallet: defaultReadWallet,
   now: () => Date.now(),
   builderCode: () => clean(process.env.POLYMARKET_BUILDER_CODE, 80),
-  maxUsdc: configuredMaxUsdc,
 }
 
 function marketCandidates(markets: GammaMarket[]) {
@@ -377,8 +366,7 @@ function priceString(value: number, tickSize: string) {
 }
 
 export async function preparePolymarketOpen(inputValue: unknown, dependencies: PrepareOpenDependencies = defaultDependencies) {
-  const maxUsdc = dependencies.maxUsdc()
-  const parsed = parseInput(inputValue, maxUsdc)
+  const parsed = parseInput(inputValue)
   if (!parsed.ok) return parsed
   const input = parsed.value
   const builderCode = dependencies.builderCode()

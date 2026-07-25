@@ -17,7 +17,7 @@ function safeScout(value: unknown) {
   if (!value || typeof value !== 'object') return {}
   const scout = value as Record<string, unknown>
   const opportunities = Array.isArray(scout.opportunities)
-    ? scout.opportunities.slice(0, 3).map(item => sanitizeOpportunity(item))
+    ? scout.opportunities.slice(0, 10).map(item => sanitizeOpportunity(item))
     : []
   return {
     summary: cleanText(scout.summary),
@@ -40,6 +40,7 @@ function sanitizeOpportunity(value: unknown) {
     dailyReward: finiteNumber(item.dailyReward),
     maxSpread: finiteNumber(item.maxSpread),
     minSize: finiteNumber(item.minSize),
+    estimatedRewardCapitalUsdc: finiteNumber(item.estimatedRewardCapitalUsdc),
     liquidity: finiteNumber(item.liquidity),
     bestBid: finiteNumber(item.bestBid),
     bestAsk: finiteNumber(item.bestAsk),
@@ -55,6 +56,21 @@ function sanitizeOpportunity(value: unknown) {
     score: finiteNumber(item.score),
     scoutReason: cleanText(item.scoutReason),
     executionPlan: Array.isArray(item.executionPlan) ? item.executionPlan.slice(0, 6).map(step => cleanText(step)).filter(Boolean) : [],
+    contextSignals: Array.isArray(item.contextSignals)
+      ? item.contextSignals.slice(0, 2).map(signal => sanitizeContextSignal(signal)).filter(signal => signal.label)
+      : [],
+  }
+}
+
+function sanitizeContextSignal(value: unknown) {
+  if (!value || typeof value !== 'object') return { label: '' }
+  const item = value as Record<string, unknown>
+  return {
+    kind: cleanText(item.kind),
+    label: cleanText(item.label),
+    source: cleanText(item.source),
+    title: cleanText(item.title),
+    publishedAt: cleanText(item.publishedAt),
   }
 }
 

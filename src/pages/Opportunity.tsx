@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Copy, Download, ExternalLink, Loader2, Radar, Share2 } from 'lucide-react'
+import { ArrowRight, Check, Download, ExternalLink, Loader2, Radar, Share2 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOpportunityShareImage'
@@ -14,8 +14,10 @@ type Opportunity = {
   depthAtTwoCents?: number
   suggestedYesBid?: number
   suggestedNoBid?: number
+  tickSize?: string
   maxSpread?: number
   minSize?: number
+  estimatedRewardCapitalUsdc?: number
   daysToResolve?: number
   lpExecutionRisk?: string
   scoutReason?: string
@@ -33,9 +35,10 @@ function number(value: unknown, maximumFractionDigits = 0) {
   return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : '—'
 }
 
-function quote(value: unknown) {
+function quote(value: unknown, tickSize = '0.01') {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed.toFixed(4) : '—'
+  const digits = tickSize.split('.')[1]?.length ?? 2
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : '—'
 }
 
 function riskLabel(value: string | undefined) {
@@ -96,9 +99,11 @@ export default function Opportunity() {
       liveSpread: opportunity.liveSpread,
       depthAtTwoCents: opportunity.depthAtTwoCents,
       minSize: opportunity.minSize,
+      estimatedRewardCapitalUsdc: opportunity.estimatedRewardCapitalUsdc,
       daysToResolve: opportunity.daysToResolve,
       suggestedYesBid: opportunity.suggestedYesBid,
       suggestedNoBid: opportunity.suggestedNoBid,
+      tickSize: opportunity.tickSize,
       lpExecutionRisk: opportunity.lpExecutionRisk,
       updatedAt: data?.updatedAt,
     })
@@ -132,35 +137,6 @@ export default function Opportunity() {
     } finally {
       setImageBusy(false)
     }
-  }
-
-  async function downloadImage() {
-    setImageBusy(true)
-    setShareNotice('')
-    try {
-      const blob = await buildShareImage()
-      downloadLpOpportunityPng(blob, slug)
-      setShareNotice('LP image downloaded.')
-    } catch (error) {
-      setShareNotice(error instanceof Error ? error.message : 'The LP image could not be downloaded.')
-    } finally {
-      setImageBusy(false)
-    }
-  }
-
-  async function shareLinkOnly() {
-    const url = window.location.href
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: opportunity?.title || 'PolyDesk market reward opportunity', url })
-        return
-      } catch {
-        return
-      }
-    }
-    await navigator.clipboard.writeText(url)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1600)
   }
 
   if (!data) {
@@ -228,7 +204,7 @@ export default function Opportunity() {
               {[
                 ['Price gap', Number.isFinite(Number(opportunity.liveSpread)) ? `${(Number(opportunity.liveSpread) * 100).toFixed(1)}c` : '—'],
                 ['Shares near price', number(opportunity.depthAtTwoCents)],
-                ['Smallest order', opportunity.minSize == null ? '—' : `${number(opportunity.minSize)} shares`],
+                ['Est. reward setup', opportunity.estimatedRewardCapitalUsdc == null ? '—' : `≈${number(opportunity.estimatedRewardCapitalUsdc, 2)} USDC`],
                 ['Ends in', opportunity.daysToResolve == null ? '—' : `${number(opportunity.daysToResolve)} days`],
               ].map(([label, value]) => (
                 <div key={label} className="!bg-white px-3 py-3">
@@ -237,10 +213,12 @@ export default function Opportunity() {
                 </div>
               ))}
             </div>
+            {opportunity.estimatedRewardCapitalUsdc != null && (
+              <p className="mt-3 text-[10px] leading-4 text-gray-500">
+                Based on {number(opportunity.minSize, 2)} reward-eligible shares across both suggested quotes. Qualifying does not guarantee a payout; Polymarket does not pay earned rewards below 1 USDC.
+              </p>
+            )}
 
-            <p className="mt-5 text-sm leading-6 text-gray-600">
-              Polymarket is offering daily rewards to people who place useful limit orders in this market. The pool is shared, so earnings are not guaranteed.
-            </p>
           </section>
 
           <section className="relative border-y border-dashed border-gray-200 px-5 py-5 sm:px-7">
@@ -253,11 +231,11 @@ export default function Opportunity() {
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div className="border-l-4 border-blue-600 bg-blue-50 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">YES</p>
-                <p className="mt-1 text-2xl font-semibold tracking-tight text-blue-700">{quote(opportunity.suggestedYesBid)}</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-blue-700">{quote(opportunity.suggestedYesBid, opportunity.tickSize)}</p>
               </div>
               <div className="border-l-4 border-red-600 bg-red-50 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">NO</p>
-                <p className="mt-1 text-2xl font-semibold tracking-tight text-red-700">{quote(opportunity.suggestedNoBid)}</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-red-700">{quote(opportunity.suggestedNoBid, opportunity.tickSize)}</p>
               </div>
             </div>
           </section>
@@ -280,20 +258,11 @@ export default function Opportunity() {
                   {number(opportunity.dailyReward)} <span className="text-lg tracking-tight">USDC/day</span>
                 </p>
               </div>
-              <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">{riskLabel(opportunity.lpExecutionRisk)}</span>
             </div>
 
             <Link to={`/polydesk?service=pulse&opportunity=${encodeURIComponent(slug)}`} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3.5 text-sm font-semibold text-white">
               Choose price and amount <ArrowRight className="h-4 w-4" />
             </Link>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => void downloadImage()} disabled={imageBusy} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-700 disabled:opacity-60">
-                <Download className="h-3.5 w-3.5" /> Download image
-              </button>
-              <button type="button" onClick={() => void shareLinkOnly()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-700">
-                <Copy className="h-3.5 w-3.5" /> Share link
-              </button>
-            </div>
             {shareNotice && <p className="mt-2 text-center text-[10px] font-medium text-gray-500">{shareNotice}</p>}
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-400">

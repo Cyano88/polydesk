@@ -44,17 +44,16 @@ function validBody(overrides: Record<string, unknown> = {}) {
   }
 }
 
-test('accepts a capped buyer-signed immediate BUY order', () => {
+test('accepts a buyer-signed immediate BUY order without a PolyDesk spend ceiling', () => {
   const result = validateSignedOpenInput(validBody(), now)
   assert.equal(result.ok, true)
   if (result.ok) {
     assert.equal(result.orderType, 'FAK')
-    assert.equal(result.maxUsdc, '25')
     assert.match(result.handoffId, /^[a-f0-9]{24}$/)
   }
 })
 
-test('rejects SELL, persistent orders, overspend, stale signatures, and payload drift', () => {
+test('rejects SELL, persistent orders, stale signatures, and payload drift', () => {
   const sell = validBody()
   ;(sell.order as Record<string, unknown>).side = 'SELL'
   ;(sell.orderPayload as { order: Record<string, unknown> }).order.side = 'SELL'
@@ -62,10 +61,10 @@ test('rejects SELL, persistent orders, overspend, stale signatures, and payload 
 
   assert.equal(validateSignedOpenInput(validBody({ orderType: 'GTC' }), now).ok, false)
 
-  const overspend = validBody()
-  ;(overspend.order as Record<string, unknown>).makerAmount = '25000001'
-  ;(overspend.orderPayload as { order: Record<string, unknown> }).order.makerAmount = '25000001'
-  assert.equal(validateSignedOpenInput(overspend, now).ok, false)
+  const largerBuy = validBody()
+  ;(largerBuy.order as Record<string, unknown>).makerAmount = '100000000'
+  ;(largerBuy.orderPayload as { order: Record<string, unknown> }).order.makerAmount = '100000000'
+  assert.equal(validateSignedOpenInput(largerBuy, now).ok, true)
 
   const stale = validBody()
   ;(stale.order as Record<string, unknown>).timestamp = String(now - 900_001)

@@ -24,6 +24,7 @@
     "test:worldcup-summary": "node --import tsx --test scripts/worldcup-final-summary.test.ts",
     "test:signed-open": "node --import tsx --test scripts/polymarket-signed-open.test.ts",
     "test:open-prepare": "node --import tsx --test scripts/polymarket-open-prepare.test.ts",
+    "test:lp-context": "node --import tsx --test scripts/lp-context-intelligence.test.ts",
     "example:open-prepare": "node examples/polymarket-open-prepare.mjs",
     "env:check": "node scripts/validate-env.mjs",
     "smoke": "node scripts/smoke.mjs"

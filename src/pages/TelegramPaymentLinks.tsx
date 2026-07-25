@@ -336,6 +336,7 @@ type HelperMessage = {
   paylink?: SavedRequest
   actionLink?: { label: string; url: string }
   actionLinks?: Array<{ label: string; url: string }>
+  liveMatches?: PolyStreamMatch[]
 }
 
 type StoredHelperThreadMessage = {
@@ -1639,6 +1640,8 @@ export function TelegramHelperPanel({
   lpScoutReceiptUrl,
   lpScoutAgentSlug,
   singlePolyDeskAgent = false,
+  immersive = false,
+  welcomeAction,
 }: {
   telegramName: string
   ownerKey: string
@@ -1665,6 +1668,13 @@ export function TelegramHelperPanel({
   lpScoutReceiptUrl?: string
   lpScoutAgentSlug?: string
   singlePolyDeskAgent?: boolean
+  immersive?: boolean
+  welcomeAction?: {
+    prefix: string
+    label: string
+    url: string
+    suffix?: string
+  }
 }) {
   const cleanTelegramName = telegramName === 'there' ? '' : telegramName
   const helperSessionKeyBase = (ownerKey || telegramId || initialPayer || cleanTelegramName || 'local-helper').trim().toLowerCase()
@@ -1698,7 +1708,7 @@ export function TelegramHelperPanel({
   const [polyDeskSubMode, setPolyDeskSubMode] = useState<PolyDeskSubMode | ''>(storedHelperMode === 'polydesk' ? storedPolyDeskSubMode : '')
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
-  const [agentStatus, setAgentStatus] = useState('Asking ZeroScout for guidance...')
+  const [agentStatus, setAgentStatus] = useState('Checking context...')
   const [thinkingState, setThinkingState] = useState<HelperThinkingState>('light')
   const [askError, setAskError] = useState('')
   const [helperToast, setHelperToast] = useState('')
@@ -2750,8 +2760,14 @@ export function TelegramHelperPanel({
     const wantsNews = !wantsFixture && /\b(news|headline|headlines|latest|update|updates)\b/i.test(nextQuestion)
     if (wantsNews) {
       const response = await fetch('/api/poly-worldcup-news')
-      const data = await response.json() as PolyWorldCupFeed
+      const data = await readPolyDeskJson<PolyWorldCupFeed>(response, 'Football news is unavailable right now.')
       if (!response.ok || !data.ok) throw new Error('Football news is unavailable right now.')
+      if (data.mode !== 'live') {
+        return {
+          answer: 'No verified live football headlines are available from the configured news provider right now. I will not substitute placeholder stories.',
+          actionLink: { label: 'News', url: newsUrl },
+        }
+      }
       const articles = (data.articles ?? []).slice(0, 3)
       if (!articles.length) {
         return {
@@ -2762,12 +2778,18 @@ export function TelegramHelperPanel({
       const lines = articles.map((article, index) => `${index + 1}. ${article.title}${article.source ? ` (${article.source})` : ''}`)
       return {
         answer: `Latest verified football market news:\n${lines.join('\n')}`,
-        actionLink: { label: 'News', url: newsUrl },
+        actionLinks: [
+          { label: 'News', url: newsUrl },
+          ...articles.filter(article => article.url).map(article => ({
+            label: article.source || 'Source',
+            url: article.url,
+          })),
+        ],
       }
     }
 
     const response = await fetch('/api/poly-stream')
-    const data = await response.json() as PolyStreamFeed
+    const data = await readPolyDeskJson<PolyStreamFeed>(response, 'The football match board is unavailable right now.')
     if (!response.ok || !data.ok) throw new Error('The football match board is unavailable right now.')
     const matches = data.matches ?? []
     const wantsToday = /\b(today|tonight|now|live|playing)\b/i.test(nextQuestion)
@@ -2800,6 +2822,7 @@ export function TelegramHelperPanel({
       return {
         answer: `Today's verified football matches:\n${lines.join('\n')}`,
         actionLink: { label: 'Live board', url: scoresUrl },
+        liveMatches: todayMatches.slice(0, 4),
       }
     }
     const match = matchedByWords || (words.length || wantsMatchDetail ? undefined : matches[0])
@@ -2822,6 +2845,7 @@ export function TelegramHelperPanel({
             ? `Trade route found for ${match.title}. Current board status: ${state.tag}, ${score}.`
             : `I do not have a verified Polymarket trade route for ${match.title} right now.`,
           actionLinks,
+          liveMatches: [match],
         }
       }
       if (wantsLiquidity) {
@@ -2831,6 +2855,7 @@ export function TelegramHelperPanel({
         return {
           answer: `${match.title}: ${liquidity}${volume ? ` ${volume}` : ''}${price ? ` ${price}` : ''}`,
           actionLinks,
+          liveMatches: [match],
         }
       }
       if (wantsGoals) {
@@ -2840,6 +2865,7 @@ export function TelegramHelperPanel({
             ? `${match.title} goals:\n${goals.slice(0, 6).join('\n')}`
             : `${match.title}: no verified goalscorer names are available in the feed right now. Score/status: ${score}.`,
           actionLinks,
+          liveMatches: [match],
         }
       }
       if (wantsCards) {
@@ -2855,6 +2881,7 @@ export function TelegramHelperPanel({
             ? `${match.title} cards: ${yellowCount} yellow, ${redCount} red.\n${cardEvents.slice(0, 6).map(event => event.text).join('\n')}`
             : `${match.title}: no verified card events are available in the feed right now.`,
           actionLinks,
+          liveMatches: [match],
         }
       }
       if (wantsCorners) {
@@ -2864,6 +2891,7 @@ export function TelegramHelperPanel({
             ? `${match.title} corner stats:\n${cornerStats.slice(0, 4).join('\n')}`
             : `${match.title}: verified corner stats are not available in the feed right now.`,
           actionLinks,
+          liveMatches: [match],
         }
       }
       const stats = (match.stats || []).filter(Boolean)
@@ -2872,6 +2900,7 @@ export function TelegramHelperPanel({
           ? `${match.title} verified stats:\n${stats.slice(0, 6).join('\n')}`
           : `${match.title}: detailed verified match stats are not available in the feed right now. Score/status: ${score}.`,
         actionLinks,
+        liveMatches: [match],
       }
     }
     const upcomingMatches = matches.filter(match => {
@@ -2887,6 +2916,7 @@ export function TelegramHelperPanel({
       return {
         answer: `Upcoming verified football fixtures:\n${lines.join('\n')}`,
         actionLink: { label: 'Live board', url: scoresUrl },
+        liveMatches: upcomingMatches.slice(0, 6),
       }
     }
     if (!match) {
@@ -2903,6 +2933,7 @@ export function TelegramHelperPanel({
         { label: 'Live board', url: scoresUrl },
         ...(match.polymarketUrl ? [{ label: 'Market', url: match.polymarketUrl }] : []),
       ],
+      liveMatches: [match],
     }
   }
 
@@ -2910,7 +2941,7 @@ export function TelegramHelperPanel({
     if (helperMode !== 'polydesk') return false
     const inferredPolyDeskSubMode: PolyDeskSubMode | '' = /\b(lp scout|liquidity|maker|reward pool|order book|quote)\b/i.test(nextQuestion)
       ? 'lp-scout'
-      : /\b(football|soccer|fixture|match|score|goal|league)\b/i.test(nextQuestion)
+      : /\b(football|soccer|fixtures?|matches?|scores?|goals?|leagues?|latest news|headlines?|sports news)\b/i.test(nextQuestion)
         ? 'worldcup'
         : /\b(portfolio|balance|position|claimable|wallet|funding|account)\b/i.test(nextQuestion)
           ? 'portfolio'
@@ -3222,7 +3253,7 @@ export function TelegramHelperPanel({
     queueHelperMessage(nextQuestion)
     try {
       const isPaylinkFlow = helperMode === 'payments' && Boolean(paylinkDraft || isPaymentRequestIntent(nextQuestion))
-      const isDeepResearch = helperMode === 'polydesk' || isDeepResearchIntent(nextQuestion)
+      const isDeepResearch = isDeepResearchIntent(nextQuestion)
       setThinkingState(isPaylinkFlow ? 'payment-draft' : isDeepResearch ? 'deep-research' : 'light')
       setAgentStatus(isPaylinkFlow
         ? 'Checking payment details...'
@@ -3348,7 +3379,7 @@ export function TelegramHelperPanel({
       if (helperMode === 'payments' && await handlePaylinkConversation(nextQuestion)) return
       if (helperMode === 'polydesk' && await handlePolyDeskConversation(nextQuestion)) return
       setThinkingState(isDeepResearch ? 'deep-research' : 'light')
-      setAgentStatus(isDeepResearch ? 'Running deeper research... this might take a little time.' : 'Asking ZeroScout...')
+      setAgentStatus(isDeepResearch ? 'Reviewing market context...' : 'Preparing response...')
       const res = await fetch('/api/agent-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3389,10 +3420,13 @@ export function TelegramHelperPanel({
           })
           return
         }
-        throw new Error(data.error ?? 'No helper response returned.')
+        const responseError = data.error ?? 'No helper response returned.'
+        throw new Error(/zeroscout|sponsorship/i.test(responseError)
+          ? 'Deep market research is temporarily unavailable. Live scores, news, portfolio, and saved LP Scout results still work.'
+          : responseError)
       }
       setThinkingState('proof')
-      setAgentStatus('Securing proof...')
+      setAgentStatus('Finalizing response...')
       finishHelperMessage(nextQuestion, { answer: data.answer!, proof: data.proof, zeroscoutSponsorship: data.zeroscoutSponsorship })
       void saveProfile({ question: nextQuestion, answer: data.answer } as Partial<HelperProfile>)
       if (!memoryDraft.trim()) {
@@ -3429,13 +3463,14 @@ export function TelegramHelperPanel({
   }
 
   return (
-    <div>
-      <div className="space-y-3">
-        <div className="overflow-hidden">
+    <div className={cn(immersive && 'flex min-h-0 flex-1 flex-col')}>
+      <div className={cn('space-y-3', immersive && 'flex min-h-0 flex-1 flex-col !space-y-0')}>
+        <div className={cn('overflow-hidden', immersive && 'flex min-h-0 flex-1 flex-col')}>
               <div
                 ref={helperScrollRef}
                 className={cn(
-                  'max-h-[360px] min-h-[220px] space-y-4 overflow-y-auto p-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                  'min-h-[220px] space-y-4 overflow-y-auto p-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                  immersive ? 'min-h-0 flex-1 overscroll-contain px-4 py-5 sm:px-5' : 'max-h-[360px]',
                   !hideTopDivider && 'border-t border-gray-100 dark:border-white/10',
                 )}
               >
@@ -3443,6 +3478,15 @@ export function TelegramHelperPanel({
                   <p>
                     {welcomeText ?? `Welcome back, ${helperName || cleanTelegramName || 'there'}. Ask me about PolyDesk, Polymarket funding, LP Scout, x402, agent setup, research, planning, or daily questions.`}
                   </p>
+                  {welcomeAction && (
+                    <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                      {welcomeAction.prefix}{' '}
+                      <a href={welcomeAction.url} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline decoration-blue-300 underline-offset-2 dark:text-blue-300">
+                        {welcomeAction.label}
+                      </a>
+                      {welcomeAction.suffix ? ` ${welcomeAction.suffix}` : ''}
+                    </p>
+                  )}
                   <div className="mt-2">
                     <ZeroScoutPowerBadge compact />
                   </div>
@@ -3572,6 +3616,7 @@ export function TelegramHelperPanel({
                           </div>
                         )}
                         {message.paylink && <HelperPaylinkCard request={message.paylink} />}
+                        {!!message.liveMatches?.length && <HelperLiveScoreWidget matches={message.liveMatches} />}
                       </div>
                     )}
                   </div>
@@ -3586,7 +3631,10 @@ export function TelegramHelperPanel({
                 )}
               </div>
 
-              <div className="bg-white p-3 dark:bg-[#111114]">
+              <div className={cn(
+                'shrink-0 border-t border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-[#111114]',
+                immersive && 'pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5',
+              )}>
                 <div className="relative">
                   <input
                     data-agent-hash-input="true"
@@ -4335,6 +4383,48 @@ function rowStateLabel(match: PolyStreamMatch) {
 
 function matchKey(match: PolyStreamMatch) {
   return match.fixtureId || `${match.title}-${match.time}-${match.status}`
+}
+
+function HelperLiveScoreWidget({ matches }: { matches: PolyStreamMatch[] }) {
+  const visibleMatches = matches.slice(0, 4)
+  if (!visibleMatches.length) return null
+  return (
+    <div
+      data-polydesk-live-score-widget="true"
+      className="mt-2.5 max-w-[92%] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181c]"
+    >
+      <div className="flex items-center justify-between border-b border-gray-100 px-3.5 py-2.5 dark:border-white/10">
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">Verified match feed</p>
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
+          <i className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live data
+        </span>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-white/10">
+        {visibleMatches.map(match => {
+          const [home, away] = splitFixtureTitle(match.title)
+          const state = matchDisplayState(match)
+          const hasScore = hasMatchScore(match)
+          return (
+            <div key={matchKey(match)} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3.5 py-3">
+              <p className="min-w-0 truncate text-left text-xs font-semibold text-gray-900 dark:text-white">{home}</p>
+              <div className="min-w-[4.25rem] text-center">
+                <p className="text-base font-black tracking-tight text-gray-950 dark:text-white">
+                  {hasScore ? `${match.homeScore}–${match.awayScore}` : state.center}
+                </p>
+                <p className={cn(
+                  'mt-0.5 text-[9px] font-bold uppercase tracking-wide',
+                  state.tag === 'LIVE' || state.tag === 'HT' ? 'text-emerald-600 dark:text-emerald-300' : 'text-gray-400',
+                )}>
+                  {state.tag === 'NS' ? state.sub || match.time : state.tag}
+                </p>
+              </div>
+              <p className="min-w-0 truncate text-right text-xs font-semibold text-gray-900 dark:text-white">{away}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function compactMatchTime(match: PolyStreamMatch) {

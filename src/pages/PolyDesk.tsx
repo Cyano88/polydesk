@@ -117,7 +117,7 @@ function OverviewTabs({
   onActivity: () => void
 }) {
   return (
-    <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-white/[0.06]" aria-label="Overview sections">
+    <div className="sticky top-[61px] z-30 mb-4 grid grid-cols-2 gap-1 rounded-xl border border-gray-200/80 bg-gray-100/95 p-1 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c20]/95" aria-label="Overview sections">
       {[
         { id: 'portfolio', label: 'Portfolio', onClick: onPortfolio },
         { id: 'activity', label: 'Activity', onClick: onActivity },
@@ -130,8 +130,8 @@ function OverviewTabs({
           className={cn(
             'min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors',
             active === item.id
-              ? 'bg-white text-gray-950 shadow-sm dark:bg-white dark:text-gray-950'
-              : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white',
+              ? '!bg-white !text-gray-950 shadow-sm'
+              : 'text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white',
           )}
         >
           {item.label}
@@ -162,7 +162,7 @@ export default function PolyDesk() {
   const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
-  const welcomeText = 'Welcome back. Ask about your Polymarket account, football markets, LP Scout, and live market context.'
+  const welcomeText = 'Welcome back. Ask about your Polymarket account, live football, latest news, LP Scout, and market context.'
 
   function requestIdentity(action: 'watch-portfolio' | 'tip') {
     loginLauncher?.requestLogin({ debugLabel: `polydesk-public-${action}` })
@@ -263,10 +263,12 @@ export default function PolyDesk() {
   }, [searchParams, setSearchParams])
 
   return (
-    <main className="text-gray-950 dark:text-white">
+    <main className={cn('text-gray-950 dark:text-white', isAgentOpen && 'h-full min-h-0')}>
       <div className={cn(
         'mx-auto w-full space-y-5',
-        serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
+        isAgentOpen
+          ? 'h-full min-h-0 max-w-3xl !space-y-0'
+          : serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         {!isAgentOpen && !serviceView && (
           browsePreview ? (
@@ -292,8 +294,8 @@ export default function PolyDesk() {
         )}
 
         {isAgentOpen && (
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card dark:border-white/10 dark:bg-[#111114]">
-            <header className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
+          <section className="flex h-full min-h-0 flex-col bg-white dark:bg-[#111114]">
+            <header className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
               <span className="text-gray-800 dark:text-gray-100">
                 <PolyDeskAgentIcon header isStatic />
               </span>
@@ -315,6 +317,12 @@ export default function PolyDesk() {
               initialNotice=""
               lockedHelperMode="polydesk"
               welcomeText={welcomeText}
+              welcomeAction={{
+                prefix: 'PolyDesk Agent is live on the OKX AI marketplace, where other agents can plug in, build with, or resell its intelligence services.',
+                label: 'okx.ai/agents/5427…',
+                url: 'https://www.okx.ai/agents/5427?source=search',
+                suffix: 'Circle agent marketplace listing coming soon.',
+              }}
               inputPlaceholder="Ask Desk Agent..."
               hideTopDivider
               autoQuestion={agentMessage || undefined}
@@ -324,6 +332,7 @@ export default function PolyDesk() {
               lpScoutReceiptUrl={lpScoutReceiptUrl || undefined}
               lpScoutAgentSlug={lpScoutAgentSlug || undefined}
               singlePolyDeskAgent
+              immersive
               onRecoverTelegramName={() => undefined}
               onBack={() => {
                 if (effectiveAgentLane) {
@@ -353,18 +362,19 @@ export default function PolyDesk() {
             ) : serviceView === 'pulse' ? (
               <Pulse />
             ) : serviceView === 'portfolio' ? (
-              browsePreview ? (
-                <LocalPreviewOverview
-                  onWatch={() => requestIdentity('watch-portfolio')}
-                  onTip={() => requestIdentity('tip')}
+              <>
+                <OverviewTabs
+                  active="portfolio"
+                  onPortfolio={() => undefined}
+                  onActivity={() => openOverviewTab('activity')}
                 />
-              ) : (
-                <>
-                  <OverviewTabs
-                    active="portfolio"
-                    onPortfolio={() => undefined}
-                    onActivity={() => openOverviewTab('activity')}
+                {browsePreview ? (
+                  <LocalPreviewOverview
+                    onWatch={() => requestIdentity('watch-portfolio')}
+                    onTip={() => requestIdentity('tip')}
                   />
+                ) : (
+                  <>
                   {portfolioAction === 'trading' && (
                     <OverviewActions
                       onWatch={() => openPortfolioAction('watch')}
@@ -382,8 +392,9 @@ export default function PolyDesk() {
                     initialTradingWalletTab={searchParams.get('wallet') === 'balance' ? 'balance' : undefined}
                   />
                   {portfolioAction === 'trading' && <PolymarketOpenOrdersPanel />}
-                </>
-              )
+                  </>
+                )}
+              </>
             ) : serviceView === 'football' ? (
               <PolyStreamPanel
                 hideBack

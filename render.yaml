@@ -78,9 +78,6 @@ services:
         sync: false
       - key: POLYMARKET_ORDER_SIGNING_ENABLED
         sync: false
-      - key: POLYDESK_EXTERNAL_OPEN_MAX_USDC
-        value: "25"
-
       - key: POLY_STREAM_FIXTURE_MODE
         value: auto
       - key: POLY_STREAM_LIMIT

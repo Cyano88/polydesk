@@ -50,6 +50,7 @@ function PolyDeskWorkspace() {
   const { wallets, ready: walletsReady } = useWallets()
   const [accountOpen, setAccountOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [mobileKeyboardOpen, setMobileKeyboardOpen] = useState(false)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light'
     return window.localStorage.getItem('polydesk-theme') === 'dark' ? 'dark' : 'light'
@@ -59,6 +60,19 @@ function PolyDeskWorkspace() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     window.localStorage.setItem('polydesk-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const updateKeyboardState = () => setMobileKeyboardOpen(window.innerHeight - viewport.height > 120)
+    updateKeyboardState()
+    viewport.addEventListener('resize', updateKeyboardState)
+    viewport.addEventListener('scroll', updateKeyboardState)
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState)
+      viewport.removeEventListener('scroll', updateKeyboardState)
+    }
+  }, [])
 
   const service = searchParams.get('service') ?? ''
   const agentOpen = searchParams.get('agent') === '1' || Boolean(searchParams.get('lane'))
@@ -78,26 +92,17 @@ function PolyDeskWorkspace() {
   const identitySeed = walletAddress || user?.id || 'polydesk'
 
   function makeTo(nextService?: string, extra: Record<string, string> = {}) {
-    const next = new URLSearchParams(searchParams)
-    next.delete('agent')
-    next.delete('lane')
-    next.delete('lpScoutPath')
-    next.delete('portfolio')
-    next.delete('wallet')
+    const next = new URLSearchParams()
+    if (localPreview) next.set('preview', '1')
     if (nextService) next.set('service', nextService)
-    else next.delete('service')
     Object.entries(extra).forEach(([key, value]) => next.set(key, value))
     const query = next.toString()
     return `/polydesk${query ? `?${query}` : ''}`
   }
 
   function makeAgentTo() {
-    const next = new URLSearchParams(searchParams)
-    next.delete('service')
-    next.delete('lane')
-    next.delete('lpScoutPath')
-    next.delete('portfolio')
-    next.delete('wallet')
+    const next = new URLSearchParams()
+    if (localPreview) next.set('preview', '1')
     next.set('agent', '1')
     const query = next.toString()
     return `/polydesk${query ? `?${query}` : ''}`
@@ -122,7 +127,10 @@ function PolyDeskWorkspace() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]">
+    <div className={cn(
+      'flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]',
+      workspace === 'agent' && 'h-dvh overflow-hidden',
+    )}>
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/80 backdrop-blur-xl dark:border-white/5 dark:bg-[#111113]/90">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
           <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
@@ -181,11 +189,23 @@ function PolyDeskWorkspace() {
 
       </header>
 
-      <main data-polydesk-product-ui className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28">
+      <main
+        data-polydesk-product-ui
+        className={cn(
+          'mx-auto w-full max-w-5xl flex-1',
+          workspace === 'agent'
+            ? 'min-h-0 overflow-hidden px-0 py-0 pb-[5.5rem] sm:px-6 sm:pt-4 sm:pb-28'
+            : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28',
+          workspace === 'agent' && mobileKeyboardOpen && '!pb-0 sm:!pb-0',
+        )}
+      >
         <Outlet />
       </main>
 
-      <footer className="fixed inset-x-0 bottom-0 z-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <footer className={cn(
+        'fixed inset-x-0 bottom-0 z-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        workspace === 'agent' && mobileKeyboardOpen && 'hidden',
+      )}>
         <nav
           aria-label="PolyDesk workspace"
           className="mx-auto grid w-[min(26rem,calc(100%-2rem))] grid-cols-4 gap-1 rounded-2xl border border-gray-200/80 bg-white/90 p-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-[#17171b]/92 dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]"

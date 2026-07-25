@@ -22,11 +22,19 @@ type ReportResponse = {
       label: string
       url: string
       rewardDaily?: unknown
+      estimatedRewardCapitalUsdc?: unknown
+      rewardMinShares?: unknown
       spread?: unknown
       depth?: unknown
       daysLeft?: unknown
       yesQuote?: unknown
       noQuote?: unknown
+      contextSignals?: Array<{
+        kind: string
+        label: string
+        source: string
+        title: string
+      }>
     }>
     proof?: Record<string, unknown> & { url?: string }
     archive?: {
@@ -102,6 +110,7 @@ export default function LPScoutReport() {
   const [shareBusy, setShareBusy] = useState(false)
   const [shareNotice, setShareNotice] = useState('')
   const [orderMarketIndex, setOrderMarketIndex] = useState<number | null>(null)
+  const [showAllMarkets, setShowAllMarkets] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -166,6 +175,7 @@ export default function LPScoutReport() {
         footerUrl: 'polydesk.trade/?service=lp-scout',
         verificationLabel: 'ZeroScout verified LP brief',
         dailyReward: numericMetric(market.rewardDaily),
+        estimatedRewardCapitalUsdc: numericMetric(market.estimatedRewardCapitalUsdc),
         liveSpread: numericMetric(market.spread),
         depthAtTwoCents: numericMetric(market.depth),
         daysToResolve: numericMetric(market.daysLeft),
@@ -247,8 +257,10 @@ export default function LPScoutReport() {
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Markets</p>
                   <div className="space-y-2">
-                    {report.marketLinks.slice(0, 3).map((market, index) => {
+                    {report.marketLinks.slice(0, showAllMarkets ? 10 : 3).map((market, index) => {
                       const reward = metricLabel(market.rewardDaily, 'USDC/day')
+                      const rewardCapital = numericMetric(market.estimatedRewardCapitalUsdc)
+                      const rewardShares = numericMetric(market.rewardMinShares)
                       const spread = metricLabel(market.spread, 'spread')
                       const depth = metricLabel(market.depth, 'depth within 2c')
                       const days = metricLabel(market.daysLeft, 'days left')
@@ -270,10 +282,33 @@ export default function LPScoutReport() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
                           {reward && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{reward}</span>}
+                          {rewardCapital !== undefined && <span className="rounded bg-blue-50 px-2 py-1 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">≈{rewardCapital.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC minimum setup</span>}
                           {spread && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{spread}</span>}
                           {depth && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{depth}</span>}
                           {days && <span className="rounded bg-gray-100 px-2 py-1 dark:bg-white/10">{days}</span>}
                         </div>
+                        {rewardCapital !== undefined && (
+                          <p className="mt-2 text-[10px] leading-4 text-gray-400">
+                            Estimate uses {rewardShares?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || 'the minimum'} reward-eligible shares across both suggested quotes. Qualifying does not guarantee a payout; Polymarket does not pay earned rewards below 1 USDC.
+                          </p>
+                        )}
+                        {!!market.contextSignals?.length && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {market.contextSignals.slice(0, 2).map(signal => (
+                              <span
+                                key={`${signal.kind}:${signal.title}`}
+                                title={signal.title}
+                                className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
+                                  signal.kind === 'football'
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
+                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200'
+                                }`}
+                              >
+                                {signal.label}{signal.source ? ` · ${signal.source}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {(yesQuote || noQuote) && (
                           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                             {yesQuote && <div className="rounded-lg bg-emerald-50 px-3 py-2 font-semibold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">YES quote near {yesQuote}</div>}
@@ -294,12 +329,23 @@ export default function LPScoutReport() {
                               marketUrl={market.url}
                               yesQuote={market.yesQuote}
                               noQuote={market.noQuote}
+                              rewardMinShares={market.rewardMinShares}
+                              estimatedRewardCapitalUsdc={market.estimatedRewardCapitalUsdc}
                             />
                           </div>
                         )}
                       </div>
                     )})}
                   </div>
+                  {report.marketLinks.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMarkets(value => !value)}
+                      className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.04]"
+                    >
+                      {showAllMarkets ? 'Show top 3' : `View ${Math.min(10, report.marketLinks.length) - 3} more opportunities`}
+                    </button>
+                  )}
                 </div>
               )}
 

@@ -38,14 +38,22 @@ function marketLinksFromScout(result: Record<string, unknown>) {
       label: String(item.title || item.market || item.question || item.name || `Market ${index + 1}`).trim(),
       url,
       rewardDaily: item.rewardDaily ?? item.rewardsDaily ?? item.dailyReward ?? item.rewardPerDay ?? item.reward ?? undefined,
+      estimatedRewardCapitalUsdc: item.estimatedRewardCapitalUsdc ?? undefined,
+      rewardMinShares: item.minSize ?? undefined,
       spread: item.spread ?? item.spreadCents ?? item.liveSpread ?? item.maxSpread ?? undefined,
       depth: item.depthWithin2c ?? item.depthAtTwoCents ?? item.depth ?? undefined,
       daysLeft: item.daysLeft ?? item.timeLeftDays ?? item.daysToResolve ?? undefined,
       yesQuote: item.yesQuote ?? item.yesEntry ?? item.suggestedYesBid ?? item.bestBid ?? item.yes ?? undefined,
       noQuote: item.noQuote ?? item.noEntry ?? item.suggestedNoBid ?? item.bestAsk ?? item.no ?? undefined,
       executionPlan: Array.isArray(item.executionPlan) ? item.executionPlan : undefined,
+      contextSignals: asArray(item.contextSignals).slice(0, 2).map(signal => ({
+        kind: String(signal.kind ?? '').trim(),
+        label: String(signal.label ?? '').trim(),
+        source: String(signal.source ?? '').trim(),
+        title: String(signal.title ?? '').trim(),
+      })),
     }
-  }).filter(Boolean).slice(0, 6)
+  }).filter(Boolean).slice(0, 10)
 }
 
 function scoutFallbackActions(result: Record<string, unknown>) {

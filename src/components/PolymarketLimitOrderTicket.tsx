@@ -65,9 +65,32 @@ type MarketPosition = {
   percentPnl?: number
 }
 
-function cleanPrice(value: unknown) {
+function tickDecimals(tickSize: string) {
+  return tickSize.split('.')[1]?.length ?? 0
+}
+
+function cleanTickSize(value: unknown) {
+  const text = String(value ?? '').trim()
+  return /^(?:0\.1|0\.01|0\.001|0\.0001)$/.test(text) ? text : '0.01'
+}
+
+function cleanPrice(value: unknown, tickSize = '0.01') {
   const number = Number(value)
-  return Number.isFinite(number) && number > 0 && number < 1 ? String(Number(number.toFixed(4))) : ''
+  if (!Number.isFinite(number) || number <= 0 || number >= 1) return ''
+  const tick = Number(tickSize)
+  const aligned = Math.floor((number + Number.EPSILON) / tick) * tick
+  return Math.min(1 - tick, Math.max(tick, aligned)).toFixed(tickDecimals(tickSize))
+}
+
+function minimumRewardSpend(rewardMinShares: unknown, price: unknown) {
+  const shares = Number(rewardMinShares)
+  const quote = Number(price)
+  if (!Number.isFinite(shares) || shares <= 0 || !Number.isFinite(quote) || quote <= 0 || quote >= 1) return 0
+  return Math.ceil(shares * quote * 1_000_000) / 1_000_000
+}
+
+function amountInput(value: number) {
+  return value.toFixed(6).replace(/\.?0+$/, '')
 }
 
 export function PolymarketLimitOrderTicket({
@@ -75,18 +98,27 @@ export function PolymarketLimitOrderTicket({
   marketUrl,
   yesQuote,
   noQuote,
+  tickSize: rawTickSize,
+  rewardMinShares,
+  estimatedRewardCapitalUsdc,
 }: {
   marketTitle: string
   marketUrl: string
   yesQuote?: unknown
   noQuote?: unknown
+  tickSize?: unknown
+  rewardMinShares?: unknown
+  estimatedRewardCapitalUsdc?: unknown
 }) {
+  const tickSize = cleanTickSize(rawTickSize)
+  const initialPrice = cleanPrice(yesQuote, tickSize)
+  const initialRewardSpend = minimumRewardSpend(rewardMinShares, initialPrice)
   const { authenticated, getAccessToken } = usePrivy()
   const { wallets } = useWallets()
   const [profile, setProfile] = useState<TradingProfile | null>(null)
   const [outcome, setOutcome] = useState<'YES' | 'NO'>('YES')
-  const [price, setPrice] = useState(cleanPrice(yesQuote))
-  const [amount, setAmount] = useState('1')
+  const [price, setPrice] = useState(initialPrice)
+  const [amount, setAmount] = useState(initialRewardSpend > 0 ? amountInput(initialRewardSpend) : '1')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [placed, setPlaced] = useState<{ orderId?: string; price: string; amount: string; outcome: 'YES' | 'NO' } | null>(null)
@@ -117,14 +149,32 @@ export function PolymarketLimitOrderTicket({
   }, [authenticated, getAccessToken])
 
   useEffect(() => {
-    setPrice(outcome === 'YES' ? cleanPrice(yesQuote) : cleanPrice(noQuote))
-  }, [noQuote, outcome, yesQuote])
+    setPrice(outcome === 'YES' ? cleanPrice(yesQuote, tickSize) : cleanPrice(noQuote, tickSize))
+  }, [noQuote, outcome, tickSize, yesQuote])
+
+  useEffect(() => {
+    const nextPrice = cleanPrice(yesQuote, tickSize)
+    const nextMinimum = minimumRewardSpend(rewardMinShares, nextPrice)
+    setOutcome('YES')
+    setPrice(nextPrice)
+    setAmount(nextMinimum > 0 ? amountInput(nextMinimum) : '1')
+    setNotice('')
+    setPlaced(null)
+  }, [marketUrl, rewardMinShares, tickSize, yesQuote])
 
   const estimatedShares = useMemo(() => {
     const amountNumber = Number(amount)
     const priceNumber = Number(price)
     return amountNumber > 0 && priceNumber > 0 ? amountNumber / priceNumber : 0
   }, [amount, price])
+
+  const requiredRewardSpend = useMemo(
+    () => minimumRewardSpend(rewardMinShares, price),
+    [price, rewardMinShares],
+  )
+  const belowRewardMinimum = requiredRewardSpend > 0 && Number(amount) < requiredRewardSpend
+  const rewardShares = Number(rewardMinShares)
+  const combinedRewardSetup = Number(estimatedRewardCapitalUsdc)
 
   const projected = useMemo(() => {
     const spend = Number(amount)
@@ -200,6 +250,10 @@ export function PolymarketLimitOrderTicket({
       setNotice('Enter a limit price between 0 and 1.')
       return
     }
+    if (belowRewardMinimum) {
+      setNotice(`Enter at least ${amountInput(requiredRewardSpend)} USDC for this ${outcome} quote to meet the market's displayed reward minimum.`)
+      return
+    }
 
     setBusy(true)
     try {
@@ -259,7 +313,7 @@ export function PolymarketLimitOrderTicket({
         funderAddress,
       })
 
-      setNotice('Confirm the GTC maker order in your wallet.')
+      setNotice('Confirm the limit order in your wallet.')
       const signedOrder = await signingClient.createOrder({
         tokenID: plan.signingPlan.createOrder.tokenID,
         price: plan.signingPlan.createOrder.price,
@@ -311,7 +365,7 @@ export function PolymarketLimitOrderTicket({
         orderBody,
         userHeaders: Object.fromEntries(Object.entries(l2Headers).map(([key, value]) => [key, String(value)])),
         remoteBuilderSigner: handoff.remoteBuilderSigner,
-        fallbackMessage: 'Polymarket rejected the GTC order.',
+        fallbackMessage: 'Polymarket rejected the limit order.',
         debug: polyDeskOrderSubmitDebug({
           providerChainId: await polyDeskProviderChainId(provider),
           ownerAddress: activeOwner,
@@ -444,7 +498,12 @@ export function PolymarketLimitOrderTicket({
           <button
             key={value}
             type="button"
-            onClick={() => setOutcome(value)}
+            onClick={() => {
+              const nextPrice = cleanPrice(value === 'YES' ? yesQuote : noQuote, tickSize)
+              const nextMinimum = minimumRewardSpend(rewardMinShares, nextPrice)
+              setOutcome(value)
+              if (nextMinimum > 0 && Number(amount) < nextMinimum) setAmount(amountInput(nextMinimum))
+            }}
             className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition-all ${
               outcome === value
                 ? value === 'YES'
@@ -462,7 +521,7 @@ export function PolymarketLimitOrderTicket({
       <div className="grid grid-cols-2 divide-x divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">
         <label className="px-3 py-3">
           <span className="block text-[10px] font-semibold uppercase text-gray-400">Your price</span>
-          <input value={price} onChange={event => setPrice(event.target.value)} inputMode="decimal" className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" placeholder="0.50" />
+          <input value={price} onChange={event => setPrice(event.target.value)} onBlur={() => setPrice(cleanPrice(price, tickSize))} inputMode="decimal" step={tickSize} className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" placeholder="0.50" />
         </label>
         <label className="px-3 py-3">
           <span className="block text-[10px] font-semibold uppercase text-gray-400">Amount</span>
@@ -473,6 +532,12 @@ export function PolymarketLimitOrderTicket({
         <span>Estimated {estimatedShares ? estimatedShares.toFixed(2) : '0'} shares</span>
         <span>Waits for a match</span>
       </div>
+      {requiredRewardSpend > 0 && (
+        <p className={`text-[11px] leading-5 ${belowRewardMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+          This {outcome} order needs at least {amountInput(requiredRewardSpend)} USDC ({rewardShares.toLocaleString(undefined, { maximumFractionDigits: 2 })} shares) to meet the displayed reward minimum.
+          {Number.isFinite(combinedRewardSetup) && combinedRewardSetup > 0 ? ` Estimated two-sided setup: ≈${combinedRewardSetup.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC.` : ''}
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10 dark:bg-white/10">
         {[
           ['Max payout', projected.payout, 'text-gray-950 dark:text-white'],
@@ -487,8 +552,8 @@ export function PolymarketLimitOrderTicket({
         ))}
       </div>
       <p className="text-[10px] leading-4 text-gray-400">Projection assumes a full fill and winning resolution; fees and LP rewards are excluded.</p>
-      <button type="button" onClick={() => void placeLimitOrder()} disabled={busy} className="polydesk-primary-cta w-full">
-        {busy ? 'Reviewing order' : authenticated ? 'Review and sign' : 'Sign in to place order'}
+      <button type="button" onClick={() => void placeLimitOrder()} disabled={busy || belowRewardMinimum} className="polydesk-primary-cta w-full disabled:cursor-not-allowed disabled:opacity-50">
+        {busy ? 'Reviewing order' : belowRewardMinimum ? `Minimum ${amountInput(requiredRewardSpend)} USDC` : authenticated ? 'Review and sign' : 'Sign in to place order'}
       </button>
       {notice && <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{notice}</p>}
     </div>
@@ -624,7 +689,7 @@ export function PolymarketOpenOrdersPanel() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-gray-950 dark:text-white">Open orders</p>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Live GTC orders resting on Polymarket.</p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Live limit orders waiting on Polymarket.</p>
         </div>
         <button type="button" onClick={() => void loadOrders()} disabled={busy} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">
           {busy ? 'Checking' : orders ? 'Refresh' : 'View'}

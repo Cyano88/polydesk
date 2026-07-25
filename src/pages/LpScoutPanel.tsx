@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRight, Check, ExternalLink, LineChart, Newspaper, Trophy, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Check, ExternalLink, LineChart, type LucideIcon } from 'lucide-react'
 import { cn } from '../lib/utils'
 import AgentWorkspace from './AgentWorkspace'
 
@@ -28,35 +28,19 @@ export type LpScoutOption = {
 export const lpScoutOptions: LpScoutOption[] = [
   {
     id: 'best',
-    title: 'Best markets',
-    body: 'Rank live reward markets by spread, depth, time and risk.',
+    title: 'Best opportunities',
+    body: 'Scan the live market and return up to 10 ranked liquidity opportunities.',
     amount: '0.01',
     icon: LineChart,
   },
   {
-    id: 'news',
-    title: 'News markets',
-    body: 'Match a news topic against active markets and their live books.',
-    amount: '0.01',
-    icon: Newspaper,
-    inputLabel: 'News topic',
-    inputPlaceholder: 'Election, regulation, company or event...',
-  },
-  {
     id: 'market',
     title: 'Inspect market',
-    body: 'Inspect one exact market, its live book and LP risk.',
+    body: 'Paste a Polymarket URL or slug to inspect its live book and LP conditions.',
     amount: '0.01',
     icon: ExternalLink,
     inputLabel: 'Market URL or slug',
     inputPlaceholder: 'https://polymarket.com/event/...',
-  },
-  {
-    id: 'football',
-    title: 'Football markets',
-    body: 'Cross-check verified fixture context with matched Polymarket books.',
-    amount: '0.01',
-    icon: Trophy,
   },
 ]
 
@@ -196,7 +180,7 @@ export function LpScoutPanel({
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Intelligence</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">LP Scout</h1>
             <p className="mt-1 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
-              Live market context for safer maker-order decisions.
+              Scan the broader market or inspect one exact Polymarket market.
             </p>
           </div>
 

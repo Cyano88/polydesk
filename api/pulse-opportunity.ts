@@ -12,8 +12,10 @@ type Opportunity = {
   depthAtTwoCents?: number
   suggestedYesBid?: number
   suggestedNoBid?: number
+  tickSize?: string
   maxSpread?: number
   minSize?: number
+  estimatedRewardCapitalUsdc?: number
   daysToResolve?: number
   lpExecutionRisk?: string
   score?: number

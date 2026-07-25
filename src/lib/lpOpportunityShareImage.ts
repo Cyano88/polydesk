@@ -9,9 +9,11 @@ export type LpOpportunityShareData = {
   liveSpread?: number
   depthAtTwoCents?: number
   minSize?: number
+  estimatedRewardCapitalUsdc?: number
   daysToResolve?: number
   suggestedYesBid?: number
   suggestedNoBid?: number
+  tickSize?: string
   lpExecutionRisk?: string
   updatedAt?: string
 }
@@ -41,9 +43,10 @@ function format(value: unknown, maximumFractionDigits = 0) {
   return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : '—'
 }
 
-function quote(value: unknown) {
+function quote(value: unknown, tickSize = '0.01') {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed.toFixed(4) : '—'
+  const digits = tickSize.split('.')[1]?.length ?? 2
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : '—'
 }
 
 function wrapLines(context: CanvasRenderingContext2D, value: string, maxWidth: number, maxLines: number) {
@@ -156,7 +159,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
 
     const reportMetrics = [
       { label: 'Spread', value: data.liveSpread == null ? '—' : `${format(data.liveSpread, 1)}c`, x: 528, width: 140 },
-      { label: 'Depth', value: format(data.depthAtTwoCents), x: 688, width: 160 },
+      { label: 'Min setup', value: data.estimatedRewardCapitalUsdc == null ? '—' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, x: 688, width: 160 },
       { label: 'Ends', value: data.daysToResolve == null ? '—' : `${format(data.daysToResolve)}d`, x: 868, width: 124 },
     ]
     reportMetrics.forEach(metric => {
@@ -169,7 +172,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
       context.fillText(metric.value, metric.x + 20, 506)
     })
   } else {
-  roundedRect(context, 88, 410, 650, 132, 18)
+  roundedRect(context, 88, 410, 420, 132, 18)
   context.fillStyle = '#eff6ff'
   context.fill()
   drawLabel(context, 'Daily rewards', 124, 450, BLUE)
@@ -179,6 +182,14 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   const rewardWidth = context.measureText(format(data.dailyReward)).width
   context.font = '700 26px Inter, Arial, sans-serif'
   context.fillText('USDC', 140 + rewardWidth, 511)
+
+  roundedRect(context, 528, 410, 220, 132, 18)
+  context.fillStyle = '#f9fafb'
+  context.fill()
+  drawLabel(context, 'Min setup', 550, 450)
+  context.fillStyle = INK
+  context.font = '700 30px Inter, Arial, sans-serif'
+  context.fillText(data.estimatedRewardCapitalUsdc == null ? '—' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, 550, 506)
 
   roundedRect(context, 766, 410, 226, 132, 18)
   context.fillStyle = '#f9fafb'
@@ -215,7 +226,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   drawLabel(context, 'YES', 128, 712, YES)
   context.fillStyle = YES
   context.font = '700 54px Inter, Arial, sans-serif'
-  context.fillText(quote(data.suggestedYesBid), 128, 778)
+  context.fillText(quote(data.suggestedYesBid, data.tickSize), 128, 778)
 
   roundedRect(context, 562, 670, 430, 142, 16)
   context.fillStyle = '#fef2f2'
@@ -225,7 +236,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   drawLabel(context, 'NO', 602, 712, NO)
   context.fillStyle = NO
   context.font = '700 54px Inter, Arial, sans-serif'
-  context.fillText(quote(data.suggestedNoBid), 602, 778)
+  context.fillText(quote(data.suggestedNoBid, data.tickSize), 602, 778)
 
   drawLabel(context, isReport ? 'Scout takeaway' : 'How to join', 88, 878)
   context.fillStyle = INK

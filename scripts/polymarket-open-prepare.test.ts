@@ -62,7 +62,6 @@ function dependencies(overrides: Partial<PrepareOpenDependencies> = {}): Prepare
     }),
     now: () => 1_800_000_000_000,
     builderCode: () => builderCode,
-    maxUsdc: () => '25',
     ...overrides,
   }
 }
@@ -146,7 +145,7 @@ test('reports public wallet blockers without asking for credentials', async () =
   assert.equal(result.data.issues.length, 3)
 })
 
-test('fails closed when FOK liquidity or the safety ceiling is insufficient', async () => {
+test('fails closed when FOK liquidity is insufficient without imposing a product spend ceiling', async () => {
   const noLiquidity = await preparePolymarketOpen(input({ orderType: 'FOK' }), dependencies({
     fetchJson: async url => url.includes('/events/slug/')
       ? event()
@@ -158,12 +157,18 @@ test('fails closed when FOK liquidity or the safety ceiling is insufficient', as
     assert.match(noLiquidity.error, /liquidity is insufficient/i)
   }
 
-  const overCap = await preparePolymarketOpen(input({ maxSpendUsdc: '25.000001' }), dependencies())
-  assert.equal(overCap.ok, false)
-  if (!overCap.ok) {
-    assert.equal(overCap.status, 400)
-    assert.match(overCap.error, /safety ceiling/i)
-  }
+  const largerOrder = await preparePolymarketOpen(input({
+    maxSpendUsdc: '100',
+    orderType: 'GTC',
+    limitPrice: '0.49',
+  }), dependencies({
+    readWallet: async () => ({
+      deployed: true,
+      balanceRaw: 200_000_000n,
+      allowanceRaw: 200_000_000n,
+    }),
+  }))
+  assert.equal(largerOrder.ok, true)
 })
 
 test('uses current asks instead of a stale last-trade quote and enforces minimum shares', async () => {

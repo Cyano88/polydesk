@@ -3,8 +3,6 @@ import type { Request, Response } from 'express'
 
 type RecordValue = Record<string, unknown>
 
-const DEFAULT_MAX_USDC = '25'
-
 function clean(value: unknown, max = 280) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -30,17 +28,6 @@ function validMarketUrl(value: string) {
   } catch {
     return false
   }
-}
-
-function maxUsdc() {
-  const configured = env('POLYDESK_EXTERNAL_OPEN_MAX_USDC') || DEFAULT_MAX_USDC
-  if (!/^\d+(?:\.\d{1,6})?$/.test(configured) || Number(configured) <= 0) return DEFAULT_MAX_USDC
-  return configured
-}
-
-function usdcAtomic(value: string) {
-  const [whole, fraction = ''] = value.split('.')
-  return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'))
 }
 
 function validSignature(value: unknown) {
@@ -95,7 +82,6 @@ export type SignedOpenValidation =
       orderType: 'FAK' | 'FOK'
       order: RecordValue
       orderPayload: RecordValue
-      maxUsdc: string
       orderBody: string
       handoffId: string
     }
@@ -126,8 +112,6 @@ export function validateSignedOpenInput(body: unknown, nowMs = Date.now()): Sign
   const orderType = clean(body.orderType, 12).toUpperCase()
   const order = body.order
   const orderPayload = body.orderPayload
-  const ceiling = maxUsdc()
-
   if (!/^[a-zA-Z0-9:_-]{8,80}$/.test(externalOrderId)) {
     return { ok: false, status: 400, error: 'externalOrderId must be 8-80 letters, numbers, colons, underscores, or hyphens.' }
   }
@@ -185,10 +169,6 @@ export function validateSignedOpenInput(body: unknown, nowMs = Date.now()): Sign
   if (!/^\d+$/.test(makerAmount) || !/^\d+$/.test(takerAmount) || BigInt(makerAmount) <= 0n || BigInt(takerAmount) <= 0n) {
     return { ok: false, status: 400, error: 'Signed OPEN amounts must be positive minimal-unit integers.' }
   }
-  if (BigInt(makerAmount) > usdcAtomic(ceiling)) {
-    return { ok: false, status: 400, error: `Signed OPEN maker amount exceeds the ${ceiling} USDC safety ceiling.` }
-  }
-
   const timestamp = Number(clean(order.timestamp, 32))
   const expiration = Number(clean(order.expiration, 32))
   if (!Number.isSafeInteger(timestamp) || timestamp < nowMs - 900_000 || timestamp > nowMs + 120_000) {
@@ -214,7 +194,6 @@ export function validateSignedOpenInput(body: unknown, nowMs = Date.now()): Sign
     orderType,
     order,
     orderPayload: orderPayload as RecordValue,
-    maxUsdc: ceiling,
     orderBody,
     handoffId,
   }
@@ -240,7 +219,6 @@ export function polymarketSignedOpenValidationHandler(req: Request, res: Respons
     tokenId: validation.tokenId,
     side: 'BUY',
     orderType: validation.orderType,
-    maxUsdc: validation.maxUsdc,
     next: 'Pay the OKX x402 challenge, then replay this exact body without modification.',
   })
 }
@@ -284,7 +262,6 @@ export default async function a2mcpPolymarketSignedOpenHandler(req: Request, res
     },
     safety: {
       allowedOrderTypes: ['FAK', 'FOK'],
-      maxUsdc: validation.maxUsdc,
       privateKeyReceived: false,
       clobApiKeyIdentifierReceived: true,
       clobSecretReceived: false,

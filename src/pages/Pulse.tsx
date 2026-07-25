@@ -14,13 +14,23 @@ type PulseOpportunity = {
   depthAtTwoCents?: number
   suggestedYesBid?: number
   suggestedNoBid?: number
+  tickSize?: string
   maxSpread?: number
   minSize?: number
+  estimatedRewardCapitalUsdc?: number
   daysToResolve?: number
   lpExecutionRisk?: string
   score?: number
   scoutReason?: string
   executionPlan?: string[]
+  contextSignals?: Array<{
+    kind: 'news' | 'football'
+    label: string
+    source: string
+    title: string
+    url?: string
+    publishedAt?: string
+  }>
   footballContext?: {
     fixture?: string
     status?: string
@@ -35,6 +45,7 @@ type PulseOpportunity = {
 type PulseHighlight = {
   id: string
   kind: 'news' | 'football' | 'lp'
+  rank: 1 | 2 | 3
   eyebrow: string
   context: string
   source?: string
@@ -50,6 +61,8 @@ type PulseFeed = {
   markets?: PulseOpportunity[]
   providers?: Record<string, 'live' | 'unavailable'>
 }
+
+let pulseSnapshot: PulseFeed | null = null
 
 function metric(value: unknown, suffix: string, digits = 2) {
   const number = Number(value)
@@ -82,6 +95,9 @@ function riskText(value: string | undefined) {
 function MarketMetrics({ opportunity, inverse = false }: { opportunity: PulseOpportunity; inverse?: boolean }) {
   const items = [
     opportunity.dailyReward == null ? '' : `${compactNumber(opportunity.dailyReward)} USDC/day`,
+    opportunity.estimatedRewardCapitalUsdc == null
+      ? ''
+      : `≈${compactNumber(opportunity.estimatedRewardCapitalUsdc, 2)} USDC minimum setup`,
     metric(Number(opportunity.liveSpread) * 100, 'c spread', 1),
     metric(opportunity.depthAtTwoCents, ' depth', 0),
     typeof opportunity.daysToResolve === 'number' ? `${opportunity.daysToResolve}d left` : '',
@@ -89,6 +105,36 @@ function MarketMetrics({ opportunity, inverse = false }: { opportunity: PulseOpp
   return (
     <div className={`flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold ${inverse ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
       {items.map(item => <span key={item}>{item}</span>)}
+    </div>
+  )
+}
+
+function ordinal(rank: number) {
+  if (rank === 1) return '1st'
+  if (rank === 2) return '2nd'
+  return '3rd'
+}
+
+function ContextLabels({ opportunity, inverse = false }: { opportunity: PulseOpportunity; inverse?: boolean }) {
+  const signals = opportunity.contextSignals?.slice(0, 2) ?? []
+  if (!signals.length) return null
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label="Market intelligence context">
+      {signals.map(signal => (
+        <span
+          key={`${signal.kind}:${signal.title}`}
+          title={signal.title}
+          className={`inline-flex max-w-full items-center rounded-md px-2 py-1 text-[10px] font-semibold ${
+            inverse
+              ? 'bg-white/12 text-white/85 backdrop-blur'
+              : signal.kind === 'football'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
+                : 'bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200'
+          }`}
+        >
+          {signal.label}{signal.source ? ` · ${signal.source}` : ''}
+        </span>
+      ))}
     </div>
   )
 }
@@ -114,7 +160,7 @@ function PulseHeroCard({
       className="polydesk-card group relative block h-[280px] w-full overflow-hidden !border-gray-800 !bg-gray-950 text-left shadow-[0_20px_50px_rgba(15,23,42,0.18)] disabled:cursor-default dark:!border-white/10"
     >
       {lead.image && !imageBroken ? (
-        <img src={lead.image} alt="" onError={onImageError} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+        <img src={lead.image} alt="" loading="eager" decoding="async" fetchPriority="high" onError={onImageError} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out will-change-transform group-hover:scale-[1.025]" />
       ) : (
         <div className="absolute inset-0 overflow-hidden bg-[#111216]">
           <span className={`absolute -left-16 top-8 h-44 w-44 rounded-full blur-3xl ${footballPending ? 'bg-emerald-400/20' : 'bg-blue-400/15'}`} />
@@ -125,7 +171,8 @@ function PulseHeroCard({
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-black/15" />
       <div className="relative flex h-full flex-col justify-end p-5">
         <div className="mb-2 flex items-center gap-2">
-          <span className="rounded-lg !bg-white px-2.5 py-1 text-[10px] font-black uppercase !text-gray-950">{lead.eyebrow}</span>
+          <span className="rounded-lg !bg-white px-2.5 py-1 text-[10px] font-black uppercase !text-gray-950">{ordinal(lead.rank)}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">{lead.eyebrow}</span>
           {lead.source && <span className="truncate text-[10px] font-semibold text-white/60">{lead.source}</span>}
         </div>
         <p className="line-clamp-1 text-xs font-medium text-white/65">{lead.context}</p>
@@ -133,6 +180,7 @@ function PulseHeroCard({
         {available ? (
           <>
             <div className="mt-3"><MarketMetrics opportunity={lead.opportunity} inverse /></div>
+            <div className="mt-2"><ContextLabels opportunity={lead.opportunity} inverse /></div>
             <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white">
               View LP opportunity <ArrowRight className="h-3.5 w-3.5" />
             </span>
@@ -147,8 +195,8 @@ function PulseHeroCard({
 
 export default function Pulse() {
   const [searchParams] = useSearchParams()
-  const [feed, setFeed] = useState<PulseFeed | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [feed, setFeed] = useState<PulseFeed | null>(pulseSnapshot)
+  const [loading, setLoading] = useState(!pulseSnapshot)
   const [error, setError] = useState('')
   const [active, setActive] = useState(0)
   const [selected, setSelected] = useState<PulseOpportunity | null>(null)
@@ -159,6 +207,7 @@ export default function Pulse() {
       const response = await fetch('/api/pulse')
       const data = await response.json() as PulseFeed
       if (!response.ok || !data.ok) throw new Error('Pulse is unavailable.')
+      pulseSnapshot = data
       setFeed(data)
       setError('')
     } catch (cause) {
@@ -177,7 +226,6 @@ export default function Pulse() {
   const highlights = feed?.highlights ?? []
   const markets = feed?.markets ?? []
   const lead = highlights.length ? highlights[active % highlights.length] : undefined
-
   useEffect(() => {
     const requested = searchParams.get('opportunity')?.trim().toLowerCase()
     if (!requested || !markets.length) return
@@ -187,7 +235,7 @@ export default function Pulse() {
 
   useEffect(() => {
     if (!highlights.length) return
-    setActive(Math.floor(Math.random() * highlights.length))
+    setActive(0)
   }, [feed?.updatedAt, highlights.length])
 
   useEffect(() => {
@@ -238,6 +286,12 @@ export default function Pulse() {
               )}
             </div>
             <div className="mt-3"><MarketMetrics opportunity={selected} /></div>
+            <div className="mt-2"><ContextLabels opportunity={selected} /></div>
+            {selected.estimatedRewardCapitalUsdc != null && (
+              <p className="mt-3 text-[11px] leading-5 text-gray-500 dark:text-gray-400">
+                Estimated from the market’s minimum reward size across both suggested quotes. Qualifying does not guarantee a payout; Polymarket does not pay earned rewards below 1 USDC.
+              </p>
+            )}
             {selected.description && <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-300">{selected.description}</p>}
           </div>
 
@@ -263,6 +317,9 @@ export default function Pulse() {
                 marketUrl={selected.marketUrl}
                 yesQuote={selected.suggestedYesBid}
                 noQuote={selected.suggestedNoBid}
+                tickSize={selected.tickSize}
+                rewardMinShares={selected.minSize}
+                estimatedRewardCapitalUsdc={selected.estimatedRewardCapitalUsdc}
               />
             )}
           </div>
@@ -276,7 +333,7 @@ export default function Pulse() {
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Live intelligence</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Pulse</h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Verified signals matched to live Polymarket liquidity.</p>
+        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">The strongest live Polymarket liquidity, with relevant news and football context when verified.</p>
       </div>
 
       {loading ? (
@@ -306,12 +363,18 @@ export default function Pulse() {
 
       {!!markets.length && (
         <div className="polydesk-card divide-y divide-gray-100 overflow-hidden dark:divide-white/10">
-          {markets.map(market => (
+          {markets.map((market, index) => (
             <button key={opportunityKey(market)} type="button" onClick={() => setSelected(market)} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-gray-50 dark:hover:bg-white/[0.04]">
-              <span className="min-w-0 flex-1">
+              {index < 3 && (
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gray-100 text-[10px] font-black text-gray-700 dark:bg-white/10 dark:text-white">
+                  {ordinal(index + 1)}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
                 <span className="line-clamp-2 text-sm font-semibold leading-5 text-gray-950 dark:text-white">{market.title}</span>
-                <span className="mt-1 block"><MarketMetrics opportunity={market} /></span>
-              </span>
+                <div className="mt-1"><MarketMetrics opportunity={market} /></div>
+                <div className="mt-2"><ContextLabels opportunity={market} /></div>
+              </div>
               <span className="shrink-0 text-[10px] font-semibold text-gray-400">{riskText(market.lpExecutionRisk)}</span>
               <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" />
             </button>

@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express'
-import { getPolyWorldcupNewsFeed, type PolyWorldCupArticle } from './poly-worldcup-news.js'
 import { buildLiveScout } from './x402-polymarket-scout.js'
 
 type PulseOpportunity = {
@@ -12,14 +11,24 @@ type PulseOpportunity = {
   depthAtTwoCents?: number
   suggestedYesBid?: number
   suggestedNoBid?: number
+  tickSize?: string
   maxSpread?: number
   minSize?: number
+  estimatedRewardCapitalUsdc?: number
   liquidity?: number
   daysToResolve?: number
   lpExecutionRisk?: string
   score?: number
   scoutReason?: string
   executionPlan?: string[]
+  contextSignals?: Array<{
+    kind: 'news' | 'football'
+    label: string
+    source: string
+    title: string
+    url?: string
+    publishedAt?: string
+  }>
   footballContext?: {
     fixture?: string
     status?: string
@@ -34,6 +43,7 @@ type PulseOpportunity = {
 type PulseHighlight = {
   id: string
   kind: 'news' | 'football' | 'lp'
+  rank: 1 | 2 | 3
   eyebrow: string
   context: string
   source?: string
@@ -70,10 +80,11 @@ function validOpportunity(opportunity: PulseOpportunity | undefined): opportunit
   return Boolean(opportunity?.title && opportunity?.marketUrl?.startsWith('https://polymarket.com/event/'))
 }
 
-function highlight(kind: PulseHighlight['kind'], opportunity: PulseOpportunity, context: string, image = '', source = ''): PulseHighlight {
+function highlight(kind: PulseHighlight['kind'], rank: PulseHighlight['rank'], opportunity: PulseOpportunity, context: string, image = '', source = ''): PulseHighlight {
   return {
     id: `${kind}:${opportunityKey(opportunity)}`,
     kind,
+    rank,
     eyebrow: kind === 'news' ? 'News match' : kind === 'football' ? 'Football match' : 'Best LP market',
     context,
     source,
@@ -82,94 +93,37 @@ function highlight(kind: PulseHighlight['kind'], opportunity: PulseOpportunity, 
   }
 }
 
-async function strongestNewsMatch(articles: PolyWorldCupArticle[]) {
-  const candidates = articles.slice(0, 3)
-  const results = await Promise.all(candidates.map(async article => {
-    const scout = await buildLiveScout({
-      mode: 'news',
-      context: article.title,
-      candidateLimit: 4,
-      opportunityLimit: 1,
-    })
-    return { article, opportunity: opportunities(scout)[0] }
-  }))
-  return results
-    .filter((item): item is { article: PolyWorldCupArticle; opportunity: PulseOpportunity } => validOpportunity(item.opportunity))
-    .sort((a, b) => Number(b.opportunity.score ?? 0) - Number(a.opportunity.score ?? 0))[0]
-}
-
 async function buildPulseFeed(): Promise<PulseFeed> {
-  const [newsResult, footballResult, bestResult] = await Promise.allSettled([
-    getPolyWorldcupNewsFeed(),
-    buildLiveScout({ mode: 'football', candidateLimit: 8, opportunityLimit: 3 }),
-    buildLiveScout({ mode: 'best', candidateLimit: 16, opportunityLimit: 8 }),
+  const [bestResult] = await Promise.allSettled([
+    buildLiveScout({ mode: 'best', candidateLimit: 32, opportunityLimit: 10 }),
   ])
 
-  const newsFeed = newsResult.status === 'fulfilled' ? newsResult.value : null
-  const footballScout = footballResult.status === 'fulfilled' ? footballResult.value : null
   const bestScout = bestResult.status === 'fulfilled' ? bestResult.value : null
-  const newsMatch = newsFeed?.mode === 'live'
-    ? await strongestNewsMatch(newsFeed.articles).catch(() => undefined)
-    : undefined
-  const bestFootball = footballScout ? opportunities(footballScout).find(validOpportunity) : undefined
-  const bestLp = bestScout ? opportunities(bestScout).find(validOpportunity) : undefined
+  const bestMarkets = bestScout
+    ? opportunities(bestScout)
+        .filter(validOpportunity)
+        .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
+        .slice(0, 3)
+    : []
+  const bestLp = bestMarkets[0]
+  const matchedContext = bestMarkets.flatMap(market => market.contextSignals ?? [])
 
   const highlights: PulseHighlight[] = []
-  if (newsMatch) {
-    highlights.push(highlight(
-      'news',
-      newsMatch.opportunity,
-      newsMatch.article.title,
-      newsMatch.article.image,
-      newsMatch.article.source,
-    ))
-  } else {
-    highlights.push({
-      id: 'news:unavailable',
-      kind: 'news',
-      eyebrow: 'News match',
-      context: 'Live market matching',
-      opportunity: {
-        title: 'No precise market match yet',
-        description: 'Pulse will replace this when a live headline and an eligible Polymarket book align.',
-      },
-    })
-  }
-  if (bestFootball) {
-    highlights.push(highlight(
-      'football',
-      bestFootball,
-      bestFootball.footballContext?.fixture || bestFootball.title || 'Verified football fixture',
-      bestFootball.image,
-      bestFootball.footballContext?.provider || '',
-    ))
-  } else {
-    highlights.push({
-      id: 'football:unavailable',
-      kind: 'football',
-      eyebrow: 'Football',
-      context: 'Verified fixture matching',
-      opportunity: {
-        title: 'Football markets are coming',
-        description: 'Pulse is waiting for a verified fixture and an eligible matched Polymarket book.',
-      },
-    })
-  }
-  if (bestLp) {
+  for (const [index, opportunity] of bestMarkets.entries()) {
     highlights.push(highlight(
       'lp',
-      bestLp,
-      bestLp.scoutReason || 'Best current conservative maker opportunity',
-      bestLp.image,
+      (index + 1) as PulseHighlight['rank'],
+      opportunity,
+      opportunity.scoutReason || 'Strong live liquidity opportunity',
+      opportunity.image,
       'Polymarket CLOB',
     ))
+    highlights[highlights.length - 1].eyebrow = index === 0 ? 'Strongest opportunity' : 'Ranked opportunity'
   }
-
   const seen = new Set<string>()
   const markets = [
     ...highlights.map(item => item.opportunity),
     ...(bestScout ? opportunities(bestScout) : []),
-    ...(footballScout ? opportunities(footballScout) : []),
   ]
     .filter(validOpportunity)
     .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
@@ -188,8 +142,8 @@ async function buildPulseFeed(): Promise<PulseFeed> {
     highlights,
     markets,
     providers: {
-      news: newsMatch ? 'live' : 'unavailable',
-      football: bestFootball ? 'live' : 'unavailable',
+      news: matchedContext.some(signal => signal.kind === 'news') ? 'live' : 'unavailable',
+      football: matchedContext.some(signal => signal.kind === 'football') ? 'live' : 'unavailable',
       polymarket: bestLp ? 'live' : 'unavailable',
     },
   }
@@ -214,5 +168,6 @@ export default async function pulseHandler(req: Request, res: Response) {
     res.setHeader('Allow', 'GET')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
+  res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45')
   return res.json(await getPulseFeed())
 }

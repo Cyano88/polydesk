@@ -69,8 +69,8 @@ const services: PolyDeskAgentService[] = [
     payment: { required: true, standard: 'x402' },
     request: {
       query: [
-        { name: 'scoutMode', required: false, description: 'LP Scout category.', values: ['best', 'theme', 'market'] },
-        { name: 'context', required: false, description: 'Theme, market URL, slug, sector, event, token, election, or sports category.' },
+        { name: 'scoutMode', required: false, description: 'Use best for the ranked shortlist or market for one exact market.', values: ['best', 'market'] },
+        { name: 'context', required: false, description: 'Required for market mode: a Polymarket event URL or slug.' },
         { name: 'budget', required: false, description: 'Human budget context in USDC. Used for sizing guidance only; PolyDesk does not trade.' },
         { name: 'agent', required: false, description: 'Buyer-agent slug used to store receipts and reports.' },
       ],
@@ -80,7 +80,7 @@ const services: PolyDeskAgentService[] = [
       ],
     },
     output: [
-      'best available LP opportunity when one passes the safety screen',
+      'up to 10 ranked LP opportunities in best mode when they pass the safety screen',
       'plain-language execution checklist',
       'risk flags and data gaps',
       'x402 receipt and ZeroScout/0G verification handoff',
@@ -109,8 +109,8 @@ const services: PolyDeskAgentService[] = [
     payment: { required: true, standard: 'x402' },
     request: {
       query: [
-        { name: 'scoutMode', required: false, description: 'LP Scout category.', values: ['best', 'theme', 'market'] },
-        { name: 'context', required: false, description: 'Theme, market URL, slug, sector, event, token, election, or sports category.' },
+        { name: 'scoutMode', required: false, description: 'Use best for the ranked shortlist or market for one exact market.', values: ['best', 'market'] },
+        { name: 'context', required: false, description: 'Required for market mode: a Polymarket event URL or slug.' },
         { name: 'budget', required: false, description: 'Human budget context in USDC. Used for sizing guidance only; PolyDesk does not trade.' },
         { name: 'agent', required: false, description: 'Buyer-agent slug used to store receipts and reports.' },
       ],
@@ -120,7 +120,7 @@ const services: PolyDeskAgentService[] = [
       ],
     },
     output: [
-      'best available LP opportunity when one passes the safety screen',
+      'up to 10 ranked LP opportunities in best mode when they pass the safety screen',
       'plain-language execution checklist',
       'risk flags and data gaps',
       'x402 receipt and ZeroScout/0G verification handoff',
@@ -210,7 +210,7 @@ const services: PolyDeskAgentService[] = [
           { name: 'externalOrderId', required: true, description: 'Caller-generated correlation identifier, 8-80 safe characters.' },
           { name: 'marketUrl', required: true, description: 'Canonical polymarket.com event URL.' },
           { name: 'outcome', required: true, description: 'Requested outcome. Ambiguous events return market choices instead of guessing.' },
-          { name: 'maxSpendUsdc', required: true, description: 'Maximum pUSD spend, capped by the service safety ceiling.' },
+          { name: 'maxSpendUsdc', required: true, description: 'Maximum pUSD spend authorized by the buyer.' },
           { name: 'wallet', required: true, description: 'Public Polymarket deposit-wallet address. No private key.' },
           { name: 'orderType', required: false, description: 'Immediate order type. Defaults to FAK.', values: ['FAK', 'FOK'] },
           { name: 'marketSlug', required: false, description: 'Exact market slug for multi-market events.' },
@@ -250,7 +250,7 @@ const services: PolyDeskAgentService[] = [
     ],
     safety: [
       'BUY only; FAK or FOK only',
-      'default maximum maker amount is 25 USDC',
+      'spend is limited by the buyer wallet balance and allowance',
       'millisecond timestamp must be fresh and match the exact payload',
       'buyer can use the free preflight endpoint before paying',
       'buyer generates CLOB submission headers locally and submits directly to Polymarket',

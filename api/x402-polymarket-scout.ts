@@ -5,6 +5,8 @@ import { appendAgentActivity, normalizeActivitySlug } from './agent-activity.js'
 import { generateZeroScoutPolymarketBrief } from './zeroscout-polymarket-brief.js'
 import { protectLpScoutWithHashPayLink } from './hashpaylink-agentic-checkout.js'
 import { getPolyStreamFeed } from './poly-stream.js'
+import { enrichLpOpportunitiesWithContext } from './lp-context-intelligence.js'
+import { estimateTwoSidedRewardCapitalUsdc } from './lp-reward-estimate.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -57,6 +59,7 @@ type PolymarketBookLevel = {
 type PolymarketBookResponse = {
   bids?: PolymarketBookLevel[]
   asks?: PolymarketBookLevel[]
+  tick_size?: string | number
 }
 
 type PolymarketBookSummary = {
@@ -67,6 +70,7 @@ type PolymarketBookSummary = {
   bidDepth?: number
   askDepth?: number
   depthAtTwoCents?: number
+  tickSize?: string
 }
 
 type ScoutMode = 'best' | 'news' | 'market' | 'football'
@@ -97,6 +101,7 @@ type PolymarketLpOpportunity = {
   bidDepth?: number
   askDepth?: number
   depthAtTwoCents?: number
+  tickSize?: string
   suggestedYesBid?: number
   suggestedNoBid?: number
   eligible?: boolean
@@ -384,6 +389,20 @@ function clampPrice(value: number) {
   return Math.min(0.99, Math.max(0.01, value))
 }
 
+const SUPPORTED_TICK_SIZES = new Set(['0.1', '0.01', '0.001', '0.0001'])
+
+function normalizedTickSize(value: unknown) {
+  const text = String(value ?? '').trim()
+  return SUPPORTED_TICK_SIZES.has(text) ? text : undefined
+}
+
+function alignMakerPrice(value: number, tickSize = '0.01') {
+  const tick = Number(tickSize)
+  const decimals = tickSize.split('.')[1]?.length ?? 0
+  const aligned = Math.floor((value + Number.EPSILON) / tick) * tick
+  return Number(Math.min(1 - tick, Math.max(tick, aligned)).toFixed(decimals))
+}
+
 function cleanContext(value: unknown) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 180)
 }
@@ -580,7 +599,16 @@ async function fetchPolymarketBook(tokenId: string): Promise<PolymarketBookSumma
       ? bidLevels.reduce((sum, level) => sum + (typeof level.price === 'number' && typeof bestBid === 'number' && bestBid - level.price <= 0.02 ? level.size ?? 0 : 0), 0)
         + askLevels.reduce((sum, level) => sum + (typeof level.price === 'number' && typeof bestAsk === 'number' && level.price - bestAsk <= 0.02 ? level.size ?? 0 : 0), 0)
       : undefined
-  return { bestBid, bestAsk, midpoint, spread, bidDepth, askDepth, depthAtTwoCents }
+  return {
+    bestBid,
+    bestAsk,
+    midpoint,
+    spread,
+    bidDepth,
+    askDepth,
+    depthAtTwoCents,
+    tickSize: normalizedTickSize(data.tick_size),
+  }
 }
 
 function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportunity {
@@ -656,8 +684,9 @@ function buildExecutionPlan(opportunity: PolymarketLpOpportunity, budget?: strin
   const depthText = typeof opportunity.depthAtTwoCents === 'number'
     ? `Depth within 2c is about ${opportunity.depthAtTwoCents.toFixed(0)} shares. Keep your quote small compared with that depth.`
     : 'Depth could not be confirmed; keep size conservative until the book refreshes.'
+  const quoteDigits = opportunity.tickSize?.split('.')[1]?.length ?? 2
   const priceText = typeof opportunity.suggestedYesBid === 'number'
-    ? `Human quote guide: try YES near ${opportunity.suggestedYesBid.toFixed(3)} or NO near ${opportunity.suggestedNoBid?.toFixed(3) ?? 'n/a'}, then refresh before the next quote.`
+    ? `Human quote guide: try YES near ${opportunity.suggestedYesBid.toFixed(quoteDigits)} or NO near ${opportunity.suggestedNoBid?.toFixed(quoteDigits) ?? 'n/a'}, then refresh before the next quote.`
     : 'Do not quote until midpoint and bid/ask are available.'
   return [
     budgetText,
@@ -674,8 +703,9 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
   const midpoint = book.midpoint ?? normalizeProbability(readNumber(market, ['last_trade_price', 'lastPrice', 'price', 'midpoint']))
   const spread = book.spread
   const offset = Math.min(0.02, Math.max(0.005, (opportunity.maxSpread ?? 0.03) * 0.35))
-  const suggestedYesBid = typeof midpoint === 'number' ? clampPrice(midpoint - offset) : undefined
-  const suggestedNoBid = typeof midpoint === 'number' ? clampPrice((1 - midpoint) - offset) : undefined
+  const tickSize = book.tickSize ?? '0.01'
+  const suggestedYesBid = typeof midpoint === 'number' ? alignMakerPrice(clampPrice(midpoint - offset), tickSize) : undefined
+  const suggestedNoBid = typeof midpoint === 'number' ? alignMakerPrice(clampPrice((1 - midpoint) - offset), tickSize) : undefined
   const eligible = typeof spread === 'number' && typeof opportunity.maxSpread === 'number' ? spread <= opportunity.maxSpread : undefined
 
   let lpExecutionRisk: PolymarketLpOpportunity['lpExecutionRisk'] = 'medium'
@@ -708,6 +738,7 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
     ...opportunity,
     ...book,
     midpoint,
+    tickSize,
     suggestedYesBid,
     suggestedNoBid,
     eligible,
@@ -808,6 +839,11 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     dailyReward: rounded(opportunity.dailyReward, 2),
     maxSpread: rounded(opportunity.maxSpread),
     minSize: rounded(opportunity.minSize, 2),
+    estimatedRewardCapitalUsdc: estimateTwoSidedRewardCapitalUsdc(
+      opportunity.minSize,
+      opportunity.suggestedYesBid,
+      opportunity.suggestedNoBid,
+    ),
     liquidity: rounded(opportunity.liquidity, 2),
     bestBid: rounded(opportunity.bestBid),
     bestAsk: rounded(opportunity.bestAsk),
@@ -815,6 +851,7 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     bidDepth: rounded(opportunity.bidDepth, 2),
     askDepth: rounded(opportunity.askDepth, 2),
     depthAtTwoCents: rounded(opportunity.depthAtTwoCents, 2),
+    tickSize: opportunity.tickSize,
     suggestedYesBid: rounded(opportunity.suggestedYesBid),
     suggestedNoBid: rounded(opportunity.suggestedNoBid),
     eligible: opportunity.eligible,
@@ -911,10 +948,12 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const requestedOpportunityLimit = Number(options.opportunityLimit)
   const opportunityLimit = Number.isFinite(requestedOpportunityLimit)
     ? Math.max(1, Math.min(12, Math.floor(requestedOpportunityLimit)))
-    : mode === 'market' ? 1 : 3
-  const opportunities = ranked
-    .slice(0, opportunityLimit)
-    .map(opportunity => serializeOpportunity(opportunity, budget))
+    : mode === 'market' ? 1 : mode === 'best' ? 10 : 3
+  const opportunities = await enrichLpOpportunitiesWithContext(
+    ranked
+      .slice(0, opportunityLimit)
+      .map(opportunity => serializeOpportunity(opportunity, budget)),
+  )
 
   const themeText = mode === 'news' && context ? ` for "${context}"` : ''
   const marketText = mode === 'market' && context ? ` for "${context}"` : ''
