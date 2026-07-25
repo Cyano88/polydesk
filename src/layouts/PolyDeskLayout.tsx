@@ -3,16 +3,12 @@ import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
   Activity as PulseIcon,
-  ArrowRight,
   Copy,
   LayoutDashboard,
-  Loader2,
   LogOut,
-  Mic2,
   Moon,
   Radar,
   Sun,
-  UserRound,
 } from 'lucide-react'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
@@ -48,97 +44,6 @@ function avatarGradient(seed: string) {
   return `linear-gradient(135deg, hsl(${hue} 76% 58%), hsl(${(hue + 78) % 360} 70% 34%))`
 }
 
-function LaunchIdentitySequence() {
-  return (
-    <div className="polydesk-launch-identity" aria-hidden="true">
-      <span className="polydesk-launch-identity__halo" />
-      <span className="polydesk-launch-identity__stage polydesk-launch-identity__human">
-        <UserRound />
-      </span>
-      <span className="polydesk-launch-identity__stage polydesk-launch-identity__voice">
-        <Mic2 />
-        <span className="polydesk-launch-identity__signal"><i /><i /><i /></span>
-      </span>
-      <span className="polydesk-launch-identity__stage polydesk-launch-identity__mark">
-        <PolymarketMark />
-      </span>
-      <span className="polydesk-launch-identity__market-dot polydesk-launch-identity__market-dot--one" />
-      <span className="polydesk-launch-identity__market-dot polydesk-launch-identity__market-dot--two" />
-    </div>
-  )
-}
-
-function PolyDeskLaunchGate({
-  ready,
-  theme,
-  onToggleTheme,
-}: {
-  ready: boolean
-  theme: 'light' | 'dark'
-  onToggleTheme: () => void
-}) {
-  return (
-    <main className="relative isolate flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f7f7f9] text-gray-950 dark:bg-[#111113] dark:text-white">
-      <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.95),transparent_38%),radial-gradient(circle_at_12%_76%,rgba(96,165,250,0.14),transparent_34%),radial-gradient(circle_at_88%_68%,rgba(167,139,250,0.13),transparent_32%)] dark:bg-[radial-gradient(ellipse_at_50%_16%,rgba(255,255,255,0.075),transparent_32%),radial-gradient(ellipse_at_50%_100%,rgba(255,255,255,0.025),transparent_44%)]" />
-      <div className="pointer-events-none absolute inset-0 -z-10 opacity-[0.22] [background-image:linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(circle_at_center,black,transparent_76%)] dark:opacity-0" />
-      <div className="pointer-events-none absolute inset-0 -z-10 hidden overflow-hidden dark:block" aria-hidden="true">
-        <span className="absolute -bottom-[52%] -left-[18%] h-[72%] w-[88%] rounded-[50%] border border-white/[0.035]" />
-        <span className="absolute -bottom-[46%] -left-[10%] h-[66%] w-[84%] rounded-[50%] border border-white/[0.045]" />
-        <span className="absolute -bottom-[54%] -right-[24%] h-[78%] w-[92%] rounded-[50%] border border-white/[0.03]" />
-        <span className="absolute left-1/2 top-[20%] h-px w-24 -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-      </div>
-      <header className="relative z-10 w-full shrink-0">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-6">
-          <span className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
-            <PolymarketMark className="h-5 w-5" /> PolyDesk
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onToggleTheme}
-              aria-label={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
-              title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}
-              className="grid h-8 w-8 place-items-center rounded-full border border-white/70 bg-white/55 text-gray-500 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.05] dark:text-gray-400 dark:hover:bg-white/[0.10] dark:hover:text-white"
-            >
-              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        </div>
-      </header>
-      <section className="relative z-10 mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-12 text-center" aria-labelledby="polydesk-sign-in-title">
-        <LaunchIdentitySequence />
-        <h1 id="polydesk-sign-in-title" className="mt-5 text-3xl font-black tracking-tight">PolyDesk</h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Your intelligent desk for prediction markets.</p>
-
-        <PrivyConnectButton
-          debugLabel="polydesk-launch-continue"
-          loginOptions={{ loginMethods: ['email', 'wallet'] }}
-          logoutOnAuthenticated={false}
-          disabled={!ready}
-          aria-busy={!ready}
-          className="polydesk-primary-cta mx-auto mt-7 w-full max-w-xs"
-        >
-          {!ready && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Continue
-          {ready && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-        </PrivyConnectButton>
-
-        <p className="mt-4 text-[11px] leading-5 text-gray-400 dark:text-gray-500">Continue with email or your existing wallet. PolyDesk never asks for your private key.</p>
-      </section>
-      <footer className="relative z-10 flex h-[60px] shrink-0 items-center border-t border-gray-100 bg-white/50 py-0 dark:border-white/5 dark:bg-[#111113]/50">
-        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-          <p className="text-center text-xs text-gray-400">
-            <span className="polydesk-powered-footer">
-              <span>Powered by</span>
-              <strong>Hash PayLink</strong>
-            </span>
-          </p>
-        </div>
-      </footer>
-    </main>
-  )
-}
-
 function PolyDeskWorkspace() {
   const [searchParams] = useSearchParams()
   const { authenticated, logout, ready, user } = usePrivy()
@@ -158,6 +63,7 @@ function PolyDeskWorkspace() {
   const service = searchParams.get('service') ?? ''
   const agentOpen = searchParams.get('agent') === '1' || Boolean(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
+  const previewMode = localPreview || !authenticated
   const workspace: Workspace = agentOpen
     ? 'agent'
     : service === 'pulse'
@@ -208,16 +114,6 @@ function PolyDeskWorkspace() {
     return <PolyDeskLoadingState fullScreen label="Restoring your desk" />
   }
 
-  if (!localPreview && !authenticated) {
-    return (
-      <PolyDeskLaunchGate
-        ready
-        theme={theme}
-        onToggleTheme={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
-      />
-    )
-  }
-
   async function copyWallet() {
     if (!walletAddress || !navigator.clipboard) return
     await navigator.clipboard.writeText(walletAddress)
@@ -229,7 +125,7 @@ function PolyDeskWorkspace() {
     <div className="flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]">
       <header className="sticky top-0 z-50 border-b border-white/60 bg-white/80 backdrop-blur-xl dark:border-white/5 dark:bg-[#111113]/90">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
-          <Link to={makeTo('portfolio', { portfolio: localPreview ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
+          <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
               <PolymarketMark className="h-5 w-5" />
             </span>
@@ -246,7 +142,7 @@ function PolyDeskWorkspace() {
             >
               {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
-            {!localPreview && (
+            {authenticated ? (
             <div className="relative">
               <button
               type="button"
@@ -270,7 +166,16 @@ function PolyDeskWorkspace() {
                 </div>
               )}
             </div>
-            )}
+            ) : !localPreview ? (
+              <PrivyConnectButton
+                debugLabel="polydesk-header-sign-in"
+                loginOptions={{ loginMethods: ['email', 'wallet'] }}
+                logoutOnAuthenticated={false}
+                className="polydesk-primary-cta polydesk-primary-cta--compact"
+              >
+                Sign in
+              </PrivyConnectButton>
+            ) : null}
           </div>
         </div>
 

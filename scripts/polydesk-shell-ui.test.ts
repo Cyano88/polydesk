@@ -33,13 +33,15 @@ const rateLimit = readFileSync(new URL('../api/rate-limit.ts', import.meta.url),
 const lpScoutReportApi = readFileSync(new URL('../api/lp-scout-report.ts', import.meta.url), 'utf8')
 const agentActivityApi = readFileSync(new URL('../api/agent-activity-read.ts', import.meta.url), 'utf8')
 
-test('unresolved authentication renders the compact restoring state before sign in', () => {
+test('unresolved authentication restores once, then keeps the product publicly browsable', () => {
   const restoringGuard = layout.indexOf('if (!localPreview && (!ready || (authenticated && !walletsReady)))')
-  const signedOutGuard = layout.indexOf('if (!localPreview && !authenticated)')
   assert.ok(restoringGuard >= 0)
-  assert.ok(signedOutGuard > restoringGuard)
   assert.match(layout, /Restoring your desk/)
   assert.match(layout, /import\.meta\.env\.DEV && searchParams\.get\('preview'\) === '1'/)
+  assert.match(layout, /const previewMode = localPreview \|\| !authenticated/)
+  assert.match(layout, /debugLabel="polydesk-header-sign-in"/)
+  assert.doesNotMatch(layout, /if \(!localPreview && !authenticated\)/)
+  assert.match(polyDeskPage, /const browsePreview = localPreview \|\| !user/)
 })
 
 test('refresh and route waits use one compact Polymarket sync state', () => {
@@ -229,7 +231,7 @@ test('active product surfaces share the premium CTA system without the legacy se
   assert.match(productStyles, /min-height: 44px/)
   assert.match(productStyles, /\.polydesk-primary-cta--compact/)
   assert.match(productStyles, /\.polydesk-primary-cta:focus-visible/)
-  assert.match(layout, /polydesk-primary-cta mx-auto mt-7 w-full max-w-xs/)
+  assert.match(layout, /polydesk-primary-cta polydesk-primary-cta--compact/)
   assert.match(agentWorkspace, /polydesk-primary-cta mt-4 w-full/)
   assert.match(paymentLinks, /polydesk-primary-cta polydesk-primary-cta--compact shrink-0/)
   assert.match(paymentLinks, /polydesk-primary-cta w-full/)

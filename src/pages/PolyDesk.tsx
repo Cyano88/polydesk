@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { usePrivy } from '@privy-io/react-auth'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { usePrivyLoginLauncher } from '../lib/PrivyLoginProvider'
 import AgentWorkspace from './AgentWorkspace'
 import TradeActivity from './TradeActivity'
 import { LpScoutPanel, type LpScoutPrefill } from './LpScoutPanel'
@@ -35,7 +36,13 @@ function normalizePortfolioAction(value: string | null): PortfolioAction {
   return value === 'watch' || value === 'external' || value === 'x402' ? value : 'trading'
 }
 
-function LocalPreviewOverview() {
+function LocalPreviewOverview({
+  onWatch = () => undefined,
+  onTip = () => undefined,
+}: {
+  onWatch?: () => void
+  onTip?: () => void
+}) {
   return (
     <section className="space-y-5">
       <div>
@@ -55,7 +62,7 @@ function LocalPreviewOverview() {
           ))}
         </div>
       </div>
-      <OverviewActions onWatch={() => undefined} onTip={() => undefined} />
+      <OverviewActions onWatch={onWatch} onTip={onTip} />
     </section>
   )
 }
@@ -137,8 +144,10 @@ function OverviewTabs({
 export default function PolyDesk() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = usePrivy()
+  const loginLauncher = usePrivyLoginLauncher()
   const activeLane = normalizeLane(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
+  const browsePreview = localPreview || !user
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
   const portfolioAction = normalizePortfolioAction(searchParams.get('portfolio'))
   const agentRouteOpen = searchParams.get('agent') === '1'
@@ -154,6 +163,10 @@ export default function PolyDesk() {
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
   const welcomeText = 'Welcome back. Ask about your Polymarket account, football markets, LP Scout, and live market context.'
+
+  function requestIdentity(action: 'watch-portfolio' | 'tip') {
+    loginLauncher?.requestLogin({ debugLabel: `polydesk-public-${action}` })
+  }
 
   const ownerKey = useMemo(() => {
     const email = searchParams.get('email')?.trim().toLowerCase()
@@ -256,8 +269,11 @@ export default function PolyDesk() {
         serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         {!isAgentOpen && !serviceView && (
-          localPreview ? (
-            <LocalPreviewOverview />
+          browsePreview ? (
+            <LocalPreviewOverview
+              onWatch={() => requestIdentity('watch-portfolio')}
+              onTip={() => requestIdentity('tip')}
+            />
           ) : (
             <>
               <PolyPortfolioPanel
@@ -337,8 +353,11 @@ export default function PolyDesk() {
             ) : serviceView === 'pulse' ? (
               <Pulse />
             ) : serviceView === 'portfolio' ? (
-              localPreview ? (
-                <LocalPreviewOverview />
+              browsePreview ? (
+                <LocalPreviewOverview
+                  onWatch={() => requestIdentity('watch-portfolio')}
+                  onTip={() => requestIdentity('tip')}
+                />
               ) : (
                 <>
                   <OverviewTabs
