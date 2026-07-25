@@ -70,6 +70,9 @@ test('workspace navigation keeps four primary destinations and nests Activity un
   assert.match(layout, /Radar/)
   assert.match(layout, /PulseIcon/)
   assert.match(layout, /PolyDeskAgentIcon/)
+  assert.match(layout, /fixed inset-x-0 bottom-0 z-50 border-t/)
+  assert.match(layout, /grid w-full max-w-2xl grid-cols-4/)
+  assert.doesNotMatch(layout, /w-\[min\(26rem,calc\(100%-2rem\)\)\]/)
   assert.ok(layout.indexOf("label: 'Pulse'") < layout.indexOf("label: 'Overview'"))
   assert.match(layout, /service === 'portfolio' \|\| service === 'activity'/)
   assert.doesNotMatch(layout, /label: 'App Pay'|label: 'Trade'|label: 'Tip'|WorkspaceUtilityPill/)
@@ -104,6 +107,7 @@ test('PolyDesk Agent uses the extracted modern composer without category selecti
   assert.match(paymentLinks, /data\.mode !== 'live'/)
   assert.match(layout, /mobileKeyboardOpen/)
   assert.match(layout, /workspace === 'agent' && mobileKeyboardOpen && 'hidden'/)
+  assert.match(layout, /pb-\[calc\(4\.25rem\+env\(safe-area-inset-bottom\)\)\]/)
 })
 
 test('Overview exposes the existing watch and external funding routes as compact actions', () => {

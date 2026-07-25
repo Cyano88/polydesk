@@ -194,7 +194,7 @@ function PolyDeskWorkspace() {
         className={cn(
           'mx-auto w-full max-w-5xl flex-1',
           workspace === 'agent'
-            ? 'min-h-0 overflow-hidden px-0 py-0 pb-[5.5rem] sm:px-6 sm:pt-4 sm:pb-28'
+            ? 'min-h-0 overflow-hidden px-0 py-0 pb-[calc(4.25rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-4'
             : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28',
           workspace === 'agent' && mobileKeyboardOpen && '!pb-0 sm:!pb-0',
         )}
@@ -203,12 +203,12 @@ function PolyDeskWorkspace() {
       </main>
 
       <footer className={cn(
-        'fixed inset-x-0 bottom-0 z-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200/80 bg-white/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#17171b]/95',
         workspace === 'agent' && mobileKeyboardOpen && 'hidden',
       )}>
         <nav
           aria-label="PolyDesk workspace"
-          className="mx-auto grid w-[min(26rem,calc(100%-2rem))] grid-cols-4 gap-1 rounded-2xl border border-gray-200/80 bg-white/90 p-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.16)] backdrop-blur-xl dark:border-white/10 dark:bg-[#17171b]/92 dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+          className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5"
         >
           {navItems.map(item => {
             const Icon = item.icon
