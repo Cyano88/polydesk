@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import crypto from 'node:crypto'
 import pg from 'pg'
+import { PrivyClient } from '@privy-io/server-auth'
 import { archivePayment, type ArchiveResult } from './og-storage.js'
 import { readDurableJson, writeDurableJson } from './render-durable-store.js'
 
@@ -26,6 +27,14 @@ type HelperMemoryProof = ArchiveResult & {
   archivedAt: number
 }
 
+type HelperMemoryItem = {
+  id: string
+  category: 'preference' | 'identity' | 'market' | 'workflow'
+  value: string
+  createdAt: number
+  updatedAt: number
+}
+
 type HelperProfile = {
   id: string
   payer: string
@@ -39,6 +48,7 @@ type HelperProfile = {
   preferredPaymentEvmWallet?: string
   preferredPaymentSolanaWallet?: string
   preferences?: string[]
+  memoryItems?: HelperMemoryItem[]
   memorySummary?: string
   memoryProof?: HelperMemoryProof
   helperThread?: HelperThreadMessage[]
@@ -90,6 +100,29 @@ function normalizePayer(value: unknown) {
   return cleanString(value, 128)
 }
 
+function bearerToken(req: Request) {
+  const authorization = req.headers.authorization ?? ''
+  return authorization.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? ''
+}
+
+async function verifiedStorageKey(req: Request) {
+  const privyAppId = (process.env.PRIVY_APP_ID ?? process.env.VITE_PRIVY_APP_ID ?? '').trim()
+  const privyAppSecret = (process.env.PRIVY_APP_SECRET ?? '').trim()
+  if (!privyAppId || !privyAppSecret) {
+    const error = new Error('PolyDesk identity verification is not configured.') as Error & { status?: number }
+    error.status = 503
+    throw error
+  }
+  const token = bearerToken(req)
+  if (!token) {
+    const error = new Error('Sign in before accessing saved PolyDesk memory.') as Error & { status?: number }
+    error.status = 401
+    throw error
+  }
+  const claims = await new PrivyClient(privyAppId, privyAppSecret).verifyAuthToken(token)
+  return `identity:${claims.userId}`
+}
+
 function profileId(payer: string) {
   return crypto.createHash('sha256').update(payer.toLowerCase()).digest('hex').slice(0, 32)
 }
@@ -97,6 +130,69 @@ function profileId(payer: string) {
 function cleanList(value: unknown) {
   if (!Array.isArray(value)) return []
   return value.map(item => cleanString(item, 80)).filter(Boolean).slice(0, 12)
+}
+
+const SENSITIVE_MEMORY_PATTERNS = [
+  /\b(?:api[_ -]?key|secret|private[_ -]?key|seed phrase|recovery phrase|mnemonic|password|passcode|otp)\b/i,
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/,
+  /\b(?:0x)?[a-fA-F0-9]{64}\b/,
+]
+
+export function sanitizeMemoryNote(value: unknown, max = 240) {
+  const note = cleanString(value, max).replace(/\s+/g, ' ').trim()
+  if (!note) return { value: '', rejected: false }
+  if (SENSITIVE_MEMORY_PATTERNS.some(pattern => pattern.test(note))) {
+    return { value: '', rejected: true }
+  }
+  return { value: note, rejected: false }
+}
+
+function cleanMemoryCategory(value: unknown): HelperMemoryItem['category'] {
+  const category = cleanString(value, 24).toLowerCase()
+  return category === 'identity' || category === 'market' || category === 'workflow'
+    ? category
+    : 'preference'
+}
+
+function cleanMemoryItems(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    const record = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+    const sanitized = sanitizeMemoryNote(record.value)
+    if (!sanitized.value) return []
+    const createdAt = Number(record.createdAt) || Date.now()
+    return [{
+      id: cleanString(record.id, 80) || crypto.createHash('sha256').update(sanitized.value.toLowerCase()).digest('hex').slice(0, 20),
+      category: cleanMemoryCategory(record.category),
+      value: sanitized.value,
+      createdAt,
+      updatedAt: Number(record.updatedAt) || createdAt,
+    }]
+  }).slice(-24)
+}
+
+function memoryItemsSummary(items: HelperMemoryItem[]) {
+  if (!items.length) return ''
+  return items.map(item => `Remembered ${item.category}: ${item.value}.`).join('\n').slice(0, 1200)
+}
+
+function summaryWithoutStructuredItems(value: string | undefined) {
+  return String(value ?? '')
+    .split('\n')
+    .filter(line => !/^Remembered (?:preference|identity|market|workflow):/i.test(line.trim()))
+    .join('\n')
+    .trim()
+}
+
+export function sanitizeMemoryForArchive(value: unknown, max = 1200) {
+  let text = cleanString(value, max).replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  text = text
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email omitted]')
+    .replace(/\b0x[a-fA-F0-9]{40}\b/g, '[wallet omitted]')
+    .replace(/\b(?:api[_ -]?key|secret|private[_ -]?key|seed phrase|recovery phrase|mnemonic|password|passcode|otp)\s*[:=]?\s*\S*/gi, '[sensitive value omitted]')
+    .replace(/\b(?:0x)?[a-fA-F0-9]{64}\b/g, '[secret omitted]')
+  return text.slice(0, max)
 }
 
 function cleanActionLinks(value: unknown) {
@@ -355,16 +451,36 @@ async function writeStore(store: Store) {
 }
 
 function publicProfile(profile: HelperProfile | null | undefined) {
-  return profile ?? null
+  if (!profile) return null
+  const {
+    ownerKey: _ownerKey,
+    accessPayer: _accessPayer,
+    accessEventId: _accessEventId,
+    ...safeProfile
+  } = profile
+  return safeProfile
 }
 
 async function checkpointMemory(profile: HelperProfile) {
   const ts = Date.now()
+  const archivedMemoryItems = cleanMemoryItems(profile.memoryItems)
+    .filter(item => item.category !== 'identity')
+    .map(item => ({ category: item.category, value: sanitizeMemoryForArchive(item.value, 240) }))
+    .filter(item => item.value)
+  const archivedPreferences = (profile.preferences ?? [])
+    .map(item => sanitizeMemoryForArchive(item, 80))
+    .filter(Boolean)
+  const archivedMemorySummary = memoryItemsSummary(archivedMemoryItems.map((item, index) => ({
+    id: `archived-${index}`,
+    category: item.category,
+    value: item.value,
+    createdAt: ts,
+    updatedAt: ts,
+  })))
   const memoryHash = crypto.createHash('sha256').update(JSON.stringify({
-    payer: profile.payer,
-    displayName: profile.displayName,
-    preferences: profile.preferences ?? [],
-    memorySummary: profile.memorySummary ?? '',
+    preferences: archivedPreferences,
+    memoryItems: archivedMemoryItems,
+    memorySummary: archivedMemorySummary,
     ts,
   })).digest('hex')
 
@@ -372,7 +488,7 @@ async function checkpointMemory(profile: HelperProfile) {
     eventId: `helper-memory-${profile.id}-${ts.toString(36)}`,
     txHash: `memory_${memoryHash}`,
     chain: '0G Memory',
-    payer: profile.displayName || profile.payer,
+    payer: `profile_${profile.id}`,
     amount: '0',
     ts,
     source: 'helper-memory',
@@ -380,9 +496,9 @@ async function checkpointMemory(profile: HelperProfile) {
       type: 'hashpaylink_helper_memory_checkpoint',
       profileId: profile.id,
       payerHash: profile.id,
-      displayName: profile.displayName,
-      preferences: profile.preferences ?? [],
-      memorySummary: profile.memorySummary ?? '',
+      preferences: archivedPreferences,
+      memoryItems: archivedMemoryItems,
+      memorySummary: archivedMemorySummary,
       memoryHash,
     },
   })
@@ -396,29 +512,25 @@ async function checkpointMemory(profile: HelperProfile) {
 }
 
 export default async function handler(req: Request, res: Response) {
+  let storageKey = ''
+  try {
+    storageKey = await verifiedStorageKey(req)
+  } catch (error) {
+    const status = Number((error as Error & { status?: number }).status) || 401
+    return res.status(status).json({
+      ok: false,
+      error: error instanceof Error ? error.message : 'PolyDesk identity verification failed.',
+    })
+  }
+
   if (req.method === 'GET') {
-    const payer = normalizePayer(req.query.payer)
-    const ownerKey = normalizePayer(req.query.owner ?? req.query.ownerKey)
-    const fallbackOwner = normalizePayer(req.query.fallbackOwner)
     const threadId = cleanString(req.query.threadId, 80) || undefined
-    if (!payer && !ownerKey) return res.status(400).json({ ok: false, error: 'Missing payer.' })
-    const ownerProfile = ownerKey
-      ? pool ? await readPgProfile(profileId(ownerKey), threadId) : undefined
-      : undefined
-    const payerProfile = payer
-      ? pool ? await readPgProfile(profileId(payer), threadId) : undefined
-      : undefined
-    const fallbackProfile = fallbackOwner
-      ? pool ? await readPgProfile(profileId(fallbackOwner), threadId) : undefined
-      : undefined
+    const id = profileId(storageKey)
     if (pool) {
-      const pgProfile = ownerProfile ?? payerProfile ?? fallbackProfile
+      const pgProfile = await readPgProfile(id, threadId)
       if (pgProfile) return res.json({ ok: true, profile: publicProfile(pgProfile) })
       const legacyStore = await readStore()
-      const legacyProfile =
-        (ownerKey ? legacyStore.profiles[profileId(ownerKey)] : undefined)
-        ?? (payer ? legacyStore.profiles[profileId(payer)] : undefined)
-        ?? (fallbackOwner ? legacyStore.profiles[profileId(fallbackOwner)] : undefined)
+      const legacyProfile = legacyStore.profiles[id]
       if (legacyProfile) {
         await writePgProfile(legacyProfile)
         for (const message of legacyProfile.helperThread ?? []) {
@@ -428,31 +540,23 @@ export default async function handler(req: Request, res: Response) {
       return res.json({ ok: true, profile: publicProfile(legacyProfile ?? null) })
     }
     const store = await readStore()
-    const fileOwnerProfile = ownerKey ? store.profiles[profileId(ownerKey)] : undefined
-    const filePayerProfile = payer ? store.profiles[profileId(payer)] : undefined
-    const fileFallbackProfile = fallbackOwner ? store.profiles[profileId(fallbackOwner)] : undefined
-    return res.json({ ok: true, profile: publicProfile(fileOwnerProfile ?? filePayerProfile ?? fileFallbackProfile) })
+    return res.json({ ok: true, profile: publicProfile(store.profiles[id]) })
   }
 
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' })
 
   const action = cleanString(req.body?.action, 32) || 'save'
   const payer = normalizePayer(req.body?.payer)
-  const ownerKey = normalizePayer(req.body?.owner ?? req.body?.ownerKey)
-  const fallbackOwner = normalizePayer(req.body?.fallbackOwner)
-  if (!payer && !ownerKey) return res.status(400).json({ ok: false, error: 'Missing payer.' })
-
-  const storageKey = ownerKey || payer
+  const ownerKey = storageKey
   const id = profileId(storageKey)
   const requestThreadId = cleanThreadId(req.body?.threadId, `mode:${cleanString(req.body?.mode, 40) || 'general'}`)
   let store: Store | null = null
   let existing: HelperProfile | undefined
   if (pool) {
     existing = await readPgProfile(id, requestThreadId)
-      ?? (fallbackOwner ? await readPgProfile(profileId(fallbackOwner), requestThreadId) : undefined)
     if (!existing) {
       const legacyStore = await readStore()
-      existing = legacyStore.profiles[id] ?? (fallbackOwner ? legacyStore.profiles[profileId(fallbackOwner)] : undefined)
+      existing = legacyStore.profiles[id]
       if (existing) {
         await writePgProfile(existing)
         for (const message of existing.helperThread ?? []) {
@@ -462,7 +566,7 @@ export default async function handler(req: Request, res: Response) {
     }
   } else {
     store = await readStore()
-    existing = store.profiles[id] ?? (fallbackOwner ? store.profiles[profileId(fallbackOwner)] : undefined)
+    existing = store.profiles[id]
   }
   const now = Date.now()
   const displayName = cleanString(req.body?.displayName, 80) || existing?.displayName || payer || storageKey
@@ -491,11 +595,61 @@ export default async function handler(req: Request, res: Response) {
     preferredPaymentEvmWallet: cleanString(req.body?.preferredPaymentEvmWallet, 120) || existing?.preferredPaymentEvmWallet,
     preferredPaymentSolanaWallet: cleanString(req.body?.preferredPaymentSolanaWallet, 120) || existing?.preferredPaymentSolanaWallet,
     preferences: cleanList(req.body?.preferences).length ? cleanList(req.body?.preferences) : existing?.preferences ?? [],
+    memoryItems: cleanMemoryItems(existing?.memoryItems),
     memorySummary,
     memoryProof: existing?.memoryProof,
     helperThread,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+  }
+
+  if (action === 'remember') {
+    const note = sanitizeMemoryNote(req.body?.memory)
+    if (note.rejected) {
+      return res.status(400).json({
+        ok: false,
+        error: 'For your security, PolyDesk will not save emails, passwords, recovery phrases, private keys, API keys, or one-time codes as memory.',
+      })
+    }
+    if (!note.value) return res.status(400).json({ ok: false, error: 'Tell PolyDesk what to remember.' })
+    const category = cleanMemoryCategory(req.body?.category)
+    const itemId = crypto.createHash('sha256').update(`${category}:${note.value.toLowerCase()}`).digest('hex').slice(0, 20)
+    const prior = next.memoryItems?.find(item => item.id === itemId)
+    const memoryItem: HelperMemoryItem = {
+      id: itemId,
+      category,
+      value: note.value,
+      createdAt: prior?.createdAt ?? now,
+      updatedAt: now,
+    }
+    next.memoryItems = [...(next.memoryItems ?? []).filter(item => item.id !== itemId), memoryItem].slice(-24)
+    next.memorySummary = [memoryItemsSummary(next.memoryItems), summaryWithoutStructuredItems(existing?.memorySummary)]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 1600)
+  }
+
+  if (action === 'forget') {
+    const query = cleanString(req.body?.memory, 120).toLowerCase()
+    if (!query) return res.status(400).json({ ok: false, error: 'Tell PolyDesk what to forget.' })
+    const before = next.memoryItems?.length ?? 0
+    next.memoryItems = (next.memoryItems ?? []).filter(item => {
+      const haystack = `${item.category} ${item.value}`.toLowerCase()
+      return !haystack.includes(query) && !query.includes(item.value.toLowerCase())
+    })
+    if ((next.memoryItems?.length ?? 0) === before) {
+      return res.status(404).json({ ok: false, error: 'I could not find that in your saved memory.' })
+    }
+    next.memorySummary = [memoryItemsSummary(next.memoryItems), summaryWithoutStructuredItems(existing?.memorySummary)]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 1600)
+  }
+
+  if (action === 'clear-memory') {
+    next.memoryItems = []
+    next.memorySummary = ''
+    next.memoryProof = undefined
   }
 
   if (action === 'append-thread') {

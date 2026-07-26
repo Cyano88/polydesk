@@ -130,19 +130,13 @@ export default function PolyDesk() {
   const welcomeText = 'Welcome back. Ask about your Polymarket account, live football, latest news, LP Scout, and market context.'
 
   const ownerKey = useMemo(() => {
-    const email = searchParams.get('email')?.trim().toLowerCase()
-    const wallet = searchParams.get('wallet')?.trim().toLowerCase()
     const privyIdentity = user?.id?.trim()
-    return email
-      ? `email:${email}`
-      : wallet
-        ? `wallet:${wallet}`
-        : privyIdentity
-          ? `identity:${privyIdentity}`
-          : localPreview
-            ? 'polydesk-preview-agent'
-            : 'polydesk-web'
-  }, [localPreview, searchParams, user?.id])
+    return privyIdentity
+      ? `identity:${privyIdentity}`
+      : localPreview
+        ? 'polydesk-preview-agent'
+        : ''
+  }, [localPreview, user?.id])
 
   function openServiceView(view: PolyDeskServiceView, trackPrevious = true) {
     const next = new URLSearchParams(searchParams)
@@ -209,7 +203,7 @@ export default function PolyDesk() {
       <div className={cn(
         'mx-auto w-full space-y-5',
         isAgentOpen
-          ? 'h-full min-h-0 max-w-3xl !space-y-0'
+          ? 'h-full min-h-0 !max-w-none !space-y-0'
           : serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         <Suspense fallback={<PolyDeskLoadingState label="Opening workspace" />}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
@@ -51,6 +51,7 @@ function PolyDeskWorkspace() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [mobileKeyboardOpen, setMobileKeyboardOpen] = useState(false)
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light'
     return window.localStorage.getItem('polydesk-theme') === 'dark' ? 'dark' : 'light'
@@ -72,8 +73,9 @@ function PolyDeskWorkspace() {
         || (activeElement instanceof HTMLElement && activeElement.isContentEditable)
     }
     const updateKeyboardState = () => {
+      setMobileViewportHeight(viewport.height)
       if (!editableHasFocus()) {
-        settledViewportHeight = viewport.height
+        settledViewportHeight = Math.max(settledViewportHeight, viewport.height)
         setMobileKeyboardOpen(false)
         return
       }
@@ -109,6 +111,9 @@ function PolyDeskWorkspace() {
 
   const walletAddress = wallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? ''))?.address ?? ''
   const identitySeed = walletAddress || user?.id || 'polydesk'
+  const workspaceStyle = workspace === 'agent' && mobileViewportHeight
+    ? ({ height: `${mobileViewportHeight}px` } satisfies CSSProperties)
+    : undefined
 
   function makeTo(nextService?: string, extra: Record<string, string> = {}) {
     const next = new URLSearchParams()
@@ -147,10 +152,10 @@ function PolyDeskWorkspace() {
 
   return (
     <div className={cn(
-      'flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]',
+      'flex min-h-screen flex-col bg-[#F5F5F7] font-inter [--polydesk-footer-height:calc(4rem+env(safe-area-inset-bottom))] dark:bg-[#111113]',
       workspace === 'agent' && 'h-dvh overflow-hidden',
-    )} data-polydesk-keyboard-open={workspace === 'agent' && mobileKeyboardOpen ? 'true' : 'false'}>
-      <header className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/95 dark:border-white/5 dark:bg-[#111113]/95">
+    )} style={workspaceStyle} data-polydesk-keyboard-open={workspace === 'agent' && mobileKeyboardOpen ? 'true' : 'false'}>
+      <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200/80 bg-white/95 dark:border-white/5 dark:bg-[#111113]/95">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
           <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
@@ -241,7 +246,7 @@ function PolyDeskWorkspace() {
         className={cn(
           'mx-auto w-full max-w-5xl flex-1',
           workspace === 'agent'
-            ? 'min-h-0 overflow-hidden px-0 py-0 pb-[calc(4.25rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-4'
+            ? 'min-h-0 !max-w-none overflow-hidden px-0 py-0 pb-[var(--polydesk-footer-height)]'
             : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28',
           workspace === 'agent' && mobileKeyboardOpen && '!pb-0 sm:!pb-0',
         )}
@@ -255,7 +260,7 @@ function PolyDeskWorkspace() {
       )}>
         <nav
           aria-label="PolyDesk workspace"
-          className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5"
+          className="mx-auto grid h-[var(--polydesk-footer-height)] w-full max-w-2xl grid-cols-4 gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5"
         >
           {navItems.map(item => {
             const Icon = item.icon

@@ -382,6 +382,13 @@ type HelperProfile = {
   preferredPaymentEvmWallet?: string
   preferredPaymentSolanaWallet?: string
   preferences?: string[]
+  memoryItems?: Array<{
+    id: string
+    category: 'preference' | 'identity' | 'market' | 'workflow'
+    value: string
+    createdAt: number
+    updatedAt: number
+  }>
   memorySummary?: string
   helperThread?: StoredHelperThreadMessage[]
   memoryProof?: {
@@ -876,6 +883,31 @@ function extractRelationshipMemory(text: string) {
   const name = cleanRelationshipName(match[2])
   if (!name) return null
   return { relation, name }
+}
+
+function explicitMemoryToSave(text: string) {
+  const match = /^(?:please\s+)?remember(?:\s+that)?\s+(.{3,240})$/i.exec(text.trim())
+  return match ? match[1].replace(/[.?!]+$/g, '').trim() : ''
+}
+
+function explicitMemoryToForget(text: string) {
+  const match = /^(?:please\s+)?forget(?:\s+that|\s+about)?\s+(.{2,120})$/i.exec(text.trim())
+  return match ? match[1].replace(/[.?!]+$/g, '').trim() : ''
+}
+
+function isMemoryReviewRequest(text: string) {
+  return /\b(?:what|show|tell me)\b.{0,24}\bremember(?:ed)?\b.{0,16}\b(?:about me|for me)?\b|\bwhat do you know about me\b/i.test(text)
+}
+
+function isMemoryArchiveRequest(text: string) {
+  return /\b(?:archive|checkpoint|save)\b.{0,24}\b(?:my\s+)?(?:memory|preferences)\b.{0,16}\b(?:to|on|with)?\s*0g\b|\b0g\b.{0,20}\b(?:memory|checkpoint)\b/i.test(text)
+}
+
+function memoryCategory(value: string): 'preference' | 'identity' | 'market' | 'workflow' {
+  if (/\b(?:call me|my name|i am|i'm)\b/i.test(value)) return 'identity'
+  if (/\b(?:market|football|news|lp|liquidity|risk|budget|usdc)\b/i.test(value)) return 'market'
+  if (/\b(?:watch|alert|notify|fund|workflow|always|default)\b/i.test(value)) return 'workflow'
+  return 'preference'
 }
 
 function nameFromMemorySummary(value: string) {
@@ -1840,20 +1872,26 @@ export function TelegramHelperPanel({
 
   useEffect(() => {
     const lookupPayer = payer.trim()
-    if (!lookupPayer && !ownerKey) return
+    if (!polyDeskAuthenticated || (!lookupPayer && !ownerKey)) {
+      setProfile(null)
+      setMemoryDraft('')
+      return
+    }
     let cancelled = false
     setProfileBusy(true)
     setProfileError('')
-    const profileParams = new URLSearchParams()
-    if (ownerKey) profileParams.set('owner', ownerKey)
-    if (lookupPayer) profileParams.set('payer', lookupPayer)
-    if (fallbackOwner) profileParams.set('fallbackOwner', fallbackOwner)
-    if (helperMode) profileParams.set('threadId', activeHelperThreadId)
-    fetch(`/api/helper-profile?${profileParams.toString()}`)
-      .then(res => res.json() as Promise<{ ok?: boolean; profile?: HelperProfile | null; error?: string }>)
-      .then(data => {
+    void (async () => {
+      try {
+        const token = await getPolyDeskAccessToken()
+        if (!token) throw new Error('Sign in to load saved PolyDesk memory.')
+        const profileParams = new URLSearchParams()
+        if (helperMode) profileParams.set('threadId', activeHelperThreadId)
+        const res = await fetch(`/api/helper-profile?${profileParams.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json() as { ok?: boolean; profile?: HelperProfile | null; error?: string }
         if (cancelled) return
-        if (!data.ok) throw new Error(data.error || 'Could not load helper profile.')
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Could not load helper profile.')
         setProfile(data.profile ?? null)
         if (data.profile?.displayName) {
           const cleanDisplayName = usableHelperName(data.profile.displayName)
@@ -1898,15 +1936,14 @@ export function TelegramHelperPanel({
             ]
           })
         }
-      })
-      .catch(err => {
+      } catch (err) {
         if (!cancelled) setProfileError(err instanceof Error ? err.message : 'Could not load helper profile.')
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setProfileBusy(false)
-      })
+      }
+    })()
     return () => { cancelled = true }
-  }, [payer, ownerKey, fallbackOwner, activeHelperThreadId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [payer, ownerKey, activeHelperThreadId, polyDeskAuthenticated, getPolyDeskAccessToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startHelper() {
     setStarted(true)
@@ -1973,16 +2010,16 @@ export function TelegramHelperPanel({
   async function appendHelperThreadMessage(nextQuestion: string, message: Omit<HelperMessage, 'question'>) {
     const answer = (message.answer ?? '').trim()
     const actionLinks = helperActionLinks({ ...message, answer })
-    if (!answer && !message.paylink && actionLinks.length === 0) return
+    if (!polyDeskAuthenticated || (!answer && !message.paylink && actionLinks.length === 0)) return
     try {
+      const token = await getPolyDeskAccessToken()
+      if (!token) return
       await fetch('/api/helper-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: 'append-thread',
-          owner: ownerKey,
           payer: payer.trim() || helperName || cleanTelegramName || ownerKey,
-          fallbackOwner,
           mode: helperMode || undefined,
           subMode: polyDeskSubMode || undefined,
           threadId: activeHelperThreadId,
@@ -2099,18 +2136,18 @@ export function TelegramHelperPanel({
 
   async function saveProfile(extra: Partial<HelperProfile> = {}) {
     const cleanPayer = (payer || helperName || helperNameDraft || cleanTelegramName).trim()
-    if (!cleanPayer) return
+    if (!cleanPayer || !polyDeskAuthenticated) return
     setProfileBusy(true)
     setProfileError('')
     try {
+      const token = await getPolyDeskAccessToken()
+      if (!token) throw new Error('Sign in to save PolyDesk memory.')
       const res = await fetch('/api/helper-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: 'save',
           payer: cleanPayer,
-          owner: ownerKey || undefined,
-          fallbackOwner: fallbackOwner || undefined,
           displayName: extra.displayName ?? (helperName || helperNameDraft || cleanPayer),
           accessPayer: extra.accessPayer,
           telegramHandle: cleanTelegramName,
@@ -2139,22 +2176,20 @@ export function TelegramHelperPanel({
   async function checkpointMemory() {
     const cleanPayer = (payer || helperName || helperNameDraft || cleanTelegramName).trim()
     const summary = memoryDraft.trim()
-    if (!cleanPayer || !summary) return
+    if (!cleanPayer || !summary || !polyDeskAuthenticated) return false
     setCheckpointBusy(true)
     setProfileError('')
     try {
+      const token = await getPolyDeskAccessToken()
+      if (!token) throw new Error('Sign in to archive PolyDesk memory.')
       const res = await fetch('/api/helper-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: 'checkpoint',
           payer: cleanPayer,
-          owner: ownerKey || undefined,
-          fallbackOwner: fallbackOwner || undefined,
           displayName: helperName || helperNameDraft || cleanPayer,
-          accessPayer: profile?.accessPayer,
           telegramHandle: cleanTelegramName,
-          accessEventId: profile?.accessEventId,
           memorySummary: summary,
           preferences: profile?.preferences ?? [],
         }),
@@ -2163,11 +2198,36 @@ export function TelegramHelperPanel({
       if (!res.ok || !data.ok || !data.profile) throw new Error(data.error || 'Could not checkpoint memory.')
       setProfile(data.profile)
       if (data.profile.memorySummary) setMemoryDraft(data.profile.memorySummary)
+      return true
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Could not checkpoint memory.')
+      return false
     } finally {
       setCheckpointBusy(false)
     }
+  }
+
+  async function runMemoryAction(action: 'remember' | 'forget', memory: string) {
+    const cleanPayer = (payer || helperName || helperNameDraft || cleanTelegramName).trim()
+    if (!cleanPayer || !polyDeskAuthenticated) throw new Error('Sign in so PolyDesk can keep this memory with your profile.')
+    const token = await getPolyDeskAccessToken()
+    if (!token) throw new Error('Sign in so PolyDesk can keep this memory with your profile.')
+    const res = await fetch('/api/helper-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        action,
+        payer: cleanPayer,
+        displayName: helperName || helperNameDraft || cleanPayer,
+        memory,
+        category: memoryCategory(memory),
+      }),
+    })
+    const data = await res.json() as { ok?: boolean; profile?: HelperProfile; error?: string }
+    if (!res.ok || !data.ok || !data.profile) throw new Error(data.error || 'Could not update memory.')
+    setProfile(data.profile)
+    setMemoryDraft(data.profile.memorySummary ?? '')
+    return data.profile
   }
 
   async function polishLocalHelperResult(prompt: string, fallback: string, memorySummaryOverride?: string) {
@@ -2755,8 +2815,8 @@ export function TelegramHelperPanel({
   async function worldCupAnswer(nextQuestion: string) {
     const scoresUrl = polyDeskUrl('poly-stream')
     const newsUrl = polyDeskUrl('poly-worldcup-news')
-    const wantsFixture = /\b(match|matches|fixture|fixtures|playing|play|game|games|score|scores|live|today|tonight|next|upcoming|schedule)\b/i.test(nextQuestion)
-    const wantsNews = !wantsFixture && /\b(news|headline|headlines|latest|update|updates)\b/i.test(nextQuestion)
+    const wantsNews = /\b(news|headline|headlines|latest news|news update|news updates)\b/i.test(nextQuestion)
+    const wantsFixture = !wantsNews && /\b(match|matches|fixture|fixtures|playing|play|game|games|score|scores|live|today|tonight|next|upcoming|schedule)\b/i.test(nextQuestion)
     if (wantsNews) {
       const response = await fetch('/api/poly-worldcup-news')
       const data = await readPolyDeskJson<PolyWorldCupFeed>(response, 'Football news is unavailable right now.')
@@ -2936,6 +2996,45 @@ export function TelegramHelperPanel({
     }
   }
 
+  async function pulseOpportunityAnswer() {
+    const response = await fetch('/api/pulse')
+    const data = await readPolyDeskJson<PolyDeskPulseFeed>(response, 'Live LP opportunities are unavailable right now.')
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Live LP opportunities are unavailable right now.')
+    const opportunities = (data.highlights ?? [])
+      .map(item => ({ rank: item.rank, opportunity: item.opportunity }))
+      .filter((item): item is { rank: number | undefined; opportunity: PolyDeskPulseOpportunity } => Boolean(item.opportunity?.title && item.opportunity?.marketUrl))
+      .slice(0, 3)
+    if (!opportunities.length) {
+      return {
+        answer: 'No live LP opportunity currently passes PolyDesk checks. I will not fill the list with weaker markets.',
+        actionLink: { label: 'Pulse', url: '/polydesk?service=pulse' },
+      }
+    }
+    const lines = opportunities.map((item, index) => {
+      const opportunity = item.opportunity
+      const rank = item.rank || index + 1
+      const reward = Number(opportunity.dailyReward)
+      const minimum = Number(opportunity.estimatedRewardCapitalUsdc)
+      const spread = Number(opportunity.liveSpread)
+      const details = [
+        Number.isFinite(reward) && reward > 0 ? `${reward.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC/day` : '',
+        Number.isFinite(spread) && spread > 0 ? `${spread.toFixed(1)}c spread` : '',
+        Number.isFinite(minimum) && minimum > 0 ? `about ${minimum.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC minimum setup` : '',
+      ].filter(Boolean)
+      return `${rank}. ${opportunity.title}${details.length ? ` — ${details.join(', ')}` : ''}`
+    })
+    return {
+      answer: `PolyDesk's strongest live LP opportunities:\n${lines.join('\n')}`,
+      actionLinks: [
+        { label: 'Open Pulse', url: '/polydesk?service=pulse' },
+        ...opportunities.map((item, index) => ({
+          label: `#${item.rank || index + 1} market`,
+          url: item.opportunity.marketUrl!,
+        })),
+      ],
+    }
+  }
+
   async function handlePolyDeskConversation(nextQuestion: string) {
     if (helperMode !== 'polydesk') return false
     const inferredPolyDeskSubMode: PolyDeskSubMode | '' = /\b(lp scout|liquidity|maker|reward pool|order book|quote)\b/i.test(nextQuestion)
@@ -2947,6 +3046,17 @@ export function TelegramHelperPanel({
           : ''
     const activePolyDeskSubMode = polyDeskSubMode || (singlePolyDeskAgent ? inferredPolyDeskSubMode : '')
     if (!activePolyDeskSubMode) return false
+    const wantsPublicLpShortlist = activePolyDeskSubMode === 'lp-scout'
+      && /\b(latest|top|best|current|today|opportunit(?:y|ies)|strongest)\b/i.test(nextQuestion)
+      && /\b(lp|liquidity|market|opportunit(?:y|ies))\b/i.test(nextQuestion)
+      && !/\b(run|scan|inspect|research|brief|report|analyse|analyze)\b/i.test(nextQuestion)
+    if (wantsPublicLpShortlist) {
+      setThinkingState('light')
+      setAgentStatus('Reading live LP opportunities...')
+      const result = await pulseOpportunityAnswer()
+      finishHelperMessage(nextQuestion, result)
+      return true
+    }
     setThinkingState(activePolyDeskSubMode === 'lp-scout' ? 'deep-research' : 'light')
     setAgentStatus(activePolyDeskSubMode === 'lp-scout' ? 'Preparing LP Scout access...' : 'Reading PolyDesk data...')
 
@@ -3186,15 +3296,16 @@ export function TelegramHelperPanel({
   }
 
   async function clearCurrentHelperThread() {
+    if (!polyDeskAuthenticated) return
     try {
+      const token = await getPolyDeskAccessToken()
+      if (!token) return
       await fetch('/api/helper-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: 'clear-thread',
-          owner: ownerKey,
           payer: payer.trim() || helperName || cleanTelegramName || ownerKey,
-          fallbackOwner,
           threadId: activeHelperThreadId,
         }),
       })
@@ -3259,6 +3370,45 @@ export function TelegramHelperPanel({
         : isDeepResearch
           ? 'Running deeper research... this might take a little time.'
           : 'Reading your message...')
+      if (isMemoryReviewRequest(nextQuestion)) {
+        const savedItems = profile?.memoryItems ?? []
+        const answer = savedItems.length
+          ? [
+              'Here is what you asked me to remember:',
+              ...savedItems.slice(-8).map(item => `• ${item.value}`),
+              'Say “forget …” to remove one item.',
+            ].join('\n')
+          : memoryDraft.trim() || profile?.memorySummary
+            ? 'I have a working summary for continuity, but no explicit saved preferences yet. Say “remember …” to save one.'
+            : 'I have not saved any personal preferences yet. Say “remember …” when you want me to keep something.'
+        finishHelperMessage(nextQuestion, { answer })
+        return
+      }
+      if (isMemoryArchiveRequest(nextQuestion)) {
+        if (!profile?.memoryItems?.length) {
+          finishHelperMessage(nextQuestion, { answer: 'There is no explicit saved preference to archive yet. Say “remember …” first.' })
+          return
+        }
+        const archived = await checkpointMemory()
+        finishHelperMessage(nextQuestion, {
+          answer: archived
+            ? 'Your sanitized memory checkpoint was archived to 0G. Emails, wallet addresses, credentials, and secret values are excluded.'
+            : 'I could not archive the memory checkpoint just now. Your active PolyDesk memory is still saved.',
+        })
+        return
+      }
+      const memoryToForget = explicitMemoryToForget(nextQuestion)
+      if (memoryToForget) {
+        await runMemoryAction('forget', memoryToForget)
+        finishHelperMessage(nextQuestion, { answer: 'Forgotten. I will no longer use that saved preference.' })
+        return
+      }
+      const memoryToSave = explicitMemoryToSave(nextQuestion)
+      if (memoryToSave && !extractRememberedName(nextQuestion)) {
+        await runMemoryAction('remember', memoryToSave)
+        finishHelperMessage(nextQuestion, { answer: 'Remembered. I will use that when it is relevant.' })
+        return
+      }
       if (isNameCorrectionMessage(nextQuestion)) {
         const nextMemory = [
           (memoryDraft.trim() || profile?.memorySummary || '')
@@ -3946,6 +4096,23 @@ type PolyWorldCupFeed = {
   freshnessSeconds?: number
   error?: string
   articles?: PolyWorldCupArticle[]
+}
+
+type PolyDeskPulseOpportunity = {
+  title?: string
+  marketUrl?: string
+  dailyReward?: number
+  liveSpread?: number
+  estimatedRewardCapitalUsdc?: number
+}
+
+type PolyDeskPulseFeed = {
+  ok?: boolean
+  highlights?: Array<{
+    rank?: number
+    opportunity?: PolyDeskPulseOpportunity
+  }>
+  error?: string
 }
 
 const fallbackWorldCupArticles: PolyWorldCupArticle[] = [
