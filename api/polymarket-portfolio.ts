@@ -199,11 +199,15 @@ function ensureSchema() {
         price double precision,
         original_size double precision,
         matched_size double precision not null default 0,
+        origin text not null default 'lp-scout',
         status text not null default 'live',
         last_checked_at timestamptz,
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
+
+      alter table polymarket_lp_order_watch
+        add column if not exists origin text not null default 'lp-scout';
 
       create index if not exists polymarket_funding_attempts_user_idx
         on polymarket_funding_attempts (privy_user_id, created_at desc);
@@ -720,6 +724,7 @@ function serializeLpOrder(row: Record<string, unknown>) {
     price: row.price == null ? null : Number(row.price),
     originalSize: row.original_size == null ? null : Number(row.original_size),
     matchedSize: Number(row.matched_size || 0),
+    origin: row.origin ? String(row.origin) : 'lp-scout',
     status: String(row.status),
     lastCheckedAt: row.last_checked_at instanceof Date ? row.last_checked_at.toISOString() : null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : null,
@@ -751,7 +756,7 @@ async function insertLpLifecycleAlerts(input: {
          )`,
     [input.ownerPrivyUserId, input.positionAddress],
   )).rows
-  const label = input.outcome ? `${input.outcome} order` : 'LP order'
+  const label = input.outcome ? `${input.outcome} order` : 'Limit order'
   const content = input.lifecycle === 'partial'
     ? {
         title: `${label} partly matched`,
@@ -1689,6 +1694,8 @@ export default async function handler(req: Request, res: Response) {
       const marketUrl = cleanString(body.marketUrl, 320)
       const outcome = cleanString(body.outcome, 24).toUpperCase()
       const side = cleanString(body.side, 8).toUpperCase() || 'BUY'
+      const requestedOrigin = cleanString(body.origin, 32)
+      const origin = requestedOrigin === 'watch-position' || requestedOrigin === 'direct' ? requestedOrigin : 'lp-scout'
       const price = Number(body.price)
       const originalSize = Number(body.originalSize)
       if (!/^0x[a-fA-F0-9]{64}$/.test(orderId)) {
@@ -1724,8 +1731,8 @@ export default async function handler(req: Request, res: Response) {
       }
       const result = await requirePool().query(
         `insert into polymarket_lp_order_watch
-          (order_id, owner_privy_user_id, position_address, market_id, asset_id, market_title, market_url, outcome, side, price, original_size)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          (order_id, owner_privy_user_id, position_address, market_id, asset_id, market_title, market_url, outcome, side, price, original_size, origin)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          on conflict (order_id) do update set
            market_id = coalesce(polymarket_lp_order_watch.market_id, excluded.market_id),
            asset_id = coalesce(polymarket_lp_order_watch.asset_id, excluded.asset_id),
@@ -1734,6 +1741,7 @@ export default async function handler(req: Request, res: Response) {
            outcome = excluded.outcome,
            price = excluded.price,
            original_size = excluded.original_size,
+           origin = excluded.origin,
            updated_at = now()
          where polymarket_lp_order_watch.owner_privy_user_id = excluded.owner_privy_user_id
            and lower(polymarket_lp_order_watch.position_address) = lower(excluded.position_address)
@@ -1750,6 +1758,7 @@ export default async function handler(req: Request, res: Response) {
           side === 'SELL' ? 'SELL' : 'BUY',
           price,
           originalSize,
+          origin,
         ],
       )
       if (!result.rows[0]) {

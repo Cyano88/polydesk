@@ -3612,9 +3612,9 @@ export function TelegramHelperPanel({
   }
 
   return (
-    <div className={cn(immersive && 'flex min-h-0 flex-1 flex-col')}>
-      <div className={cn('space-y-3', immersive && 'flex min-h-0 flex-1 flex-col !space-y-0')}>
-        <div className={cn('overflow-hidden', immersive && 'flex min-h-0 flex-1 flex-col')}>
+    <div className={cn(immersive && 'flex min-h-0 w-full max-w-none flex-1 flex-col')}>
+      <div className={cn('space-y-3', immersive && 'flex min-h-0 w-full max-w-none flex-1 flex-col !space-y-0')}>
+        <div className={cn('overflow-hidden', immersive && 'flex min-h-0 w-full max-w-none flex-1 flex-col')}>
               <div
                 ref={helperScrollRef}
                 className={cn(
@@ -3781,8 +3781,8 @@ export function TelegramHelperPanel({
               </div>
 
               <div className={cn(
-                'shrink-0 border-t border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-[#111114]',
-                immersive && 'pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5',
+                'polydesk-agent-composer shrink-0 border-t border-gray-100 bg-white p-3 dark:border-white/10 dark:bg-[#111114]',
+                immersive && 'sm:px-5',
               )}>
                 <div className="relative">
                   <input
@@ -3791,10 +3791,12 @@ export function TelegramHelperPanel({
                     onChange={event => setQuestion(event.target.value)}
                     onKeyDown={event => event.key === 'Enter' && !event.shiftKey && !asking && askHelper()}
                     onFocus={() => {
-                      window.requestAnimationFrame(() => {
+                      const scrollToLatest = () => {
                         const node = helperScrollRef.current
                         if (node) node.scrollTop = node.scrollHeight
-                      })
+                      }
+                      window.requestAnimationFrame(scrollToLatest)
+                      window.setTimeout(scrollToLatest, 180)
                     }}
                     placeholder={helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent ? 'Choose a Desk Agent lane' : helperMode ? inputPlaceholder ?? 'Ask Hash...' : 'Choose a mode to start'}
                     disabled={!helperMode || (helperMode === 'polydesk' && !polyDeskSubMode && !singlePolyDeskAgent)}
@@ -6380,9 +6382,11 @@ type PolymarketPortfolioBundle = {
   alerts: PolymarketAlertRecord[]
   lpOrders?: Array<{
     orderId: string
+    assetId?: string | null
     marketTitle: string
     marketUrl: string
     outcome: string | null
+    origin?: 'lp-scout' | 'watch-position' | 'direct'
     matchedSize: number
     originalSize: number | null
     status: string
@@ -6412,6 +6416,8 @@ type PolymarketPosition = {
   archived?: boolean
   status?: string
   marketStatus?: string
+  negativeRisk?: boolean
+  negRisk?: boolean
 }
 
 function formatUsd(value: unknown, fallback = '—') {
@@ -6823,6 +6829,8 @@ export function PolyPortfolioPanel({
   surface = 'telegram',
   initialPortfolioAction = null,
   initialTradingWalletTab,
+  onTradingTabChange,
+  onTradeWatchedPosition,
 }: {
   onBack: () => void
   onOpenLpScout: () => void
@@ -6832,6 +6840,13 @@ export function PolyPortfolioPanel({
   surface?: 'telegram' | 'standalone'
   initialPortfolioAction?: 'watch' | 'trading' | 'external' | 'x402' | null
   initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions'
+  onTradingTabChange?: (tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') => void
+  onTradeWatchedPosition?: (trade: {
+    title: string
+    marketUrl: string
+    outcome: 'YES' | 'NO'
+    price: number
+  }) => void
 }) {
   const showLegacyBack = surface !== 'standalone'
   const [portfolioSearchParams] = useSearchParams()
@@ -6909,6 +6924,10 @@ export function PolyPortfolioPanel({
   const [sellNotice, setSellNotice] = useState('')
   const [sellSuccess, setSellSuccess] = useState('')
   const [pendingSellPosition, setPendingSellPosition] = useState<PolymarketPosition | null>(null)
+  const [claimBusyKey, setClaimBusyKey] = useState('')
+  const [claimNotice, setClaimNotice] = useState('')
+  const [claimSuccess, setClaimSuccess] = useState('')
+  const [pendingClaimPosition, setPendingClaimPosition] = useState<PolymarketPosition | null>(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<PolymarketAlertSettings | null>(null)
@@ -6942,6 +6961,20 @@ export function PolyPortfolioPanel({
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
   const [positionStatusTab, setPositionStatusTab] = useState<PolymarketPositionStatus>('live')
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
+
+  function selectTradingTab(tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') {
+    if (tab === 'monitor') {
+      if (polymarketDepositWallet) {
+        setAddressInput(polymarketDepositWallet)
+        setUnsignedWatchAddress(polymarketDepositWallet)
+        setUnsignedPortfolioAction('watch')
+      }
+      onTradingTabChange?.('monitor')
+      return
+    }
+    setTradingWalletTab(tab)
+    onTradingTabChange?.(tab)
+  }
 
   useEffect(() => {
     const token = portfolioSearchParams.get('watchToken')?.trim()
@@ -7030,6 +7063,14 @@ export function PolyPortfolioPanel({
 
   const activePositionValue = useMemo(() => positionValueSum(activeOpenPositions), [activeOpenPositions])
   const claimableValue = useMemo(() => positionValueSum(claimablePositions), [claimablePositions])
+  const portfolioCashValue = Number.isFinite(tradingPusdValue) ? Number(tradingPusdValue) : 0
+  const ownedPortfolioValue = portfolioCashValue + activePositionValue + claimableValue
+  const orderOriginByAsset = useMemo(() => new Map(
+    [...(bundle?.lpOrders ?? [])]
+      .reverse()
+      .filter(order => order.assetId)
+      .map(order => [String(order.assetId), order.origin ?? 'lp-scout'] as const),
+  ), [bundle?.lpOrders])
 
   const positionsByStatus = useMemo(
     () => livePositions.filter(position => polymarketPositionStatus(position) === positionStatusTab),
@@ -7846,6 +7887,138 @@ export function PolyPortfolioPanel({
       setWithdrawError(err instanceof Error ? err.message : 'Could not withdraw from Polymarket.')
     } finally {
       setWithdrawBusy(false)
+    }
+  }
+
+  async function claimPositionToPusd(position: PolymarketPosition) {
+    setClaimNotice('')
+    setClaimSuccess('')
+    const conditionId = String(position.conditionId ?? '').trim()
+    if (!/^0x[a-fA-F0-9]{64}$/.test(conditionId)) {
+      setClaimNotice('This resolved position is missing its condition ID.')
+      return
+    }
+    if (!polymarketDepositWallet || !polymarketWalletReady || !savedTradingAddress) {
+      setClaimNotice('Activate the PolyDesk trading account before claiming.')
+      return
+    }
+    const signingWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
+      ?? privyWallets.find(wallet => wallet.address?.toLowerCase() === signingWalletAddress.toLowerCase())
+    if (!signingWallet || typeof signingWallet.getEthereumProvider !== 'function') {
+      setClaimNotice('Reconnect the owner wallet that controls this trading account.')
+      return
+    }
+    const positionKey = polymarketPositionKey(position)
+    setClaimBusyKey(positionKey)
+    try {
+      const configResponse = await fetch('/api/polymarket-bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'config' }),
+      })
+      const config = await readPolyDeskJson<{
+        ok?: boolean
+        relayerReady?: boolean
+        relayerUrl?: string | null
+        pusdTokenAddress?: string
+        error?: string
+      }>(configResponse, 'Could not load Polymarket claim configuration.')
+      if (!configResponse.ok || !config.ok || !config.relayerReady || !config.relayerUrl) {
+        throw new Error(config.error || 'Polymarket relayer is not configured for native claims.')
+      }
+      const [{ RelayClient }, { createWalletClient, custom, encodeFunctionData }, { polygon }, { BuilderConfig }] = await Promise.all([
+        import('@polymarket/builder-relayer-client'),
+        import('viem'),
+        import('viem/chains'),
+        import('@polymarket/builder-signing-sdk'),
+      ])
+      if (typeof signingWallet.switchChain === 'function') await signingWallet.switchChain(137)
+      const provider = await signingWallet.getEthereumProvider()
+      await polyDeskEnsurePolygonProvider(provider)
+      const activeOwner = await polyDeskProviderAccount(provider)
+      if (activeOwner.toLowerCase() !== savedTradingAddress.toLowerCase()) {
+        throw new Error('Connected owner wallet does not match this PolyDesk trading account.')
+      }
+      const walletClient = createWalletClient({
+        account: activeOwner as `0x${string}`,
+        chain: polygon,
+        transport: custom(provider),
+      })
+      const relayerClient = new RelayClient(config.relayerUrl, 137, walletClient, polyDeskRelayerBuilderConfig(BuilderConfig), undefined, { chain: polygon })
+      const derivedWallet = await relayerClient.deriveDepositWalletAddress()
+      if (derivedWallet.toLowerCase() !== polymarketDepositWallet.toLowerCase()) {
+        throw new Error('Connected owner wallet does not control this Polymarket wallet.')
+      }
+      if (!await relayerClient.getDeployed(polymarketDepositWallet, 'WALLET')) {
+        throw new Error('Polymarket wallet is not deployed yet.')
+      }
+
+      const conditionalTokens = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045' as const
+      const pusd = (config.pusdTokenAddress || '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB') as `0x${string}`
+      const adapter = (position.negativeRisk === true || position.negRisk === true
+        ? '0xadA2005600Dec949baf300f4C6120000bDB6eAab'
+        : '0xAdA100Db00Ca00073811820692005400218FcE1f') as `0x${string}`
+      const approvalAbi = [{
+        type: 'function',
+        name: 'setApprovalForAll',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'operator', type: 'address' },
+          { name: 'approved', type: 'bool' },
+        ],
+        outputs: [],
+      }] as const
+      const calls: Array<{ target: string; value: string; data: `0x${string}` }> = [{
+        target: conditionalTokens,
+        value: '0',
+        data: encodeFunctionData({
+          abi: approvalAbi,
+          functionName: 'setApprovalForAll',
+          args: [adapter, true],
+        }),
+      }]
+      calls.push({
+        target: adapter,
+        value: '0',
+        data: encodeFunctionData({
+          abi: [{
+            type: 'function',
+            name: 'redeemPositions',
+            stateMutability: 'nonpayable',
+            inputs: [
+              { name: 'collateralToken', type: 'address' },
+              { name: 'parentCollectionId', type: 'bytes32' },
+              { name: 'conditionId', type: 'bytes32' },
+              { name: 'indexSets', type: 'uint256[]' },
+            ],
+            outputs: [],
+          }] as const,
+          functionName: 'redeemPositions',
+          args: [
+            pusd,
+            `0x${'0'.repeat(64)}` as `0x${string}`,
+            conditionId as `0x${string}`,
+            [1n, 2n],
+          ],
+        }),
+      })
+      setClaimNotice('Confirm the claim in your wallet.')
+      const deadline = Math.floor(Date.now() / 1000 + 600).toString()
+      const response = await relayerClient.executeDepositWalletBatch(calls, polymarketDepositWallet, deadline)
+      const confirmed = await response.wait()
+      if (confirmed?.state && !/confirmed/i.test(String(confirmed.state))) {
+        throw new Error('Polymarket did not confirm the claim.')
+      }
+      setClaimNotice('')
+      setClaimSuccess(`${formatUsd(position.currentValue)} claimed to pUSD.`)
+      await Promise.all([
+        loadTradingPusdBalance(polymarketDepositWallet),
+        fetchLiveData(tradingPortfolioAddress),
+      ])
+    } catch (error) {
+      setClaimNotice(error instanceof Error ? error.message : 'Could not claim this position.')
+    } finally {
+      setClaimBusyKey('')
     }
   }
 
@@ -8797,7 +8970,7 @@ export function PolyPortfolioPanel({
   if (!watchedAddress && unsignedPortfolioAction === 'watch') {
     return (
       <div className="mt-4">
-        <PolyDeskBackButton onClick={showLegacyBack ? () => setUnsignedPortfolioAction(null) : onBack} />
+        {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Watch portfolio</p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-900 dark:text-white">Follow any public wallet</h2>
         <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
@@ -8871,15 +9044,11 @@ export function PolyPortfolioPanel({
     return (
       <div className="mt-4 space-y-3">
         {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
-        <div className="polydesk-card p-4">
-          <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Account</h2>
-          <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Cash, positions and funding in one place.
-          </p>
-          <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">pUSD trading cash</p>
-            <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">$0</p>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Connect the owner wallet that controls your PolyDesk Polymarket wallet.</p>
+        <div className="space-y-3">
+          <div className="rounded-[1.4rem] bg-gray-950 p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.14)] dark:bg-white dark:text-gray-950">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50 dark:text-gray-500">Portfolio balance</p>
+            <p className="mt-2 text-4xl font-semibold tracking-[-0.05em]">$0.00</p>
+            <p className="mt-3 text-xs text-white/55 dark:text-gray-500">Sign in to load pUSD cash, positions and claimable payouts.</p>
           </div>
           <div className="mt-3">
             {!authenticated ? (
@@ -8940,7 +9109,7 @@ export function PolyPortfolioPanel({
 
   return (
     <div className="mt-4 space-y-4">
-      <PolyDeskBackButton onClick={showLegacyBack && unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />
+      {showLegacyBack && <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />}
       {fundingReturnNotice}
       {unsignedPortfolioAction === 'watch' && (publicWatchPending || bundle?.emailConfirmationPending) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
@@ -9044,26 +9213,7 @@ export function PolyPortfolioPanel({
 
       {/* Main wallet card */}
       {unsignedPortfolioAction === 'trading' && (
-      <div className="polydesk-card p-4">
-        <div>
-          <div className="mt-1 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Account</h2>
-              <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                Cash, positions and funding in one place.
-              </p>
-            </div>
-            {signingWalletAddress && (
-              <PrivyDisconnectButton
-                title="Sign out wallet"
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.04]"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Sign out
-              </PrivyDisconnectButton>
-            )}
-          </div>
-        </div>
+      <div className="space-y-4">
 
         {!savedTradingAddress && (
           <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
@@ -9114,101 +9264,83 @@ export function PolyPortfolioPanel({
           </div>
         )}
 
-        {savedTradingAddress && (
-          <div className="mt-3 grid gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Wallet</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-gray-800 dark:text-gray-100">{shortHex(savedTradingAddress)}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => void disconnectTradingProfile()}
-                  disabled={savingProfile}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200 dark:hover:bg-white/[0.08]"
-                >
-                  {savingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Change
-                </button>
-              </div>
-            </div>
-            {connectedTradingWalletMismatch && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
-                <p className="font-semibold">Connected Privy wallet does not match this saved Main Wallet.</p>
-                <p className="mt-1 font-mono">{shortHex(signingWalletAddress)} connected</p>
-                <button
-                  type="button"
-                  onClick={() => void useConnectedTradingWallet()}
-                  disabled={savingProfile || depositWalletBusy}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-950 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-amber-900 disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
-                >
-                  {savingProfile || depositWalletBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Use connected wallet
-                </button>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-2 dark:border-white/10">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Trading account</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-gray-800 dark:text-gray-100">
-                  {polymarketDepositWallet
-                    ? `${shortHex(polymarketDepositWallet)}${polymarketWalletReady ? '' : ' - activating'}`
-                    : depositWalletBusy ? 'Activating...' : 'Not active'}
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                  {polymarketWalletReady
-                    ? 'Used for Polymarket positions and orders.'
-                    : 'PolyDesk is activating your trading account.'}
-                </p>
-              </div>
-              {!polymarketWalletReady && (
-                <button
-                  type="button"
-                  onClick={() => void activatePolymarketWallet(savedTradingAddress)}
-                  disabled={depositWalletBusy}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-black px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
-                >
-                  {depositWalletBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  {polymarketDepositWallet ? 'Check' : 'Activate'}
-                </button>
-              )}
-            </div>
-            {depositWalletError && <p className="text-xs text-red-500 dark:text-red-300">{depositWalletError}</p>}
-            {polymarketWalletReady && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddressInput(polymarketDepositWallet)
-                  setUnsignedWatchAddress(polymarketDepositWallet)
-                  setUnsignedPortfolioAction('watch')
-                }}
-                className="flex w-full items-center justify-between gap-3 border-t border-gray-200 pt-2 text-left dark:border-white/10"
-              >
-                <span>
-                  <span className="block text-xs font-semibold text-gray-900 dark:text-white">Monitor my LP portfolio</span>
-                  <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">Position and order alerts for this trading account.</span>
-                </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
-              </button>
-            )}
+        {connectedTradingWalletMismatch && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+            <p className="font-semibold">Reconnect the wallet that controls this trading account.</p>
+            <button
+              type="button"
+              onClick={() => void useConnectedTradingWallet()}
+              disabled={savingProfile || depositWalletBusy}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-950 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50 dark:bg-amber-200 dark:text-amber-950"
+            >
+              {savingProfile || depositWalletBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              Reconnect
+            </button>
           </div>
         )}
+        {savedTradingAddress && !polymarketWalletReady && (
+          <button
+            type="button"
+            onClick={() => void activatePolymarketWallet(savedTradingAddress)}
+            disabled={depositWalletBusy}
+            className="polydesk-primary-cta w-full"
+          >
+            {depositWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {polymarketDepositWallet ? 'Check trading account' : 'Activate trading account'}
+          </button>
+        )}
+        {depositWalletError && <p className="text-xs text-red-500 dark:text-red-300">{depositWalletError}</p>}
 
-        <div className="mt-4 grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
+        <section className="overflow-hidden rounded-[1.4rem] bg-gray-950 p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.14)] dark:bg-white dark:text-gray-950">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50 dark:text-gray-500">Portfolio balance</p>
+              <p className="mt-2 text-4xl font-semibold tracking-[-0.05em]">
+                {liveLoading || tradingPusdLoading ? <Loader2 className="inline h-7 w-7 animate-spin" /> : formatUsd(ownedPortfolioValue)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (tradingPortfolioAddress) void fetchLiveData(tradingPortfolioAddress)
+                if (polymarketDepositWallet) void loadTradingPusdBalance(polymarketDepositWallet)
+              }}
+              disabled={(liveLoading && tradingPusdLoading) || !tradingPortfolioAddress}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition hover:bg-white/10 disabled:opacity-50 dark:border-black/10 dark:text-gray-600 dark:hover:bg-black/5"
+              aria-label="Refresh portfolio balance"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', (liveLoading || tradingPusdLoading) && 'animate-spin')} />
+            </button>
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/10 pt-4 dark:border-black/10">
+            {[
+              ['pUSD cash', tradingPusdDisplay],
+              ['Positions', formatUsd(activePositionValue)],
+              ['Claimable', formatUsd(claimableValue)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-[10px] text-white/50 dark:text-gray-500">{label}</p>
+                <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
+              </div>
+            ))}
+          </div>
+          {tradingPusdError && <p className="mt-3 text-xs text-amber-200 dark:text-amber-700">{tradingPusdError}</p>}
+        </section>
+
+        <div className="grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
           {[
-            { key: 'balance', label: 'Balance', icon: Activity },
             { key: 'fund', label: 'Fund', icon: Download },
             { key: 'withdraw', label: 'Withdraw', icon: ArrowRight },
             { key: 'positions', label: 'Positions', icon: LineChart },
+            { key: 'monitor', label: 'Monitor LP', icon: Bell },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"
-              onClick={() => setTradingWalletTab(key as typeof tradingWalletTab)}
+              onClick={() => selectTradingTab(key as 'fund' | 'withdraw' | 'positions' | 'monitor')}
               className={cn(
                 'flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-lg border px-1.5 text-[10px] font-bold transition-all',
-                tradingWalletTab === key
+                (key !== 'monitor' && tradingWalletTab === key)
                   ? 'border-gray-300 bg-gray-100 text-gray-950 shadow-sm dark:border-white/15 dark:bg-white/[0.12] dark:text-white'
                   : 'border-transparent bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-200',
               )}
@@ -9244,57 +9376,6 @@ export function PolyPortfolioPanel({
                 {network.label}
               </button>
             ))}
-          </div>
-        )}
-
-        {tradingWalletTab === 'balance' && (
-          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">pUSD trading cash</p>
-                  <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">
-                    {tradingPusdLoading ? <Loader2 className="inline h-5 w-5 animate-spin" /> : tradingPusdDisplay}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {tradingPusdError
-                      ? tradingPusdError
-                      : polymarketWalletReady ? 'Live pUSD balance on the Polymarket wallet.' : 'Activates after Polymarket wallet is ready.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Portfolio value</p>
-                  <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">
-                    {liveLoading ? <Loader2 className="inline h-5 w-5 animate-spin" /> : formatUsd(totalValue)}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{formatUsd(activePositionValue)} active positions</p>
-                  {tradingPortfolioAddress && <p className="mt-1 text-xs font-semibold text-gray-400">{shortHex(tradingPortfolioAddress)}</p>}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (tradingPortfolioAddress) void fetchLiveData(tradingPortfolioAddress)
-                    if (polymarketDepositWallet) void loadTradingPusdBalance(polymarketDepositWallet)
-                  }}
-                  disabled={(liveLoading && tradingPusdLoading) || !tradingPortfolioAddress}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition hover:bg-gray-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
-                  aria-label="Refresh PolyDesk portfolio value"
-                >
-                  <RefreshCw className={cn('h-4 w-4', (liveLoading || tradingPusdLoading) && 'animate-spin')} />
-                </button>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Claimable</p>
-              <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">
-                {liveLoading ? <Loader2 className="inline h-5 w-5 animate-spin" /> : formatUsd(claimableValue)}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{claimablePositions.length} redeemable position{claimablePositions.length === 1 ? '' : 's'}</p>
-            </div>
           </div>
         )}
 
@@ -9468,9 +9549,8 @@ export function PolyPortfolioPanel({
                 <RefreshCw className={cn('h-4 w-4', liveLoading && 'animate-spin')} />
               </button>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
+            <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
               {[
-                { key: 'not-started', label: 'Not started' },
                 { key: 'live', label: 'Live' },
                 { key: 'ended', label: 'Ended' },
               ].map(tab => (
@@ -9495,14 +9575,21 @@ export function PolyPortfolioPanel({
               <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No {positionStatusTab.replace('-', ' ')} positions in this wallet.</p>
             ) : (
               <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(156,163,175,0.35)_transparent]">
-                {sellNotice && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">{sellNotice}</p>}
-                {sellSuccess && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">{sellSuccess}</p>}
+                {(sellNotice || claimNotice) && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">{sellNotice || claimNotice}</p>}
+                {(sellSuccess || claimSuccess) && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">{sellSuccess || claimSuccess}</p>}
                 {positionsByStatus.slice(0, 8).map(position => {
                   const pnl = position.percentPnl
                   const claimable = isClaimablePosition(position)
                   const active = isActiveOpenPosition(position)
                   const positionKey = polymarketPositionKey(position)
                   const sellBusy = sellBusyKey === positionKey
+                  const claimBusy = claimBusyKey === positionKey
+                  const origin = orderOriginByAsset.get(polymarketPositionTokenId(position))
+                  const originLabel = origin === 'watch-position'
+                    ? 'Watch idea'
+                    : origin === 'lp-scout'
+                      ? 'LP position'
+                      : 'Direct trade'
                   const tone = typeof pnl === 'number'
                     ? pnl >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500 dark:text-red-300'
                     : 'text-gray-400'
@@ -9514,6 +9601,9 @@ export function PolyPortfolioPanel({
                           <p className="text-[11px] text-gray-500 dark:text-gray-400">
                             {position.outcome ?? 'Position'} - {formatUsd(position.currentValue)}
                           </p>
+                          <span className="mt-1 inline-flex rounded-full bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-white/[0.08] dark:text-gray-300">
+                            {originLabel}
+                          </span>
                         </div>
                         <p className={cn('text-sm font-semibold tabular-nums', tone)}>{formatPercent(pnl)}</p>
                       </div>
@@ -9534,22 +9624,20 @@ export function PolyPortfolioPanel({
                           </button>
                         )}
                         {claimable && (
-                          <a
-                            href={polymarketEventUrl(position)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClaimNotice('')
+                              setClaimSuccess('')
+                              setPendingClaimPosition(position)
+                            }}
+                            disabled={Boolean(claimBusyKey)}
                             className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:border-emerald-300 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
                           >
-                            Claim <ExternalLink className="h-3 w-3" />
-                          </a>
+                            {claimBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                            Claim to pUSD
+                          </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setTradingWalletTab('withdraw')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300 dark:hover:border-white/20 dark:hover:text-white"
-                        >
-                          Withdraw <ArrowRight className="h-3 w-3" />
-                        </button>
                         <a
                           href={polymarketEventUrl(position)}
                           target="_blank"
@@ -9754,17 +9842,9 @@ export function PolyPortfolioPanel({
                   <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{position.title ?? 'Polymarket position'}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{formatUsd(position.currentValue)} redeemable</p>
                 </div>
-                <a
-                  href={polymarketEventUrl(position)}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => {
-                    if (watchedAddress) window.setTimeout(() => void fetchLiveData(watchedAddress), 4000)
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-black px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
-                >
-                  Claim <ExternalLink className="h-3 w-3" />
-                </a>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                  Resolved
+                </span>
               </li>
             ))}
           </ul>
@@ -9805,6 +9885,20 @@ export function PolyPortfolioPanel({
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    {onTradeWatchedPosition && Number(position.curPrice ?? position.avgPrice) > 0 && Number(position.curPrice ?? position.avgPrice) < 1 && (
+                      <button
+                        type="button"
+                        onClick={() => onTradeWatchedPosition({
+                          title: position.title ?? 'Polymarket market',
+                          marketUrl: polymarketEventUrl(position),
+                          outcome: normalizeTradeOutcome(position.outcome).toUpperCase() as 'YES' | 'NO',
+                          price: Number(position.curPrice ?? position.avgPrice),
+                        })}
+                        className="inline-flex items-center gap-1 rounded-lg bg-gray-950 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
+                      >
+                        Trade this market
+                      </button>
+                    )}
                     <a
                       href={polymarketEventUrl(position)}
                       target="_blank"
@@ -9858,6 +9952,47 @@ export function PolyPortfolioPanel({
               >
                 Continue
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingClaimPosition && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#111216]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Claim winnings</p>
+            <h3 className="mt-2 text-base font-semibold tracking-tight text-gray-950 dark:text-white">
+              Add this payout to pUSD cash?
+            </h3>
+            <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
+              <p className="line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white">
+                {pendingClaimPosition.title ?? 'Polymarket position'}
+              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {formatUsd(pendingClaimPosition.currentValue)} available to claim.
+              </p>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              Your wallet approves the claim. The resolved tokens are redeemed into pUSD in this trading account.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingClaimPosition(null)}
+                className="flex min-h-[42px] items-center justify-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const position = pendingClaimPosition
+                  setPendingClaimPosition(null)
+                  void claimPositionToPusd(position)
+                }}
+                className="polydesk-primary-cta w-full"
+              >
+                Claim to pUSD
               </button>
             </div>
           </div>

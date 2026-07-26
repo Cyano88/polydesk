@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePrivy } from '@privy-io/react-auth'
-import { ArrowRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { LpScoutPrefill } from './LpScoutPanel'
 import Pulse from './Pulse'
@@ -12,6 +11,7 @@ const AgentWorkspace = lazy(() => import('./AgentWorkspace'))
 const TradeActivity = lazy(() => import('./TradeActivity'))
 const LpScoutPanel = lazy(() => import('./LpScoutPanel').then(module => ({ default: module.LpScoutPanel })))
 const PolymarketOpenOrdersPanel = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketOpenOrdersPanel })))
+const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketLimitOrderTicket })))
 const PolyPortfolioPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyPortfolioPanel })))
 const PolyStreamPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyStreamPanel })))
 const PolyWorldCupHubPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyWorldCupHubPanel })))
@@ -37,12 +37,7 @@ function normalizePortfolioAction(value: string | null): PortfolioAction {
 }
 
 function LocalPreviewOverview({
-  onWatch = () => undefined,
-  onTip = () => undefined,
-}: {
-  onWatch?: () => void
-  onTip?: () => void
-}) {
+}: Record<string, never>) {
   return (
     <section className="space-y-5">
       <div>
@@ -62,48 +57,7 @@ function LocalPreviewOverview({
           ))}
         </div>
       </div>
-      <OverviewActions onWatch={onWatch} onTip={onTip} />
     </section>
-  )
-}
-
-function OverviewActions({
-  onWatch,
-  onTip,
-}: {
-  onWatch: () => void
-  onTip: () => void
-}) {
-  const actions = [
-    {
-      label: 'Watch portfolio',
-      body: 'Track any public Polymarket account.',
-      onClick: onWatch,
-    },
-    {
-      label: 'Tip',
-      body: 'Send USDC to a Polymarket wallet.',
-      onClick: onTip,
-    },
-  ]
-
-  return (
-    <div className="grid grid-cols-2 gap-3" aria-label="Portfolio actions">
-      {actions.map(action => (
-        <button
-          key={action.label}
-          type="button"
-          onClick={action.onClick}
-          className="polydesk-card group min-h-28 p-4 text-left transition-colors hover:border-gray-300 dark:hover:border-white/20"
-        >
-          <span className="flex items-center justify-between gap-3">
-            <strong className="text-sm font-semibold text-gray-950 dark:text-white">{action.label}</strong>
-            <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-          </span>
-          <span className="mt-2 block text-xs leading-5 text-gray-500 dark:text-gray-400">{action.body}</span>
-        </button>
-      ))}
-    </div>
   )
 }
 
@@ -126,8 +80,15 @@ export default function PolyDesk() {
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView || 'pulse')
   const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
+  const [portfolioDetail, setPortfolioDetail] = useState<'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'>('balance')
+  const [watchedTrade, setWatchedTrade] = useState<{
+    title: string
+    marketUrl: string
+    outcome: 'YES' | 'NO'
+    price: number
+  } | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
-  const welcomeText = 'Welcome back. Ask about your Polymarket account, live football, latest news, LP Scout, and market context.'
+  const welcomeText = 'Welcome back. Ask about your portfolio, live football, news, or LP opportunities.'
 
   const ownerKey = useMemo(() => {
     const privyIdentity = user?.id?.trim()
@@ -198,21 +159,25 @@ export default function PolyDesk() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
+  useEffect(() => {
+    if (!watchedTrade) return
+    window.setTimeout(() => {
+      document.querySelector('[data-polydesk-watched-trade="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 40)
+  }, [watchedTrade])
+
   return (
-    <main className={cn('text-gray-950 dark:text-white', isAgentOpen && 'h-full min-h-0')}>
+    <main className={cn('text-gray-950 dark:text-white', isAgentOpen && 'h-full min-h-0 w-full')}>
       <div className={cn(
         'mx-auto w-full space-y-5',
         isAgentOpen
-          ? 'h-full min-h-0 !max-w-none !space-y-0'
+          ? 'h-full min-h-0 w-full !max-w-2xl !space-y-0'
           : serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         <Suspense fallback={<PolyDeskLoadingState label="Opening workspace" />}>
         {!isAgentOpen && !serviceView && (
           browsePreview ? (
-            <LocalPreviewOverview
-              onWatch={() => openPortfolioAction('watch')}
-              onTip={() => openPortfolioAction('external')}
-            />
+            <LocalPreviewOverview />
           ) : (
             <>
               <PolyPortfolioPanel
@@ -231,15 +196,12 @@ export default function PolyDesk() {
         )}
 
         {isAgentOpen && (
-          <section className="flex h-full min-h-0 flex-col bg-white dark:bg-[#111114]">
+          <section className="flex h-full min-h-0 w-full max-w-2xl flex-col bg-white dark:bg-[#111114]">
             <header className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
               <span className="text-gray-800 dark:text-gray-100">
                 <PolyDeskAgentIcon header isStatic />
               </span>
-              <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-gray-950 dark:text-white">PolyDesk Agent</h1>
-                <p className="text-[11px] text-gray-400">Prediction-market intelligence</p>
-              </div>
+              <h1 className="min-w-0 text-sm font-semibold text-gray-950 dark:text-white">PolyDesk Agent</h1>
             </header>
             <TelegramHelperPanel
               key={helperKey}
@@ -255,10 +217,10 @@ export default function PolyDesk() {
               lockedHelperMode="polydesk"
               welcomeText={welcomeText}
               welcomeAction={{
-                prefix: 'PolyDesk Agent is live on the OKX AI marketplace, where other agents can plug in, build with, or resell its intelligence services.',
+                prefix: 'PolyDesk Agent is live on OKX AI for agents to use or resell.',
                 label: 'okx.ai/agents/5427…',
                 url: 'https://www.okx.ai/agents/5427?source=search',
-                suffix: 'Circle agent marketplace listing coming soon.',
+                suffix: 'Circle listing coming soon.',
               }}
               inputPlaceholder="Ask Desk Agent..."
               hideTopDivider
@@ -294,18 +256,9 @@ export default function PolyDesk() {
             ) : serviceView === 'portfolio' ? (
               <>
                 {browsePreview && !searchParams.get('portfolio') ? (
-                  <LocalPreviewOverview
-                    onWatch={() => openPortfolioAction('watch')}
-                    onTip={() => openPortfolioAction('external')}
-                  />
+                  <LocalPreviewOverview />
                 ) : (
                   <>
-                  {portfolioAction === 'trading' && (
-                    <OverviewActions
-                      onWatch={() => openPortfolioAction('watch')}
-                      onTip={() => openPortfolioAction('external')}
-                    />
-                  )}
                   <PolyPortfolioPanel
                     onBack={closeServiceView}
                     onOpenLpScout={() => openServiceView('lp-scout')}
@@ -315,8 +268,25 @@ export default function PolyDesk() {
                     surface="standalone"
                     initialPortfolioAction={portfolioAction}
                     initialTradingWalletTab={searchParams.get('wallet') === 'balance' ? 'balance' : undefined}
+                    onTradingTabChange={tab => {
+                      setPortfolioDetail(tab)
+                      if (tab === 'monitor') openPortfolioAction('watch')
+                    }}
+                    onTradeWatchedPosition={setWatchedTrade}
                   />
-                  {portfolioAction === 'trading' && <PolymarketOpenOrdersPanel />}
+                  {portfolioAction === 'trading' && portfolioDetail === 'positions' && <PolymarketOpenOrdersPanel />}
+                  {portfolioAction === 'watch' && watchedTrade && (
+                    <section className="mt-4 scroll-mt-28" data-polydesk-watched-trade="true">
+                      <PolymarketLimitOrderTicket
+                        marketTitle={watchedTrade.title}
+                        marketUrl={watchedTrade.marketUrl}
+                        yesQuote={watchedTrade.outcome === 'YES' ? watchedTrade.price : 1 - watchedTrade.price}
+                        noQuote={watchedTrade.outcome === 'NO' ? watchedTrade.price : 1 - watchedTrade.price}
+                        initialOutcome={watchedTrade.outcome}
+                        orderSource="watch-position"
+                      />
+                    </section>
+                  )}
                   </>
                 )}
               </>

@@ -101,6 +101,8 @@ export function PolymarketLimitOrderTicket({
   tickSize: rawTickSize,
   rewardMinShares,
   estimatedRewardCapitalUsdc,
+  initialOutcome = 'YES',
+  orderSource = 'lp-scout',
 }: {
   marketTitle: string
   marketUrl: string
@@ -109,6 +111,8 @@ export function PolymarketLimitOrderTicket({
   tickSize?: unknown
   rewardMinShares?: unknown
   estimatedRewardCapitalUsdc?: unknown
+  initialOutcome?: 'YES' | 'NO'
+  orderSource?: 'lp-scout' | 'watch-position'
 }) {
   const tickSize = cleanTickSize(rawTickSize)
   const initialPrice = cleanPrice(yesQuote, tickSize)
@@ -116,8 +120,8 @@ export function PolymarketLimitOrderTicket({
   const { authenticated, getAccessToken } = usePrivy()
   const { wallets } = useWallets()
   const [profile, setProfile] = useState<TradingProfile | null>(null)
-  const [outcome, setOutcome] = useState<'YES' | 'NO'>('YES')
-  const [price, setPrice] = useState(initialPrice)
+  const [outcome, setOutcome] = useState<'YES' | 'NO'>(initialOutcome)
+  const [price, setPrice] = useState(initialOutcome === 'NO' ? cleanPrice(noQuote, tickSize) : initialPrice)
   const [amount, setAmount] = useState(initialRewardSpend > 0 ? amountInput(initialRewardSpend) : '1')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -160,12 +164,12 @@ export function PolymarketLimitOrderTicket({
   useEffect(() => {
     const nextPrice = cleanPrice(yesQuote, tickSize)
     const nextMinimum = minimumRewardSpend(rewardMinShares, nextPrice)
-    setOutcome('YES')
-    setPrice(nextPrice)
+    setOutcome(initialOutcome)
+    setPrice(initialOutcome === 'NO' ? cleanPrice(noQuote, tickSize) : nextPrice)
     setAmount(nextMinimum > 0 ? amountInput(nextMinimum) : '1')
     setNotice('')
     setPlaced(null)
-  }, [marketUrl, rewardMinShares, tickSize, yesQuote])
+  }, [initialOutcome, marketUrl, noQuote, rewardMinShares, tickSize, yesQuote])
 
   const estimatedShares = useMemo(() => {
     const amountNumber = Number(amount)
@@ -267,7 +271,7 @@ export function PolymarketLimitOrderTicket({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          externalOrderId: `lp-scout:${Date.now()}`,
+          externalOrderId: `${orderSource}:${Date.now()}`,
           marketUrl,
           outcome,
           maxSpendUsdc: amount,
@@ -341,7 +345,7 @@ export function PolymarketLimitOrderTicket({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source: 'lp-scout-limit',
+          source: orderSource === 'watch-position' ? 'watch-position-limit' : 'lp-scout-limit',
           marketTitle,
           marketUrl,
           outcome: plan.market.outcome,
@@ -404,6 +408,7 @@ export function PolymarketLimitOrderTicket({
               side: 'BUY',
               price: plan.signingPlan.createOrder.price,
               originalSize: plan.signingPlan.createOrder.size,
+              origin: orderSource,
             }),
           })
         } catch {

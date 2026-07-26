@@ -101,6 +101,7 @@ function isAllowedSourceMarket(source: string, marketUrl: string) {
   if (source === 'world-cup-moneyline') return marketUrl.startsWith('https://polymarket.com/sports/world-cup/')
   if (source === 'portfolio-position-sell') return marketUrl.startsWith('https://polymarket.com/')
   if (source === 'lp-scout-limit') return marketUrl.startsWith('https://polymarket.com/event/')
+  if (source === 'watch-position-limit') return marketUrl.startsWith('https://polymarket.com/event/')
   return false
 }
 
