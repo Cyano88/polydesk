@@ -24,7 +24,6 @@ import {
   Pencil,
   PlusCircle,
   Radio,
-  RefreshCw,
   Send,
   Share2,
   Sparkles,
@@ -4161,7 +4160,7 @@ export function PolyWorldCupNewsPanel({
   const lead = articles[active % articles.length] ?? articles[0]
   const hasProviderFeed = Boolean(feed?.mode === 'live' || (feed?.providerConfigured && feed?.source && feed.source !== 'fallback'))
   const statusText = loading
-    ? 'Refreshing feed'
+    ? ''
     : error
     ? 'Provider feed unavailable'
     : hasProviderFeed
@@ -4735,16 +4734,16 @@ function friendlyTradeError(err: unknown) {
     return 'Order approval was cancelled.'
   }
   if (/\b(insufficient|not enough|balance|funds|allowance|collateral)\b/.test(message)) {
-    return 'Not enough balance or allowance for this order. Refresh the wallet and try again.'
+    return 'Not enough balance or allowance for this order. Check the wallet and try again.'
   }
   if (/\b(network|timeout|fetch|failed to fetch|503|502|504|unavailable)\b/.test(message)) {
     return 'Connection issue while sending the order. Please try again.'
   }
   if (/\b(no orders found to match|couldn'?t be fully filled|fak order|fok order|partially filled or killed|fully filled or killed)\b/.test(message)) {
-    return 'No matching liquidity was available when the order reached Polymarket. Refresh odds and try again.'
+    return 'No matching liquidity was available when the order reached Polymarket. Review the latest odds and try again.'
   }
   if (/\b(price|fillable|liquidity|minimum|min size|too small|market)\b/.test(message)) {
-    return 'This market moved before the order finished. Refresh and try again.'
+    return 'This market moved before the order finished. Review the latest price and try again.'
   }
   return cleanMessage
 }
@@ -4760,7 +4759,7 @@ function rawTradeErrorMessage(err: unknown) {
 
 function stagedTradeError(stage: string, err: unknown) {
   const message = friendlyTradeError(err)
-  if (stage && message === 'Not enough balance or allowance for this order. Refresh the wallet and try again.') {
+  if (stage && message === 'Not enough balance or allowance for this order. Check the wallet and try again.') {
     const rawMessage = rawTradeErrorMessage(err)
     return rawMessage && rawMessage !== message
       ? `PolyDesk trade failed at ${stage}: ${message} Upstream: ${rawMessage}`
@@ -4809,7 +4808,6 @@ function HashLiveScoreWidget({
   loading,
   providerReady,
   error,
-  onRetry,
   onSubmitTrade,
   tradeAmount,
   onTradeAmountChange,
@@ -4822,7 +4820,6 @@ function HashLiveScoreWidget({
   loading: boolean
   providerReady: boolean
   error: string
-  onRetry: () => void
   onSubmitTrade: (match: PolyStreamMatch, option: PolyStreamTradeOption) => void
   tradeAmount: string
   onTradeAmountChange: (value: string) => void
@@ -4903,16 +4900,8 @@ function HashLiveScoreWidget({
       <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-4 text-center dark:border-rose-400/20 dark:bg-rose-400/10">
         <p className="text-sm font-semibold text-rose-700 dark:text-rose-200">Live scores temporarily unavailable</p>
         <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-rose-600/80 dark:text-rose-100/70">
-          Refresh in a moment. We do not show stale football rows.
+          We will retry quietly and will not show stale football rows.
         </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 transition-all hover:bg-rose-50 active:scale-[0.98] dark:border-rose-300/20 dark:bg-white/10 dark:text-rose-100"
-        >
-          <Loader2 className={cn('h-3 w-3', loading && 'animate-spin')} />
-          Refresh
-        </button>
       </div>
     )
   }
@@ -4922,16 +4911,8 @@ function HashLiveScoreWidget({
       <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 text-center dark:border-white/10 dark:bg-white/[0.04]">
         <p className="text-sm font-semibold text-gray-900 dark:text-white">Live board is waiting for match data</p>
         <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          Refresh shortly. Hash PayLink only shows current provider data here.
+          Live data will appear automatically when the provider responds.
         </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-200"
-        >
-          <Loader2 className={cn('h-3 w-3', loading && 'animate-spin')} />
-          Refresh
-        </button>
       </div>
     )
   }
@@ -5222,7 +5203,7 @@ export function PolyStreamPanel({
   const polymarketWalletReady = Boolean(polymarketDepositWallet && String(profile?.depositWalletStatus || '').toLowerCase() === 'ready')
   const providerReady = Boolean(feed?.providerConfigured && feed.providerStatus === 'connected' && !error)
   const statusText = loading
-    ? 'Refreshing'
+    ? ''
     : error
     ? 'Provider error'
     : providerReady
@@ -5270,7 +5251,7 @@ export function PolyStreamPanel({
     } finally {
       if (mountedRef.current) setProfileLoading(false)
     }
-  }, [authenticated, getAccessToken])
+  }, [authenticated, getAccessToken, unsignedPortfolioAction])
 
   const signWorldCupTrade = useCallback(async (match: PolyStreamMatch, option: PolyStreamTradeOption) => {
     setTradeNotice('')
@@ -5605,12 +5586,7 @@ export function PolyStreamPanel({
       {!hideBack && <PolyDeskBackButton onClick={onBack} />}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Markets</p>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold text-gray-400">{statusText}</span>
-          <button type="button" onClick={() => void loadStream()} className="polydesk-icon-button !h-9 !w-9" aria-label="Refresh markets">
-            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          </button>
-        </div>
+        <span className="text-[10px] font-semibold text-gray-400">{statusText}</span>
       </div>
 
       <div className="space-y-2">
@@ -5619,7 +5595,6 @@ export function PolyStreamPanel({
           loading={loading && !feed}
           providerReady={providerReady}
           error={error}
-          onRetry={() => void loadStream()}
           onSubmitTrade={(match, option) => void signWorldCupTrade(match, option)}
           tradeAmount={tradeAmount}
           onTradeAmountChange={setTradeAmount}
@@ -6530,7 +6505,7 @@ async function readPolyDeskJson<T>(res: Response, fallbackMessage: string): Prom
   }
   const text = await res.text().catch(() => '')
   if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-    throw new Error('PolyDesk portfolio service is not reachable from this page. Refresh and try again, or check the API deployment.')
+    throw new Error('PolyDesk portfolio service is temporarily unavailable. Try again shortly.')
   }
   throw new Error(fallbackMessage)
 }
@@ -6829,7 +6804,6 @@ export function PolyPortfolioPanel({
   surface = 'telegram',
   initialPortfolioAction = null,
   initialTradingWalletTab,
-  onTradingTabChange,
   onTradeWatchedPosition,
 }: {
   onBack: () => void
@@ -6839,8 +6813,7 @@ export function PolyPortfolioPanel({
   telegramId?: string
   surface?: 'telegram' | 'standalone'
   initialPortfolioAction?: 'watch' | 'trading' | 'external' | 'x402' | null
-  initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions'
-  onTradingTabChange?: (tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') => void
+  initialTradingWalletTab?: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'
   onTradeWatchedPosition?: (trade: {
     title: string
     marketUrl: string
@@ -6956,24 +6929,14 @@ export function PolyPortfolioPanel({
   const [tradingPusdBalance, setTradingPusdBalance] = useState<{ raw: string; formatted: string } | null>(null)
   const [tradingPusdLoading, setTradingPusdLoading] = useState(false)
   const [tradingPusdError, setTradingPusdError] = useState('')
-  const [tradingWalletTab, setTradingWalletTab] = useState<'balance' | 'fund' | 'withdraw' | 'positions'>(initialPortfolioAction === 'trading' ? (initialTradingWalletTab ?? 'balance') : 'balance')
+  const [tradingWalletTab, setTradingWalletTab] = useState<'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'>(initialPortfolioAction === 'trading' ? (initialTradingWalletTab ?? 'positions') : 'balance')
   const [tradingWalletNetwork, setTradingWalletNetwork] = useState<PolymarketBridgeNetwork>('base')
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
-  const [positionStatusTab, setPositionStatusTab] = useState<PolymarketPositionStatus>('live')
+  const [positionStatusTab, setPositionStatusTab] = useState<'orders' | PolymarketPositionStatus>('orders')
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
   function selectTradingTab(tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') {
-    if (tab === 'monitor') {
-      if (polymarketDepositWallet) {
-        setAddressInput(polymarketDepositWallet)
-        setUnsignedWatchAddress(polymarketDepositWallet)
-        setUnsignedPortfolioAction('watch')
-      }
-      onTradingTabChange?.('monitor')
-      return
-    }
     setTradingWalletTab(tab)
-    onTradingTabChange?.(tab)
   }
 
   useEffect(() => {
@@ -7071,9 +7034,15 @@ export function PolyPortfolioPanel({
       .filter(order => order.assetId)
       .map(order => [String(order.assetId), order.origin ?? 'lp-scout'] as const),
   ), [bundle?.lpOrders])
+  const openLpOrders = useMemo(
+    () => (bundle?.lpOrders ?? []).filter(order => order.status === 'live' || order.status === 'partial'),
+    [bundle?.lpOrders],
+  )
 
   const positionsByStatus = useMemo(
-    () => livePositions.filter(position => polymarketPositionStatus(position) === positionStatusTab),
+    () => positionStatusTab === 'orders'
+      ? []
+      : livePositions.filter(position => polymarketPositionStatus(position) === positionStatusTab),
     [livePositions, positionStatusTab],
   )
 
@@ -7081,7 +7050,7 @@ export function PolyPortfolioPanel({
     if (!initialPortfolioAction) return
     setUnsignedPortfolioAction(initialPortfolioAction)
     if (initialPortfolioAction === 'trading') {
-      setTradingWalletTab(initialTradingWalletTab ?? 'balance')
+      setTradingWalletTab(initialTradingWalletTab ?? 'positions')
     }
   }, [initialPortfolioAction, initialTradingWalletTab])
 
@@ -7165,7 +7134,10 @@ export function PolyPortfolioPanel({
       const res = await fetch('/api/polymarket-portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'evaluate-alerts' }),
+        body: JSON.stringify({
+          action: 'evaluate-alerts',
+          scope: unsignedPortfolioAction === 'trading' ? 'owned' : 'watch',
+        }),
       })
       const data = await readPolyDeskJson<{ ok?: boolean; alerts?: PolymarketAlertRecord[] }>(res, 'Could not evaluate alerts.')
       if (res.ok && data.ok && Array.isArray(data.alerts)) {
@@ -7201,7 +7173,7 @@ export function PolyPortfolioPanel({
           : await fetch(`/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(requestId)}`)
         const data = await readPolyDeskJson<{ ok?: boolean; status?: string; receiptUrl?: string; error?: string }>(response, 'Could not verify Polymarket funding.')
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not verify Polymarket funding.')
-        if (data.status !== 'funded') throw new Error(data.status === 'bridging' ? 'Funding is still bridging. Refresh shortly.' : 'Polymarket funding is not complete yet.')
+        if (data.status !== 'funded') throw new Error(data.status === 'bridging' ? 'Funding is still bridging and will update automatically.' : 'Polymarket funding is not complete yet.')
         setFundingReturnReceiptUrl(data.receiptUrl ?? '')
         setFundingReturnState('funded')
         setFundingReturnMessage('Polymarket funding delivered and verified.')
@@ -7236,11 +7208,31 @@ export function PolyPortfolioPanel({
   }, [liveDataAddress, fetchLiveData, fetchBundle])
 
   useEffect(() => {
+    if (!liveDataAddress) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void fetchLiveData(liveDataAddress)
+      void fetchBundle()
+      if (unsignedPortfolioAction === 'trading' && polymarketDepositWallet) {
+        void loadTradingPusdBalance(polymarketDepositWallet)
+      }
+    }, 30000)
+    return () => window.clearInterval(timer)
+  }, [liveDataAddress, unsignedPortfolioAction, polymarketDepositWallet, fetchLiveData, fetchBundle])
+
+  useEffect(() => {
     if (unsignedPortfolioAction !== 'watch') return
     if (!watchedAddress || liveLoading) return
     if (liveLoadedAddress.toLowerCase() !== watchedAddress.toLowerCase()) return
     void evaluateAlerts()
   }, [unsignedPortfolioAction, watchedAddress, liveLoadedAddress, liveLoading, livePositions.length, evaluateAlerts])
+
+  useEffect(() => {
+    if (unsignedPortfolioAction !== 'trading') return
+    if (!tradingPortfolioAddress || liveLoading) return
+    if (liveLoadedAddress.toLowerCase() !== tradingPortfolioAddress.toLowerCase()) return
+    void evaluateAlerts()
+  }, [unsignedPortfolioAction, tradingPortfolioAddress, liveLoadedAddress, liveLoading, livePositions.length, evaluateAlerts])
 
   useEffect(() => {
     if (settings) setSettingsDraft(settings)
@@ -7274,10 +7266,9 @@ export function PolyPortfolioPanel({
 
   useEffect(() => {
     if (unsignedPortfolioAction !== 'trading') return
-    if (tradingWalletTab !== 'balance') return
     if (!polymarketWalletReady || !polymarketDepositWallet) return
     void loadTradingPusdBalance(polymarketDepositWallet)
-  }, [unsignedPortfolioAction, tradingWalletTab, polymarketWalletReady, polymarketDepositWallet])
+  }, [unsignedPortfolioAction, polymarketWalletReady, polymarketDepositWallet])
 
   async function saveProfile(addressOverride?: string): Promise<PolymarketPortfolioBundle | null> {
     const address = (addressOverride ?? addressInput).trim()
@@ -8556,16 +8547,8 @@ export function PolyPortfolioPanel({
           <p className="text-sm font-semibold text-gray-900 dark:text-white">Session is taking longer than expected</p>
           <div className="mt-3 space-y-3">
             <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              PolyDesk is still waiting for the wallet session. Refresh this page if it does not continue.
+              PolyDesk is still waiting for the wallet session and will continue automatically.
             </p>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.04]"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh PolyDesk
-            </button>
           </div>
         </div>
       </div>
@@ -8719,7 +8702,7 @@ export function PolyPortfolioPanel({
                         disabled={unsignedExternalLoading || !/^0x[a-fA-F0-9]{40}$/.test(unsignedExternalAddress.trim())}
                         className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                       >
-                        {unsignedExternalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        {unsignedExternalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                         Check account
                       </button>
                     </div>
@@ -8890,7 +8873,7 @@ export function PolyPortfolioPanel({
                   disabled={unsignedExternalLoading || !externalWalletValid}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                 >
-                  {unsignedExternalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {unsignedExternalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                   Check account
                 </button>
               </div>
@@ -9146,15 +9129,6 @@ export function PolyPortfolioPanel({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => watchedAddress && void fetchLiveData(watchedAddress)}
-              disabled={liveLoading}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/[0.04]"
-              aria-label="Refresh"
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', liveLoading && 'animate-spin')} />
-            </button>
-            <button
-              type="button"
               onClick={disconnectProfile}
               disabled={savingProfile}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/[0.04]"
@@ -9292,25 +9266,11 @@ export function PolyPortfolioPanel({
         {depositWalletError && <p className="text-xs text-red-500 dark:text-red-300">{depositWalletError}</p>}
 
         <section className="overflow-hidden rounded-[1.4rem] bg-gray-950 p-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.14)] dark:bg-white dark:text-gray-950">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50 dark:text-gray-500">Portfolio balance</p>
-              <p className="mt-2 text-4xl font-semibold tracking-[-0.05em]">
-                {liveLoading || tradingPusdLoading ? <Loader2 className="inline h-7 w-7 animate-spin" /> : formatUsd(ownedPortfolioValue)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (tradingPortfolioAddress) void fetchLiveData(tradingPortfolioAddress)
-                if (polymarketDepositWallet) void loadTradingPusdBalance(polymarketDepositWallet)
-              }}
-              disabled={(liveLoading && tradingPusdLoading) || !tradingPortfolioAddress}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition hover:bg-white/10 disabled:opacity-50 dark:border-black/10 dark:text-gray-600 dark:hover:bg-black/5"
-              aria-label="Refresh portfolio balance"
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', (liveLoading || tradingPusdLoading) && 'animate-spin')} />
-            </button>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/50 dark:text-gray-500">Portfolio balance</p>
+            <p className="mt-2 text-4xl font-semibold tracking-[-0.05em]">
+              {liveLoading || tradingPusdLoading ? <Loader2 className="inline h-7 w-7 animate-spin" /> : formatUsd(ownedPortfolioValue)}
+            </p>
           </div>
           <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/10 pt-4 dark:border-black/10">
             {[
@@ -9329,10 +9289,10 @@ export function PolyPortfolioPanel({
 
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
           {[
+            { key: 'positions', label: 'Positions', icon: LineChart },
+            { key: 'monitor', label: 'Monitor', icon: Bell },
             { key: 'fund', label: 'Fund', icon: Download },
             { key: 'withdraw', label: 'Withdraw', icon: ArrowRight },
-            { key: 'positions', label: 'Positions', icon: LineChart },
-            { key: 'monitor', label: 'Monitor LP', icon: Bell },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -9340,7 +9300,7 @@ export function PolyPortfolioPanel({
               onClick={() => selectTradingTab(key as 'fund' | 'withdraw' | 'positions' | 'monitor')}
               className={cn(
                 'flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-lg border px-1.5 text-[10px] font-bold transition-all',
-                (key !== 'monitor' && tradingWalletTab === key)
+                tradingWalletTab === key
                   ? 'border-gray-300 bg-gray-100 text-gray-950 shadow-sm dark:border-white/15 dark:bg-white/[0.12] dark:text-white'
                   : 'border-transparent bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.06] dark:hover:text-gray-200',
               )}
@@ -9534,30 +9494,20 @@ export function PolyPortfolioPanel({
 
         {tradingWalletTab === 'positions' && (
           <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Total positions</p>
-                <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">{livePositions.length}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => tradingPortfolioAddress && void fetchLiveData(tradingPortfolioAddress)}
-                disabled={liveLoading || !tradingPortfolioAddress}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition hover:bg-gray-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.1]"
-                aria-label="Refresh PolyDesk positions"
-              >
-                <RefreshCw className={cn('h-4 w-4', liveLoading && 'animate-spin')} />
-              </button>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Positions</p>
+              <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">{livePositions.length}</p>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
+            <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
               {[
+                { key: 'orders', label: 'Open LP orders' },
                 { key: 'live', label: 'Live' },
                 { key: 'ended', label: 'Ended' },
               ].map(tab => (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setPositionStatusTab(tab.key as PolymarketPositionStatus)}
+                  onClick={() => setPositionStatusTab(tab.key as 'orders' | PolymarketPositionStatus)}
                   className={cn(
                     'min-h-[34px] rounded-lg px-2 text-[11px] font-bold transition-all',
                     positionStatusTab === tab.key
@@ -9569,7 +9519,35 @@ export function PolyPortfolioPanel({
                 </button>
               ))}
             </div>
-            {liveLoading && livePositions.length === 0 ? (
+            {positionStatusTab === 'orders' ? (
+              openLpOrders.length === 0 ? (
+                <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No open LP orders.</p>
+              ) : (
+                <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(156,163,175,0.35)_transparent]">
+                  {openLpOrders.slice(0, 8).map(order => (
+                    <a
+                      key={order.orderId}
+                      href={order.marketUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 transition hover:border-gray-200 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-white/20"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{order.marketTitle}</p>
+                          <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                            {order.outcome || 'LP order'} · {Math.max(0, Number(order.originalSize || 0) - Number(order.matchedSize || 0)).toLocaleString()} shares open
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
+                          {order.status === 'partial' ? 'Partial' : 'Open'}
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )
+            ) : liveLoading && livePositions.length === 0 ? (
               <PolyDeskLoadingState label="Syncing positions" />
             ) : positionsByStatus.length === 0 ? (
               <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No {positionStatusTab.replace('-', ' ')} positions in this wallet.</p>
@@ -9687,11 +9665,14 @@ export function PolyPortfolioPanel({
       )}
 
       {/* Alerts card */}
-      {unsignedPortfolioAction === 'watch' && watchAccountTab === 'alerts' && (
+      {((unsignedPortfolioAction === 'watch' && watchAccountTab === 'alerts')
+        || (unsignedPortfolioAction === 'trading' && tradingWalletTab === 'monitor')) && (
       <div className="polydesk-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Alerts</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+              {unsignedPortfolioAction === 'trading' ? 'Portfolio monitor' : 'Watch alerts'}
+            </p>
             <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
               {uniqueUnreadAlerts.length > 0 ? `${uniqueUnreadAlerts.length} active` : 'No active alerts'}
             </p>
@@ -9732,7 +9713,9 @@ export function PolyPortfolioPanel({
             </div>
             <AlertToggle
               label="New positions"
-              hint="Notify when the watched wallet opens a filled position."
+              hint={unsignedPortfolioAction === 'trading'
+                ? 'Notify when this portfolio opens a filled position.'
+                : 'Notify when the watched wallet opens a filled position.'}
               value={settingsDraft.newPositionAlertsEnabled}
               onChange={value => setSettingsDraft(d => d ? {
                 ...d,
@@ -9822,7 +9805,7 @@ export function PolyPortfolioPanel({
           </div>
         ) : (
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            No active alerts. We watch your saved positions against your alert settings each time you open Portfolio.
+            No active alerts. Position and LP order checks update quietly in the background.
           </p>
         )}
       </div>

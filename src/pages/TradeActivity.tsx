@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { ChevronDown, CircleDollarSign, ExternalLink, History, Radar, RefreshCw } from 'lucide-react'
+import { ChevronDown, CircleDollarSign, ExternalLink, History, Radar } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { readSavedLpScoutActivity, type SavedLpScoutActivity } from '../lib/polydeskTradeActivity'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
@@ -117,18 +117,17 @@ export default function TradeActivity() {
   const [scoutReports, setScoutReports] = useState<ScoutReport[]>([])
   const [tradingAddress, setTradingAddress] = useState('')
   const [loading, setLoading] = useState(!localPreview)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [expandedActivityId, setExpandedActivityId] = useState('')
+  const hasLoadedRef = useRef(localPreview)
 
-  const load = useCallback(async (manual = false) => {
+  const load = useCallback(async () => {
     if (localPreview) {
       setLoading(false)
-      setRefreshing(false)
       return
     }
     if (!ready || !authenticated) return
-    manual ? setRefreshing(true) : setLoading(true)
+    if (!hasLoadedRef.current) setLoading(true)
     setError('')
     try {
       const scoutPromise = Promise.all(readSavedLpScoutActivity().map(loadScoutReport))
@@ -172,13 +171,29 @@ export default function TradeActivity() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load activity.')
     } finally {
+      hasLoadedRef.current = true
       setLoading(false)
-      setRefreshing(false)
     }
   }, [authenticated, getAccessToken, localPreview, ready])
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, 30000)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    window.addEventListener('focus', refreshWhenVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener('focus', refreshWhenVisible)
+    }
   }, [load])
 
   const rows = useMemo<ActivityRow[]>(() => {
@@ -211,21 +226,10 @@ export default function TradeActivity() {
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Overview</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Activity</h1>
-          {!loading && <p className="mt-1 text-xs text-gray-400">{rows.length} record{rows.length === 1 ? '' : 's'}</p>}
-        </div>
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={loading || refreshing}
-          className="polydesk-icon-button shrink-0 disabled:opacity-50"
-          aria-label="Refresh activity"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Overview</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Activity</h1>
+        {!loading && <p className="mt-1 text-xs text-gray-400">{rows.length} record{rows.length === 1 ? '' : 's'}</p>}
       </div>
 
       {error && (

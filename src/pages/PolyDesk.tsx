@@ -10,7 +10,6 @@ import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 const AgentWorkspace = lazy(() => import('./AgentWorkspace'))
 const TradeActivity = lazy(() => import('./TradeActivity'))
 const LpScoutPanel = lazy(() => import('./LpScoutPanel').then(module => ({ default: module.LpScoutPanel })))
-const PolymarketOpenOrdersPanel = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketOpenOrdersPanel })))
 const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketLimitOrderTicket })))
 const PolyPortfolioPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyPortfolioPanel })))
 const PolyStreamPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyStreamPanel })))
@@ -80,7 +79,6 @@ export default function PolyDesk() {
   const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView || 'pulse')
   const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
-  const [portfolioDetail, setPortfolioDetail] = useState<'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'>('balance')
   const [watchedTrade, setWatchedTrade] = useState<{
     title: string
     marketUrl: string
@@ -188,9 +186,8 @@ export default function PolyDesk() {
                 telegramId=""
                 surface="standalone"
                 initialPortfolioAction="trading"
-                initialTradingWalletTab="balance"
+                initialTradingWalletTab="positions"
               />
-              <PolymarketOpenOrdersPanel />
             </>
           )
         )}
@@ -267,14 +264,9 @@ export default function PolyDesk() {
                     telegramId=""
                     surface="standalone"
                     initialPortfolioAction={portfolioAction}
-                    initialTradingWalletTab={searchParams.get('wallet') === 'balance' ? 'balance' : undefined}
-                    onTradingTabChange={tab => {
-                      setPortfolioDetail(tab)
-                      if (tab === 'monitor') openPortfolioAction('watch')
-                    }}
+                    initialTradingWalletTab={searchParams.get('wallet') === 'positions' ? 'positions' : undefined}
                     onTradeWatchedPosition={setWatchedTrade}
                   />
-                  {portfolioAction === 'trading' && portfolioDetail === 'positions' && <PolymarketOpenOrdersPanel />}
                   {portfolioAction === 'watch' && watchedTrade && (
                     <section className="mt-4 scroll-mt-28" data-polydesk-watched-trade="true">
                       <PolymarketLimitOrderTicket

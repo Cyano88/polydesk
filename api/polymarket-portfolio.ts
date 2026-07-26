@@ -1179,11 +1179,12 @@ export async function bootstrapPolymarketAlertMonitor() {
   if (!pool) return [] as string[]
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select p.privy_user_id, coalesce(p.watched_address, p.polymarket_address) as address
+    `select p.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
        from polymarket_profiles p
        join polymarket_alert_settings s on s.privy_user_id = p.privy_user_id
       where s.alert_email is not null
         and s.alert_email_verified = true
+        and coalesce(p.deposit_wallet_address, p.trading_address) is not null
         and (
           s.loss_threshold_percent > 0
           or s.new_position_alerts_enabled = true
@@ -1206,7 +1207,7 @@ export async function bootstrapPolymarketAlertMonitor() {
        from polymarket_position_alert_state s
        join polymarket_profiles p on p.privy_user_id = s.privy_user_id
       where s.resolution_status <> 'lost'
-        and lower(s.position_address) = lower(coalesce(p.watched_address, p.polymarket_address))`,
+        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
   )).rows
   return assets.map(row => String(row.asset_id)).filter(Boolean)
 }
@@ -1215,11 +1216,12 @@ export async function reconcilePolymarketWatchedPortfolios() {
   if (!pool) return
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select p.privy_user_id, coalesce(p.watched_address, p.polymarket_address) as address
+    `select p.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
        from polymarket_profiles p
        join polymarket_alert_settings s on s.privy_user_id = p.privy_user_id
       where s.alert_email is not null
         and s.alert_email_verified = true
+        and coalesce(p.deposit_wallet_address, p.trading_address) is not null
         and (
           s.loss_threshold_percent > 0
           or s.new_position_alerts_enabled = true
@@ -1243,11 +1245,11 @@ export async function evaluatePolymarketAlertAssets(assetIds: string[]) {
   if (!pool || assetIds.length === 0) return
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select distinct s.privy_user_id, coalesce(p.watched_address, p.polymarket_address) as address
+    `select distinct s.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
       from polymarket_position_alert_state s
        join polymarket_profiles p on p.privy_user_id = s.privy_user_id
       where s.asset_id = any($1::text[])
-        and lower(s.position_address) = lower(coalesce(p.watched_address, p.polymarket_address))`,
+        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
     [assetIds],
   )).rows
   await Promise.all(profiles.map(row =>
@@ -1265,18 +1267,18 @@ export async function processPolymarketResolutionEvent(event: PolymarketResoluti
   await ensureSchema()
   const rows = (await requirePool().query(
     `select s.privy_user_id, s.market_id, s.asset_id, s.resolution_status,
-            p.polymarket_address, p.watched_address,
+            p.trading_address, p.deposit_wallet_address,
             a.alert_email, a.alert_email_verified, a.resolved_alerts_enabled
        from polymarket_position_alert_state s
       join polymarket_profiles p on p.privy_user_id = s.privy_user_id
        join polymarket_alert_settings a on a.privy_user_id = s.privy_user_id
       where lower(s.market_id) = lower($1)
-        and lower(s.position_address) = lower(coalesce(p.watched_address, p.polymarket_address))`,
+        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
     [event.market],
   )).rows
 
   for (const row of rows) {
-    const address = String(row.watched_address || row.polymarket_address)
+    const address = String(row.deposit_wallet_address || row.trading_address)
     const alertEmail = row.alert_email_verified && row.alert_email ? String(row.alert_email) : null
     if (String(row.asset_id).toLowerCase() === event.winningAssetId.toLowerCase()) {
       await evaluateAlerts(String(row.privy_user_id), address)
@@ -2003,8 +2005,8 @@ export default async function handler(req: Request, res: Response) {
             : 'Connect and verify an email before enabling email alerts.',
         })
       }
-      const profileExists = (await requirePool().query('select 1 from polymarket_profiles where privy_user_id = $1 and coalesce(watched_address, polymarket_address) is not null', [privyUserId])).rowCount
-      if (!profileExists) return res.status(409).json({ ok: false, error: 'Save a watched Polymarket account first.' })
+      const profileExists = (await requirePool().query('select 1 from polymarket_profiles where privy_user_id = $1 and coalesce(deposit_wallet_address, trading_address) is not null', [privyUserId])).rowCount
+      if (!profileExists) return res.status(409).json({ ok: false, error: 'Open your PolyDesk trading account first.' })
       await requirePool().query(
         `insert into polymarket_alert_settings
           (privy_user_id, loss_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, movement_alerts_enabled, alert_email, alert_email_verified)
@@ -2227,11 +2229,22 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'evaluate-alerts') {
+      const scope = cleanString(body.scope, 16) === 'owned' ? 'owned' : 'watch'
       const profileRow = (await requirePool().query(
-        'select coalesce(watched_address, polymarket_address) as polymarket_address from polymarket_profiles where privy_user_id = $1',
-        [privyUserId],
+        `select case
+                  when $2 = 'owned' then coalesce(deposit_wallet_address, trading_address)
+                  else coalesce(watched_address, polymarket_address)
+                end as polymarket_address
+           from polymarket_profiles
+          where privy_user_id = $1`,
+        [privyUserId, scope],
       )).rows[0]
-      if (!profileRow?.polymarket_address) return res.status(409).json({ ok: false, error: 'Save a watched Polymarket account first.' })
+      if (!profileRow?.polymarket_address) {
+        return res.status(409).json({
+          ok: false,
+          error: scope === 'owned' ? 'Open your PolyDesk trading account first.' : 'Save a watched Polymarket account first.',
+        })
+      }
       const inserted = await evaluateAlerts(privyUserId, String(profileRow.polymarket_address))
       const rows = (await requirePool().query(
         'select * from polymarket_alert_history where privy_user_id = $1 order by created_at desc limit 50',

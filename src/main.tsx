@@ -24,7 +24,7 @@ class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error:
           <p className="text-[11px] font-bold uppercase tracking-widest text-red-500">PolyDesk</p>
           <h1 className="mt-2 text-xl font-black tracking-tight">Something failed to open</h1>
           <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            Refresh and try again. If it repeats, send this message to support.
+            Reopen PolyDesk. If it repeats, send this message to support.
           </p>
           <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-gray-50 p-3 text-xs text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
             {this.state.error.message}

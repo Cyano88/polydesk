@@ -153,7 +153,7 @@ function PolyDeskWorkspace() {
 
   const navItems = [
     { id: 'pulse', label: 'Pulse', icon: PulseIcon, to: makeTo('pulse'), active: workspace === 'pulse' },
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'balance' }), active: workspace === 'overview' },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'positions' }), active: workspace === 'overview' },
     { id: 'agent', label: 'Agent', icon: null, to: makeAgentTo(), active: workspace === 'agent' },
     { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: workspace === 'scout' },
   ] as const
@@ -174,9 +174,9 @@ function PolyDeskWorkspace() {
       'flex min-h-screen flex-col bg-[#F5F5F7] font-inter [--polydesk-footer-height:calc(4rem+env(safe-area-inset-bottom))] dark:bg-[#111113]',
       workspace === 'agent' && 'h-dvh overflow-hidden',
     )} style={workspaceStyle} data-polydesk-keyboard-open={workspace === 'agent' && mobileKeyboardOpen ? 'true' : 'false'}>
-      <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200/80 bg-white/95 dark:border-white/5 dark:bg-[#111113]/95">
+      <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200 bg-white dark:border-white/10 dark:bg-[#111113]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
-          <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
+          <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
               <PolymarketMark className="h-5 w-5" />
             </span>
@@ -231,13 +231,13 @@ function PolyDeskWorkspace() {
         </div>
 
         {workspace === 'overview' && (
-          <nav aria-label="Overview sections" className="mx-auto flex max-w-5xl px-4 pb-2 sm:px-6">
-            <div className="inline-flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/[0.07]">
+          <nav aria-label="Overview sections" className="mx-auto flex w-full max-w-2xl px-4 pb-2 sm:px-6">
+            <div className="grid w-full grid-cols-4 gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/[0.07]">
               {[
                 {
                   id: 'portfolio',
                   label: 'Portfolio',
-                  to: makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' }),
+                  to: makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' }),
                 },
                 { id: 'watch', label: 'Watch', to: makeTo('portfolio', { portfolio: 'watch' }) },
                 { id: 'tip', label: 'Tip', to: makeTo('portfolio', { portfolio: 'external' }) },
@@ -248,7 +248,7 @@ function PolyDeskWorkspace() {
                   to={item.to}
                   aria-current={overviewSection === item.id ? 'page' : undefined}
                   className={cn(
-                    'inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold transition-colors',
+                    'inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-semibold transition-colors',
                     overviewSection === item.id
                       ? '!bg-white !text-gray-950 shadow-sm dark:!bg-white dark:!text-gray-950'
                       : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white',
@@ -267,18 +267,16 @@ function PolyDeskWorkspace() {
         className={cn(
           'mx-auto w-full max-w-5xl flex-1',
           workspace === 'agent'
-            ? 'min-h-0 !max-w-2xl self-stretch overflow-hidden px-0 py-0'
+            ? 'min-h-0 !max-w-2xl self-stretch overflow-hidden px-0 py-0 pb-[var(--polydesk-footer-height)]'
             : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28',
+          workspace === 'agent' && mobileKeyboardOpen && '!pb-0',
         )}
       >
         <Outlet />
       </main>
 
       <footer className={cn(
-        'border-t border-gray-200/80 bg-white/95 dark:border-white/10 dark:bg-[#17171b]/95',
-        workspace === 'agent'
-          ? 'relative z-40 shrink-0'
-          : 'fixed inset-x-0 bottom-0 z-50',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white dark:border-white/10 dark:bg-[#17171b]',
         workspace === 'agent' && mobileKeyboardOpen && 'hidden',
       )}>
         <nav

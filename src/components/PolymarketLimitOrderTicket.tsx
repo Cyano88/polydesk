@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
-import { CheckCircle2, RefreshCw } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import {
   polyDeskCreateOwnerApiKey,
   polyDeskEnsurePolygonProvider,
@@ -132,7 +132,6 @@ export function PolymarketLimitOrderTicket({
     outcome: 'YES' | 'NO'
   } | null>(null)
   const [marketPosition, setMarketPosition] = useState<MarketPosition | null>(null)
-  const [positionBusy, setPositionBusy] = useState(false)
   const [cancelContext, setCancelContext] = useState<{
     orderId: string
     walletClient: any
@@ -210,7 +209,6 @@ export function PolymarketLimitOrderTicket({
       setMarketPosition(null)
       return
     }
-    setPositionBusy(true)
     try {
       const response = await fetch(`/api/polymarket-portfolio?action=positions&address=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`)
       const body = await response.json().catch(() => ({})) as { ok?: boolean; positions?: MarketPosition[] }
@@ -225,12 +223,19 @@ export function PolymarketLimitOrderTicket({
       })
       setMarketPosition(position ?? null)
     } finally {
-      setPositionBusy(false)
+      // Background refresh stays silent.
     }
   }, [authenticated, marketSlug, marketTitle, outcome, placed?.outcome, profile?.depositWalletAddress])
 
   useEffect(() => {
     void loadMarketPosition()
+  }, [loadMarketPosition])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadMarketPosition()
+    }, 30000)
+    return () => window.clearInterval(timer)
   }, [loadMarketPosition])
 
   async function placeLimitOrder() {
@@ -513,11 +518,7 @@ export function PolymarketLimitOrderTicket({
             </p>
           )}
 
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <button type="button" onClick={() => void loadMarketPosition()} disabled={positionBusy} className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
-              <RefreshCw className={`h-3.5 w-3.5 ${positionBusy ? 'animate-spin' : ''}`} />
-              Refresh performance
-            </button>
+          <div className="mt-3 flex items-center justify-end gap-3">
             {cancelContext && (
               <button type="button" onClick={() => void cancelPlacedOrder()} disabled={busy} className="text-xs font-semibold text-rose-600 dark:text-rose-400">
                 {busy ? 'Cancelling' : 'Cancel order'}
@@ -740,9 +741,11 @@ export function PolymarketOpenOrdersPanel() {
           <p className="text-sm font-semibold text-gray-950 dark:text-white">Open orders</p>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Live limit orders waiting on Polymarket.</p>
         </div>
-        <button type="button" onClick={() => void loadOrders()} disabled={busy} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">
-          {busy ? 'Checking' : orders ? 'Refresh' : 'View'}
-        </button>
+        {!orders && (
+          <button type="button" onClick={() => void loadOrders()} disabled={busy} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">
+            {busy ? 'Checking' : 'View'}
+          </button>
+        )}
       </div>
       {orders && (
         <div className="mt-3 space-y-2">
