@@ -67,6 +67,7 @@ type PulseFeed = {
 let cache: { expiresAt: number; feed: PulseFeed } | null = null
 let pending: Promise<PulseFeed> | null = null
 const CACHE_MS = 60_000
+const STALE_CACHE_MS = 10 * 60_000
 
 function opportunities(result: Awaited<ReturnType<typeof buildLiveScout>>) {
   return Array.isArray(result.opportunities) ? result.opportunities as PulseOpportunity[] : []
@@ -95,7 +96,7 @@ function highlight(kind: PulseHighlight['kind'], rank: PulseHighlight['rank'], o
 
 async function buildPulseFeed(): Promise<PulseFeed> {
   const [bestResult] = await Promise.allSettled([
-    buildLiveScout({ mode: 'best', candidateLimit: 32, opportunityLimit: 10 }),
+    buildLiveScout({ mode: 'best', candidateLimit: 80, opportunityLimit: 10 }),
   ])
 
   const bestScout = bestResult.status === 'fulfilled' ? bestResult.value : null
@@ -149,8 +150,7 @@ async function buildPulseFeed(): Promise<PulseFeed> {
   }
 }
 
-export async function getPulseFeed(force = false) {
-  if (!force && cache && cache.expiresAt > Date.now()) return cache.feed
+function refreshPulseFeed() {
   if (pending) return pending
   pending = buildPulseFeed()
     .then(feed => {
@@ -163,11 +163,37 @@ export async function getPulseFeed(force = false) {
   return pending
 }
 
+export function getPulseCacheStatus() {
+  if (!cache) return pending ? 'warming' : 'cold'
+  return cache.expiresAt > Date.now() ? 'fresh' : 'stale'
+}
+
+export async function getPulseFeed(force = false) {
+  const now = Date.now()
+  if (!force && cache) {
+    if (cache.expiresAt > now) return cache.feed
+    if (cache.expiresAt + STALE_CACHE_MS > now) {
+      void refreshPulseFeed().catch(() => undefined)
+      return cache.feed
+    }
+  }
+  return refreshPulseFeed()
+}
+
 export default async function pulseHandler(req: Request, res: Response) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
-  res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=45')
-  return res.json(await getPulseFeed())
+  const startedAt = Date.now()
+  const cacheStatus = getPulseCacheStatus()
+  const feed = await getPulseFeed()
+  const durationMs = Date.now() - startedAt
+  res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
+  res.setHeader('Server-Timing', `pulse;dur=${durationMs}`)
+  res.setHeader('X-PolyDesk-Pulse-Cache', cacheStatus)
+  if (durationMs >= 1_000) {
+    console.info('[pulse-request]', { cacheStatus, durationMs, markets: feed.markets.length })
+  }
+  return res.json(feed)
 }

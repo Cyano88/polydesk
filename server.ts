@@ -22,6 +22,7 @@ import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
+import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
@@ -29,7 +30,7 @@ import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-fu
 import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
 import polyStreamHandler from './api/poly-stream.js'
 import polyWorldcupNewsHandler from './api/poly-worldcup-news.js'
-import pulseHandler from './api/pulse.js'
+import pulseHandler, { getPulseCacheStatus, getPulseFeed } from './api/pulse.js'
 import pulseOpportunityHandler, { getPulseOpportunity } from './api/pulse-opportunity.js'
 import { rateLimit } from './api/rate-limit.js'
 import solanaBalanceHandler from './api/solana-balance.js'
@@ -127,12 +128,18 @@ const strictLimiter = rateLimit({ name: 'strict', windowMs: 60_000, max: 20 })
 const readLimiter = rateLimit({ name: 'read', windowMs: 60_000, max: 120 })
 const zeroScoutLimiter = rateLimit({ name: 'zeroscout', windowMs: 60_000, max: 45 })
 const fundingCheckoutLimiter = rateLimit({ name: 'funding-checkout', windowMs: 60_000, max: 6 })
+const publicWatchCreateLimiter = rateLimit({ name: 'public-watch-create', windowMs: 60 * 60_000, max: 5 })
 
 app.all('/api/polymarket-bridge', strictLimiter, polymarketBridgeHandler)
 app.post('/api/polymarket-builder-handoff', strictLimiter, polymarketBuilderHandoffHandler)
 app.post('/api/polymarket-builder-signer', strictLimiter, polymarketBuilderSignerHandler)
 app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
 app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
+app.post('/api/polymarket-portfolio', (req, res, next) => {
+  const action = String(req.query.action ?? req.body?.action ?? '').trim().toLowerCase()
+  if (action === 'create-public-watch') return publicWatchCreateLimiter(req, res, next)
+  return next()
+})
 app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
@@ -168,6 +175,7 @@ app.post('/api/zeroscout-polymarket-brief', zeroScoutLimiter, zeroScoutPolymarke
 app.get('/api/health', (_req, res) => res.json({
   ok: true,
   service: 'polydesk',
+  pulse: getPulseCacheStatus(),
   ts: Date.now(),
 }))
 
@@ -206,6 +214,29 @@ app.get('*', (_req, res) => {
 })
 
 const PORT = Number(process.env.PORT) || 3000
+const PULSE_WARM_INTERVAL_MS = Math.max(60_000, Number(process.env.PULSE_WARM_INTERVAL_MS) || 90_000)
+
+async function warmPulse(reason: 'startup' | 'scheduled') {
+  const startedAt = Date.now()
+  try {
+    const feed = await getPulseFeed(true)
+    const durationMs = Date.now() - startedAt
+    if (reason === 'startup' || durationMs >= 30_000) {
+      console.info('[pulse-warm]', { reason, durationMs, markets: feed.markets.length })
+    }
+  } catch (cause) {
+    console.warn('[pulse-warm] failed', {
+      reason,
+      message: cause instanceof Error ? cause.message : 'unknown_error',
+    })
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`PolyDesk running on port ${PORT}`)
+  const startupWarm = setTimeout(() => void warmPulse('startup'), 250)
+  startupWarm.unref()
+  const scheduledWarm = setInterval(() => void warmPulse('scheduled'), PULSE_WARM_INTERVAL_MS)
+  scheduledWarm.unref()
+  startPolymarketAlertMonitor()
 })

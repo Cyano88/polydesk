@@ -15,6 +15,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
+    "test:polymarket-alerts": "node --import tsx --test scripts/polymarket-alert-rules.test.ts",
+    "test:email-provider": "node --import tsx --test scripts/email-provider.test.ts",
     "test:hashpaylink-funding": "node --import tsx --test scripts/hashpaylink-polymarket-funding.test.ts",
     "test:hashpaylink-agentic": "node --import tsx --test scripts/hashpaylink-agentic-checkout.test.ts",
     "test:lp-scout-boundary": "node --import tsx --test scripts/lp-scout-zeroscout-boundary.test.ts",
@@ -55,11 +57,13 @@
     "tailwind-merge": "^3.6.0",
     "tsx": "^4.23.0",
     "viem": "^2.51.2",
-    "vite-plugin-node-polyfills": "^0.26.0"
+    "vite-plugin-node-polyfills": "^0.26.0",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.5.2",
     "postcss": "^8.5.16",

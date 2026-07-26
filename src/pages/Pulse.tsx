@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Radio, Share2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { PolymarketLimitOrderTicket } from '../components/PolymarketLimitOrderTicket'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+
+const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketLimitOrderTicket })))
 
 type PulseOpportunity = {
   title?: string
@@ -63,6 +64,43 @@ type PulseFeed = {
 }
 
 let pulseSnapshot: PulseFeed | null = null
+const PULSE_SESSION_KEY = 'polydesk:pulse:v1'
+const PULSE_SESSION_MAX_AGE_MS = 10 * 60_000
+
+function initialPulseSnapshot() {
+  if (pulseSnapshot) return pulseSnapshot
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(PULSE_SESSION_KEY) || '') as {
+      savedAt?: number
+      feed?: PulseFeed
+    }
+    if (
+      saved.feed?.ok
+      && Number(saved.savedAt) > Date.now() - PULSE_SESSION_MAX_AGE_MS
+      && Array.isArray(saved.feed.highlights)
+      && Array.isArray(saved.feed.markets)
+    ) {
+      pulseSnapshot = saved.feed
+      return saved.feed
+    }
+  } catch {
+    // A malformed or unavailable session cache should never block the live feed.
+  }
+  return null
+}
+
+function rememberPulseSnapshot(feed: PulseFeed) {
+  pulseSnapshot = feed
+  try {
+    window.sessionStorage.setItem(PULSE_SESSION_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      feed,
+    }))
+  } catch {
+    // Browsers may disable session storage; the in-memory snapshot still works.
+  }
+}
 
 function metric(value: unknown, suffix: string, digits = 2) {
   const number = Number(value)
@@ -87,12 +125,12 @@ function marketSlug(opportunity: PulseOpportunity) {
 }
 
 function riskText(value: string | undefined) {
-  if (value === 'low') return 'Lower execution risk'
-  if (value === 'medium') return 'Moderate execution risk'
-  return 'High execution risk'
+  if (value === 'low') return 'Lower risk'
+  if (value === 'medium') return 'Moderate risk'
+  return 'Higher risk'
 }
 
-function MarketMetrics({ opportunity, inverse = false }: { opportunity: PulseOpportunity; inverse?: boolean }) {
+function MarketMetrics({ opportunity, inverse = false, compact = false }: { opportunity: PulseOpportunity; inverse?: boolean; compact?: boolean }) {
   const items = [
     opportunity.dailyReward == null ? '' : `${compactNumber(opportunity.dailyReward)} USDC/day`,
     opportunity.estimatedRewardCapitalUsdc == null
@@ -101,22 +139,32 @@ function MarketMetrics({ opportunity, inverse = false }: { opportunity: PulseOpp
     metric(Number(opportunity.liveSpread) * 100, 'c spread', 1),
     metric(opportunity.depthAtTwoCents, ' depth', 0),
     typeof opportunity.daysToResolve === 'number' ? `${opportunity.daysToResolve}d left` : '',
-  ].filter(Boolean)
+  ].filter(Boolean).slice(0, compact ? 3 : 5)
   return (
-    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold ${inverse ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
+    <div className={`flex flex-wrap gap-x-2.5 gap-y-0.5 font-semibold ${compact ? 'text-[10px]' : 'text-[11px]'} ${inverse ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
       {items.map(item => <span key={item}>{item}</span>)}
     </div>
   )
 }
 
 function ordinal(rank: number) {
-  if (rank === 1) return '1st'
-  if (rank === 2) return '2nd'
-  return '3rd'
+  const remainder = rank % 100
+  if (remainder >= 11 && remainder <= 13) return `${rank}th`
+  if (rank % 10 === 1) return `${rank}st`
+  if (rank % 10 === 2) return `${rank}nd`
+  if (rank % 10 === 3) return `${rank}rd`
+  return `${rank}th`
 }
 
-function ContextLabels({ opportunity, inverse = false }: { opportunity: PulseOpportunity; inverse?: boolean }) {
-  const signals = opportunity.contextSignals?.slice(0, 2) ?? []
+function rankMedal(rank: number) {
+  if (rank === 1) return '🥇'
+  if (rank === 2) return '🥈'
+  if (rank === 3) return '🥉'
+  return String(rank)
+}
+
+function ContextLabels({ opportunity, inverse = false, compact = false }: { opportunity: PulseOpportunity; inverse?: boolean; compact?: boolean }) {
+  const signals = opportunity.contextSignals?.slice(0, compact ? 1 : 2) ?? []
   if (!signals.length) return null
   return (
     <div className="flex flex-wrap gap-1.5" aria-label="Market intelligence context">
@@ -124,7 +172,7 @@ function ContextLabels({ opportunity, inverse = false }: { opportunity: PulseOpp
         <span
           key={`${signal.kind}:${signal.title}`}
           title={signal.title}
-          className={`inline-flex max-w-full items-center rounded-md px-2 py-1 text-[10px] font-semibold ${
+          className={`inline-flex max-w-full items-center rounded-md px-2 text-[10px] font-semibold ${compact ? 'py-0.5' : 'py-1'} ${
             inverse
               ? 'bg-white/12 text-white/85 backdrop-blur'
               : signal.kind === 'football'
@@ -160,7 +208,7 @@ function PulseHeroCard({
       className="polydesk-card group relative block h-[280px] w-full overflow-hidden !border-gray-800 !bg-gray-950 text-left shadow-[0_20px_50px_rgba(15,23,42,0.18)] disabled:cursor-default dark:!border-white/10"
     >
       {lead.image && !imageBroken ? (
-        <img src={lead.image} alt="" loading="eager" decoding="async" fetchPriority="high" onError={onImageError} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out will-change-transform group-hover:scale-[1.025]" />
+        <img src={lead.image} alt="" loading="eager" decoding="async" fetchPriority="high" onError={onImageError} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.025] motion-reduce:transition-none" />
       ) : (
         <div className="absolute inset-0 overflow-hidden bg-[#111216]">
           <span className={`absolute -left-16 top-8 h-44 w-44 rounded-full blur-3xl ${footballPending ? 'bg-emerald-400/20' : 'bg-blue-400/15'}`} />
@@ -195,33 +243,51 @@ function PulseHeroCard({
 
 export default function Pulse() {
   const [searchParams] = useSearchParams()
-  const [feed, setFeed] = useState<PulseFeed | null>(pulseSnapshot)
-  const [loading, setLoading] = useState(!pulseSnapshot)
+  const initialSnapshot = useMemo(initialPulseSnapshot, [])
+  const [feed, setFeed] = useState<PulseFeed | null>(initialSnapshot)
+  const [loading, setLoading] = useState(!initialSnapshot)
   const [error, setError] = useState('')
   const [active, setActive] = useState(0)
   const [selected, setSelected] = useState<PulseOpportunity | null>(null)
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
+  const requestRef = useRef<Promise<void> | null>(null)
 
-  async function load() {
-    try {
-      const response = await fetch('/api/pulse')
-      const data = await response.json() as PulseFeed
-      if (!response.ok || !data.ok) throw new Error('Pulse is unavailable.')
-      pulseSnapshot = data
-      setFeed(data)
-      setError('')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Pulse is unavailable.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const load = useCallback(() => {
+    if (requestRef.current) return requestRef.current
+    const request = (async () => {
+      try {
+        const response = await fetch('/api/pulse')
+        const data = await response.json().catch(() => null) as PulseFeed | null
+        if (!response.ok || !data?.ok) throw new Error('Pulse is unavailable.')
+        rememberPulseSnapshot(data)
+        setFeed(data)
+        setError('')
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Pulse is unavailable.')
+      } finally {
+        setLoading(false)
+        requestRef.current = null
+      }
+    })()
+    requestRef.current = request
+    return request
+  }, [])
 
   useEffect(() => {
     void load()
-    const refresh = window.setInterval(() => void load(), 60_000)
-    return () => window.clearInterval(refresh)
-  }, [])
+    const refreshMs = Math.max(30_000, Number(feed?.refreshAfterSeconds ?? 60) * 1_000)
+    const refresh = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, refreshMs)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.clearInterval(refresh)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [feed?.refreshAfterSeconds, load])
 
   const highlights = feed?.highlights ?? []
   const markets = feed?.markets ?? []
@@ -312,15 +378,17 @@ export default function Pulse() {
             </div>
 
             {selected.marketUrl && (
-              <PolymarketLimitOrderTicket
-                marketTitle={selected.title || 'Polymarket market'}
-                marketUrl={selected.marketUrl}
-                yesQuote={selected.suggestedYesBid}
-                noQuote={selected.suggestedNoBid}
-                tickSize={selected.tickSize}
-                rewardMinShares={selected.minSize}
-                estimatedRewardCapitalUsdc={selected.estimatedRewardCapitalUsdc}
-              />
+              <Suspense fallback={<PolyDeskLoadingState label="Opening order ticket" />}>
+                <PolymarketLimitOrderTicket
+                  marketTitle={selected.title || 'Polymarket market'}
+                  marketUrl={selected.marketUrl}
+                  yesQuote={selected.suggestedYesBid}
+                  noQuote={selected.suggestedNoBid}
+                  tickSize={selected.tickSize}
+                  rewardMinShares={selected.minSize}
+                  estimatedRewardCapitalUsdc={selected.estimatedRewardCapitalUsdc}
+                />
+              </Suspense>
             )}
           </div>
         </div>
@@ -333,7 +401,7 @@ export default function Pulse() {
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Live intelligence</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Pulse</h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">The strongest live Polymarket liquidity, with relevant news and football context when verified.</p>
+        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Three safer LP opportunities, continuously re-ranked. A stronger qualifying market replaces the weakest.</p>
       </div>
 
       {loading ? (
@@ -356,24 +424,25 @@ export default function Pulse() {
       {!!highlights.length && (
         <div className="flex justify-center gap-1.5" aria-label="Pulse rotation">
           {highlights.map((item, index) => (
-            <button key={item.id} type="button" onClick={() => setActive(index)} aria-label={`Show ${item.eyebrow}`} className={`h-1.5 rounded-full transition-all ${index === active % highlights.length ? 'w-6 bg-gray-950 dark:bg-white' : 'w-1.5 bg-gray-300 dark:bg-white/20'}`} />
+            <button key={item.id} type="button" onClick={() => setActive(index)} aria-label={`Show ${item.eyebrow}`} className={`h-1.5 rounded-full transition-[width,background-color] duration-150 ${index === active % highlights.length ? 'w-6 bg-gray-950 dark:bg-white' : 'w-1.5 bg-gray-300 dark:bg-white/20'}`} />
           ))}
         </div>
       )}
 
       {!!markets.length && (
         <div className="polydesk-card divide-y divide-gray-100 overflow-hidden dark:divide-white/10">
-          {markets.map((market, index) => (
-            <button key={opportunityKey(market)} type="button" onClick={() => setSelected(market)} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-gray-50 dark:hover:bg-white/[0.04]">
-              {index < 3 && (
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gray-100 text-[10px] font-black text-gray-700 dark:bg-white/10 dark:text-white">
-                  {ordinal(index + 1)}
-                </span>
-              )}
+          {markets.slice(0, 5).map((market, index) => (
+            <button key={opportunityKey(market)} type="button" onClick={() => setSelected(market)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-gray-50 dark:hover:bg-white/[0.04]">
+              <span
+                className="grid h-7 w-7 shrink-0 place-items-center text-base font-semibold text-gray-400"
+                aria-label={`${ordinal(index + 1)} ranked opportunity`}
+              >
+                {rankMedal(index + 1)}
+              </span>
               <div className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-sm font-semibold leading-5 text-gray-950 dark:text-white">{market.title}</span>
-                <div className="mt-1"><MarketMetrics opportunity={market} /></div>
-                <div className="mt-2"><ContextLabels opportunity={market} /></div>
+                <span className="line-clamp-1 text-[13px] font-semibold leading-5 text-gray-950 dark:text-white">{market.title}</span>
+                <div className="mt-0.5"><MarketMetrics opportunity={market} compact /></div>
+                <div className="mt-1"><ContextLabels opportunity={market} compact /></div>
               </div>
               <span className="shrink-0 text-[10px] font-semibold text-gray-400">{riskText(market.lpExecutionRisk)}</span>
               <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" />

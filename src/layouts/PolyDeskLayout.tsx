@@ -64,13 +64,31 @@ function PolyDeskWorkspace() {
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
-    const updateKeyboardState = () => setMobileKeyboardOpen(window.innerHeight - viewport.height > 120)
+    let settledViewportHeight = viewport.height
+    const editableHasFocus = () => {
+      const activeElement = document.activeElement
+      return activeElement instanceof HTMLInputElement
+        || activeElement instanceof HTMLTextAreaElement
+        || (activeElement instanceof HTMLElement && activeElement.isContentEditable)
+    }
+    const updateKeyboardState = () => {
+      if (!editableHasFocus()) {
+        settledViewportHeight = viewport.height
+        setMobileKeyboardOpen(false)
+        return
+      }
+      setMobileKeyboardOpen(settledViewportHeight - viewport.height > 120)
+    }
     updateKeyboardState()
     viewport.addEventListener('resize', updateKeyboardState)
     viewport.addEventListener('scroll', updateKeyboardState)
+    document.addEventListener('focusin', updateKeyboardState)
+    document.addEventListener('focusout', updateKeyboardState)
     return () => {
       viewport.removeEventListener('resize', updateKeyboardState)
       viewport.removeEventListener('scroll', updateKeyboardState)
+      document.removeEventListener('focusin', updateKeyboardState)
+      document.removeEventListener('focusout', updateKeyboardState)
     }
   }, [])
 
@@ -78,6 +96,7 @@ function PolyDeskWorkspace() {
   const agentOpen = searchParams.get('agent') === '1' || Boolean(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
   const previewMode = localPreview || !authenticated
+  const overviewSection = service === 'activity' ? 'activity' : 'portfolio'
   const workspace: Workspace = agentOpen
     ? 'agent'
     : service === 'pulse'
@@ -130,8 +149,8 @@ function PolyDeskWorkspace() {
     <div className={cn(
       'flex min-h-screen flex-col bg-[#F5F5F7] font-inter dark:bg-[#111113]',
       workspace === 'agent' && 'h-dvh overflow-hidden',
-    )}>
-      <header className="sticky top-0 z-50 border-b border-white/60 bg-white/80 backdrop-blur-xl dark:border-white/5 dark:bg-[#111113]/90">
+    )} data-polydesk-keyboard-open={workspace === 'agent' && mobileKeyboardOpen ? 'true' : 'false'}>
+      <header className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/95 dark:border-white/5 dark:bg-[#111113]/95">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
           <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
@@ -187,6 +206,34 @@ function PolyDeskWorkspace() {
           </div>
         </div>
 
+        {workspace === 'overview' && (
+          <nav aria-label="Overview sections" className="mx-auto flex max-w-5xl px-4 pb-2 sm:px-6">
+            <div className="inline-flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/[0.07]">
+              {[
+                {
+                  id: 'portfolio',
+                  label: 'Portfolio',
+                  to: makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'balance' }),
+                },
+                { id: 'activity', label: 'Activity', to: makeTo('activity') },
+              ].map(item => (
+                <Link
+                  key={item.id}
+                  to={item.to}
+                  aria-current={overviewSection === item.id ? 'page' : undefined}
+                  className={cn(
+                    'inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold transition-colors',
+                    overviewSection === item.id
+                      ? '!bg-white !text-gray-950 shadow-sm dark:!bg-white dark:!text-gray-950'
+                      : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white',
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </header>
 
       <main
@@ -203,7 +250,7 @@ function PolyDeskWorkspace() {
       </main>
 
       <footer className={cn(
-        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200/80 bg-white/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#17171b]/95',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200/80 bg-white/95 dark:border-white/10 dark:bg-[#17171b]/95',
         workspace === 'agent' && mobileKeyboardOpen && 'hidden',
       )}>
         <nav
@@ -218,7 +265,7 @@ function PolyDeskWorkspace() {
                 to={item.to}
                 aria-current={item.active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-950 dark:focus-visible:outline-white',
+                  'flex min-h-12 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-950 dark:focus-visible:outline-white',
                   item.active
                     ? 'bg-gray-950 text-white shadow-sm dark:bg-white dark:text-gray-950 dark:shadow-[0_6px_20px_rgba(0,0,0,0.28)]'
                     : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-white/[0.07] dark:hover:text-gray-200',

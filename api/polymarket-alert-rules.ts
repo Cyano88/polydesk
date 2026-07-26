@@ -1,0 +1,117 @@
+export type PolymarketAlertPosition = {
+  asset?: string
+  conditionId?: string
+  title?: string
+  slug?: string
+  eventSlug?: string
+  outcome?: string
+  size?: number
+  avgPrice?: number
+  currentValue?: number
+  percentPnl?: number
+  redeemable?: boolean
+}
+
+export type PolymarketResolutionEvent = {
+  market: string
+  winningAssetId: string
+  winningOutcome: string
+  question?: string
+  slug?: string
+}
+
+export type PositionAlertTransition =
+  | {
+      type: 'loss-threshold'
+      percentPnl: number
+      thresholdPercent: number
+    }
+  | {
+      type: 'claimable'
+      winningOutcome: string
+    }
+  | {
+      type: 'resolved-loss'
+      winningOutcome: string
+    }
+
+export type PolymarketLpOrderLifecycle = 'live' | 'partial' | 'filled' | 'cancelled' | 'expired'
+
+export function normalizeLpOrderLifecycle(input: {
+  status?: unknown
+  originalSize?: unknown
+  matchedSize?: unknown
+}): PolymarketLpOrderLifecycle {
+  const status = String(input.status ?? '').trim().toLowerCase()
+  const originalSize = Number(input.originalSize)
+  const matchedSize = Number(input.matchedSize)
+
+  if (/(cancelled|canceled)/.test(status)) return 'cancelled'
+  if (/(expired)/.test(status)) return 'expired'
+  if (
+    (Number.isFinite(originalSize) && originalSize > 0 && Number.isFinite(matchedSize) && matchedSize >= originalSize)
+    || /^(matched|filled|complete|completed)$/.test(status)
+  ) {
+    return 'filled'
+  }
+  if (Number.isFinite(matchedSize) && matchedSize > 0) return 'partial'
+  return 'live'
+}
+
+export function normalizedPercentPnl(value: unknown) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function crossedLossThreshold(input: {
+  percentPnl: unknown
+  thresholdPercent: number
+  wasBelowThreshold: boolean
+}) {
+  const percentPnl = normalizedPercentPnl(input.percentPnl)
+  const thresholdPercent = Math.abs(input.thresholdPercent)
+  if (percentPnl === null || !Number.isFinite(thresholdPercent) || thresholdPercent <= 0) {
+    return { belowThreshold: false, shouldAlert: false, percentPnl }
+  }
+  const belowThreshold = percentPnl <= -thresholdPercent
+  return {
+    belowThreshold,
+    shouldAlert: belowThreshold && !input.wasBelowThreshold,
+    percentPnl,
+  }
+}
+
+export function shouldAlertNewPosition(input: {
+  enabled: boolean
+  positionsInitialized: boolean
+  positionAlreadyKnown: boolean
+  size: unknown
+}) {
+  const size = typeof input.size === 'number' ? input.size : Number(input.size)
+  return input.enabled
+    && input.positionsInitialized
+    && !input.positionAlreadyKnown
+    && Number.isFinite(size)
+    && size > 0
+}
+
+export function resolutionTransition(
+  position: PolymarketAlertPosition,
+  event: PolymarketResolutionEvent,
+): PositionAlertTransition | null {
+  const market = String(position.conditionId ?? '').toLowerCase()
+  const resolvedMarket = event.market.toLowerCase()
+  const asset = String(position.asset ?? '').toLowerCase()
+  const winningAsset = event.winningAssetId.toLowerCase()
+  if (!market || market !== resolvedMarket || !asset || !winningAsset) return null
+  return asset === winningAsset
+    ? { type: 'claimable', winningOutcome: event.winningOutcome }
+    : { type: 'resolved-loss', winningOutcome: event.winningOutcome }
+}
+
+export function polymarketPositionUrl(position: PolymarketAlertPosition) {
+  const slug = String(position.eventSlug || position.slug || '').trim()
+  return slug
+    ? `https://polymarket.com/event/${encodeURIComponent(slug)}`
+    : 'https://polymarket.com/portfolio'
+}

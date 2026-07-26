@@ -121,7 +121,12 @@ export function PolymarketLimitOrderTicket({
   const [amount, setAmount] = useState(initialRewardSpend > 0 ? amountInput(initialRewardSpend) : '1')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [placed, setPlaced] = useState<{ orderId?: string; price: string; amount: string; outcome: 'YES' | 'NO' } | null>(null)
+  const [placed, setPlaced] = useState<{
+    orderId?: string
+    price: string
+    amount: string
+    outcome: 'YES' | 'NO'
+  } | null>(null)
   const [marketPosition, setMarketPosition] = useState<MarketPosition | null>(null)
   const [positionBusy, setPositionBusy] = useState(false)
   const [cancelContext, setCancelContext] = useState<{
@@ -375,14 +380,37 @@ export function PolymarketLimitOrderTicket({
           remoteBuilderSigner: handoff.remoteBuilderSigner,
         }),
       }) as Record<string, unknown>
+      const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
       setPlaced({
-        orderId: typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : undefined,
+        orderId: submittedOrderId || undefined,
         price,
         amount,
         outcome,
       })
-      const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
       if (submittedOrderId) setCancelContext({ orderId: submittedOrderId, walletClient, credentials })
+      if (submittedOrderId) {
+        try {
+          await fetch('/api/polymarket-portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              action: 'register-lp-order',
+              orderId: submittedOrderId,
+              positionAddress: funderAddress,
+              assetId: plan.market.tokenId,
+              marketTitle,
+              marketUrl,
+              outcome: plan.market.outcome || outcome,
+              side: 'BUY',
+              price: plan.signingPlan.createOrder.price,
+              originalSize: plan.signingPlan.createOrder.size,
+            }),
+          })
+        } catch {
+          // The order is already authoritative. Monitoring registration is
+          // best-effort and must never turn a successful trade into an error.
+        }
+      }
       setNotice('')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The limit order could not be placed.')
@@ -414,6 +442,14 @@ export function PolymarketLimitOrderTicket({
       const result = await response.json().catch(() => ({})) as { canceled?: string[]; not_canceled?: Record<string, string>; error?: string }
       if (!response.ok || !result.canceled?.includes(cancelContext.orderId)) {
         throw new Error(result.error || Object.values(result.not_canceled ?? {})[0] || 'Polymarket did not confirm cancellation.')
+      }
+      const token = await getAccessToken()
+      if (token) {
+        await fetch('/api/polymarket-portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'mark-lp-order-cancelled', orderId: cancelContext.orderId }),
+        }).catch(() => undefined)
       }
       setCancelContext(null)
       setPlaced(null)
@@ -674,6 +710,14 @@ export function PolymarketOpenOrdersPanel() {
       })
       const result = await response.json().catch(() => ({})) as { canceled?: string[]; error?: string }
       if (!response.ok || !result.canceled?.includes(orderId)) throw new Error(result.error || 'Polymarket did not confirm cancellation.')
+      const token = await getAccessToken()
+      if (token) {
+        await fetch('/api/polymarket-portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'mark-lp-order-cancelled', orderId }),
+        }).catch(() => undefined)
+      }
       setOrders(current => current?.filter(item => String(item.id || item.orderID || '') !== orderId) ?? [])
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The order could not be cancelled.')

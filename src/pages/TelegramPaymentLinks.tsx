@@ -19,7 +19,6 @@ import {
   LineChart,
   Loader2,
   LogOut,
-  Mail,
   MessageCircle,
   Newspaper,
   Pencil,
@@ -6173,6 +6172,7 @@ type PolymarketAlertSettings = {
   lossThresholdPercent: number
   resolvedAlertsEnabled: boolean
   claimableAlertsEnabled: boolean
+  newPositionAlertsEnabled: boolean
   movementAlertsEnabled: boolean
   alertEmail: string
 }
@@ -6186,6 +6186,10 @@ type PolymarketAlertRecord = {
   severity: string
   createdAt: string | null
   readAt: string | null
+  emailStatus: string
+  emailSentAt: string | null
+  actionLabel: string | null
+  actionUrl: string | null
 }
 
 type PolymarketFundingAttempt = {
@@ -6200,11 +6204,22 @@ type PolymarketFundingAttempt = {
 }
 
 type PolymarketPortfolioBundle = {
+  verifiedEmail?: string
+  emailConfirmationPending?: boolean
   profile: PolymarketProfile | null
   settings: PolymarketAlertSettings | null
   watchlist: Array<{ id: number; marketId: string; marketSlug: string | null; marketUrl: string | null; label: string | null }>
   fundingAttempts: PolymarketFundingAttempt[]
   alerts: PolymarketAlertRecord[]
+  lpOrders?: Array<{
+    orderId: string
+    marketTitle: string
+    marketUrl: string
+    outcome: string | null
+    matchedSize: number
+    originalSize: number | null
+    status: string
+  }>
 }
 
 type PolymarketPosition = {
@@ -6667,6 +6682,13 @@ export function PolyPortfolioPanel({
   const [bundle, setBundle] = useState<PolymarketPortfolioBundle | null>(null)
   const [bundleLoading, setBundleLoading] = useState(false)
   const [bundleError, setBundleError] = useState('')
+  const [publicWatchToken, setPublicWatchToken] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return portfolioSearchParams.get('watchToken')?.trim()
+      || window.localStorage.getItem('polydesk.publicWatchToken')
+      || ''
+  })
+  const [publicWatchPending, setPublicWatchPending] = useState('')
 
   const [addressInput, setAddressInput] = useState('')
   const [networkInput, setNetworkInput] = useState<PolymarketBridgeNetwork>('base')
@@ -6724,6 +6746,9 @@ export function PolyPortfolioPanel({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<PolymarketAlertSettings | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [watchLossThreshold, setWatchLossThreshold] = useState(20)
+  const [watchEmail, setWatchEmail] = useState('')
+  const [watchNewPositions, setWatchNewPositions] = useState(false)
   const [addressCopied, setAddressCopied] = useState(false)
   const [unsignedPortfolioAction, setUnsignedPortfolioAction] = useState<'watch' | 'trading' | 'external' | 'x402' | null>(initialPortfolioAction)
   const [unsignedWatchAddress, setUnsignedWatchAddress] = useState('')
@@ -6752,6 +6777,23 @@ export function PolyPortfolioPanel({
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
   useEffect(() => {
+    const token = portfolioSearchParams.get('watchToken')?.trim()
+    if (!token || !/^[a-f0-9]{64}$/i.test(token)) return
+    window.localStorage.setItem('polydesk.publicWatchToken', token)
+    setPublicWatchToken(token)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('watchToken')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [portfolioSearchParams])
+
+  useEffect(() => {
+    const watchAddress = portfolioSearchParams.get('watchAddress')?.trim() ?? ''
+    if (!/^0x[a-fA-F0-9]{40}$/.test(watchAddress)) return
+    setAddressInput(watchAddress)
+    setUnsignedWatchAddress(watchAddress)
+  }, [portfolioSearchParams])
+
+  useEffect(() => {
     if (!POLYDESK_NAIRA_FUNDING_ENABLED && fundMethod === 'naira') {
       setFundMethod('usdc')
       setFundError('')
@@ -6763,7 +6805,10 @@ export function PolyPortfolioPanel({
   const settings = bundle?.settings ?? null
   const signingWallet = privyWallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? '')) ?? null
   const signingWalletAddress = signingWallet?.address ?? ''
-  const watchedAddress = profile?.watchedAddress || profile?.polymarketAddress || ''
+  const usingStandaloneWatch = Boolean(publicWatchToken || publicWatchPending || bundle?.emailConfirmationPending)
+  const watchedAddress = usingStandaloneWatch
+    ? profile?.watchedAddress || profile?.polymarketAddress || ''
+    : ''
   const savedTradingAddress = profile?.tradingAddress || ''
   const polymarketDepositWallet = profile?.depositWalletAddress || ''
   const depositWalletStatus = String(profile?.depositWalletStatus || '').toLowerCase()
@@ -6850,30 +6895,36 @@ export function PolyPortfolioPanel({
   }, [activeOpenPositions, settings])
 
   const fetchBundle = useCallback(async () => {
-    if (!authenticated) return
+    const usePublicWatch = Boolean(publicWatchToken)
+    if (!authenticated && !usePublicWatch) return
     setBundleLoading(true)
     setBundleError('')
     try {
-      const token = await getAccessToken()
-      if (!token) throw new Error('Sign in required.')
-      const res = await fetch('/api/polymarket-portfolio?action=profile', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const token = usePublicWatch ? '' : await getAccessToken()
+      if (!usePublicWatch && !token) throw new Error('Sign in required.')
+      const res = usePublicWatch
+        ? await fetch(`/api/polymarket-portfolio?action=public-watch&token=${encodeURIComponent(publicWatchToken)}`)
+        : await fetch('/api/polymarket-portfolio?action=profile', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
       const data = await readPolyDeskJson<{ ok?: boolean; error?: string } & PolymarketPortfolioBundle>(res, 'Could not load Polymarket portfolio.')
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not load Polymarket portfolio.')
       setBundle({
+        verifiedEmail: data.verifiedEmail,
+        emailConfirmationPending: data.emailConfirmationPending,
         profile: data.profile,
         settings: data.settings,
         watchlist: data.watchlist ?? [],
         fundingAttempts: data.fundingAttempts ?? [],
         alerts: data.alerts ?? [],
+        lpOrders: data.lpOrders ?? [],
       })
     } catch (err) {
       setBundleError(err instanceof Error ? err.message : 'Could not load Polymarket portfolio.')
     } finally {
       setBundleLoading(false)
     }
-  }, [authenticated, getAccessToken])
+  }, [authenticated, getAccessToken, publicWatchToken])
 
   const fetchLiveData = useCallback(async (address: string) => {
     setLiveLoading(true)
@@ -6918,8 +6969,8 @@ export function PolyPortfolioPanel({
   }, [authenticated, getAccessToken])
 
   useEffect(() => {
-    if (privyReady && authenticated) void fetchBundle()
-  }, [privyReady, authenticated, fetchBundle])
+    if ((privyReady && authenticated) || publicWatchToken) void fetchBundle()
+  }, [privyReady, authenticated, publicWatchToken, fetchBundle])
 
   useEffect(() => {
     const notice = portfolioSearchParams.get('notice')
@@ -7029,6 +7080,62 @@ export function PolyPortfolioPanel({
     setProfileError('')
     setSavingProfile(true)
     try {
+      if (unsignedPortfolioAction === 'watch' && !publicWatchToken) {
+        const email = watchEmail.trim().toLowerCase()
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Enter an email you can confirm.')
+        const response = await fetch('/api/polymarket-portfolio?action=create-public-watch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            email,
+            lossThresholdPercent: watchLossThreshold,
+            newPositionAlertsEnabled: watchNewPositions,
+          }),
+        })
+        const data = await readPolyDeskJson<{
+          ok?: boolean
+          error?: string
+          message?: string
+          lossThresholdPercent?: number
+        }>(response, 'Could not create portfolio watch.')
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Could not create portfolio watch.')
+        if (authenticated) {
+          const legacyToken = await getAccessToken().catch(() => null)
+          if (legacyToken) {
+            await fetch('/api/polymarket-portfolio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legacyToken}` },
+              body: JSON.stringify({ action: 'disconnect-watch' }),
+            }).catch(() => undefined)
+          }
+        }
+        setBundle({
+          verifiedEmail: '',
+          emailConfirmationPending: true,
+          profile: {
+            polymarketAddress: address,
+            watchedAddress: address,
+            preferredFundingNetwork: 'base',
+            lastSyncedAt: null,
+          },
+          settings: {
+            lossThresholdPercent: data.lossThresholdPercent ?? watchLossThreshold,
+            resolvedAlertsEnabled: true,
+            claimableAlertsEnabled: true,
+            newPositionAlertsEnabled: watchNewPositions,
+            movementAlertsEnabled: false,
+            alertEmail: '',
+          },
+          watchlist: [],
+          fundingAttempts: [],
+          alerts: [],
+          lpOrders: [],
+        })
+        setPublicWatchPending(data.message || 'Check your email to confirm alerts.')
+        setAddressInput('')
+        return null
+      }
       const token = await getAccessToken()
       if (!token) throw new Error('Sign in required.')
       const res = await fetch('/api/polymarket-portfolio', {
@@ -7046,11 +7153,13 @@ export function PolyPortfolioPanel({
       const data = await readPolyDeskJson<{ ok?: boolean; error?: string } & PolymarketPortfolioBundle>(res, 'Could not save profile.')
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not save profile.')
       const nextBundle = {
+        verifiedEmail: data.verifiedEmail,
         profile: data.profile,
         settings: data.settings,
         watchlist: data.watchlist ?? [],
         fundingAttempts: data.fundingAttempts ?? [],
         alerts: data.alerts ?? [],
+        lpOrders: data.lpOrders ?? [],
       }
       setBundle(nextBundle)
       setAddressInput('')
@@ -7087,6 +7196,7 @@ export function PolyPortfolioPanel({
         watchlist: data.watchlist ?? [],
         fundingAttempts: data.fundingAttempts ?? [],
         alerts: data.alerts ?? [],
+        lpOrders: data.lpOrders ?? [],
       }
       setBundle(nextBundle)
       return nextBundle
@@ -7101,6 +7211,22 @@ export function PolyPortfolioPanel({
   async function disconnectProfile() {
     setSavingProfile(true)
     try {
+      if (publicWatchToken) {
+        const response = await fetch('/api/polymarket-portfolio?action=delete-public-watch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: publicWatchToken }),
+        })
+        if (!response.ok) throw new Error('Could not stop portfolio alerts.')
+        window.localStorage.removeItem('polydesk.publicWatchToken')
+        setPublicWatchToken('')
+        setBundle(null)
+        setLiveValue(null)
+        setLivePositions([])
+        setSettingsOpen(false)
+        setPublicWatchPending('')
+        return
+      }
       const token = await getAccessToken()
       if (!token) throw new Error('Sign in required.')
       const res = await fetch('/api/polymarket-portfolio', {
@@ -7918,18 +8044,28 @@ export function PolyPortfolioPanel({
     if (!settingsDraft) return
     setSettingsSaving(true)
     try {
-      const token = await getAccessToken()
-      if (!token) throw new Error('Sign in required.')
-      const res = await fetch('/api/polymarket-portfolio', {
+      const token = publicWatchToken ? '' : await getAccessToken()
+      if (!publicWatchToken && !token) throw new Error('Sign in required.')
+      const res = await fetch(`/api/polymarket-portfolio?action=${publicWatchToken ? 'update-public-watch' : 'save-alert-settings'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'save-alert-settings', ...settingsDraft }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(publicWatchToken
+          ? { token: publicWatchToken, ...settingsDraft }
+          : { ...settingsDraft }),
       })
-      const data = await readPolyDeskJson<{ ok?: boolean; settings?: PolymarketAlertSettings; error?: string }>(res, 'Could not save alert settings.')
+      const data = await readPolyDeskJson<{ ok?: boolean; settings?: PolymarketAlertSettings; error?: string; verifiedEmail?: string; emailConfirmationPending?: boolean }>(res, 'Could not save alert settings.')
       if (!res.ok || !data.ok || !data.settings) throw new Error(data.error || 'Could not save alert settings.')
-      setBundle(prev => prev ? { ...prev, settings: data.settings ?? null } : prev)
+      setBundle(prev => prev ? {
+        ...prev,
+        settings: data.settings ?? null,
+        verifiedEmail: data.verifiedEmail ?? prev.verifiedEmail,
+        emailConfirmationPending: data.emailConfirmationPending ?? prev.emailConfirmationPending,
+      } : prev)
       setSettingsOpen(false)
-      void evaluateAlerts()
+      if (!publicWatchToken) void evaluateAlerts()
     } catch (err) {
       setBundleError(err instanceof Error ? err.message : 'Could not save alert settings.')
     } finally {
@@ -7939,12 +8075,15 @@ export function PolyPortfolioPanel({
 
   async function markAlertRead(alertId: number) {
     try {
-      const token = await getAccessToken()
-      if (!token) return
-      await fetch('/api/polymarket-portfolio', {
+      const token = publicWatchToken ? '' : await getAccessToken()
+      if (!publicWatchToken && !token) return
+      await fetch(`/api/polymarket-portfolio?action=${publicWatchToken ? 'mark-public-alert-read' : 'mark-alert-read'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'mark-alert-read', alertId }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(publicWatchToken ? { token: publicWatchToken, alertId } : { action: 'mark-alert-read', alertId }),
       })
       setBundle(prev => prev ? {
         ...prev,
@@ -8025,11 +8164,12 @@ export function PolyPortfolioPanel({
     )
   }
 
-  const sessionlessExternalMode = !PRIVY_AUTH_ENABLED && unsignedPortfolioAction === 'external'
+  const sessionlessPublicMode = !PRIVY_AUTH_ENABLED
+    && (unsignedPortfolioAction === 'watch' || unsignedPortfolioAction === 'external')
 
-  if (!PRIVY_AUTH_ENABLED && !sessionlessExternalMode) {
+  if (!PRIVY_AUTH_ENABLED && !sessionlessPublicMode) {
     const portfolioActions = [
-      ['watch', 'Watch Polymarket account', 'Sign-in required for saved alerts.'],
+      ['watch', 'Watch Polymarket account', 'Track any public wallet with verified email alerts.'],
       ['trading', 'Trading wallet', 'Sign-in required for Main Wallet readiness.'],
       ['external', 'External funding', 'Check or fund another Polymarket wallet.'],
     ] as const
@@ -8053,10 +8193,7 @@ export function PolyPortfolioPanel({
           </div>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{selectedAction[1]} needs sign-in</h2>
           <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Saved portfolio alerts and trading-wallet readiness need the Hash PayLink Privy session. External Polymarket wallet checks and funding still work without sign-in.
-          </p>
-          <p className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">
-            Build env needed: VITE_PRIVY_APP_ID and VITE_AUTH_BRIDGE=hybrid.
+            Trading wallet setup needs PolyDesk sign-in. Public portfolio watch and external funding remain available without it.
           </p>
           <button
             type="button"
@@ -8071,7 +8208,7 @@ export function PolyPortfolioPanel({
     )
   }
 
-  if (!sessionlessExternalMode && !privyReady && privyWaitExpired) {
+  if (!sessionlessPublicMode && !privyReady && privyWaitExpired) {
     return (
       <div className="mt-4 space-y-3">
         {showLegacyBack && <PolyDeskBackButton onClick={onBack} />}
@@ -8095,11 +8232,14 @@ export function PolyPortfolioPanel({
     )
   }
 
-  if (!sessionlessExternalMode && !privyReady) {
+  if (!sessionlessPublicMode && !privyReady) {
     return <PolyDeskLoadingState label="Restoring your session" />
   }
 
-  if (!sessionlessExternalMode && !authenticated) {
+  const publicWatchSetupReady = unsignedPortfolioAction === 'watch'
+    && /^0x[a-fA-F0-9]{40}$/.test(addressInput.trim())
+
+  if (!sessionlessPublicMode && !authenticated && !publicWatchToken && !publicWatchSetupReady) {
     const portfolioActions = [
       ['watch', 'Watch account', 'Track a public Polymarket profile.'],
       ['trading', 'Main Wallet', 'Add USDC, withdraw pUSD as USDC, and view active positions.'],
@@ -8148,7 +8288,6 @@ export function PolyPortfolioPanel({
                     type="button"
                     onClick={() => {
                       setAddressInput(unsignedWatchAddress.trim())
-                      void openPolyDeskLogin()
                     }}
                     disabled={!/^0x[a-fA-F0-9]{40}$/.test(unsignedWatchAddress.trim())}
                     className="polydesk-primary-cta w-full"
@@ -8491,26 +8630,59 @@ export function PolyPortfolioPanel({
   if (!watchedAddress && unsignedPortfolioAction === 'watch') {
     return (
       <div className="mt-4">
-        {showLegacyBack && <PolyDeskBackButton onClick={() => setUnsignedPortfolioAction(null)} />}
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
-            <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
-          </span>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk</p>
-        </div>
-        <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">Watch a public Polymarket account</h2>
+        <PolyDeskBackButton onClick={showLegacyBack ? () => setUnsignedPortfolioAction(null) : onBack} />
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Watch portfolio</p>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-900 dark:text-white">Follow any public wallet</h2>
         <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-          Paste the public 0x address from a Polymarket account panel. PolyDesk uses it to show positions, claimables, and alerts. It does not give PolyDesk control of that account.
+          Paste a wallet, choose what matters, and confirm your email.
         </p>
-        <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-800 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-100">
-          Public profile tracking is separate from Main Wallet. PolyDesk only reads this address for positions and alerts.
-        </div>
         <div className="mt-4 space-y-3">
           <InputBlock
             label="Watched account address"
             value={addressInput}
             onChange={setAddressInput}
             placeholder="0x... public profile address"
+          />
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Alert when a position is down</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">One alert when any filled position crosses this loss level.</p>
+              </div>
+              <label className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 dark:border-white/10 dark:bg-white/[0.04]">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={95}
+                  step={1}
+                  value={watchLossThreshold}
+                  onChange={event => setWatchLossThreshold(Math.max(1, Math.min(95, Math.floor(Number(event.target.value) || 1))))}
+                  className="w-9 bg-transparent text-right text-sm font-semibold tabular-nums text-gray-900 outline-none dark:text-white"
+                  aria-label="Loss alert threshold"
+                />
+                <span className="text-xs font-semibold text-gray-400">%</span>
+              </label>
+            </div>
+            <label className="mt-3 flex items-start gap-2.5 border-t border-gray-200 pt-3 dark:border-white/10">
+              <input
+                type="checkbox"
+                checked={watchNewPositions}
+                onChange={event => setWatchNewPositions(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-black focus:ring-black dark:border-white/20 dark:bg-white/[0.06] dark:checked:bg-white"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-gray-900 dark:text-white">New positions</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">Notify when this wallet opens a filled position.</span>
+              </span>
+            </label>
+          </div>
+          <InputBlock
+            label="Alert email"
+            value={watchEmail}
+            onChange={setWatchEmail}
+            placeholder="you@example.com"
+            inputMode="email"
           />
           {profileError && <p className="text-xs text-red-500 dark:text-red-300">{profileError}</p>}
           {bundleError && <p className="text-xs text-red-500 dark:text-red-300">{bundleError}</p>}
@@ -8521,7 +8693,7 @@ export function PolyPortfolioPanel({
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
           >
             {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Save watched account
+            Continue
           </button>
         </div>
       </div>
@@ -8596,12 +8768,18 @@ export function PolyPortfolioPanel({
   )
   const visibleAlerts = uniqueUnreadAlerts.slice(0, 4)
   const hiddenAlertCount = Math.max(0, uniqueUnreadAlerts.length - visibleAlerts.length)
+  const activeLpOrderCount = bundle?.lpOrders?.filter(order => order.status === 'live' || order.status === 'partial').length ?? 0
   const latestFunding = bundle?.fundingAttempts?.[0] ?? null
 
   return (
     <div className="mt-4 space-y-4">
-      {showLegacyBack && <PolyDeskBackButton onClick={unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />}
+      <PolyDeskBackButton onClick={showLegacyBack && unsignedPortfolioAction ? () => setUnsignedPortfolioAction(null) : onBack} />
       {fundingReturnNotice}
+      {unsignedPortfolioAction === 'watch' && (publicWatchPending || bundle?.emailConfirmationPending) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
+          {publicWatchPending || 'Check your email to confirm alerts.'}
+        </div>
+      )}
 
       {/* Watched account card */}
       {unsignedPortfolioAction === 'watch' && (
@@ -8830,6 +9008,23 @@ export function PolyPortfolioPanel({
               )}
             </div>
             {depositWalletError && <p className="text-xs text-red-500 dark:text-red-300">{depositWalletError}</p>}
+            {polymarketWalletReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddressInput(polymarketDepositWallet)
+                  setUnsignedWatchAddress(polymarketDepositWallet)
+                  setUnsignedPortfolioAction('watch')
+                }}
+                className="flex w-full items-center justify-between gap-3 border-t border-gray-200 pt-2 text-left dark:border-white/10"
+              >
+                <span>
+                  <span className="block text-xs font-semibold text-gray-900 dark:text-white">Monitor my LP portfolio</span>
+                  <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">Position and order alerts for this trading account.</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+              </button>
+            )}
           </div>
         )}
 
@@ -9245,6 +9440,11 @@ export function PolyPortfolioPanel({
             <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
               {uniqueUnreadAlerts.length > 0 ? `${uniqueUnreadAlerts.length} active` : 'No active alerts'}
             </p>
+            {activeLpOrderCount > 0 && (
+              <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                Monitoring {activeLpOrderCount} resting LP {activeLpOrderCount === 1 ? 'order' : 'orders'}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -9276,37 +9476,32 @@ export function PolyPortfolioPanel({
               </div>
             </div>
             <AlertToggle
-              label="Resolved markets"
-              hint="Notify when a market closes."
-              value={settingsDraft.resolvedAlertsEnabled}
-              onChange={v => setSettingsDraft(d => d ? { ...d, resolvedAlertsEnabled: v } : d)}
+              label="New positions"
+              hint="Notify when the watched wallet opens a filled position."
+              value={settingsDraft.newPositionAlertsEnabled}
+              onChange={value => setSettingsDraft(d => d ? {
+                ...d,
+                newPositionAlertsEnabled: value,
+              } : d)}
             />
             <AlertToggle
-              label="Claimable balance"
-              hint="Notify when a position is redeemable."
-              value={settingsDraft.claimableAlertsEnabled}
-              onChange={v => setSettingsDraft(d => d ? { ...d, claimableAlertsEnabled: v } : d)}
+              label="Market results"
+              hint="Notify when a position is ready to claim or settles with no payout."
+              value={settingsDraft.resolvedAlertsEnabled && settingsDraft.claimableAlertsEnabled}
+              onChange={value => setSettingsDraft(d => d ? {
+                ...d,
+                resolvedAlertsEnabled: value,
+                claimableAlertsEnabled: value,
+                movementAlertsEnabled: false,
+              } : d)}
             />
-            <AlertToggle
-              label="Live market movement"
-              hint="Notify on intraday price swings (coming online)."
-              value={settingsDraft.movementAlertsEnabled}
-              onChange={v => setSettingsDraft(d => d ? { ...d, movementAlertsEnabled: v } : d)}
+            <InputBlock
+              label="Alert email"
+              value={settingsDraft.alertEmail || bundle?.verifiedEmail || ''}
+              onChange={value => setSettingsDraft(d => d ? { ...d, alertEmail: value } : d)}
+              placeholder="you@example.com"
+              inputMode="email"
             />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Delivery email</p>
-              <div className="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
-                <Mail className="h-3.5 w-3.5 text-gray-400" />
-                <input
-                  type="email"
-                  value={settingsDraft.alertEmail ?? ''}
-                  onChange={e => setSettingsDraft(d => d ? { ...d, alertEmail: e.target.value } : d)}
-                  placeholder="you@example.com"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Saved for portfolio alert delivery.</p>
-            </div>
             <button
               type="button"
               onClick={saveAlertSettings}
@@ -9337,6 +9532,22 @@ export function PolyPortfolioPanel({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{alert.title}</p>
                   {alert.body && <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-gray-400">{alert.body}</p>}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium text-gray-400">
+                    {alert.createdAt && <span>{new Date(alert.createdAt).toLocaleString()}</span>}
+                    {alert.emailStatus === 'sent' && <span className="text-emerald-600 dark:text-emerald-300">Email sent</span>}
+                    {(alert.emailStatus === 'pending' || alert.emailStatus === 'sending') && <span>Email queued</span>}
+                    {alert.emailStatus === 'failed' && <span className="text-amber-600 dark:text-amber-300">Email retrying</span>}
+                    {alert.actionUrl && (
+                      <a
+                        href={alert.actionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-gray-700 hover:underline dark:text-gray-200"
+                      >
+                        {alert.actionLabel || 'Review position'}
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"

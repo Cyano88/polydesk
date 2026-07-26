@@ -51,6 +51,8 @@ services:
         value: PolyDesk
       - key: RESEND_API_KEY
         sync: false
+      - key: POLYMARKET_EMAIL_ALERTS_ENABLED
+        value: "true"
 
       - key: POLYMARKET_CHAIN_ID
         value: "137"
@@ -94,6 +96,8 @@ services:
         value: "1"
       - key: POLYMARKET_LOOKUP_LIMIT
         value: "20"
+      - key: PULSE_WARM_INTERVAL_MS
+        value: "90000"
       - key: POLYMARKET_MATCH_URLS
         sync: false
 

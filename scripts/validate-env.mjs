@@ -39,6 +39,18 @@ const groups = [
     ],
   },
   {
+    name: 'position email alerts',
+    required: [
+      'POLYMARKET_ALERT_FROM_EMAIL',
+      'RESEND_API_KEY',
+    ],
+    recommended: [
+      'POLYMARKET_ALERT_FROM_NAME',
+      'POLYMARKET_EMAIL_ALERTS_ENABLED',
+    ],
+    optional: [],
+  },
+  {
     name: 'desk agent and lp scout',
     recommended: [
       'DEFAULT_AGENT_SLUG',

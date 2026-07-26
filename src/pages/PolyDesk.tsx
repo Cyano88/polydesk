@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePrivy } from '@privy-io/react-auth'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { usePrivyLoginLauncher } from '../lib/PrivyLoginProvider'
-import AgentWorkspace from './AgentWorkspace'
-import TradeActivity from './TradeActivity'
-import { LpScoutPanel, type LpScoutPrefill } from './LpScoutPanel'
-import { PolymarketOpenOrdersPanel } from '../components/PolymarketLimitOrderTicket'
+import type { LpScoutPrefill } from './LpScoutPanel'
 import Pulse from './Pulse'
 import PolyDeskAgentIcon from '../components/PolyDeskAgentIcon'
-import {
-  PolyPortfolioPanel,
-  PolyStreamPanel,
-  PolyWorldCupHubPanel,
-  PolyWorldCupNewsPanel,
-  TelegramHelperPanel,
-} from './TelegramPaymentLinks'
+import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+
+const AgentWorkspace = lazy(() => import('./AgentWorkspace'))
+const TradeActivity = lazy(() => import('./TradeActivity'))
+const LpScoutPanel = lazy(() => import('./LpScoutPanel').then(module => ({ default: module.LpScoutPanel })))
+const PolymarketOpenOrdersPanel = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketOpenOrdersPanel })))
+const PolyPortfolioPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyPortfolioPanel })))
+const PolyStreamPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyStreamPanel })))
+const PolyWorldCupHubPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyWorldCupHubPanel })))
+const PolyWorldCupNewsPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.PolyWorldCupNewsPanel })))
+const TelegramHelperPanel = lazy(() => import('./TelegramPaymentLinks').then(module => ({ default: module.TelegramHelperPanel })))
 
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
 type PolyDeskServiceView = '' | PolyDeskLane | 'football' | 'worldcup-news' | 'worldcup-scores' | 'pulse' | 'activity'
@@ -107,44 +107,9 @@ function OverviewActions({
   )
 }
 
-function OverviewTabs({
-  active,
-  onPortfolio,
-  onActivity,
-}: {
-  active: 'portfolio' | 'activity'
-  onPortfolio: () => void
-  onActivity: () => void
-}) {
-  return (
-    <div className="sticky top-[61px] z-30 mb-4 grid grid-cols-2 gap-1 rounded-xl border border-gray-200/80 bg-gray-100/95 p-1 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#1c1c20]/95" aria-label="Overview sections">
-      {[
-        { id: 'portfolio', label: 'Portfolio', onClick: onPortfolio },
-        { id: 'activity', label: 'Activity', onClick: onActivity },
-      ].map(item => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={item.onClick}
-          aria-pressed={active === item.id}
-          className={cn(
-            'min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors',
-            active === item.id
-              ? '!bg-white !text-gray-950 shadow-sm'
-              : 'text-gray-500 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white',
-          )}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 export default function PolyDesk() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = usePrivy()
-  const loginLauncher = usePrivyLoginLauncher()
   const activeLane = normalizeLane(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
   const browsePreview = localPreview || !user
@@ -163,10 +128,6 @@ export default function PolyDesk() {
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
   const welcomeText = 'Welcome back. Ask about your Polymarket account, live football, latest news, LP Scout, and market context.'
-
-  function requestIdentity(action: 'watch-portfolio' | 'tip') {
-    loginLauncher?.requestLogin({ debugLabel: `polydesk-public-${action}` })
-  }
 
   const ownerKey = useMemo(() => {
     const email = searchParams.get('email')?.trim().toLowerCase()
@@ -210,25 +171,6 @@ export default function PolyDesk() {
     setServiceView('portfolio')
   }
 
-  function openOverviewTab(tab: 'portfolio' | 'activity') {
-    const next = new URLSearchParams(searchParams)
-    next.delete('agent')
-    next.delete('lane')
-    if (tab === 'activity') {
-      next.set('service', 'activity')
-      next.delete('portfolio')
-      next.delete('wallet')
-      setServiceView('activity')
-    } else {
-      next.set('service', 'portfolio')
-      next.set('portfolio', 'trading')
-      next.set('wallet', 'balance')
-      setServiceView('portfolio')
-    }
-    setSearchParams(next, { replace: false })
-    setIsAgentOpen(false)
-  }
-
   function backToServiceParent(parent: PolyDeskServiceView) {
     const target = previousServiceView || parent
     setPreviousServiceView('')
@@ -270,11 +212,12 @@ export default function PolyDesk() {
           ? 'h-full min-h-0 max-w-3xl !space-y-0'
           : serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
+        <Suspense fallback={<PolyDeskLoadingState label="Opening workspace" />}>
         {!isAgentOpen && !serviceView && (
           browsePreview ? (
             <LocalPreviewOverview
-              onWatch={() => requestIdentity('watch-portfolio')}
-              onTip={() => requestIdentity('tip')}
+              onWatch={() => openPortfolioAction('watch')}
+              onTip={() => openPortfolioAction('external')}
             />
           ) : (
             <>
@@ -351,27 +294,15 @@ export default function PolyDesk() {
             className="p-0"
           >
             {serviceView === 'activity' ? (
-              <>
-                <OverviewTabs
-                  active="activity"
-                  onPortfolio={() => openOverviewTab('portfolio')}
-                  onActivity={() => undefined}
-                />
-                <TradeActivity />
-              </>
+              <TradeActivity />
             ) : serviceView === 'pulse' ? (
               <Pulse />
             ) : serviceView === 'portfolio' ? (
               <>
-                <OverviewTabs
-                  active="portfolio"
-                  onPortfolio={() => undefined}
-                  onActivity={() => openOverviewTab('activity')}
-                />
-                {browsePreview ? (
+                {browsePreview && !searchParams.get('portfolio') ? (
                   <LocalPreviewOverview
-                    onWatch={() => requestIdentity('watch-portfolio')}
-                    onTip={() => requestIdentity('tip')}
+                    onWatch={() => openPortfolioAction('watch')}
+                    onTip={() => openPortfolioAction('external')}
                   />
                 ) : (
                   <>
@@ -432,6 +363,7 @@ export default function PolyDesk() {
             )}
           </section>
         )}
+        </Suspense>
       </div>
     </main>
   )
