@@ -756,6 +756,7 @@ function isLikelyIdentifier(value: string) {
     || value.includes('@')
     || /^0x[a-fA-F0-9]{40}$/.test(value)
     || /^helper-free-/i.test(value)
+    || /^(identity|polydesk(?:-web)?)$/i.test(value)
     || /^(identity:|wallet:|email:|polydesk-(preview|web)(?:$|[-:]))/i.test(value)
 }
 
@@ -778,14 +779,14 @@ function nameFromMemory(memorySummary: string, payerName: string) {
   ]
   const picked = candidates
     .map(item => String(item ?? '').trim().replace(/\b(?:not|is not|isn't)\s+@?[a-zA-Z0-9_.-]+.*$/i, '').replace(/\banymore\b.*$/i, '').trim())
-    .find(Boolean)
+    .find(item => Boolean(item) && !isLikelyIdentifier(item))
   return picked ? titleName(picked) : ''
 }
 
 function introducedName(question: string) {
-  const match = /\b(?:my name is|i am|i'm|call me)\s+([A-Za-z][A-Za-z0-9_-]{1,40}(?:\s+[A-Za-z][A-Za-z0-9_-]{1,40}){0,2})\b/i.exec(question)
+  const match = /\b(?:my name(?:\s+is|['’]s)|i am|i'm|call me)\s+([A-Za-z][A-Za-z0-9_-]{1,40}(?:\s+[A-Za-z][A-Za-z0-9_-]{1,40}){0,2})\b/i.exec(question)
   const name = match?.[1]?.trim() ?? ''
-  if (!name || /\b(agent|hash|trying|asking|looking|tired|ready|done|here)\b/i.test(name)) return ''
+  if (!name || /\b(agent|hash|trying|asking|looking|tired|ready|done|here|sad|down|upset|stressed|anxious|lonely|confused|angry|happy|sick|bored|excited|fine|well|busy)\b/i.test(name)) return ''
   return titleName(name)
 }
 
@@ -869,13 +870,13 @@ function fallbackHelperAnswer(question: string) {
     return 'Tell me the payer, amount, network, purpose, and receive wallet. I can then prepare a clean PayLink for sharing.'
   }
   if (/\b(what can you do|help me|how can you help|what do you help with)\b/i.test(question)) {
-    return 'I can help with PolyDesk, Polymarket funding, portfolio checks, football markets, LP Scout x402, wallet setup, and support questions.'
+    return 'I can check your portfolio and open-position PnL, prepare Polymarket funding, open Watch, Tip, or Activity, read verified football data, and route LP opportunities or paid LP Scout research.'
   }
   if (isPersonalContextQuestion(question)) {
     return personalContextFallback(question)
   }
   if (requiresLiveExternalData(question)) {
-    return 'I cannot verify live schedules or current events from this chat yet, so I should not guess. Ask me to create a PayLink or check payment details here, and use an official source for the latest fixture.'
+    return 'I could not verify that live result just now. Ask for live football, verified news, or current LP opportunities and I will use the matching PolyDesk feed.'
   }
   return ''
 }
@@ -931,6 +932,9 @@ function classifyHelperRequest(question: string, helperMode = ''): { helperInten
   const value = question.toLowerCase()
   if (isNameQuestion(question)) return { helperIntent: 'personal-memory', qualityMode: 'fast' }
   if (isGreetingQuestion(question)) return { helperIntent: 'greeting', qualityMode: 'fast' }
+  if (/\b(what can you do|how can you help|help me|capabilities|what do you help with)\b/.test(value)) {
+    return { helperIntent: 'capabilities', qualityMode: 'fast' }
+  }
   if (helperMode === 'polydesk') {
     const deepPolyDeskRequest = /\b(research|analyze|analysis|strategy|compare|proposal|lp scout|liquidity|order book|market structure)\b/i.test(question)
       || question.trim().length > 220
@@ -942,9 +946,6 @@ function classifyHelperRequest(question: string, helperMode = ''): { helperInten
   if (helperMode === 'payments') return { helperIntent: 'payment-help', qualityMode: 'standard' }
   if (/^\s*(hi|hello|hey|yo|gm|good morning|good afternoon|good evening)\b/.test(value)) {
     return { helperIntent: 'greeting', qualityMode: 'fast' }
-  }
-  if (/\b(what can you do|how can you help|help me|capabilities|what do you help with)\b/.test(value)) {
-    return { helperIntent: 'capabilities', qualityMode: 'fast' }
   }
   if (requiresLiveExternalData(question)) {
     return { helperIntent: 'live-data-question', qualityMode: 'deep' }
@@ -1161,7 +1162,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
     if (helperMode === 'streampay') {
       return `Hey${knownName ? ` ${knownName}` : ''}. I am Agent Hash for HashpayStream. I can help with creator posts, HashWatch, books, World Cup news, live scores, x402 unlocks, pay-as-you-read/watch checkpoints, receipts, earnings, and unlocked-content summaries.`
     }
-    return `Hey${knownName ? ` ${knownName}` : ''}. I can help with PolyDesk funding, portfolio checks, football markets, LP Scout x402, wallet setup, and Polymarket workflows.`
+    return `Hey${knownName ? ` ${knownName}` : ''}. I can help with your portfolio, funding, Watch, Tip, verified football data, LP opportunities, and paid LP Scout research.`
   }
 
   if (isHashpayStreamMediaInspection && zeroScoutAnswer && !isUnusableHashpayStreamMediaGuidance(zeroScoutAnswer, zeroScoutGuidance)) return zeroScoutAnswer
@@ -1193,7 +1194,7 @@ function getHelperResponse(question: string, payerName: string, chain: string, a
   }
 
   if (helperMode === 'polydesk') {
-    return 'I could not complete the PolyDesk answer just now. Open Portfolio, Football, or LP Scout and I will use that exact Polymarket path.'
+    return 'I could not match that request to a verified PolyDesk action. Try Portfolio, funding, live football, news, or LP opportunities.'
   }
 
   if (accessMode !== HELPER_FREE_ACCESS_MODE) {

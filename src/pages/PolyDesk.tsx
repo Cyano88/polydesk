@@ -20,6 +20,7 @@ const TelegramHelperPanel = lazy(() => import('./TelegramPaymentLinks').then(mod
 type PolyDeskLane = 'portfolio' | 'worldcup' | 'lp-scout'
 type PolyDeskServiceView = '' | PolyDeskLane | 'football' | 'worldcup-news' | 'worldcup-scores' | 'pulse' | 'activity'
 type PortfolioAction = 'watch' | 'trading' | 'external' | 'x402'
+type TradingWalletTab = 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'
 
 function normalizeLane(value: string | null): PolyDeskLane | '' {
   return value === 'portfolio' || value === 'worldcup' || value === 'lp-scout' ? value : ''
@@ -33,6 +34,12 @@ function normalizeServiceView(value: string | null): PolyDeskServiceView {
 
 function normalizePortfolioAction(value: string | null): PortfolioAction {
   return value === 'watch' || value === 'external' || value === 'x402' ? value : 'trading'
+}
+
+function normalizeTradingWalletTab(value: string | null): TradingWalletTab | undefined {
+  return value === 'balance' || value === 'fund' || value === 'withdraw' || value === 'positions' || value === 'monitor'
+    ? value
+    : undefined
 }
 
 function LocalPreviewOverview({
@@ -68,6 +75,7 @@ export default function PolyDesk() {
   const browsePreview = localPreview || !user
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
   const portfolioAction = normalizePortfolioAction(searchParams.get('portfolio'))
+  const tradingWalletTab = normalizeTradingWalletTab(searchParams.get('wallet'))
   const agentRouteOpen = searchParams.get('agent') === '1'
   const lpScoutActivityId = searchParams.get('lpScoutActivity')?.trim() ?? ''
   const lpScoutReceiptId = searchParams.get('lpScoutReceipt')?.trim() ?? ''
@@ -86,7 +94,7 @@ export default function PolyDesk() {
     price: number
   } | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
-  const welcomeText = 'Welcome back. Ask about your portfolio, live football, news, or LP opportunities.'
+  const welcomeText = 'Welcome back. Ask about your portfolio, live football, football news, or LP opportunities.'
 
   const ownerKey = useMemo(() => {
     const privyIdentity = user?.id?.trim()
@@ -264,7 +272,7 @@ export default function PolyDesk() {
                     telegramId=""
                     surface="standalone"
                     initialPortfolioAction={portfolioAction}
-                    initialTradingWalletTab={searchParams.get('wallet') === 'positions' ? 'positions' : undefined}
+                    initialTradingWalletTab={tradingWalletTab}
                     onTradeWatchedPosition={setWatchedTrade}
                   />
                   {portfolioAction === 'watch' && watchedTrade && (

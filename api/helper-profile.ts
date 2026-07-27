@@ -201,8 +201,16 @@ function cleanActionLinks(value: unknown) {
     const record = item && typeof item === 'object' ? item as Record<string, unknown> : {}
     const label = cleanString(record.label, 40)
     const url = cleanString(record.url, 500)
-    if (!label || !url || !/^\/|^https?:\/\//i.test(url)) return null
-    return { label, url }
+    if (!label || !url) return null
+    if (/^\/(?!\/)/.test(url)) return { label, url }
+    try {
+      const parsed = new URL(url)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+        ? { label, url: parsed.toString() }
+        : null
+    } catch {
+      return null
+    }
   }).filter(Boolean).slice(0, 4) as Array<{ label: string; url: string }>
 }
 
@@ -275,14 +283,33 @@ function inferTopics(text: string) {
   ].filter(Boolean) as string[]
 }
 
+export function cleanHelperDisplayName(value: unknown) {
+  const clean = cleanString(value, 80)
+    .replace(/^@+/, '')
+    .replace(/[.?!,;:]+$/g, '')
+    .trim()
+  if (
+    !clean
+    || clean.includes('@')
+    || /^0x[a-fA-F0-9]{40}$/.test(clean)
+    || /^(identity|wallet|email)(?::|$)/i.test(clean)
+    || /^polydesk(?:-(?:preview|web|agent))?(?:$|[-:])/i.test(clean)
+  ) return ''
+  return clean.split(/\s+/).slice(0, 3).join(' ').slice(0, 48)
+}
+
 function deriveMemorySummary(input: {
   existing?: string
   displayName: string
   question?: string
   answer?: string
 }) {
+  const cleanDisplayName = cleanHelperDisplayName(input.displayName)
   const base = input.existing?.trim()
-    || `Prefers to be called ${input.displayName}. Uses Hash PayLink Agent Helper for payments, Polymarket funding, HashpayStream, planning, and agent setup.`
+    || [
+      cleanDisplayName ? `Prefers to be called ${cleanDisplayName}.` : '',
+      'Uses PolyDesk Agent for portfolio, Polymarket funding, verified football data, and LP research.',
+    ].filter(Boolean).join(' ')
   const question = compactMemoryText(input.question ?? '', 120)
   if (!question) return base.slice(0, 1600)
 
@@ -569,7 +596,9 @@ export default async function handler(req: Request, res: Response) {
     existing = store.profiles[id]
   }
   const now = Date.now()
-  const displayName = cleanString(req.body?.displayName, 80) || existing?.displayName || payer || storageKey
+  const displayName = cleanHelperDisplayName(req.body?.displayName)
+    || cleanHelperDisplayName(existing?.displayName)
+    || cleanHelperDisplayName(payer)
   const requestedMemory = cleanString(req.body?.memorySummary, 1600)
   const question = cleanString(req.body?.question, 1000)
   const answer = cleanString(req.body?.answer, 2000)

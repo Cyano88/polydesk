@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import helperProfileHandler, { sanitizeMemoryForArchive, sanitizeMemoryNote } from '../api/helper-profile.ts'
+import helperProfileHandler, { cleanHelperDisplayName, sanitizeMemoryForArchive, sanitizeMemoryNote } from '../api/helper-profile.ts'
 
 test('active memory rejects secrets and personal email', () => {
   assert.equal(sanitizeMemoryNote('My email is test@example.com').rejected, true)
@@ -21,6 +21,13 @@ test('0G checkpoint text removes sensitive identifiers', () => {
   assert.doesNotMatch(archived, /hunter2/)
   assert.match(archived, /\[email omitted\]/)
   assert.match(archived, /\[wallet omitted\]/)
+})
+
+test('profile display names reject technical identities', () => {
+  assert.equal(cleanHelperDisplayName('identity:did:privy:abc'), '')
+  assert.equal(cleanHelperDisplayName('polydesk-web'), '')
+  assert.equal(cleanHelperDisplayName('0x1234567890123456789012345678901234567890'), '')
+  assert.equal(cleanHelperDisplayName('Shy Onoja'), 'Shy Onoja')
 })
 
 test('profile memory cannot be probed with a submitted owner identifier', async () => {

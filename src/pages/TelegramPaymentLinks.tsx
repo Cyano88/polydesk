@@ -823,6 +823,11 @@ const moodNameWords = new Set([
   'busy',
 ])
 
+const nonNameIntroductionWords = new Set([
+  'asking', 'feeling', 'funding', 'going', 'having', 'here', 'interested', 'looking',
+  'new', 'planning', 'ready', 'searching', 'seeking', 'trying', 'wanting',
+])
+
 function normalizeHelperName(value: string) {
   return value
     .trim()
@@ -844,11 +849,14 @@ function isMoodName(value: string) {
 
 function usableHelperName(value: string) {
   const clean = normalizeHelperName(value)
+  const firstWord = clean.split(/\s+/)[0]?.toLowerCase() ?? ''
   const technicalIdentity = clean.includes('@')
     || /^0x[a-fA-F0-9]{40}$/.test(clean)
     || /^(identity|wallet|email):/i.test(clean)
+    || /^(identity|polydesk(?:-web)?)$/i.test(clean)
     || /^polydesk-(preview|web)(?:$|[-:])/i.test(clean)
-  return isMoodName(clean) || technicalIdentity ? '' : clean
+  const nonNameIntroduction = nonNameIntroductionWords.has(firstWord)
+  return isMoodName(clean) || technicalIdentity || nonNameIntroduction ? '' : clean
 }
 
 function isNameCorrectionMessage(text: string) {
@@ -865,8 +873,11 @@ function isAskingUserName(text: string) {
 }
 
 function extractRememberedName(text: string) {
-  const match = text.match(/\b(?:remember\s+)?(?:my name is|call me)\s+(@?[a-zA-Z][\w .-]{1,40})/i)?.[1] ?? ''
-  return usableHelperName(match)
+  const match = text.match(/\b(?:remember\s+)?(?:my name(?:\s+is|['’]s)|call me|i(?:\s+am|['’]m))\s+(@?[a-zA-Z][\w .-]{1,40})/i)?.[1] ?? ''
+  const candidate = match
+    .replace(/\s+\b(?:and|but|because|so|who|that|i|we)\b.*$/i, '')
+    .trim()
+  return usableHelperName(candidate)
 }
 
 function cleanRelationshipName(value: string) {
@@ -1805,7 +1816,12 @@ export function TelegramHelperPanel({
   }, [messages, asking, agentStatus])
 
   function helperMemoryContext() {
-    const profileName = helperName || profile?.displayName || helperNameDraft || nameFromMemorySummary(memoryDraft || profile?.memorySummary || '')
+    const profileName = usableHelperName(
+      helperName
+      || helperNameDraft
+      || profile?.displayName
+      || nameFromMemorySummary(memoryDraft || profile?.memorySummary || ''),
+    )
     const activeMode = helperModes.find(mode => mode.id === helperMode)
     const activePolyDeskSubMode = polyDeskSubModes.find(mode => mode.id === polyDeskSubMode)
     const recentThread = messages
@@ -2069,7 +2085,21 @@ export function TelegramHelperPanel({
             : null,
         ]
       : []
-    return [message.actionLink, ...(message.actionLinks ?? []), ...cardLinks].filter((link): link is { label: string; url: string } => Boolean(link?.url))
+    return [message.actionLink, ...(message.actionLinks ?? []), ...cardLinks]
+      .map(link => {
+        if (!link?.label || !link.url) return null
+        const rawUrl = link.url.trim()
+        if (/^\/(?!\/)/.test(rawUrl)) return { label: link.label, url: rawUrl }
+        try {
+          const parsed = new URL(rawUrl)
+          return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+            ? { label: link.label, url: parsed.toString() }
+            : null
+        } catch {
+          return null
+        }
+      })
+      .filter((link): link is { label: string; url: string } => Boolean(link))
   }
 
   function chooseHelperMode(mode: HelperMode) {
@@ -2136,6 +2166,7 @@ export function TelegramHelperPanel({
   async function saveProfile(extra: Partial<HelperProfile> = {}) {
     const cleanPayer = (payer || helperName || helperNameDraft || cleanTelegramName).trim()
     if (!cleanPayer || !polyDeskAuthenticated) return
+    const cleanDisplayName = usableHelperName(extra.displayName ?? (helperName || helperNameDraft || profile?.displayName || ''))
     setProfileBusy(true)
     setProfileError('')
     try {
@@ -2147,7 +2178,7 @@ export function TelegramHelperPanel({
         body: JSON.stringify({
           action: 'save',
           payer: cleanPayer,
-          displayName: extra.displayName ?? (helperName || helperNameDraft || cleanPayer),
+          displayName: cleanDisplayName,
           accessPayer: extra.accessPayer,
           telegramHandle: cleanTelegramName,
           accessEventId: extra.accessEventId,
@@ -2618,6 +2649,12 @@ export function TelegramHelperPanel({
   }
 
   function polyDeskUrl(service: TelegramServiceId) {
+    if (singlePolyDeskAgent) {
+      if (service === 'poly-portfolio') return '/polydesk?service=portfolio&portfolio=trading&wallet=positions'
+      if (service === 'poly-worldcup-news') return '/polydesk?service=worldcup-news'
+      if (service === 'poly-stream' || service === 'poly-worldcup') return '/polydesk?service=football'
+      if (service === 'lp-scout') return '/polydesk?service=lp-scout'
+    }
     const params = new URLSearchParams()
     params.set('section', 'market-tools')
     params.set('service', service)
@@ -2627,9 +2664,13 @@ export function TelegramHelperPanel({
 
   function buildLpScoutWalletManagerUrl(context: string) {
     const params = new URLSearchParams()
-    params.set('profile', 'agent')
-    params.set('walletManager', 'service')
-    params.set('src', 'lp-scout')
+    if (!singlePolyDeskAgent) {
+      params.set('profile', 'agent')
+      params.set('walletManager', 'service')
+      params.set('src', 'lp-scout')
+      params.set('serviceUrl', '/api/x402/polymarket-scout')
+      params.set('n', 'arc')
+    }
     params.set('run', 'polymarket-scout')
     const scoutMode = /https?:\/\/polymarket\.com\/event\/|\bslug\b/i.test(context)
       ? 'market'
@@ -2640,10 +2681,10 @@ export function TelegramHelperPanel({
           : 'best'
     params.set('scoutMode', scoutMode)
     params.set('maxAmount', lpScoutOptions[0]?.amount ?? '0.01')
-    params.set('serviceUrl', '/api/x402/polymarket-scout')
-    params.set('n', 'arc')
     if (context.trim()) params.set('context', context.trim().slice(0, 180))
-    return `${shareOrigin()}/agent?${params.toString()}`
+    return singlePolyDeskAgent
+      ? `/polydesk?service=lp-scout&${params.toString()}`
+      : `${shareOrigin()}/agent?${params.toString()}`
   }
 
   function lpScoutTreasuryAccessRequest(): SavedRequest {
@@ -2661,6 +2702,13 @@ export function TelegramHelperPanel({
 
   async function portfolioAnswer(nextQuestion: string) {
     const portfolioUrl = polyDeskUrl('poly-portfolio')
+    if (polyPortfolioFundingDraft && /^(?:cancel|stop|never\s*mind|nevermind|start over)$/i.test(nextQuestion.trim())) {
+      setPolyPortfolioFundingDraft(null)
+      return {
+        answer: 'Funding cancelled. No checkout was created.',
+        actionLink: { label: 'Portfolio', url: portfolioUrl },
+      }
+    }
     if (!polyDeskAuthenticated) {
       return {
         answer: 'Open PolyDesk Portfolio and sign in to connect your Polymarket profile first.',
@@ -2803,6 +2851,23 @@ export function TelegramHelperPanel({
     const total = normalizePortfolioValue(valueData.value)?.value
     const claimableText = claimable.length ? ` ${claimable.length} claimable position${claimable.length === 1 ? '' : 's'} need attention.` : ' No claimables right now.'
     const wantsCashBalance = /\b(cash|available|wallet balance|cash balance|current balance|portfolio balance)\b/i.test(nextQuestion)
+    const wantsPnl = /\b(pnl|profit|loss|gains?|performance|how am i doing)\b/i.test(nextQuestion)
+    if (wantsPnl) {
+      const knownPnl = active
+        .map(position => numberOrNull(position.cashPnl))
+        .filter((value): value is number => value !== null)
+      const openPnl = knownPnl.reduce((sum, value) => sum + value, 0)
+      const weekly = /\b(this|past|last)\s+week\b|\bweekly\b/i.test(nextQuestion)
+      return {
+        answer: knownPnl.length
+          ? `Your ${active.length} open position${active.length === 1 ? '' : 's'} currently show ${formatUsd(openPnl)} in combined PnL.${weekly ? ' Weekly realized PnL is not available from the current portfolio feed yet.' : ''}`
+          : `Your open-position PnL is not available from the current Polymarket response.${weekly ? ' Weekly realized PnL is also not available yet.' : ''}`,
+        actionLinks: [
+          { label: 'Portfolio', url: portfolioUrl },
+          { label: 'Activity', url: '/polydesk?service=activity' },
+        ],
+      }
+    }
     return {
       answer: wantsCashBalance
         ? `Your saved Polymarket portfolio value is ${formatUsd(total)} across ${active.length} open position${active.length === 1 ? '' : 's'}.${claimableText} I cannot verify idle Polymarket cash balance yet.`
@@ -3036,18 +3101,64 @@ export function TelegramHelperPanel({
 
   async function handlePolyDeskConversation(nextQuestion: string) {
     if (helperMode !== 'polydesk') return false
-    const inferredPolyDeskSubMode: PolyDeskSubMode | '' = /\b(lp scout|liquidity|maker|reward pool|order book|quote)\b/i.test(nextQuestion)
+    const wantsOwnedMonitor = /\b(?:watch|track|monitor)\b.{0,24}\b(?:my|own)\b.{0,24}\b(?:portfolio|account|positions?|trades?|lp orders?)\b/i.test(nextQuestion)
+      || /\b(?:my|own)\b.{0,24}\b(?:portfolio|account|positions?|trades?|lp orders?)\b.{0,24}\b(?:watch|track|monitor)\b/i.test(nextQuestion)
+    if (wantsOwnedMonitor) {
+      finishHelperMessage(nextQuestion, {
+        answer: 'Open Monitor to set alerts for positions and LP orders in your own trading account.',
+        actionLink: { label: 'Monitor', url: '/polydesk?service=portfolio&portfolio=trading&wallet=monitor' },
+      })
+      return true
+    }
+    const wantsExternalWatch = /\b(?:watch|track)\b.{0,32}\b(?:wallet|address|account|portfolio)\b|\b(?:wallet|address|account|portfolio)\b.{0,32}\b(?:watch|track)\b/i.test(nextQuestion)
+      || /\bmonitor\b.{0,32}\b(?:public|external|another|someone(?:'s)?|wallet|address)\b/i.test(nextQuestion)
+    if (wantsExternalWatch) {
+      finishHelperMessage(nextQuestion, {
+        answer: 'Paste the public Polymarket address you want to watch, then choose the email alerts you need.',
+        actionLink: { label: 'Watch portfolio', url: '/polydesk?service=portfolio&portfolio=watch' },
+      })
+      return true
+    }
+    if (/\bmonitor\b.{0,32}\b(?:portfolio|positions?|trades?|lp orders?)\b/i.test(nextQuestion)) {
+      finishHelperMessage(nextQuestion, {
+        answer: 'Open Monitor to set alerts for positions and LP orders in your own trading account.',
+        actionLink: { label: 'Monitor', url: '/polydesk?service=portfolio&portfolio=trading&wallet=monitor' },
+      })
+      return true
+    }
+    const wantsExternalFunding = /\b(?:tip|send)\b.{0,48}\b(?:friend|someone|another|external|wallet|address|polymarket account)\b/i.test(nextQuestion)
+      || /\b(?:fund|deposit|top up)\b.{0,48}\b(?:friend|someone|another|external)\b/i.test(nextQuestion)
+      || /\b(?:tip|send|fund|deposit|top up)\b.{0,80}0x[a-fA-F0-9]{40}\b/i.test(nextQuestion)
+    if (wantsExternalFunding) {
+      finishHelperMessage(nextQuestion, {
+        answer: 'Open Tip, enter the recipient Polymarket wallet and USDC amount, then review before sending.',
+        actionLink: { label: 'Tip', url: '/polydesk?service=portfolio&portfolio=external' },
+      })
+      return true
+    }
+    if (/\b(?:my|recent|account|portfolio)\s+activity\b|\b(?:transaction|payment|trade|funding)\s+history\b|\bactivity\s+(?:tab|page|section)\b/i.test(nextQuestion)) {
+      finishHelperMessage(nextQuestion, {
+        answer: 'Open Activity to review your saved funding, LP Scout, and portfolio events.',
+        actionLink: { label: 'Activity', url: '/polydesk?service=activity' },
+      })
+      return true
+    }
+    const inferredPolyDeskSubMode: PolyDeskSubMode | '' = polyPortfolioFundingDraft
+      ? 'portfolio'
+      : /\b(lp(?:\s+scout)?|liquidity|maker|reward pool|order book|quote|opportunit(?:y|ies))\b/i.test(nextQuestion)
       ? 'lp-scout'
       : /\b(football|soccer|fixtures?|matches?|scores?|goals?|leagues?|latest news|headlines?|sports news)\b/i.test(nextQuestion)
         ? 'worldcup'
-        : /\b(portfolio|balance|position|claimable|wallet|funding|account)\b/i.test(nextQuestion)
+        : /\b(portfolio|balance|position|claimable|wallet|funding|account|pnl|profit|loss|gains?|performance)\b/i.test(nextQuestion)
           ? 'portfolio'
           : ''
-    const activePolyDeskSubMode = polyDeskSubMode || (singlePolyDeskAgent ? inferredPolyDeskSubMode : '')
+    const activePolyDeskSubMode = singlePolyDeskAgent
+      ? inferredPolyDeskSubMode || polyDeskSubMode
+      : polyDeskSubMode
     if (!activePolyDeskSubMode) return false
     const wantsPublicLpShortlist = activePolyDeskSubMode === 'lp-scout'
       && /\b(latest|top|best|current|today|opportunit(?:y|ies)|strongest)\b/i.test(nextQuestion)
-      && /\b(lp|liquidity|market|opportunit(?:y|ies))\b/i.test(nextQuestion)
+      && /\b(lp|liquidity|markets?|opportunit(?:y|ies))\b/i.test(nextQuestion)
       && !/\b(run|scan|inspect|research|brief|report|analyse|analyze)\b/i.test(nextQuestion)
     if (wantsPublicLpShortlist) {
       setThinkingState('light')
@@ -3262,7 +3373,7 @@ export function TelegramHelperPanel({
       } catch (err) {
         finishHelperMessage(nextQuestion, {
           answer: err instanceof Error ? err.message : 'Could not open the paid LP Scout result yet.',
-          actionLink: { label: 'LP Scout', url: '/?service=lp-scout' },
+          actionLink: { label: 'LP Scout', url: '/polydesk?service=lp-scout' },
         })
         return true
       }
@@ -3585,7 +3696,19 @@ export function TelegramHelperPanel({
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      setAskError(err instanceof Error ? err.message : 'Helper request failed.')
+      if (helperMode === 'polydesk') {
+        const rawMessage = err instanceof Error ? err.message : ''
+        const answer = /portfolio|position|profile/i.test(rawMessage)
+          ? 'Portfolio data is temporarily unavailable. Your account was not changed; try again shortly.'
+          : /football|fixture|match|score|news/i.test(rawMessage)
+            ? 'The verified football feed is temporarily unavailable. Try again shortly.'
+            : /pulse|lp opportunit|liquidity/i.test(rawMessage)
+              ? 'Live LP opportunities are temporarily unavailable. Try again shortly.'
+              : 'PolyDesk Agent could not complete that request just now. Nothing was submitted; try again shortly.'
+        finishHelperMessage(nextQuestion, { answer })
+      } else {
+        setAskError(err instanceof Error ? err.message : 'Helper request failed.')
+      }
     } finally {
       if (helperAbortRef.current === abortController) helperAbortRef.current = null
       setAsking(false)
