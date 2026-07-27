@@ -84,6 +84,18 @@ The rehearsal response exposed a stale receipt label (`USDC` instead of
 `USDT`). Commit `d5d2bd1` corrects this for the final recording purchase and
 adds a regression test. Do not use the rehearsal report as the final close-up.
 
+## Final-take evidence
+
+- X Layer settlement: `0x9393f7ef7dab96fa8e8613fb68a6b2cca152bc8227c9cd4211eabbf357a25d32`
+- Settlement status: `SUCCESS`
+- Settled amount: `0.3 USDT`
+- Paid report: `https://polydesk.trade/report/lp-scout/0b26355c-3d51-43c6-84cc-bdd6b5f30522?receipt=641f7ef0-0d3d-4f3e-9aa3-8111a494c161`
+- Proof hash: `28b1a3ae3413d18806cee7416ee80d7828a32b63316ef975ed12080e8df893f2`
+- 0G archive proof: `https://chainscan.0g.ai/tx/0xf38d8c7dadfd3ac0dc82018bb9bbe3e1ead9a5f13b4ef0f797e8a9ed7771cbfe`
+
+This is the final evidence set. Its persisted receipt reports `0.3` and
+`USDT`, and its replay response identifies `OKX Agent Payments Protocol`.
+
 ## Claims to avoid
 
 - Do not call `122 sold` 122 customers or 122 organic purchases; say “122 recorded uses.”
