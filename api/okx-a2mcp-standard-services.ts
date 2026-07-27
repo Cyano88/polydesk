@@ -381,13 +381,6 @@ export function addFundingReplaySchema(
     const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
     const replaySchema = fundingLinkReplaySchema()
     challenge.outputSchema = replaySchema
-    if (Array.isArray(challenge.accepts)) {
-      challenge.accepts = challenge.accepts.map(option => (
-        option && typeof option === 'object'
-          ? { ...option as Record<string, unknown>, outputSchema: replaySchema }
-          : option
-      ))
-    }
     return {
       ...response,
       headers: {
