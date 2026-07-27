@@ -31,8 +31,8 @@ Do not tour every PolyDesk feature. Mention the buyer-controlled signed-order wo
 | 28–41s | Terminal: request the endpoint and show the fresh quote | “The endpoint responds with a real HTTP 402 challenge: 0.3 USDT on X Layer, using OKX Agent Payments.” |
 | 41–53s | Show the OKX confirmation card, then approve | “The buyer sees the exact asset, amount and recipient before money moves. I approve this single service payment.” |
 | 53–70s | Terminal: payment and automatic replay complete | “OKX signs and settles the payment, then replays the same request. PolyDesk does not receive the buyer’s private key or trading credentials.” |
-| 70–83s | Format the returned LP report: top market, spread, depth, reward, minimum size, risk/checklist | “The deliverable is not a generic answer. It is a current operator report with the evidence and constraints needed for a liquidity decision.” |
-| 83–90s | Show settlement transaction/receipt beside the report | “That is PolyDesk: live intelligence, buyer-approved payment and an auditable result—in one agent-to-agent flow.” |
+| 70–83s | Show the returned report: top market, spread, depth, reward, minimum size, risk/checklist | “The deliverable is not a generic answer. It is a current operator report with the evidence and constraints needed for a liquidity decision.” |
+| 83–90s | Show the confirmed X Layer transaction and archived 0G proof beside the report | “That is PolyDesk: live intelligence, buyer-approved payment and an independently auditable result—in one agent-to-agent flow.” |
 
 ## Recording commands
 
@@ -70,6 +70,19 @@ Keep these fields visible and readable:
 - execution-risk warning or checklist;
 - payment amount and network;
 - settlement transaction or receipt identifier.
+- archived 0G proof link.
+
+## Verified rehearsal evidence
+
+- X Layer settlement: `0xce129ab9426f418719057c186398373ded74b624ed622b9d16bc99d10a0c3983`
+- Settlement status: `SUCCESS`
+- Settled amount: `0.3 USDT`
+- Paid report: `https://polydesk.trade/report/lp-scout/c9e6b0d8-84d5-4c0e-9c99-cc6c4f7795e8?receipt=0cccbe35-403a-49c9-b82b-c4bcc613d647`
+- 0G archive proof: `https://chainscan.0g.ai/tx/0x40da8cdb3f5343c0b701442950bc73b6cb00b9641e23410267b0d8336fd9b8c5`
+
+The rehearsal response exposed a stale receipt label (`USDC` instead of
+`USDT`). Commit `d5d2bd1` corrects this for the final recording purchase and
+adds a regression test. Do not use the rehearsal report as the final close-up.
 
 ## Claims to avoid
 
