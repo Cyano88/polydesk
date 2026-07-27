@@ -102,6 +102,7 @@ function isAllowedSourceMarket(source: string, marketUrl: string) {
   if (source === 'portfolio-position-sell') return marketUrl.startsWith('https://polymarket.com/')
   if (source === 'lp-scout-limit') return marketUrl.startsWith('https://polymarket.com/event/')
   if (source === 'watch-position-limit') return marketUrl.startsWith('https://polymarket.com/event/')
+  if (source === 'governed-open') return marketUrl.startsWith('https://polymarket.com/event/')
   return false
 }
 
