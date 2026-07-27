@@ -32,3 +32,37 @@ test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => 
   assert.equal(accepts.extra?.assetTransferMethod, undefined)
   assert.equal(accepts.extra?.tokenSymbol, 'USDT')
 })
+
+test('funding-link challenge declares replayable POST parameters', async () => {
+  const req = {
+    headers: { host: 'polydesk.trade' },
+    protocol: 'https',
+  } as Request
+  const route = buildStandardServiceRouteConfig(
+    req,
+    '/api/a2mcp/polymarket-funding-link',
+    '0.1',
+    '0x631c96fba389f65da7093e559e8120b587ec7df4',
+  )
+  const extensions = route.extensions as {
+    bazaar?: {
+      info?: { input?: { type?: string; method?: string; bodyType?: string; body?: Record<string, unknown> } }
+      schema?: { properties?: { input?: { properties?: { body?: { required?: string[] } } } } }
+    }
+  }
+  const unpaid = await route.unpaidResponseBody?.({} as never) as {
+    body?: { inputSchema?: { properties?: Record<string, unknown>; required?: string[] } }
+  }
+
+  assert.equal(extensions.bazaar?.info?.input?.type, 'http')
+  assert.equal(extensions.bazaar?.info?.input?.method, 'POST')
+  assert.equal(extensions.bazaar?.info?.input?.bodyType, 'json')
+  assert.equal(extensions.bazaar?.info?.input?.body?.requiredBalanceUsdc, '5')
+  assert.deepEqual(
+    extensions.bazaar?.schema?.properties?.input?.properties?.body?.required,
+    ['ownerAddress', 'requiredBalanceUsdc'],
+  )
+  assert.ok(unpaid.body?.inputSchema?.properties?.ownerAddress)
+  assert.ok(unpaid.body?.inputSchema?.properties?.requiredBalanceUsdc)
+  assert.deepEqual(unpaid.body?.inputSchema?.required, ['ownerAddress', 'requiredBalanceUsdc'])
+})

@@ -21,6 +21,99 @@ const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
 
+const fundingLinkBodyProperties = {
+  ownerAddress: {
+    type: 'string',
+    pattern: '^0x[a-fA-F0-9]{40}$',
+    description: 'Owner EOA that controls the Polymarket account.',
+  },
+  requiredBalanceUsdc: {
+    type: 'string',
+    pattern: '^[0-9]+(?:\\.[0-9]{1,6})?$',
+    description: 'Target pUSD balance required before the intended Polymarket action.',
+  },
+  network: {
+    type: 'string',
+    enum: ['base', 'arbitrum'],
+    description: 'Source network for the hosted USDC funding checkout.',
+  },
+  agent: {
+    type: 'string',
+    maxLength: 80,
+    description: 'Optional calling-agent label included in the checkout metadata.',
+  },
+} as const
+
+const fundingLinkRequiredFields = ['ownerAddress', 'requiredBalanceUsdc'] as const
+
+function fundingLinkDiscoveryExtension() {
+  const inputExample = {
+    ownerAddress: '0x1111111111111111111111111111111111111111',
+    requiredBalanceUsdc: '5',
+    network: 'base',
+    agent: 'buyer-agent',
+  }
+  const outputExample = {
+    ok: true,
+    state: 'funding_required',
+    depositWallet: '0x2222222222222222222222222222222222222222',
+    shortfallUsdc: '5',
+    checkoutUrl: 'https://pay.hashpaylink.com/example',
+    fundingRequestId: 'pfr_example',
+    statusUrl: 'https://polydesk.trade/api/polymarket/funding/pfr_example',
+  }
+
+  return {
+    bazaar: {
+      info: {
+        input: {
+          type: 'http',
+          method: 'POST',
+          bodyType: 'json',
+          body: inputExample,
+        },
+        output: {
+          type: 'json',
+          example: outputExample,
+        },
+      },
+      schema: {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: {
+          input: {
+            type: 'object',
+            properties: {
+              type: { const: 'http' },
+              method: { const: 'POST' },
+              bodyType: { const: 'json' },
+              body: {
+                type: 'object',
+                properties: fundingLinkBodyProperties,
+                required: fundingLinkRequiredFields,
+                additionalProperties: false,
+              },
+            },
+            required: ['type', 'method', 'bodyType', 'body'],
+            additionalProperties: false,
+          },
+          output: {
+            type: 'object',
+            properties: {
+              type: { const: 'json' },
+              example: { type: 'object' },
+            },
+            required: ['type', 'example'],
+            additionalProperties: false,
+          },
+        },
+        required: ['input', 'output'],
+        additionalProperties: false,
+      },
+    },
+  }
+}
+
 const serviceDefinitions = {
   '/api/a2mcp/worldcup-live-scores': {
     name: 'World Cup 2026 Final Standings',
@@ -150,6 +243,8 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
 
 export function buildStandardServiceRouteConfig(req: Request, path: StandardServicePath, price: string, payTo: string): RouteConfig {
   const service = serviceDefinitions[path]
+  const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
+  const discoveryExtensions = isFundingLink ? fundingLinkDiscoveryExtension() : {}
   return {
     accepts: {
       scheme: 'exact',
@@ -179,6 +274,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
     extensions: {
       serviceName: service.name,
       tags: service.tags,
+      ...discoveryExtensions,
     },
     unpaidResponseBody: () => ({
       contentType: 'application/json',
@@ -189,6 +285,14 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
         protocol: 'OKX Agent Payments Protocol',
         payment: { network: 'X Layer', asset: 'USDT', amount: price },
         message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the request with the payment header.',
+        ...(isFundingLink ? {
+          inputSchema: {
+            type: 'object',
+            properties: fundingLinkBodyProperties,
+            required: fundingLinkRequiredFields,
+            additionalProperties: false,
+          },
+        } : {}),
       },
     }),
   }
