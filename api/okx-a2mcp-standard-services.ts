@@ -49,15 +49,16 @@ const fundingLinkRequiredFields = ['ownerAddress', 'requiredBalanceUsdc'] as con
 function fundingLinkReplaySchema() {
   return {
     input: {
-      type: 'http',
-      method: 'POST',
-      bodyType: 'json',
-      body: {
-        type: 'object',
-        properties: fundingLinkBodyProperties,
-        required: fundingLinkRequiredFields,
-        additionalProperties: false,
+      ownerAddress: {
+        ...fundingLinkBodyProperties.ownerAddress,
+        required: true,
       },
+      requiredBalanceUsdc: {
+        ...fundingLinkBodyProperties.requiredBalanceUsdc,
+        required: true,
+      },
+      network: fundingLinkBodyProperties.network,
+      agent: fundingLinkBodyProperties.agent,
     },
     output: {
       type: 'json',

@@ -93,27 +93,27 @@ test('funding-link 402 header exposes the legacy replay contract used by OKX buy
     accepts?: Array<{
       outputSchema?: {
         input?: {
-          method?: string
-          body?: { properties?: Record<string, unknown>; required?: string[] }
+          ownerAddress?: { required?: boolean }
+          requiredBalanceUsdc?: { required?: boolean }
+          network?: Record<string, unknown>
+          agent?: Record<string, unknown>
         }
       }
     }>
     outputSchema?: {
       input?: {
-        method?: string
-        body?: { properties?: Record<string, unknown>; required?: string[] }
+        ownerAddress?: { required?: boolean }
+        requiredBalanceUsdc?: { required?: boolean }
+        network?: Record<string, unknown>
+        agent?: Record<string, unknown>
       }
     }
   }
 
-  assert.equal(decoded.outputSchema?.input?.method, 'POST')
-  assert.ok(decoded.outputSchema?.input?.body?.properties?.ownerAddress)
-  assert.ok(decoded.outputSchema?.input?.body?.properties?.requiredBalanceUsdc)
-  assert.deepEqual(decoded.outputSchema?.input?.body?.required, ['ownerAddress', 'requiredBalanceUsdc'])
-  assert.equal(decoded.accepts?.[0]?.outputSchema?.input?.method, 'POST')
-  assert.ok(decoded.accepts?.[0]?.outputSchema?.input?.body?.properties?.ownerAddress)
-  assert.deepEqual(
-    decoded.accepts?.[0]?.outputSchema?.input?.body?.required,
-    ['ownerAddress', 'requiredBalanceUsdc'],
-  )
+  assert.equal(decoded.outputSchema?.input?.ownerAddress?.required, true)
+  assert.equal(decoded.outputSchema?.input?.requiredBalanceUsdc?.required, true)
+  assert.ok(decoded.outputSchema?.input?.network)
+  assert.ok(decoded.outputSchema?.input?.agent)
+  assert.equal(decoded.accepts?.[0]?.outputSchema?.input?.ownerAddress?.required, true)
+  assert.equal(decoded.accepts?.[0]?.outputSchema?.input?.requiredBalanceUsdc?.required, true)
 })
