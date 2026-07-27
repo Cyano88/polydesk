@@ -5,6 +5,7 @@ import {
   x402ResourceServer,
   type HTTPAdapter,
   type HTTPRequestContext,
+  type RouteConfig,
   type RoutesConfig,
 } from '@okxweb3/x402-core/server'
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
@@ -79,8 +80,57 @@ function adapterForRequest(req: Request): HTTPAdapter {
 }
 
 function decimalUsdtToAtomic(amount: number) {
-  if (!Number.isFinite(amount) || amount < 0) throw new Error(`Invalid OKX x402 price: ${amount}`)
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error(`Invalid OKX x402 price: ${amount}`)
   return String(Math.round(amount * 1_000_000))
+}
+
+export function buildOkxLpScoutRouteConfig(req: Request, price: string, payTo: string): RouteConfig {
+  return {
+    accepts: {
+      scheme: 'exact',
+      network: OKX_XLAYER_NETWORK,
+      payTo,
+      price: {
+        amount: decimalUsdtToAtomic(Number(price)),
+        asset: OKX_XLAYER_USDT,
+        extra: {
+          tokenSymbol: 'USDT',
+          decimals: 6,
+          name: 'USDT',
+          version: '1',
+        },
+      },
+      maxTimeoutSeconds: 600,
+      extra: {
+        tokenSymbol: 'USDT',
+        decimals: 6,
+        name: 'USDT',
+        version: '1',
+      },
+    },
+    resource: `${publicOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`,
+    description: 'PolyDesk LP Scout report for buyer agents on OKX.AI.',
+    mimeType: 'application/json',
+    extensions: {
+      serviceName: 'PolyDesk LP Scout',
+      tags: ['polymarket', 'lp-scout', 'prediction-market'],
+    },
+    unpaidResponseBody: () => ({
+      contentType: 'application/json',
+      body: {
+        ok: false,
+        error: 'payment_required',
+        service: 'PolyDesk LP Scout',
+        protocol: 'OKX Agent Payments Protocol',
+        payment: {
+          network: 'X Layer',
+          asset: 'USDT',
+          amount: price,
+        },
+        message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the same request with the payment header.',
+      },
+    }),
+  }
 }
 
 function payerFromPayload(paymentPayload: PaymentPayload) {
@@ -136,56 +186,8 @@ async function getOkxHttpServer(req: Request) {
       const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
       if (!payTo) throw new Error('OKX_X402_PAY_TO is required for OKX A2MCP x402 settlement')
       const price = env('OKX_X402_POLYMARKET_LP_SCOUT_PRICE') || DEFAULT_PRICE
-      const resource = `${publicOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`
       const routes: RoutesConfig = {
-        'GET /api/a2mcp/okx/polymarket-lp-scout': {
-          accepts: {
-            scheme: 'exact',
-            network: OKX_XLAYER_NETWORK,
-            payTo,
-            price: {
-              amount: decimalUsdtToAtomic(Number(price)),
-              asset: OKX_XLAYER_USDT,
-              extra: {
-                assetTransferMethod: 'permit2',
-                tokenSymbol: 'USDT',
-                decimals: 6,
-                name: 'USDT',
-                version: '1',
-              },
-            },
-            maxTimeoutSeconds: 600,
-            extra: {
-              assetTransferMethod: 'permit2',
-              tokenSymbol: 'USDT',
-              decimals: 6,
-              name: 'USDT',
-              version: '1',
-            },
-          },
-          resource,
-          description: 'PolyDesk LP Scout report for buyer agents on OKX.AI.',
-          mimeType: 'application/json',
-          extensions: {
-            serviceName: 'PolyDesk LP Scout',
-            tags: ['polymarket', 'lp-scout', 'prediction-market'],
-          },
-          unpaidResponseBody: () => ({
-            contentType: 'application/json',
-            body: {
-              ok: false,
-              error: 'payment_required',
-              service: 'PolyDesk LP Scout',
-              protocol: 'OKX Agent Payments Protocol',
-              payment: {
-                network: 'X Layer',
-                asset: 'USDT',
-                amount: price,
-              },
-              message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the same request with the payment header.',
-            },
-          }),
-        },
+        'GET /api/a2mcp/okx/polymarket-lp-scout': buildOkxLpScoutRouteConfig(req, price, payTo),
       }
 
       const httpServer = new x402HTTPResourceServer(resourceServer, routes)
