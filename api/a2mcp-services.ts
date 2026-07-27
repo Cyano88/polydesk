@@ -161,8 +161,8 @@ const services: PolyDeskAgentService[] = [
   },
   {
     id: 'polymarket-funding-link',
-    title: 'Polymarket Funding Link',
-    description: 'Create a Hash PayLink hosted checkout that funds a public Polymarket wallet through the Polymarket bridge with USDC.',
+    title: 'Verified Polymarket Funding',
+    description: 'Derive and verify an owner EOA’s deployed Polymarket Deposit Wallet, check its pUSD balance, and create a Hash PayLink USDC checkout only when funding is needed.',
     category: 'funding',
     endpoint: '/api/a2mcp/polymarket-funding-link',
     method: 'POST',
@@ -170,8 +170,10 @@ const services: PolyDeskAgentService[] = [
     payment: { required: true, standard: 'x402' },
     request: {
       query: [
-        { name: 'wallet', required: true, description: 'Public Polymarket 0x wallet to fund.' },
-        { name: 'amount', required: true, description: 'USDC amount. Minimum is currently 3 USDC.' },
+        { name: 'ownerAddress', required: true, description: 'Public owner EOA that controls the Polymarket Deposit Wallet.' },
+        { name: 'wallet', required: false, description: 'Optional claimed Polymarket Deposit Wallet. It must match the wallet derived from ownerAddress.' },
+        { name: 'requiredBalanceUsdc', required: false, description: 'Required pUSD balance for the intended buy. PolyDesk creates a checkout only for the verified shortfall.' },
+        { name: 'amount', required: false, description: 'Direct USDC top-up amount when requiredBalanceUsdc is not supplied. Hosted checkout minimum is currently 3 USDC.' },
         { name: 'network', required: false, description: 'Funding network. Defaults to Base.', values: ['base', 'arbitrum'] },
         { name: 'agent', required: false, description: 'Buyer-agent slug used for attribution in the response.' },
       ],
@@ -181,6 +183,8 @@ const services: PolyDeskAgentService[] = [
       ],
     },
     output: [
+      'derived and deployed Deposit Wallet verification',
+      'current pUSD balance and required shortfall',
       'hosted Hash PayLink checkout URL',
       'provider-verified funding request id',
       'authenticated funding status URL',

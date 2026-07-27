@@ -41,9 +41,9 @@ const serviceDefinitions = {
     deliver: a2mcpPolymarketPortfolioWatchHandler,
   },
   '/api/a2mcp/polymarket-funding-link': {
-    name: 'Polymarket Funding Link',
-    description: 'Prepare a hosted checkout handoff for funding a public Polymarket wallet.',
-    tags: ['polymarket', 'funding', 'checkout'],
+    name: 'Verified Polymarket Funding',
+    description: 'Derive and verify the owner EOA’s deployed Polymarket Deposit Wallet, check pUSD readiness, and prepare a hosted checkout only for the verified account.',
+    tags: ['polymarket', 'deposit-wallet', 'funding', 'checkout', 'readiness'],
     deliver: a2mcpPolymarketFundingLinkHandler,
   },
   '/api/a2mcp/polymarket-signed-open': {

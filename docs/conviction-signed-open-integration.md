@@ -39,31 +39,45 @@ integration does not bypass that limitation.
 
 ## End-to-end flow
 
-1. Optionally fund the public Polymarket wallet:
+1. Check the owner EOA and derived Polymarket Deposit Wallet for free:
+
+   `POST /api/polymarket-account/readiness`
+
+   Supply `ownerAddress`, `requiredBalanceUsdc`, and `sourceNetwork`. PolyDesk
+   derives the Deposit Wallet itself, verifies deployment, reads pUSD, and
+   returns `SETUP_DEPOSIT_WALLET`, `CREATE_FUNDING_CHECKOUT`, or `PREPARE_BUY`.
+
+2. If the verified Deposit Wallet needs funding:
 
    `POST /api/a2mcp/polymarket-funding-link`
 
-2. Send only the simple public intent to the free preparation endpoint:
+   Supply the same `ownerAddress` and `requiredBalanceUsdc`. A caller-supplied
+   `wallet` is optional and is accepted only when it exactly matches the wallet
+   derived from the owner. The response contains a Hash PayLink checkout and
+   status URL, or returns `PREPARE_BUY` without creating a checkout when the
+   current pUSD balance is already sufficient.
+
+3. Send only the simple public intent to the free preparation endpoint:
 
    `POST /api/polymarket-open/prepare`
 
    PolyDesk resolves the exact token, order book, tick size, negative-risk
    exchange, V2 builder code, public pUSD balance, and public allowance.
 
-3. If `readyForLocalSigning` is true, build and sign the returned
+4. If `readyForLocalSigning` is true, build and sign the returned
    `signingPlan` locally with `@polymarket/clob-client-v2`. PolyDesk never
    receives the signer or CLOB secrets.
-4. Validate the exact signed request for free:
+5. Validate the exact signed request for free:
 
    `POST /api/polymarket-signed-open/validate`
 
-5. Send the same body to the paid endpoint:
+6. Send the same body to the paid endpoint:
 
    `POST /api/a2mcp/polymarket-signed-open`
 
-6. Complete the returned OKX HTTP 402 payment and replay the exact request.
-7. Create the buyer's CLOB submission headers locally.
-8. Submit the exact `submission.orderPayload` directly to Polymarket. The CLOB
+7. Complete the returned OKX HTTP 402 payment and replay the exact request.
+8. Create the buyer's CLOB submission headers locally.
+9. Submit the exact `submission.orderPayload` directly to Polymarket. The CLOB
    performs final cryptographic signature and wallet-authority verification.
 
 ## Simple preparation request

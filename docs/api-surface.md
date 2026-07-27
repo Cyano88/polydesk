@@ -33,7 +33,8 @@ CLI payment, or generate a second payment receipt.
 | `GET /api/lp-scout-report?id=...` | Saved LP Scout report |
 | `POST /api/zeroscout/polymarket-brief` | ZeroScout verification for a paid, saved scout |
 | `POST /api/webhooks/hashpaylink` | Raw-body, signed Hash PayLink webhook receiver |
-| `POST /api/a2mcp/polymarket-funding-link` | OKX-paid handoff to a Hash PayLink Base/Arbitrum Polymarket funding checkout |
+| `POST /api/polymarket-account/readiness` | Free owner-EOA to Deposit Wallet derivation, deployment, pUSD balance, and live bridge-route check |
+| `POST /api/a2mcp/polymarket-funding-link` | OKX-paid verified handoff to a Hash PayLink Base/Arbitrum checkout; refuses arbitrary or undeployed wallet targets |
 | `POST /api/a2mcp/polymarket-signed-open` | OKX-paid constraint validation and direct-submit handoff for a buyer-signed, capped BUY order |
 | `POST /api/polymarket-open/prepare` | Free intent-to-sign plan with live market resolution and public deposit-wallet readiness checks |
 | `POST /api/polymarket-signed-open/validate` | Free validation of the exact signed OPEN body before the buyer pays |
@@ -110,3 +111,6 @@ After deployment:
 - A paid valid signed OPEN replay returns the exact CLOB payload; invalid,
   stale, SELL, GTC/GTD, oversized, or mutated orders are rejected. Polymarket
   CLOB remains the final cryptographic signature and wallet-authority verifier.
+
+The copy-paste external-agent sequence is documented in
+`docs/polymarket-agent-ready-buy.md`.

@@ -25,6 +25,7 @@ import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
+import polymarketAccountReadinessHandler from './api/polymarket-account-readiness.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
@@ -139,6 +140,7 @@ app.post('/api/polymarket-builder-handoff', strictLimiter, polymarketBuilderHand
 app.post('/api/polymarket-builder-signer', strictLimiter, polymarketBuilderSignerHandler)
 app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
 app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
+app.post('/api/polymarket-account/readiness', strictLimiter, polymarketAccountReadinessHandler)
 app.post('/api/polymarket-portfolio', (req, res, next) => {
   const action = String(req.query.action ?? req.body?.action ?? '').trim().toLowerCase()
   if (action === 'create-public-watch') return publicWatchCreateLimiter(req, res, next)
