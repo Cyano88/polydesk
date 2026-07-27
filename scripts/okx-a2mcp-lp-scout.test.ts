@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Request } from 'express'
 import { buildOkxLpScoutRouteConfig } from '../api/okx-a2mcp-polymarket-lp-scout.js'
+import { describeScoutPayment } from '../api/x402-polymarket-scout.js'
 
 test('OKX LP Scout advertises EIP-3009 exact without Permit2', () => {
   const req = {
@@ -27,4 +28,22 @@ test('OKX LP Scout advertises EIP-3009 exact without Permit2', () => {
   assert.equal(accepts.extra?.assetTransferMethod, undefined)
   assert.equal(accepts.extra?.tokenSymbol, 'USDT')
   assert.equal(route.resource, 'https://polydesk.trade/api/a2mcp/okx/polymarket-lp-scout')
+})
+
+test('OKX LP Scout receipt labels match the settled USDT payment', () => {
+  const payment = describeScoutPayment({
+    verified: true,
+    payer: '0x8b1016a561ce45b05f2be9948730fcd1a81b1b07',
+    amount: '300000',
+    network: 'X Layer',
+    asset: 'USDT',
+    provider: 'OKX Agent Payments Protocol',
+    kind: 'okx_agent_payments_x402',
+  })
+
+  assert.deepEqual(payment, {
+    amount: '0.3 USDT',
+    asset: 'USDT',
+    provider: 'OKX Agent Payments Protocol',
+  })
 })

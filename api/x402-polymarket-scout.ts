@@ -27,6 +27,13 @@ type PaidRequest = Request & {
 const PRICE = process.env.HASH_PAYLINK_LP_SCOUT_PRICE ?? '$0.01'
 const REQUEST_TIMEOUT_MS = 12_000
 
+export function describeScoutPayment(payment?: PaidRequest['payment']) {
+  const asset = payment?.asset || 'USDC'
+  const amount = payment?.amount ? `${formatUnits(BigInt(payment.amount), 6)} ${asset}` : PRICE
+  const provider = payment?.provider || 'Circle Gateway x402'
+  return { asset, amount, provider }
+}
+
 function publicErrorMessage(err: unknown) {
   const message = err instanceof Error ? err.message : String(err ?? 'Unknown ZeroScout error')
   return message
@@ -197,20 +204,21 @@ function proofForPayment(req: PaidRequest, amount: string) {
 async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeof buildLiveScout>>, amount: string) {
   const proof = proofForPayment(req, amount)
   if (!proof) return undefined
+  const paymentDisplay = describeScoutPayment(req.payment)
   const agentSlug = proof.buyerAgent || 'a2mcp-buyer'
   const serviceUrl = canonicalServiceUrl(req)
   const paidActivity = await appendAgentActivity({
     agentSlug,
     type: 'x402_spent',
     title: 'PolyDesk LP Scout payment',
-    amount: amount.replace(/\s+USDC$/i, ''),
-    asset: 'USDC',
+    amount: amount.split(/\s+/)[0],
+    asset: paymentDisplay.asset,
     direction: 'out',
     network: proof.network,
     wallet: proof.payer,
     txHash: proof.transaction,
     serviceUrl,
-    detail: 'Hash PayLink verified the Circle Gateway x402 payment for PolyDesk LP Scout.',
+    detail: `${paymentDisplay.provider} verified the ${paymentDisplay.asset} x402 payment for PolyDesk LP Scout.`,
     proof,
   })
   const result = await appendAgentActivity({
@@ -989,8 +997,8 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
 
 export async function scoutResponse(req: PaidRequest) {
   const payment = req.payment
-  const asset = payment?.asset || 'USDC'
-  const amount = payment?.amount ? `${formatUnits(BigInt(payment.amount), 6)} ${asset}` : PRICE
+  const paymentDisplay = describeScoutPayment(payment)
+  const amount = paymentDisplay.amount
   const scout = await buildLiveScout({
     mode: normalizeScoutMode(req.query.scoutMode),
     context: cleanContext(req.query.context),
@@ -1019,9 +1027,8 @@ export async function scoutResponse(req: PaidRequest) {
       : undefined,
     scout,
     receipt: {
-      provider: 'Circle Gateway x402',
-      ...(payment?.provider ? { provider: payment.provider } : {}),
-      price: PRICE,
+      provider: paymentDisplay.provider,
+      price: amount,
       generatedAt: new Date().toISOString(),
       activity,
     },
