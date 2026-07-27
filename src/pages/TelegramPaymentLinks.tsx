@@ -2727,8 +2727,9 @@ export function TelegramHelperPanel({
     })
     const profileData = await profileRes.json() as { ok?: boolean; profile?: PolymarketProfile | null; error?: string }
     if (!profileRes.ok || !profileData.ok) throw new Error(profileData.error || 'Could not load PolyDesk profile.')
-    const address = profileData.profile?.polymarketAddress
-    if (!address) {
+    const profile = profileData.profile
+    const portfolioAddress = profile?.depositWalletAddress || profile?.polymarketAddress
+    if (!portfolioAddress) {
       return {
         answer: 'Connect your Polymarket 0x profile in PolyDesk Portfolio first.',
         actionLink: { label: 'Portfolio', url: portfolioUrl },
@@ -2738,6 +2739,14 @@ export function TelegramHelperPanel({
     const isFundingContinuation = Boolean(polyPortfolioFundingDraft)
     const isFundingIntent = /\b(fund|deposit|top up|bridge)\b/i.test(nextQuestion)
     if (isFundingIntent || isFundingContinuation) {
+      const fundingAddress = profile?.depositWalletAddress
+      if (!fundingAddress || String(profile?.depositWalletStatus || '').toLowerCase() !== 'ready') {
+        setPolyPortfolioFundingDraft(null)
+        return {
+          answer: 'Activate your PolyDesk trading account before funding it.',
+          actionLink: { label: 'Portfolio', url: '/polydesk?service=portfolio&portfolio=trading&wallet=balance' },
+        }
+      }
       const requestedAmount = extractAmount(nextQuestion) || polyPortfolioFundingDraft?.amount || ''
       const requestedNetwork = extractNetwork(nextQuestion) || polyPortfolioFundingDraft?.network || ''
       if (!requestedAmount) {
@@ -2781,7 +2790,7 @@ export function TelegramHelperPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          polymarketWallet: address,
+          polymarketWallet: fundingAddress,
           amount: requestedAmount,
           networks: bridgeNetwork === 'base' ? ['base', 'arbitrum'] : ['arbitrum', 'base'],
           requestId,
@@ -2806,7 +2815,7 @@ export function TelegramHelperPanel({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           action: 'log-funding',
-          polymarketWallet: address,
+          polymarketWallet: fundingAddress,
           network: finalNetwork,
           amount: requestedAmount,
           status: 'pending',
@@ -2819,15 +2828,15 @@ export function TelegramHelperPanel({
       if (!logResponse.ok || !logData.ok) throw new Error(logData.error || 'Could not save the funding attempt.')
       setPolyPortfolioFundingDraft(null)
       return {
-        answer: `Bridge checkout ready for ${requestedAmount} USDC to your Polymarket profile ${shortAddress(address)} on ${requestNetworkLabels[finalNetwork]}.`,
+        answer: `Bridge checkout ready for ${requestedAmount} USDC to your Polymarket account ${shortAddress(fundingAddress)} on ${requestNetworkLabels[finalNetwork]}.`,
         paylink: {
           kind: 'polymarket-funding' as const,
           mode: 'person' as const,
           network: finalNetwork,
-          wallet: address,
-          evmWallet: address,
+          wallet: fundingAddress,
+          evmWallet: fundingAddress,
           solanaWallet: '',
-          polymarketWallet: address,
+          polymarketWallet: fundingAddress,
           label: 'Polymarket funding',
           target: 'Your Polymarket account',
           amount: requestedAmount,
@@ -2838,8 +2847,8 @@ export function TelegramHelperPanel({
     }
 
     const [valueRes, positionsRes] = await Promise.all([
-      fetch(`/api/polymarket-portfolio?action=value&address=${encodeURIComponent(address)}`),
-      fetch(`/api/polymarket-portfolio?action=positions&address=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`),
+      fetch(`/api/polymarket-portfolio?action=value&address=${encodeURIComponent(portfolioAddress)}`),
+      fetch(`/api/polymarket-portfolio?action=positions&address=${encodeURIComponent(portfolioAddress)}&sizeThreshold=0&limit=100`),
     ])
     const valueData = await valueRes.json() as { ok?: boolean; value?: unknown; error?: string }
     const positionsData = await positionsRes.json() as { ok?: boolean; positions?: PolymarketPosition[]; error?: string }
@@ -7023,7 +7032,6 @@ export function PolyPortfolioPanel({
   const [claimBusyKey, setClaimBusyKey] = useState('')
   const [claimNotice, setClaimNotice] = useState('')
   const [claimSuccess, setClaimSuccess] = useState('')
-  const [pendingClaimPosition, setPendingClaimPosition] = useState<PolymarketPosition | null>(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<PolymarketAlertSettings | null>(null)
@@ -9745,7 +9753,7 @@ export function PolyPortfolioPanel({
                             onClick={() => {
                               setClaimNotice('')
                               setClaimSuccess('')
-                              setPendingClaimPosition(position)
+                              void claimPositionToPusd(position)
                             }}
                             disabled={Boolean(claimBusyKey)}
                             className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:border-emerald-300 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200"
@@ -10073,47 +10081,6 @@ export function PolyPortfolioPanel({
               >
                 Continue
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {pendingClaimPosition && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#111216]">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Claim winnings</p>
-            <h3 className="mt-2 text-base font-semibold tracking-tight text-gray-950 dark:text-white">
-              Add this payout to pUSD cash?
-            </h3>
-            <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]">
-              <p className="line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white">
-                {pendingClaimPosition.title ?? 'Polymarket position'}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {formatUsd(pendingClaimPosition.currentValue)} available to claim.
-              </p>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-              Your wallet approves the claim. The resolved tokens are redeemed into pUSD in this trading account.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingClaimPosition(null)}
-                className="flex min-h-[42px] items-center justify-center rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.04]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const position = pendingClaimPosition
-                  setPendingClaimPosition(null)
-                  void claimPositionToPusd(position)
-                }}
-                className="polydesk-primary-cta w-full"
-              >
-                Claim to pUSD
               </button>
             </div>
           </div>
