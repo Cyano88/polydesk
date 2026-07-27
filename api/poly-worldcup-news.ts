@@ -10,6 +10,12 @@ export type PolyWorldCupArticle = {
   url: string
   publishedAt: string
   tag: string
+  polymarketMarkets: Array<{
+    title: string
+    url: string
+    eventSlug: string
+    matchBasis: 'deterministic-headline-overlap'
+  }>
 }
 
 type CacheEntry = {
@@ -18,7 +24,7 @@ type CacheEntry = {
     ok: true
     providerConfigured: boolean
     source: string
-    mode: 'live' | 'fallback'
+    mode: 'live' | 'unavailable'
     updatedAt: string
     freshnessSeconds: number
     error?: string
@@ -30,36 +36,6 @@ const DEFAULT_QUERY = '(football OR soccer) AND (match OR league OR tournament)'
 const DEFAULT_CACHE_MS = 15 * 60 * 1000
 const FALLBACK_IMAGE = '/brand/world-globe.png'
 const DEFAULT_NEWS_API_URL = 'https://gnews.io/api/v4/search'
-
-const OFFICIAL_OKX_NEWS: PolyWorldCupArticle[] = [
-  {
-    title: 'OKX introduces Exchange OS on X Layer for custom spot, perpetual and outcome markets',
-    description: 'Official OKX announcement for Exchange OS, the X Layer market infrastructure that includes staged support for outcome-market infrastructure.',
-    source: 'OKX Learn',
-    image: '/brand/world-globe.png',
-    url: 'https://www.okx.com/en-us/learn/exchange-os',
-    publishedAt: '2026-05-26T00:00:00.000Z',
-    tag: 'X Layer',
-  },
-  {
-    title: 'X Layer details Flashblocks engineering for low-latency app infrastructure',
-    description: 'Official X Layer engineering post covering flashblocks, low-latency RPC updates, and real-time app infrastructure.',
-    source: 'OKX Learn',
-    image: '/brand/world-globe.png',
-    url: 'https://www.okx.com/en-ae/learn/flashblocks-on-x-layer',
-    publishedAt: '2026-05-27T00:00:00.000Z',
-    tag: 'Infrastructure',
-  },
-  {
-    title: 'Football market context needs live news checks before quoting',
-    description: 'Use verified team news and current Polymarket order-book depth before placing maker quotes in football markets.',
-    source: 'PolyDesk',
-    image: FALLBACK_IMAGE,
-    url: '',
-    publishedAt: '2026-06-11T23:59:00.000Z',
-    tag: 'Markets',
-  },
-]
 
 let cache: CacheEntry | null = null
 
@@ -127,26 +103,11 @@ function dedupeArticles(articles: PolyWorldCupArticle[]) {
   })
 }
 
-function mergeOfficialNews(articles: PolyWorldCupArticle[]) {
-  const live = dedupeArticles(articles)
-  const official = dedupeArticles(OFFICIAL_OKX_NEWS).filter(article => {
-    const key = (article.url || article.title).trim().toLowerCase()
-    return !live.some(item => (item.url || item.title).trim().toLowerCase() === key)
-  })
-  const merged: PolyWorldCupArticle[] = []
-  let officialIndex = 0
-  for (const [index, article] of live.entries()) {
-    merged.push(article)
-    if ((index + 1) % 2 === 0 && officialIndex < official.length) {
-      merged.push(official[officialIndex])
-      officialIndex += 1
-    }
-  }
-  while (officialIndex < official.length) {
-    merged.push(official[officialIndex])
-    officialIndex += 1
-  }
-  return merged.slice(0, 12)
+function strictFootballArticle(title: string, description: string) {
+  const text = `${title} ${description}`.toLowerCase()
+  const football = /\bfootball\b|\bsoccer\b|\bpremier league\b|\bchampions league\b|\bfifa\b|\bufa\b|\buefa\b|\bworld cup\b|\bgoalkeeper\b|\bstriker\b|\bmidfielder\b|\bfixture\b|\btransfer\b/.test(text)
+  const otherSport = /\bcricket\b|\bnhl\b|\bhockey\b|\bnba\b|\bbasketball\b|\bbaseball\b|\bmlb\b|\bnfl\b|\bamerican football\b/.test(text)
+  return football && !otherSport
 }
 
 function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null {
@@ -157,12 +118,14 @@ function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null 
     || asString(article.summary)
     || asString(article.content)
     || 'Football update for market context.'
+  const url = articleUrl(article)
+  if (!url || !/^https?:\/\//i.test(url) || !strictFootballArticle(title, description)) return null
   return {
     title,
     description,
     source: articleSource(article),
     image: articleImage(article),
-    url: articleUrl(article),
+    url,
     publishedAt: asString(article.publishedAt)
       || asString(article.published_at)
       || asString(article.pubDate)
@@ -171,6 +134,7 @@ function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null 
       || asString(article.date)
       || new Date().toISOString(),
     tag: tagFor(title, description),
+    polymarketMarkets: [],
   }
 }
 
@@ -190,37 +154,50 @@ function extractArticles(payload: unknown): ProviderArticle[] {
   return []
 }
 
-function fallbackArticles(): PolyWorldCupArticle[] {
-  const now = Date.now()
-  return mergeOfficialNews([
-    {
-      title: 'Football markets need fresh news checks before quoting',
-      description: 'Use team news, injury context, and current order-book depth before placing maker orders in football markets.',
-      source: 'PolyDesk',
-      image: FALLBACK_IMAGE,
-      url: '',
-      publishedAt: new Date(now).toISOString(),
-      tag: 'Markets',
-    },
-    {
-      title: 'Squad and injury headlines can move national-team prices quickly',
-      description: 'Before committing USDC, check whether the latest squad update changes the market price or makes liquidity thinner.',
-      source: 'Hash PayLink desk',
-      image: FALLBACK_IMAGE,
-      url: '',
-      publishedAt: new Date(now - 60_000).toISOString(),
-      tag: 'Squads',
-    },
-    {
-      title: 'Fixture context matters for longer football positions',
-      description: 'Every quote should be reviewed against the current schedule, team news, and market volatility.',
-      source: 'PolyDesk',
-      image: FALLBACK_IMAGE,
-      url: '',
-      publishedAt: new Date(now - 120_000).toISOString(),
-      tag: 'Fixtures',
-    },
-  ])
+const MARKET_STOP_WORDS = new Set([
+  'about', 'after', 'before', 'could', 'football', 'from', 'have', 'into', 'match',
+  'more', 'news', 'over', 'says', 'soccer', 'that', 'their', 'this', 'will', 'with',
+])
+
+function marketTokens(value: string) {
+  return new Set(value.toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length >= 4 && !MARKET_STOP_WORDS.has(token)))
+}
+
+async function relatedPolymarketMarkets(article: PolyWorldCupArticle) {
+  const params = new URLSearchParams({
+    active: 'true',
+    closed: 'false',
+    limit: '20',
+    search: article.title,
+  })
+  const response = await fetch(`https://gamma-api.polymarket.com/events?${params.toString()}`, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(8_000),
+  })
+  if (!response.ok) return []
+  const payload = await response.json()
+  const values = Array.isArray(payload) ? payload : []
+  const sourceTokens = marketTokens(`${article.title} ${article.description}`)
+  return values
+    .map(value => {
+      const record = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+      const title = asString(record.title) || asString(record.question)
+      const eventSlug = asString(record.slug)
+      const candidateTokens = marketTokens(title)
+      const overlap = [...candidateTokens].filter(token => sourceTokens.has(token))
+      if (!title || !/^[a-z0-9-]+$/i.test(eventSlug) || overlap.length < 3) return null
+      return {
+        title,
+        url: `https://polymarket.com/event/${eventSlug}`,
+        eventSlug,
+        matchBasis: 'deterministic-headline-overlap' as const,
+      }
+    })
+    .filter((value): value is NonNullable<typeof value> => Boolean(value))
+    .slice(0, 3)
 }
 
 async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
@@ -251,9 +228,13 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
     const response = await fetch(url, { headers, signal: controller.signal })
     if (!response.ok) throw new Error(`News provider returned ${response.status}`)
     const payload = await response.json()
-    return (extractArticles(payload).map(normalizeArticle).filter(Boolean) as PolyWorldCupArticle[])
+    const normalized = (extractArticles(payload).map(normalizeArticle).filter(Boolean) as PolyWorldCupArticle[])
       .sort((a, b) => articleTimeValue(b) - articleTimeValue(a))
       .slice(0, 10)
+    return Promise.all(normalized.map(async article => ({
+      ...article,
+      polymarketMarkets: await relatedPolymarketMarkets(article).catch(() => []),
+    })))
   } finally {
     clearTimeout(timeout)
   }
@@ -272,12 +253,12 @@ export async function getPolyWorldcupNewsFeed() {
   const providerConfigured = Boolean(envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY') || envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
   try {
     const providerArticles = await fetchProviderArticles()
-    const articles = providerArticles.length ? mergeOfficialNews(providerArticles) : fallbackArticles()
+    const articles = dedupeArticles(providerArticles)
     const feed = {
       ok: true as const,
       providerConfigured,
-      source: providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'fallback',
-      mode: providerArticles.length ? 'live' as const : 'fallback' as const,
+      source: providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'unavailable',
+      mode: providerArticles.length ? 'live' as const : 'unavailable' as const,
       updatedAt: new Date().toISOString(),
       freshnessSeconds: 0,
       articles,
@@ -289,12 +270,12 @@ export async function getPolyWorldcupNewsFeed() {
     const feed = {
       ok: true as const,
       providerConfigured,
-      source: 'fallback',
-      mode: 'fallback' as const,
+      source: 'unavailable',
+      mode: 'unavailable' as const,
       updatedAt: new Date().toISOString(),
       freshnessSeconds: 0,
       error: detail.slice(0, 240),
-      articles: fallbackArticles(),
+      articles: [],
     }
     cache = { expiresAt: Date.now() + Math.min(ttl, 60_000), feed }
     return feed

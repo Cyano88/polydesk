@@ -210,12 +210,12 @@
       </article>
       <article class="rail">
         <span class="pill">0.1 USDT · X Layer</span>
-        <h3>Buyer-Signed OPEN Handoff</h3>
-        <p>PolyDesk prepares and validates a capped BUY order. The buyer signs locally and submits directly to Polymarket.</p>
-        <div class="step"><b>1</b><span>Prepare a simple BUY intent and resolve live market constraints.</span></div>
-        <div class="step"><b>2</b><span>Buyer signs the exact FAK/FOK order locally; free preflight checks binding.</span></div>
-        <div class="step"><b>3</b><span>Receive the direct-submit CLOB payload. No key, secret or passphrase reaches PolyDesk.</span></div>
-        <div class="endpoint">POST /api/a2mcp/polymarket-signed-open</div>
+        <h3>Governed Polymarket Trader</h3>
+        <p>Watch, pick or copy; verify the buyer account; enforce a bounded mandate; submit directly; publish proof.</p>
+        <div class="step"><b>1</b><span>Select a public signal under explicit execution-quality rules.</span></div>
+        <div class="step"><b>2</b><span>Derive the Deposit Wallet, fund only if required, and validate the exact buyer-signed FAK/FOK order.</span></div>
+        <div class="step"><b>3</b><span>Submit directly to Polymarket and receive a verified terminal receipt.</span></div>
+        <div class="endpoint">POST /api/a2mcp/polymarket-agent-flow</div>
       </article>
     </div>
   </section>

@@ -8,18 +8,31 @@ import {
   orderToJsonV2,
 } from '@polymarket/clob-client-v2'
 
+const cliArgs = process.argv.slice(2)
+const confirmExecution = cliArgs.includes('--confirm')
 const [
   ownerAddress,
   depositWalletAddress,
-  maximumTotalDebitUsdc = '4',
-  orderAmountUsdc = '3.975',
-] = process.argv.slice(2)
+  maximumTotalDebitUsdc = '2.80',
+  orderAmountUsdc = '2.75',
+  marketSlug = 'us-x-iran-effective-ceasfire-by-july-31-20260715194822045',
+  outcome = 'Yes',
+  maximumPrice = '0.55',
+  eventSlug = marketSlug === 'us-x-iran-effective-ceasfire-by-july-31-20260715194822045'
+    ? 'us-x-iran-effective-ceasfire-byptptpt-2-week-pause-20260715194822042'
+    : marketSlug,
+] = cliArgs.filter(arg => arg !== '--confirm')
 if (!/^0x[a-fA-F0-9]{40}$/.test(ownerAddress || '') || !/^0x[a-fA-F0-9]{40}$/.test(depositWalletAddress || '')) {
-  console.error('Usage: node examples/okx-polymarket-governed-buy.mjs <owner-eoa> <deposit-wallet> [maximum-total-debit-usdc] [order-amount-usdc]')
+  console.error('Usage: node examples/okx-polymarket-governed-buy.mjs <owner-eoa> <deposit-wallet> [maximum-total-debit-usdc] [order-amount-usdc] [market-slug] [outcome] [maximum-price] [event-slug] [--confirm]')
   process.exit(1)
 }
-if (!(Number(maximumTotalDebitUsdc) > 0) || !(Number(orderAmountUsdc) > 0) || Number(orderAmountUsdc) > Number(maximumTotalDebitUsdc)) {
-  console.error('maximum-total-debit-usdc and order-amount-usdc must be positive, and the order amount cannot exceed the total debit cap.')
+if (
+  !(Number(maximumTotalDebitUsdc) > 0)
+  || !(Number(orderAmountUsdc) > 0)
+  || Number(orderAmountUsdc) > Number(maximumTotalDebitUsdc)
+  || !(Number(maximumPrice) > 0 && Number(maximumPrice) < 1)
+) {
+  console.error('Spend values must be positive, the order amount cannot exceed the total debit cap, and maximum-price must be between 0 and 1.')
   process.exit(1)
 }
 
@@ -28,12 +41,12 @@ const CONFIG = {
   clobUrl: 'https://clob.polymarket.com',
   ownerAddress,
   depositWalletAddress,
-  marketUrl: 'https://polymarket.com/event/fed-decision-in-july-181',
-  marketSlug: 'will-there-be-no-change-in-fed-interest-rates-after-the-july-2026-meeting',
-  outcome: 'Yes',
+  marketUrl: `https://polymarket.com/event/${eventSlug}`,
+  marketSlug,
+  outcome,
   maximumTotalDebitUsdc,
   orderAmountUsdc,
-  maximumPrice: 0.795,
+  maximumPrice: Number(maximumPrice),
   orderType: 'FAK',
 }
 
@@ -133,7 +146,7 @@ function decodePaymentResponse(value) {
   }
 }
 
-const externalOrderId = `okx:polydesk:fed:${Date.now()}`
+const externalOrderId = `okx:polydesk:governed:${Date.now()}`
 const prepare = requireOk('PolyDesk preparation failed', await jsonRequest(
   `${CONFIG.baseUrl}/api/polymarket-open/prepare`,
   {
@@ -282,7 +295,7 @@ const builderHandoff = requireOk('Builder handoff failed', await jsonRequest(
   },
 ))
 
-const challengeResponse = await fetch(`${CONFIG.baseUrl}/api/a2mcp/polymarket-governed-open`, {
+const challengeResponse = await fetch(`${CONFIG.baseUrl}/api/a2mcp/polymarket-agent-flow`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(governedBody),
@@ -293,6 +306,35 @@ if (challengeResponse.status !== 402) {
 }
 const paymentRequired = challengeResponse.headers.get('payment-required')
 if (!paymentRequired) throw new Error('PolyDesk challenge did not include PAYMENT-REQUIRED.')
+
+if (!confirmExecution) {
+  console.log(JSON.stringify({
+    ok: true,
+    mode: 'preview',
+    executionRequiresConfirmFlag: true,
+    externalOrderId,
+    market: {
+      title: prepare.market.title,
+      outcome: prepare.market.outcome,
+      marketUrl: CONFIG.marketUrl,
+      tokenId: prepare.market.tokenId,
+      negRisk: prepare.market.negRisk,
+    },
+    plan: {
+      priceBoundary: prepare.market.executionPrice,
+      orderAmountUsdc: CONFIG.orderAmountUsdc,
+      estimatedTotalDebitUsdc: estimatedTotalDebitUsdc.toFixed(6),
+      maximumTotalDebitUsdc: CONFIG.maximumTotalDebitUsdc,
+      orderType: CONFIG.orderType,
+    },
+    governance: {
+      decision: validation.decision,
+      reasons: validation.reasons,
+    },
+    paymentRequired: decodePaymentResponse(paymentRequired),
+  }, null, 2))
+  process.exit(0)
+}
 
 const payment = runOnchainOs([
   'payment',
@@ -306,7 +348,7 @@ if (!payment?.authorization_header || !payment?.header_name) {
   throw new Error('OKX Agent Payments Protocol did not return a payment authorization header.')
 }
 
-const paidResponse = await fetch(`${CONFIG.baseUrl}/api/a2mcp/polymarket-governed-open`, {
+const paidResponse = await fetch(`${CONFIG.baseUrl}/api/a2mcp/polymarket-agent-flow`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -362,6 +404,39 @@ if (!orderResponse.ok || orderResult?.error || orderResult?.success === false) {
   throw new Error(`Polymarket order submission failed: ${orderResult?.error || `HTTP ${orderResponse.status}`}`)
 }
 
+const completedOrderId = orderResult?.orderID || orderResult?.orderId || orderResult?.order_id
+const completedTransactionHash = (
+  orderResult?.transactionHash
+  || orderResult?.transaction_hash
+  || orderResult?.transactionsHashes?.[0]
+  || orderResult?.transactionHashes?.[0]
+)
+let completion = null
+if (/^0x[a-fA-F0-9]{64}$/.test(completedOrderId || '') && /^0x[a-fA-F0-9]{64}$/.test(completedTransactionHash || '')) {
+  const completionRequest = {
+    executionId: paidDecision.executionId,
+    orderId: completedOrderId,
+    transactionHash: completedTransactionHash,
+  }
+  const completionChallenge = await jsonRequest(`${CONFIG.baseUrl}/api/polymarket-agent-flow/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(completionRequest),
+  })
+  if (completionChallenge.response.status !== 428 || !completionChallenge.data?.completionMessage) {
+    throw new Error(`Trade completion challenge failed: ${completionChallenge.data?.error || `HTTP ${completionChallenge.response.status}`}`)
+  }
+  const completionSignature = signPersonal(completionChallenge.data.completionMessage)
+  completion = requireOk('Trade completion verification failed', await jsonRequest(
+    `${CONFIG.baseUrl}/api/polymarket-agent-flow/complete`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...completionRequest, completionSignature }),
+    },
+  ))
+}
+
 console.log(JSON.stringify({
   ok: true,
   externalOrderId,
@@ -381,4 +456,9 @@ console.log(JSON.stringify({
   },
   servicePayment: decodePaymentResponse(paidResponse.headers.get('payment-response')),
   order: orderResult,
+  completion: completion || {
+    pending: true,
+    reason: 'The CLOB response did not include both a 32-byte order ID and Polygon transaction hash.',
+    endpoint: `${CONFIG.baseUrl}/api/polymarket-agent-flow/complete`,
+  },
 }, null, 2))

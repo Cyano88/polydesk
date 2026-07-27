@@ -4218,13 +4218,18 @@ type PolyWorldCupArticle = {
   url: string
   publishedAt: string
   tag: string
+  polymarketMarkets?: Array<{
+    title: string
+    url: string
+    eventSlug: string
+  }>
 }
 
 type PolyWorldCupFeed = {
   ok?: boolean
   providerConfigured?: boolean
   source?: string
-  mode?: 'live' | 'fallback' | string
+  mode?: 'live' | 'unavailable' | string
   updatedAt?: string
   freshnessSeconds?: number
   error?: string
@@ -4247,18 +4252,6 @@ type PolyDeskPulseFeed = {
   }>
   error?: string
 }
-
-const fallbackWorldCupArticles: PolyWorldCupArticle[] = [
-  {
-    title: 'Football market context is ready',
-    description: 'Connect a verified football provider, then use LP Scout before placing maker orders.',
-    source: 'PolyDesk',
-    image: POLYMARKET_LOGO,
-    url: '',
-    publishedAt: new Date().toISOString(),
-    tag: 'Markets',
-  },
-]
 
 function relativeNewsTime(value?: string) {
   if (!value) return ''
@@ -4288,9 +4281,9 @@ export function PolyWorldCupNewsPanel({
   const [error, setError] = useState('')
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
 
-  const articles = feed?.articles?.length ? feed.articles : fallbackWorldCupArticles
-  const lead = articles[active % articles.length] ?? articles[0]
-  const hasProviderFeed = Boolean(feed?.mode === 'live' || (feed?.providerConfigured && feed?.source && feed.source !== 'fallback'))
+  const articles = feed?.articles ?? []
+  const lead = articles.length ? articles[active % articles.length] ?? articles[0] : undefined
+  const hasProviderFeed = Boolean(feed?.mode === 'live' && articles.length)
   const statusText = loading
     ? ''
     : error
@@ -4299,7 +4292,7 @@ export function PolyWorldCupNewsPanel({
     ? typeof feed?.freshnessSeconds === 'number'
       ? `Updated ${feed.freshnessSeconds < 60 ? `${feed.freshnessSeconds}s ago` : relativeNewsTime(feed?.updatedAt || '')}`
       : `Updated ${relativeNewsTime(feed?.updatedAt || '')}`
-    : 'Hash PayLink desk feed'
+    : 'No current provider headlines'
 
   useEffect(() => {
     let cancelled = false
@@ -4335,6 +4328,18 @@ export function PolyWorldCupNewsPanel({
     }, 6500)
     return () => window.clearInterval(timer)
   }, [articles.length])
+
+  if (!lead) {
+    return (
+      <div className="mt-4 space-y-3">
+        {!hideBack && <PolyDeskBackButton onClick={onBack} />}
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">News</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300">
+          {loading ? 'Loading current football headlines…' : 'No current provider-sourced football headlines are available.'}
+        </div>
+      </div>
+    )
+  }
 
   function askLpScout() {
     const headline = lead.title.replace(/\s+/g, ' ').trim()
@@ -4389,11 +4394,18 @@ export function PolyWorldCupNewsPanel({
                   <ExternalLink className="h-3 w-3" />
                   Open source
                 </a>
-              ) : (
-                <span className="inline-flex items-center justify-center rounded-lg bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-white/20">
-                  Source pending
-                </span>
-              )}
+              ) : null}
+              {lead.polymarketMarkets?.[0] ? (
+                <a
+                  href={lead.polymarketMarkets[0].url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-1 rounded-lg bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold leading-none text-white ring-1 ring-white/25 transition-all hover:bg-white/25 active:scale-[0.98]"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open market
+                </a>
+              ) : null}
               <button
                 type="button"
                 onClick={askLpScout}

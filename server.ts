@@ -17,6 +17,8 @@ import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scou
 import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
 import {
   polymarketGovernedOpenAuthorizationHandler,
+  polymarketGovernedTradeCompleteHandler,
+  polymarketGovernedTradeReceiptHandler,
   polymarketGovernedOpenValidationHandler,
 } from './api/a2mcp-polymarket-governed-open.js'
 import { polymarketSignedOpenValidationHandler } from './api/a2mcp-polymarket-signed-open.js'
@@ -26,6 +28,7 @@ import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
 import polymarketCopyPrepareHandler from './api/polymarket-copy-prepare.js'
+import polymarketAgentFlowHandler from './api/polymarket-agent-flow.js'
 import polymarketAccountReadinessHandler from './api/polymarket-account-readiness.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
@@ -142,6 +145,7 @@ app.post('/api/polymarket-builder-signer', strictLimiter, polymarketBuilderSigne
 app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
 app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
 app.post('/api/polymarket-copy/prepare', strictLimiter, polymarketCopyPrepareHandler)
+app.all('/api/polymarket-agent-flow', strictLimiter, polymarketAgentFlowHandler)
 app.post('/api/polymarket-account/readiness', strictLimiter, polymarketAccountReadinessHandler)
 app.post('/api/polymarket-portfolio', (req, res, next) => {
   const action = String(req.query.action ?? req.body?.action ?? '').trim().toLowerCase()
@@ -156,12 +160,12 @@ app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayL
 app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
-app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
-app.post('/api/a2mcp/polymarket-signed-open', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)
-app.post('/api/a2mcp/polymarket-governed-open', strictLimiter, okxA2mcpStandardServiceHandler)
+app.post('/api/a2mcp/polymarket-agent-flow', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/polymarket-governed-open/authorize', strictLimiter, polymarketGovernedOpenAuthorizationHandler)
 app.post('/api/polymarket-governed-open/validate', strictLimiter, polymarketGovernedOpenValidationHandler)
+app.post('/api/polymarket-agent-flow/complete', strictLimiter, polymarketGovernedTradeCompleteHandler)
+app.get('/api/polymarket-agent-flow/receipt/:executionId', readLimiter, polymarketGovernedTradeReceiptHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.get('/api/pulse', readLimiter, pulseHandler)
@@ -176,8 +180,8 @@ app.post('/api/solana-balance', readLimiter, solanaBalanceHandler)
 app.all('/api/telegram-request', strictLimiter, telegramRequestHandler)
 app.get('/api/a2mcp/polymarket-lp-scout', strictLimiter, x402PolymarketScoutHandler)
 app.get('/api/a2mcp/okx/polymarket-lp-scout', strictLimiter, okxA2mcpPolymarketLpScoutHandler)
-app.all('/api/a2mcp/worldcup-live-scores', strictLimiter, okxA2mcpStandardServiceHandler)
-app.all('/api/a2mcp/worldcup-market-news', strictLimiter, okxA2mcpStandardServiceHandler)
+app.all('/api/a2mcp/football-live-data', strictLimiter, okxA2mcpStandardServiceHandler)
+app.all('/api/a2mcp/football-news-brief', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/x402/polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout/polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.get('/api/lp-scout-report', readLimiter, lpScoutReportHandler)

@@ -92,6 +92,10 @@ services:
         sync: false
       - key: POLY_STREAM_API_KEY
         sync: false
+      - key: POLY_NEWS_API_KEY
+        sync: false
+      - key: POLY_NEWS_PROVIDER
+        value: gnews
       - key: POLYMARKET_MARKET_LOOKUP
         value: "1"
       - key: POLYMARKET_LOOKUP_LIMIT

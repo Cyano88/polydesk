@@ -14,7 +14,7 @@ test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => 
   const payTo = '0x631c96fba389f65da7093e559e8120b587ec7df4'
   const route = buildStandardServiceRouteConfig(
     req,
-    '/api/a2mcp/worldcup-live-scores',
+    '/api/a2mcp/football-live-data',
     '0.1',
     payTo,
   )

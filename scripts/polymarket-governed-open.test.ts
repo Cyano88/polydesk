@@ -6,6 +6,8 @@ import {
   buildGovernedMandateAuthorization,
   evaluateGovernedOpenInput,
   governedMandateAuthorizationMessage,
+  governedTradeCompletionMessage,
+  verifyGovernedTradeCompletion,
 } from '../api/a2mcp-polymarket-governed-open.js'
 import { buildStandardServiceRouteConfig } from '../api/okx-a2mcp-standard-services.js'
 
@@ -184,7 +186,7 @@ test('OKX route advertises non-zero exact USDT payment on X Layer', () => {
   const req = { headers: { host: 'polydesk.trade' }, protocol: 'https' } as Request
   const route = buildStandardServiceRouteConfig(
     req,
-    '/api/a2mcp/polymarket-governed-open',
+    '/api/a2mcp/polymarket-agent-flow',
     '0.1',
     '0x631c96fba389f65da7093e559e8120b587ec7df4',
   )
@@ -200,4 +202,97 @@ test('OKX route advertises non-zero exact USDT payment on X Layer', () => {
   assert.equal(accepts.price.amount, '100000')
   assert.equal(accepts.price.asset, '0x779ded0c9e1022225f8e0630b35a9b54be713736')
   assert.equal(accepts.price.extra?.assetTransferMethod, undefined)
+})
+
+test('verifies a terminal trade receipt against Polygon and the public Polymarket trade feed', async () => {
+  const executionId = 'pex_' + '12'.repeat(12)
+  const externalOrderId = 'copy:verified:001'
+  const orderId = `0x${'ab'.repeat(32)}`
+  const transactionHash = `0x${'cd'.repeat(32)}`
+  const completionMessage = governedTradeCompletionMessage(executionId, externalOrderId, orderId, transactionHash)
+  const completionSignature = await new Wallet(authorityKey).signMessage(completionMessage)
+  const record = {
+    fingerprint: '1'.repeat(64),
+    externalOrderId,
+    executionId,
+    decisionHash: '2'.repeat(64),
+    decision: 'APPROVE',
+    orderHash: '3'.repeat(64),
+    mandateHash: '4'.repeat(64),
+    decidedAt: new Date(now).toISOString(),
+    payer: 'okx-buyer',
+    authoritySigner,
+    market: {
+      title: 'Example market',
+      url: marketUrl,
+      outcome: 'Yes',
+      tokenId: '123456789',
+    },
+    order: {
+      maker: signer,
+      signer,
+      type: 'FAK',
+      maximumAmountUsdc: '5',
+      maximumPrice: '0.55',
+    },
+  }
+  const result = await verifyGovernedTradeCompletion(
+    record,
+    { orderId, transactionHash, completionSignature },
+    {
+      fetchReceipt: async () => ({
+        status: '0x1',
+        to: '0xE111180000d2663C0091e4f400237545B87B996B',
+        logs: [{ topics: [orderId] }],
+      }),
+      fetchTrades: async () => [{
+        transactionHash,
+        asset: '123456789',
+        side: 'BUY',
+        size: 5,
+        price: 0.5,
+      }],
+      now: () => now,
+    },
+  )
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.receipt.status, 'VERIFIED_FILLED')
+  assert.equal(result.receipt.execution.fillAmountUsdc, 2.5)
+  assert.equal(result.receipt.proofs.publicTradeMatched, true)
+})
+
+test('completion proof fails closed for a non-Polymarket exchange', async () => {
+  const executionId = 'pex_' + '34'.repeat(12)
+  const externalOrderId = 'copy:verified:002'
+  const orderId = `0x${'ef'.repeat(32)}`
+  const transactionHash = `0x${'01'.repeat(32)}`
+  const completionSignature = await new Wallet(authorityKey).signMessage(
+    governedTradeCompletionMessage(executionId, externalOrderId, orderId, transactionHash),
+  )
+  const result = await verifyGovernedTradeCompletion(
+    {
+      fingerprint: '1'.repeat(64),
+      externalOrderId,
+      executionId,
+      decisionHash: '2'.repeat(64),
+      decision: 'APPROVE',
+      orderHash: '3'.repeat(64),
+      mandateHash: '4'.repeat(64),
+      decidedAt: new Date(now).toISOString(),
+      payer: 'okx-buyer',
+      authoritySigner,
+      market: { title: 'Example', url: marketUrl, outcome: 'Yes', tokenId: '123' },
+      order: { maker: signer, signer, type: 'FAK', maximumAmountUsdc: '5', maximumPrice: '0.55' },
+    },
+    { orderId, transactionHash, completionSignature },
+    {
+      fetchReceipt: async () => ({ status: '0x1', to: '0x1111111111111111111111111111111111111111', logs: [{ topics: [orderId] }] }),
+      fetchTrades: async () => [],
+      now: () => now,
+    },
+  )
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.match(result.error, /allowlisted Polymarket/i)
 })

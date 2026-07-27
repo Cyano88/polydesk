@@ -97,11 +97,11 @@ test('rejects SELL, persistent orders, stale signatures, and payload drift', () 
   assert.equal(validateSignedOpenInput(takerDrift, now).ok, false)
 })
 
-test('OKX route advertises exact EIP-3009 payment for signed OPEN', () => {
+test('consolidated OKX trader route advertises exact EIP-3009 payment', () => {
   const req = { headers: { host: 'polydesk.trade' }, protocol: 'https' } as Request
   const route = buildStandardServiceRouteConfig(
     req,
-    '/api/a2mcp/polymarket-signed-open',
+    '/api/a2mcp/polymarket-agent-flow',
     '0.1',
     '0x631c96fba389f65da7093e559e8120b587ec7df4',
   )

@@ -23,7 +23,6 @@
     "test:hashpaylink-url": "node --import tsx --test scripts/hashpaylink-url.test.ts",
     "test:hashpaylink-webhook": "node --import tsx --test scripts/hashpaylink-webhook.test.ts",
     "test:telegram-funding": "node --import tsx --test scripts/telegram-funding-request.test.ts",
-    "test:worldcup-summary": "node --import tsx --test scripts/worldcup-final-summary.test.ts",
     "test:okx-lp-scout": "node --import tsx --test scripts/okx-a2mcp-lp-scout.test.ts",
     "test:signed-open": "node --import tsx --test scripts/polymarket-signed-open.test.ts",
     "test:governed-open": "node --import tsx --test scripts/polymarket-governed-open.test.ts",

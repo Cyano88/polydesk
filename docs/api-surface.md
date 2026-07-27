@@ -1,6 +1,6 @@
 # PolyDesk API Boundary
 
-Updated: 2026-07-23
+Updated: 2026-07-27
 
 ## Product boundary
 
@@ -35,18 +35,25 @@ CLI payment, or generate a second payment receipt.
 | `POST /api/webhooks/hashpaylink` | Raw-body, signed Hash PayLink webhook receiver |
 | `POST /api/polymarket-account/readiness` | Free owner-EOA to Deposit Wallet derivation, deployment, pUSD balance, and live bridge-route check |
 | `POST /api/a2mcp/polymarket-funding-link` | OKX-paid verified handoff to a Hash PayLink Base/Arbitrum checkout; refuses arbitrary or undeployed wallet targets |
-| `POST /api/a2mcp/polymarket-signed-open` | OKX-paid constraint validation and direct-submit handoff for a buyer-signed, capped BUY order |
+| `GET /api/a2mcp/football-live-data` | OKX-paid provider-truth football match data with verified Polymarket trade metadata when matched |
+| `POST /api/a2mcp/football-news-brief` | OKX-paid provider-sourced football brief with canonical source and matched Polymarket event links |
+| `POST /api/a2mcp/polymarket-agent-flow` | Consolidated OKX-paid governed watch, pick, or copy handoff for an exact buyer-signed BUY |
+| `GET /api/polymarket-agent-flow` | Free machine-readable governed trader lifecycle |
 | `POST /api/polymarket-open/prepare` | Free intent-to-sign plan with live market resolution and public deposit-wallet readiness checks |
 | `POST /api/polymarket-copy/prepare` | Free exact-BUY verification, buyer Deposit Wallet derivation/match, and governed copy-order preparation |
 | `POST /api/polymarket-signed-open/validate` | Free validation of the exact signed OPEN body before the buyer pays |
+| `POST /api/polymarket-agent-flow/complete` | Authority-signed verification of the submitted order and public fill |
+| `GET /api/polymarket-agent-flow/receipt/:executionId` | Public machine-readable terminal trade receipt |
 | `GET /api/health` | Service health |
 
 The OKX service fee is settled on X Layer. For funding-link delivery, PolyDesk
 then calls the server-only Hash PayLink API to create the Base/Arbitrum hosted
-funding checkout. The signed OPEN service does not use Hash PayLink or accept a
+funding checkout. The governed trader does not use Hash PayLink or accept a
 private key, CLOB API secret, or CLOB passphrase. The official order payload
 does include the buyer API-key identifier as `owner`; PolyDesk validates the
-exact payload constraints and returns the direct-submit body. Builder
+exact payload constraints and returns the direct-submit body. After submission,
+PolyDesk verifies the Polygon receipt and exact public Polymarket BUY before
+publishing a terminal receipt. Builder
 attribution is already bound into the CLOB V2 signed order, and the buyer
 submits directly to Polymarket for final cryptographic verification.
 

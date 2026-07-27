@@ -11,11 +11,12 @@ import {
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import a2mcpPolymarketFundingLinkHandler, { preflightA2mcpPolymarketFundingLink } from './a2mcp-polymarket-funding-link.js'
-import a2mcpPolymarketGovernedOpenHandler, { governedOpenReady } from './a2mcp-polymarket-governed-open.js'
-import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
-import a2mcpPolymarketSignedOpenHandler from './a2mcp-polymarket-signed-open.js'
-import polyWorldcupNewsHandler from './poly-worldcup-news.js'
-import worldCupFinalSummaryHandler from './worldcup-final-summary.js'
+import a2mcpPolymarketGovernedOpenHandler, {
+  evaluateGovernedOpenInput,
+  governedOpenReady,
+} from './a2mcp-polymarket-governed-open.js'
+import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
+import polyStreamHandler, { getPolyStreamFeed } from './poly-stream.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
@@ -136,23 +137,17 @@ function fundingLinkDiscoveryExtension() {
 }
 
 const serviceDefinitions = {
-  '/api/a2mcp/worldcup-live-scores': {
-    name: 'World Cup 2026 Final Standings',
-    description: 'Verified World Cup 2026 final standings, podium, final result, and upcoming live football data roadmap.',
-    tags: ['world-cup', 'final-standings', 'football-data'],
-    deliver: worldCupFinalSummaryHandler,
+  '/api/a2mcp/football-live-data': {
+    name: 'Football Match Live Data',
+    description: 'Provider-truth football fixtures, live scores, match events, and a canonical Polymarket event URL plus trade metadata when an active match market is confidently resolved.',
+    tags: ['football', 'live-data', 'polymarket', 'agent-api'],
+    deliver: polyStreamHandler,
   },
-  '/api/a2mcp/worldcup-market-news': {
-    name: 'World Cup Market News',
-    description: 'Market-moving World Cup headlines and prediction-market context.',
-    tags: ['world-cup', 'news', 'prediction-market'],
+  '/api/a2mcp/football-news-brief': {
+    name: 'Football News Brief',
+    description: 'Current provider-sourced football headlines with canonical source links and deterministic Polymarket event matches where available.',
+    tags: ['football', 'news', 'polymarket', 'agent-api'],
     deliver: polyWorldcupNewsHandler,
-  },
-  '/api/a2mcp/polymarket-portfolio-watch': {
-    name: 'Polymarket Portfolio Watch',
-    description: 'Polymarket wallet positions plus exact recent BUY signals for buyer-verified governed copy preparation.',
-    tags: ['polymarket', 'portfolio', 'monitoring', 'copy-trading'],
-    deliver: a2mcpPolymarketPortfolioWatchHandler,
   },
   '/api/a2mcp/polymarket-funding-link': {
     name: 'Verified Polymarket Funding',
@@ -160,16 +155,10 @@ const serviceDefinitions = {
     tags: ['polymarket', 'deposit-wallet', 'funding', 'checkout', 'readiness'],
     deliver: a2mcpPolymarketFundingLinkHandler,
   },
-  '/api/a2mcp/polymarket-signed-open': {
-    name: 'Polymarket Signed OPEN Handoff',
-    description: 'Validate the constraints of a buyer-signed, capped Polymarket BUY payload and return a direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
-    tags: ['polymarket', 'intent-to-sign', 'signed-order', 'buyer-controlled'],
-    deliver: a2mcpPolymarketSignedOpenHandler,
-  },
-  '/api/a2mcp/polymarket-governed-open': {
-    name: 'Polymarket Governed Market OPEN',
-    description: 'Apply a deterministic spending mandate to an exact buyer-signed Polymarket BUY order and return an APPROVE, ESCALATE, or BLOCK decision without receiving private keys or reusable CLOB credentials.',
-    tags: ['polymarket', 'governed-execution', 'buyer-signed', 'deterministic-policy'],
+  '/api/a2mcp/polymarket-agent-flow': {
+    name: 'Governed Polymarket Trader',
+    description: 'Complete a prepared watch, pick, or copy intent under deterministic spending bounds, then return the exact buyer-signed payload for direct Polymarket submission.',
+    tags: ['polymarket', 'copy-trading', 'governed-execution', 'buyer-signed'],
     ready: governedOpenReady,
     deliver: a2mcpPolymarketGovernedOpenHandler,
   },
@@ -412,6 +401,39 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   const path = routePath(req) as StandardServicePath
   const service = serviceDefinitions[path]
   if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
+  if (path === '/api/a2mcp/football-live-data') {
+    const requestedDate = clean(req.query.date) || new Date().toISOString().slice(0, 10)
+    const feed = await getPolyStreamFeed(/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10))
+    if (!feed.matches.length) {
+      return res.status(503).json({
+        ok: false,
+        error: 'No provider-truth football match data is available. No payment challenge was issued.',
+        providerStatus: feed.providerStatus,
+      })
+    }
+  }
+  if (path === '/api/a2mcp/football-news-brief') {
+    const feed = await getPolyWorldcupNewsFeed()
+    if (feed.mode !== 'live' || !feed.articles.length) {
+      return res.status(503).json({
+        ok: false,
+        error: 'No current provider-sourced football brief is available. No payment challenge was issued.',
+      })
+    }
+  }
+  if (path === '/api/a2mcp/polymarket-agent-flow') {
+    const evaluation = evaluateGovernedOpenInput(req.body)
+    if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
+    if (evaluation.decision !== 'APPROVE') {
+      return res.status(409).json({
+        ok: false,
+        decision: evaluation.decision,
+        reasons: evaluation.reasons,
+        checks: evaluation.checks,
+        error: 'Only an APPROVE decision can proceed to the paid governed handoff. No payment challenge was issued.',
+      })
+    }
+  }
   if (path === '/api/a2mcp/polymarket-funding-link') {
     const preflight = await preflightA2mcpPolymarketFundingLink(req)
     if (!preflight.proceed) return res.status(preflight.status).json(preflight.body)

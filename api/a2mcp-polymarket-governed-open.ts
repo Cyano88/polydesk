@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { verifyMessage } from 'ethers'
-import { hasRenderDurableStore, mutateDurableJson } from './render-durable-store.js'
+import {
+  hasRenderDurableStore,
+  mutateDurableJson,
+  readDurableJson,
+  writeDurableJson,
+} from './render-durable-store.js'
 import { validateSignedOpenInput } from './a2mcp-polymarket-signed-open.js'
 
 type RecordValue = Record<string, unknown>
@@ -43,9 +48,61 @@ type GovernedOpenRecord = {
   decidedAt: string
   payer: string
   paymentTransaction?: string
+  authoritySigner: string
+  market: {
+    title: string
+    url: string
+    outcome: string
+    tokenId: string
+  }
+  order: {
+    maker: string
+    signer: string
+    type: 'FAK' | 'FOK'
+    maximumAmountUsdc: string
+    maximumPrice: string
+  }
+  receipt?: GovernedTradeReceipt
+}
+
+type GovernedTradeReceipt = {
+  receiptVersion: 'polydesk-governed-trade-receipt-v1'
+  executionId: string
+  externalOrderId: string
+  status: 'VERIFIED_FILLED'
+  verifiedAt: string
+  market: GovernedOpenRecord['market']
+  execution: {
+    orderId: string
+    transactionHash: string
+    exchange: string
+    side: 'BUY'
+    fillSize: number
+    fillPrice: number
+    fillAmountUsdc: number
+  }
+  policy: {
+    decision: Decision
+    decisionHash: string
+    orderHash: string
+    mandateHash: string
+  }
+  proofs: {
+    polygonReceiptVerified: true
+    allowedExchangeVerified: true
+    orderIdInReceipt: true
+    publicTradeMatched: true
+    buyerAuthoritySignatureVerified: true
+  }
 }
 
 class ExternalOrderConflict extends Error {}
+
+const POLYGON_EXCHANGES = new Set([
+  '0xe111180000d2663c0091e4f400237545b87b996b',
+  '0xe2222d279d744050d28e00520010520000310f59',
+])
+const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 
 function clean(value: unknown, max = 280) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
@@ -80,6 +137,22 @@ export function governedMandateAuthorizationMessage(externalOrderId: string, can
     'Network: X Layer (eip155:196)',
     `External order: ${externalOrderId}`,
     `Mandate SHA-256: ${mandateHash}`,
+  ].join('\n')
+}
+
+export function governedTradeCompletionMessage(
+  executionId: string,
+  externalOrderId: string,
+  orderId: string,
+  transactionHash: string,
+) {
+  return [
+    'PolyDesk Governed Trade Completion',
+    'Policy: polydesk-governed-trade-receipt-v1',
+    `Execution: ${executionId}`,
+    `External order: ${externalOrderId}`,
+    `Polymarket order: ${orderId.toLowerCase()}`,
+    `Polygon transaction: ${transactionHash.toLowerCase()}`,
   ].join('\n')
 }
 
@@ -469,6 +542,20 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
         mandateHash: evaluation.mandateHash,
         decidedAt: new Date().toISOString(),
         payer: clean(paidReq.payment?.payer, 96) || 'okx-buyer',
+        authoritySigner: clean(evaluation.mandate.authoritySigner, 80).toLowerCase(),
+        market: {
+          title: evaluation.signedOpen.marketTitle,
+          url: evaluation.signedOpen.marketUrl,
+          outcome: evaluation.signedOpen.outcome,
+          tokenId: evaluation.signedOpen.tokenId,
+        },
+        order: {
+          maker: clean(evaluation.signedOpen.order.maker, 80).toLowerCase(),
+          signer: evaluation.signedOpen.signer.toLowerCase(),
+          type: evaluation.signedOpen.orderType,
+          maximumAmountUsdc: evaluation.amountUsdc,
+          maximumPrice: evaluation.effectivePrice,
+        },
         ...(paidReq.payment?.transaction ? { paymentTransaction: clean(paidReq.payment.transaction, 160) } : {}),
       }
     })
@@ -483,6 +570,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     }
     throw error
   }
+  await writeDurableJson(`polymarket-governed-execution:${record.executionId}`, record)
 
   return res.status(200).json({
     ok: true,
@@ -512,6 +600,11 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
           method: 'POST',
           orderPayload: evaluation.signedOpen.orderPayload,
           instruction: 'Generate the five buyer CLOB headers locally and submit this exact payload directly to Polymarket.',
+          afterSubmission: {
+            endpoint: '/api/polymarket-agent-flow/complete',
+            required: ['executionId', 'orderId', 'transactionHash'],
+            instruction: 'Request the completion message, sign it with the mandate authority, then replay it to receive the public verified receipt.',
+          },
         }
       : null,
     safety: {
@@ -530,4 +623,215 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
       transaction: paidReq.payment?.transaction,
     },
   })
+}
+
+type CompletionDependencies = {
+  fetchReceipt: (transactionHash: string) => Promise<RecordValue | null>
+  fetchTrades: (maker: string) => Promise<RecordValue[]>
+  now: () => number
+}
+
+function env(...names: string[]) {
+  for (const name of names) {
+    const value = clean(process.env[name], 400)
+    if (value) return value
+  }
+  return ''
+}
+
+async function fetchJson(url: string, init?: RequestInit) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 12_000)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return body
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const completionDependencies: CompletionDependencies = {
+  fetchReceipt: async transactionHash => {
+    const rpcUrl = env('POLYMARKET_RPC_URL', 'POLYGON_RPC_URL')
+    if (!rpcUrl) throw new Error('POLYMARKET_RPC_URL or POLYGON_RPC_URL is required for completion proof.')
+    const body = await fetchJson(rpcUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getTransactionReceipt',
+        params: [transactionHash],
+      }),
+    })
+    return isRecord(body) && isRecord(body.result) ? body.result : null
+  },
+  fetchTrades: async maker => {
+    const body = await fetchJson(`${DATA_API_ORIGIN}/trades?user=${encodeURIComponent(maker)}&limit=100`)
+    return Array.isArray(body) ? body.filter(isRecord) : []
+  },
+  now: () => Date.now(),
+}
+
+function exactHash(value: unknown) {
+  const normalized = clean(value, 80).toLowerCase()
+  return /^0x[a-f0-9]{64}$/.test(normalized) ? normalized : ''
+}
+
+export async function verifyGovernedTradeCompletion(
+  record: GovernedOpenRecord,
+  input: RecordValue,
+  dependencies: CompletionDependencies = completionDependencies,
+) {
+  if (record.receipt) return { ok: true as const, duplicate: true, receipt: record.receipt }
+  if (record.decision !== 'APPROVE') {
+    return { ok: false as const, status: 409, error: `Only an APPROVE execution can be completed; this execution is ${record.decision}.` }
+  }
+  const orderId = exactHash(input.orderId)
+  const transactionHash = exactHash(input.transactionHash)
+  const completionSignature = clean(input.completionSignature, 180)
+  if (!orderId || !transactionHash) {
+    return { ok: false as const, status: 400, error: 'orderId and transactionHash must be 32-byte hex values.' }
+  }
+  const completionMessage = governedTradeCompletionMessage(
+    record.executionId,
+    record.externalOrderId,
+    orderId,
+    transactionHash,
+  )
+  if (!completionSignature) {
+    return {
+      ok: false as const,
+      status: 428,
+      signatureRequired: true,
+      authoritySigner: record.authoritySigner,
+      completionMessage,
+      signingMethod: 'personal_sign',
+      next: 'Sign completionMessage with authoritySigner and replay with completionSignature.',
+    }
+  }
+  let recovered = ''
+  try {
+    recovered = verifyMessage(completionMessage, completionSignature).toLowerCase()
+  } catch {
+    return { ok: false as const, status: 400, error: 'completionSignature is invalid.' }
+  }
+  if (recovered !== record.authoritySigner) {
+    return { ok: false as const, status: 403, error: 'completionSignature does not match the mandate authority.' }
+  }
+
+  const chainReceipt = await dependencies.fetchReceipt(transactionHash)
+  if (!chainReceipt || clean(chainReceipt.status, 16).toLowerCase() !== '0x1') {
+    return { ok: false as const, status: 409, error: 'Polygon transaction is missing or did not succeed.' }
+  }
+  const exchange = clean(chainReceipt.to, 80).toLowerCase()
+  if (!POLYGON_EXCHANGES.has(exchange)) {
+    return { ok: false as const, status: 409, error: 'Polygon transaction did not execute through an allowlisted Polymarket CTF Exchange V2 contract.' }
+  }
+  if (!JSON.stringify(chainReceipt).toLowerCase().includes(orderId.slice(2))) {
+    return { ok: false as const, status: 409, error: 'The supplied Polymarket order ID was not found in the Polygon receipt.' }
+  }
+  let matchedTrades: RecordValue[] = []
+  for (let attempt = 0; attempt < 4 && !matchedTrades.length; attempt += 1) {
+    const trades = await dependencies.fetchTrades(record.order.maker)
+    matchedTrades = trades.filter(item => (
+      exactHash(item.transactionHash) === transactionHash
+      && clean(item.asset, 120) === record.market.tokenId
+      && clean(item.side, 12).toUpperCase() === 'BUY'
+    ))
+    if (!matchedTrades.length && attempt < 3) await new Promise(resolve => setTimeout(resolve, 750))
+  }
+  if (!matchedTrades.length) {
+    return { ok: false as const, status: 409, error: 'No exact public Polymarket BUY trade matched this transaction, wallet, and outcome token.' }
+  }
+  const fills = matchedTrades.map(trade => ({
+    size: Number(trade.size),
+    price: Number(trade.price),
+  }))
+  const fillSize = fills.reduce((total, fill) => total + fill.size, 0)
+  const fillAmountUsdc = Number(fills.reduce((total, fill) => total + fill.size * fill.price, 0).toFixed(6))
+  const fillPrice = Number((fillAmountUsdc / fillSize).toFixed(6))
+  if (
+    !Number.isFinite(fillSize) || fillSize <= 0
+    || !Number.isFinite(fillPrice) || fillPrice <= 0 || fillPrice >= 1
+    || fills.some(fill => !Number.isFinite(fill.size) || fill.size <= 0 || !Number.isFinite(fill.price) || fill.price <= 0 || fill.price >= 1)
+    || fills.some(fill => fill.price > Number(record.order.maximumPrice) + 1e-9)
+    || fillAmountUsdc > Number(record.order.maximumAmountUsdc) + 0.000001
+  ) {
+    return { ok: false as const, status: 409, error: 'The public fill does not satisfy the stored price and spend bounds.' }
+  }
+
+  const receipt: GovernedTradeReceipt = {
+    receiptVersion: 'polydesk-governed-trade-receipt-v1',
+    executionId: record.executionId,
+    externalOrderId: record.externalOrderId,
+    status: 'VERIFIED_FILLED',
+    verifiedAt: new Date(dependencies.now()).toISOString(),
+    market: record.market,
+    execution: {
+      orderId,
+      transactionHash,
+      exchange,
+      side: 'BUY',
+      fillSize,
+      fillPrice,
+      fillAmountUsdc,
+    },
+    policy: {
+      decision: record.decision,
+      decisionHash: record.decisionHash,
+      orderHash: record.orderHash,
+      mandateHash: record.mandateHash,
+    },
+    proofs: {
+      polygonReceiptVerified: true,
+      allowedExchangeVerified: true,
+      orderIdInReceipt: true,
+      publicTradeMatched: true,
+      buyerAuthoritySignatureVerified: true,
+    },
+  }
+  return { ok: true as const, duplicate: false, receipt }
+}
+
+export async function polymarketGovernedTradeCompleteHandler(req: Request, res: Response) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST')
+    return res.status(405).json({ ok: false, error: 'Method not allowed.' })
+  }
+  if (!governedOpenReady()) return res.status(503).json({ ok: false, error: 'Durable execution storage is not configured.' })
+  const body = isRecord(req.body) ? req.body : {}
+  const executionId = clean(body.executionId, 80)
+  if (!/^pex_[a-f0-9]{24}$/.test(executionId)) {
+    return res.status(400).json({ ok: false, error: 'A valid executionId is required.' })
+  }
+  const key = `polymarket-governed-execution:${executionId}`
+  const record = await readDurableJson<GovernedOpenRecord>(key)
+  if (!record) return res.status(404).json({ ok: false, error: 'Governed execution was not found.' })
+  const result = await verifyGovernedTradeCompletion(record, body)
+  if (!result.ok) {
+    const { status, ...responseBody } = result
+    return res.status(status).json(responseBody)
+  }
+  if (!result.duplicate) {
+    record.receipt = result.receipt
+    await writeDurableJson(key, record)
+    await writeDurableJson(`polymarket-governed-receipt:${executionId}`, result.receipt)
+  }
+  return res.status(200).json({ ok: true, duplicate: result.duplicate, receipt: result.receipt })
+}
+
+export async function polymarketGovernedTradeReceiptHandler(req: Request, res: Response) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return res.status(405).json({ ok: false, error: 'Method not allowed.' })
+  }
+  if (!governedOpenReady()) return res.status(503).json({ ok: false, error: 'Durable execution storage is not configured.' })
+  const executionId = clean(req.params.executionId, 80)
+  const receipt = await readDurableJson<GovernedTradeReceipt>(`polymarket-governed-receipt:${executionId}`)
+  if (!receipt) return res.status(404).json({ ok: false, error: 'Verified trade receipt was not found.' })
+  res.setHeader('Cache-Control', 'public, max-age=60')
+  return res.status(200).json({ ok: true, receipt })
 }

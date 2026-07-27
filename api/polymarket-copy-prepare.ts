@@ -566,6 +566,11 @@ export async function preparePolymarketCopy(
       decision: 'BLOCK',
     }
   }
+  const readinessIssues = Array.isArray(prepared.data.issues)
+    ? prepared.data.issues.map((issue: unknown) => String(issue))
+    : []
+  const needsFunding = readinessIssues.some((issue: string) => /balance is below/i.test(issue))
+  const needsAllowance = readinessIssues.some((issue: string) => /allowance .* is below/i.test(issue))
 
   return {
     ok: true as const,
@@ -605,6 +610,27 @@ export async function preparePolymarketCopy(
         autonomousBuyAllowedOnlyWithValidMandate: true,
         nextEndpoint: '/api/polymarket-governed-open/authorize',
       },
+      nextAction: needsFunding
+        ? {
+            type: 'FUND',
+            endpoint: '/api/a2mcp/polymarket-funding-link',
+            ownerAddress: account.ownerAddress,
+            verifiedDepositWallet: account.depositWalletAddress,
+            requiredBalanceUsdc: maxSpendUsdc,
+            instruction: 'Request a checkout only for this owner-derived Deposit Wallet, wait for confirmed funding, then request a fresh plan.',
+          }
+        : needsAllowance
+          ? {
+              type: 'APPROVE_COLLATERAL',
+              spender: prepared.data.wallet.collateral.spender,
+              requiredUsdc: maxSpendUsdc,
+              instruction: 'The buyer must approve pUSD for the exact Polymarket exchange spender, then request a fresh plan.',
+            }
+          : {
+              type: 'SIGN',
+              endpoint: '/api/polymarket-governed-open/authorize',
+              instruction: 'Create the exact buyer-local order and authority mandate, validate it for free, then pay the governed handoff.',
+            },
     },
   }
 }
