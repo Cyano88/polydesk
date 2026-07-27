@@ -28,6 +28,7 @@
     "test:governed-open": "node --import tsx --test scripts/polymarket-governed-open.test.ts",
     "test:open-prepare": "node --import tsx --test scripts/polymarket-open-prepare.test.ts",
     "test:copy-prepare": "node --import tsx --test scripts/polymarket-copy-prepare.test.ts",
+    "test:football-provider": "node --import tsx --test scripts/football-provider-routing.test.ts",
     "test:account-readiness": "node --import tsx --test scripts/polymarket-account-readiness.test.ts",
     "test:lp-context": "node --import tsx --test scripts/lp-context-intelligence.test.ts",
     "test:helper-memory": "node --import tsx --test scripts/helper-memory.test.ts",

@@ -699,11 +699,10 @@ function isoDate(offsetDays = 0) {
   return date.toISOString().slice(0, 10)
 }
 
-function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
+export function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
   const explicit = envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
   if (explicit) return [explicit]
   const leagues = configuredLeagueIds()
-  if (!leagues.length) return []
   const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
   const baseInclude = 'participants;state;scores;venue;periods;events;league'
   const liveInclude = process.env.POLY_STREAM_LIVE_INCLUDE?.trim() || baseInclude
@@ -712,12 +711,18 @@ function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
     : mode === 'live'
       ? liveInclude
       : process.env.POLY_STREAM_INCLUDE?.trim() || baseInclude
-  const withCommonParams = (path: string, league: string) => {
+  const withCommonParams = (path: string, league?: string) => {
     const url = new URL(`${base}${path}`)
     url.searchParams.set('include', include)
     url.searchParams.set('includes', include)
-    url.searchParams.set('filters', `fixtureLeagues:${league}`)
+    if (league) url.searchParams.set('filters', `fixtureLeagues:${league}`)
     return url.toString()
+  }
+  if (!leagues.length) {
+    if (mode === 'live') return [withCommonParams('/livescores/inplay')]
+    if (mode === 'last') return [withCommonParams(`/fixtures/between/${isoDate(-7)}/${isoDate()}`)]
+    const startDate = process.env.POLY_STREAM_START_DATE?.trim() || isoDate()
+    return [withCommonParams(`/fixtures/between/${startDate}/${isoDate(7)}`)]
   }
   if (mode === 'live') return leagues.map(league => withCommonParams('/livescores', league))
   if (mode === 'last') return leagues.map(league => withCommonParams('/fixtures/latest', league))
@@ -1351,11 +1356,7 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
     lastProviderSource = ''
     const matches = providerConfigured ? await fetchProviderMatches(selectedDate) : []
     if (matches.length) lastProviderError = ''
-    else if (providerConfigured && !lastProviderError) {
-      lastProviderError = configuredLeagueIds().length || envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
-        ? 'Provider returned no live or upcoming football matches.'
-        : 'Set POLY_STREAM_LEAGUE_IDS to active football league IDs from your provider.'
-    }
+    else if (providerConfigured && !lastProviderError) lastProviderError = 'Provider returned no live or upcoming football matches available to this subscription.'
     const feed: ScoreFeed = {
       ok: true,
       providerConfigured,
