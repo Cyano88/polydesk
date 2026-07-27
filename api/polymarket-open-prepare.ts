@@ -69,8 +69,7 @@ export type PrepareOpenInput = {
   outcome: string
   maxSpendUsdc: string
   wallet: string
-  orderType: 'FAK' | 'FOK' | 'GTC'
-  limitPrice?: string
+  orderType: 'FAK' | 'FOK'
   marketSlug?: string
   tokenId?: string
 }
@@ -132,7 +131,6 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
   const maxSpendUsdc = clean(value.maxSpendUsdc ?? value.amount, 32)
   const wallet = clean(value.wallet ?? value.polymarketWallet, 80)
   const orderType = clean(value.orderType || 'FAK', 12).toUpperCase()
-  const limitPrice = clean(value.limitPrice ?? value.price, 16)
   const marketSlug = clean(value.marketSlug, 180)
   const tokenId = clean(value.tokenId, 96)
 
@@ -159,11 +157,8 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
     return { ok: false, status: 400, error: 'maxSpendUsdc must be a positive amount with at most 6 decimals.' }
   }
   if (!isAddress(wallet)) return { ok: false, status: 400, error: 'A valid public Polymarket deposit-wallet address is required.' }
-  if (orderType !== 'FAK' && orderType !== 'FOK' && orderType !== 'GTC') {
-    return { ok: false, status: 400, error: 'orderType must be FAK, FOK, or GTC.' }
-  }
-  if (orderType === 'GTC' && (!/^\d+(?:\.\d{1,6})?$/.test(limitPrice) || Number(limitPrice) <= 0 || Number(limitPrice) >= 1)) {
-    return { ok: false, status: 400, error: 'Limit price must be greater than 0 and less than 1.' }
+  if (orderType !== 'FAK' && orderType !== 'FOK') {
+    return { ok: false, status: 400, error: 'External OPEN supports immediate FAK or FOK BUY orders only.' }
   }
   if (tokenId && !/^\d+$/.test(tokenId)) return { ok: false, status: 400, error: 'tokenId must be a numeric CLOB token ID.' }
   return {
@@ -174,8 +169,7 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
       outcome,
       maxSpendUsdc,
       wallet: getAddress(wallet),
-      orderType: orderType as 'FAK' | 'FOK' | 'GTC',
-      ...(orderType === 'GTC' ? { limitPrice } : {}),
+      orderType: orderType as 'FAK' | 'FOK',
       ...(marketSlug ? { marketSlug } : {}),
       ...(tokenId ? { tokenId } : {}),
     },
@@ -399,9 +393,9 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   if (!/^(?:0\.)?\d+$/.test(tickSize) || Number(tickSize) <= 0 || !/^\d+(?:\.\d+)?$/.test(minimumOrderSize)) {
     return { ok: false as const, status: 502, error: 'Polymarket order book is missing valid tick-size or minimum-size metadata.' }
   }
-  const immediateFill = input.orderType === 'GTC' ? null : executionPrice(book, Number(input.maxSpendUsdc), input.orderType)
-  if (immediateFill && !immediateFill.ok) return { ok: false as const, status: 409, error: immediateFill.error, ...(immediateFill.availableUsdc ? { availableUsdc: immediateFill.availableUsdc } : {}) }
-  const orderPrice = input.orderType === 'GTC' ? Number(input.limitPrice) : immediateFill!.price
+  const immediateFill = executionPrice(book, Number(input.maxSpendUsdc), input.orderType)
+  if (!immediateFill.ok) return { ok: false as const, status: 409, error: immediateFill.error, ...(immediateFill.availableUsdc ? { availableUsdc: immediateFill.availableUsdc } : {}) }
+  const orderPrice = immediateFill.price
   const normalizedPrice = priceString(orderPrice, tickSize)
   if (Math.abs(Number(normalizedPrice) - orderPrice) > 1e-9) {
     return { ok: false as const, status: 409, error: `Limit price must follow this market's ${tickSize} tick size.` }
@@ -473,9 +467,9 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         bookTimestamp: clean(book.timestamp, 64) || null,
         clobReportedLastTradePrice: clean(book.last_trade_price, 32) || null,
         executionPrice: normalizedPrice,
-        executionPriceSource: input.orderType === 'GTC' ? 'user-limit' : 'current-asks',
-        availableUsdc: immediateFill?.availableUsdc,
-        partialFillPossible: immediateFill?.partialFillPossible ?? false,
+        executionPriceSource: 'current-asks',
+        availableUsdc: immediateFill.availableUsdc,
+        partialFillPossible: immediateFill.partialFillPossible,
       },
       wallet: {
         address: input.wallet,
@@ -501,7 +495,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
           funderAddress: input.wallet,
           builderConfig: { builderCode },
         },
-        createMarketOrder: input.orderType === 'GTC' ? undefined : {
+        createMarketOrder: {
           tokenID: resolved.tokenId,
           amount: Number(input.maxSpendUsdc),
           price: Number(normalizedPrice),
@@ -509,14 +503,6 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
           orderType: input.orderType,
           userUSDCBalance: Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS)),
         },
-        createOrder: input.orderType === 'GTC' ? {
-          tokenID: resolved.tokenId,
-          price: Number(normalizedPrice),
-          size: estimatedShares,
-          side: 'BUY',
-          orderType: input.orderType,
-          userUSDCBalance: Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS)),
-        } : undefined,
         options: {
           tickSize,
           negRisk,
@@ -525,7 +511,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         submit: {
           method: 'postOrder',
           orderType: input.orderType,
-          postOnly: input.orderType === 'GTC',
+          postOnly: false,
           deferExec: false,
         },
       },

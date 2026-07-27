@@ -25,7 +25,9 @@ integration does not bypass that limitation.
 
 - BUY only.
 - Immediate `FAK` or `FOK` orders only; no persistent `GTC` or `GTD`.
-- Default maximum maker amount: 25 USDC.
+- `FAK` is the default and may partially fill before cancelling the remainder.
+- `FOK` is all-or-nothing and preparation fails when the current book cannot cover the requested spend.
+- The caller sets the maximum spend; governed OPEN additionally enforces the authority-signed mandate cap.
 - Signature timestamp must be a CLOB V2 millisecond timestamp no more than 15
   minutes old.
 - Declared token, signer, side, order type, and exact payload must all match.

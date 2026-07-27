@@ -6,13 +6,15 @@ PolyDesk never receives a private key, CLOB API secret, or CLOB passphrase. The 
 
 ## One flow
 
-1. Prepare and sign an immediate `FAK` or `FOK` BUY locally.
+1. Prepare and sign an immediate BUY locally. `FAK` is the default; use `FOK` only when a partial fill is unacceptable.
 2. Ask the free authorization endpoint for the exact mandate message.
 3. Sign that message with the authority wallet and add the signature to `mandate`.
 4. Run the free preflight.
 5. If the decision is `APPROVE`, call the paid endpoint and complete its 0.1-USDT X Layer payment.
 6. Submit the returned exact payload directly to Polymarket with buyer-local CLOB headers.
 7. Keep `executionId`, `externalOrderId`, and the three hashes with the Polymarket order response.
+
+PolyDesk does not prepare resting `GTC` or `GTD` orders for this flow. The signed price is the maximum execution boundary: `FAK` fills whatever is immediately available within it and cancels the remainder, while `FOK` fills the entire amount or cancels.
 
 ## Prepare the authority signature
 
@@ -123,6 +125,8 @@ The first paid evaluation permanently binds `externalOrderId` to the exact order
 - The mandate must be signed by its declared authority wallet and bound to the external order ID.
 - The mandate must be unexpired and no more than seven days long.
 - Only immediate BUY orders are accepted.
+- `FAK` is the recommended pilot default because it does not leave an unattended order on the book. `FOK` is available when all-or-nothing delivery matters.
+- Request a fresh preparation plan immediately before signing; plans expire after 60 seconds and are priced from current asks.
 - Polymarket performs final cryptographic signature and order validation.
 
 The market URL is declared metadata; the numeric outcome token is the field cryptographically bound into the signed order. Call PolyDesk’s live OPEN preparation endpoint before signing to resolve the event, outcome token and current order book rather than trusting caller-supplied labels.

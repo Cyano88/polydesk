@@ -159,9 +159,11 @@ test('fails closed when FOK liquidity is insufficient without imposing a product
 
   const largerOrder = await preparePolymarketOpen(input({
     maxSpendUsdc: '100',
-    orderType: 'GTC',
-    limitPrice: '0.49',
+    orderType: 'FOK',
   }), dependencies({
+    fetchJson: async url => url.includes('/events/slug/')
+      ? event()
+      : book('111', { asks: [{ price: '0.50', size: '300' }] }),
     readWallet: async () => ({
       deployed: true,
       balanceRaw: 200_000_000n,
@@ -203,25 +205,19 @@ test('uses current asks instead of a stale last-trade quote and enforces minimum
   }
 })
 
-test('prepares a post-only GTC maker order at the user limit without crossing the live asks', async () => {
-  const result = await preparePolymarketOpen(input({
+test('defaults to immediate FAK and rejects resting GTC orders', async () => {
+  const defaultOrder = await preparePolymarketOpen(input({ orderType: undefined }), dependencies())
+  assert.equal(defaultOrder.ok, true)
+  if (defaultOrder.ok) {
+    assert.equal(defaultOrder.data.signingPlan.submit.orderType, 'FAK')
+    assert.equal(defaultOrder.data.signingPlan.submit.postOnly, false)
+    assert.equal(defaultOrder.data.market.executionPriceSource, 'current-asks')
+  }
+
+  const resting = await preparePolymarketOpen(input({
     orderType: 'GTC',
     limitPrice: '0.49',
-    maxSpendUsdc: '4.9',
   }), dependencies())
-  assert.equal(result.ok, true)
-  if (!result.ok) return
-  assert.equal(result.data.market.executionPrice, '0.49')
-  assert.equal(result.data.market.executionPriceSource, 'user-limit')
-  assert.equal(result.data.signingPlan.createMarketOrder, undefined)
-  assert.equal(result.data.signingPlan.createOrder?.size, 10)
-  assert.equal(result.data.signingPlan.submit.orderType, 'GTC')
-  assert.equal(result.data.signingPlan.submit.postOnly, true)
-
-  const offTick = await preparePolymarketOpen(input({
-    orderType: 'GTC',
-    limitPrice: '0.495',
-  }), dependencies())
-  assert.equal(offTick.ok, false)
-  if (!offTick.ok) assert.match(offTick.error, /tick size/i)
+  assert.equal(resting.ok, false)
+  if (!resting.ok) assert.match(resting.error, /immediate FAK or FOK/i)
 })
