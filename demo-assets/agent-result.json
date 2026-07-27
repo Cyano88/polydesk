@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "service": "PolyDesk x402 Polymarket LP Scout",
+  "protocol": "A2MCP x402",
+  "paid": true,
+  "payment": {
+    "amount": "0.3 USDT",
+    "network": "X Layer",
+    "transaction": "0x9393f7ef7dab96fa8e8613fb68a6b2cca152bc8227c9cd4211eabbf357a25d32"
+  },
+  "scout": {
+    "summary": "Live LP Scout selected 5 conservative Polymarket reward markets after checking rewards, spread, depth, time left, and volatility.",
+    "opportunities": [
+      {
+        "title": "Clarity Act signed into law in 2026?",
+        "dailyReward": 1000,
+        "liveSpread": 0.01,
+        "depthAtTwoCents": 293762.32,
+        "minSize": 200,
+        "lpExecutionRisk": "low"
+      },
+      {
+        "title": "Will Harry Kane win the 2026 Ballon d'Or?",
+        "dailyReward": 275,
+        "liveSpread": 0.001,
+        "depthAtTwoCents": 624389.57,
+        "minSize": 50,
+        "lpExecutionRisk": "low"
+      }
+    ]
+  },
+  "receipt": {
+    "provider": "OKX Agent Payments Protocol",
+    "price": "0.3 USDT"
+  },
+  "artifacts": {
+    "reportUrl": "https://polydesk.trade/report/lp-scout/0b26355c-3d51-43c6-84cc-bdd6b5f30522?receipt=641f7ef0-0d3d-4f3e-9aa3-8111a494c161",
+    "proofHash": "28b1a3ae3413d18806cee7416ee80d7828a32b63316ef975ed12080e8df893f2",
+    "archiveUrl": "https://chainscan.0g.ai/tx/0xf38d8c7dadfd3ac0dc82018bb9bbe3e1ead9a5f13b4ef0f797e8a9ed7771cbfe"
+  },
+  "safety": {
+    "humanReviewRequired": true,
+    "marketOrdersAllowed": false
+  }
+}

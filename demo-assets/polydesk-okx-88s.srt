@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:00:06,000
+PolyDesk turns live prediction-market data into a paid, auditable decision another agent can consume.
+
+2
+00:00:06,000 --> 00:00:15,000
+It is live as OKX.AI Agent 5427 with 122 recorded marketplace uses. That is an agent-level metric and may include tests.
+
+3
+00:00:15,000 --> 00:00:25,000
+LP Scout continuously ranks Polymarket reward markets using spread, depth, liquidity, reward terms, time left, volatility and execution risk.
+
+4
+00:00:25,000 --> 00:00:33,000
+This is a real successful payment: 0.3 USDT settled on X Layer, followed by the paid replay.
+
+5
+00:00:33,000 --> 00:00:47,000
+The replay is structured JSON: ranked opportunities, payment evidence, safety boundaries, a stable report URL and proof identifiers.
+
+6
+00:00:47,000 --> 00:01:01,000
+The same result is readable by a person, with maker quote guidance, minimum setup, risk flags and an archived 0G proof.
+
+7
+00:01:01,000 --> 00:01:15,000
+PolyDesk also provides a hosted Polymarket funding checkout and a buyer-signed OPEN handoff. PolyDesk never receives trading keys or CLOB secrets.
+
+8
+00:01:15,000 --> 00:01:28,000
+One paid call produces settlement proof, actionable delivery and an independent archive. The buyer keeps authority; PolyDesk supplies the decision and proof layer.

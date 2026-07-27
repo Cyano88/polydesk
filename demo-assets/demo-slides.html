@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PolyDesk OKX demo slides</title>
+  <style>
+    :root {
+      --ink: #0b1020;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --soft: #f5f7fa;
+      --blue: #155eef;
+      --green: #067647;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #f7f8fa;
+    }
+    .slide {
+      display: none;
+      width: 1920px;
+      height: 1080px;
+      padding: 72px 92px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,248,250,.98)),
+        radial-gradient(circle at 75% 10%, #eaf2ff 0, transparent 35%);
+    }
+    .slide.active { display: flex; flex-direction: column; }
+    .topline { display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 14px; font-size: 25px; font-weight: 750; }
+    .mark {
+      width: 38px; height: 38px; border: 4px solid var(--ink); border-radius: 8px;
+      display: grid; place-items: center; font-size: 19px; transform: skewY(-8deg);
+    }
+    .eyebrow {
+      color: var(--blue); font-size: 18px; line-height: 1; font-weight: 800;
+      letter-spacing: .12em; text-transform: uppercase;
+    }
+    h1 { margin: 58px 0 22px; font-size: 78px; line-height: 1.04; letter-spacing: -.045em; max-width: 1500px; }
+    h2 { margin: 28px 0 14px; font-size: 56px; line-height: 1.08; letter-spacing: -.035em; }
+    .lede { max-width: 1320px; color: #344054; font-size: 31px; line-height: 1.45; }
+    .footer { margin-top: auto; color: var(--muted); font-size: 20px; display: flex; justify-content: space-between; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line);
+      background: #fff; border-radius: 999px; padding: 12px 18px; font-size: 18px; font-weight: 700;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #12b76a; }
+    .hero-grid { display: grid; grid-template-columns: 1.04fr .96fr; gap: 54px; flex: 1; align-items: center; }
+    .panel {
+      background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: 28px;
+      box-shadow: 0 22px 70px rgba(15,23,42,.09); overflow: hidden;
+    }
+    .panel-pad { padding: 32px; }
+    .screenshot { width: 100%; height: 660px; object-fit: cover; object-position: top; display: block; }
+    .metric { font-size: 108px; line-height: .9; font-weight: 800; letter-spacing: -.07em; }
+    .metric-label { margin-top: 20px; font-size: 28px; font-weight: 700; }
+    .note { margin-top: 16px; color: var(--muted); font-size: 19px; line-height: 1.5; }
+    .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 38px; }
+    .fact { border: 1px solid var(--line); border-radius: 20px; background: #fff; padding: 24px; }
+    .fact strong { display: block; font-size: 26px; margin-bottom: 8px; }
+    .fact span { color: var(--muted); font-size: 18px; line-height: 1.45; }
+    .code-layout { display: grid; grid-template-columns: 1.15fr .85fr; gap: 28px; flex: 1; min-height: 0; margin-top: 34px; }
+    pre {
+      margin: 0; height: 100%; overflow: hidden; padding: 30px 34px;
+      border-radius: 24px; background: #090d18; color: #e7edf8;
+      font: 19px/1.48 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      box-shadow: 0 22px 70px rgba(15,23,42,.16);
+    }
+    .key { color: #8ec5ff; } .str { color: #a7f3d0; } .num { color: #fbbf24; }
+    .machine-notes { display: flex; flex-direction: column; gap: 18px; }
+    .machine-note { padding: 25px; border: 1px solid var(--line); background: #fff; border-radius: 20px; }
+    .machine-note strong { display: block; font-size: 24px; margin-bottom: 8px; }
+    .machine-note span { color: var(--muted); font-size: 18px; line-height: 1.45; }
+    .rails { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+    .rail { min-height: 650px; padding: 34px; border: 1px solid var(--line); border-radius: 26px; background: #fff; }
+    .rail h3 { margin: 14px 0 12px; font-size: 35px; letter-spacing: -.025em; }
+    .rail p { color: var(--muted); font-size: 20px; line-height: 1.5; }
+    .step { display: grid; grid-template-columns: 42px 1fr; gap: 14px; align-items: start; margin-top: 20px; }
+    .step b { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--soft); }
+    .step span { font-size: 21px; line-height: 1.45; }
+    .endpoint {
+      margin-top: 24px; padding: 16px 18px; border-radius: 14px; background: #090d18;
+      color: #fff; font: 17px/1.35 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere;
+    }
+    .proof-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 38px; flex: 1; min-height: 0; margin-top: 34px; }
+    .proof-shot { width: 100%; height: 720px; object-fit: contain; object-position: top; }
+    .proof-copy { display: flex; flex-direction: column; justify-content: center; }
+    .proof-copy h2 { font-size: 58px; }
+    .check { display: flex; gap: 14px; align-items: flex-start; margin-top: 22px; font-size: 23px; line-height: 1.4; }
+    .check i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #d1fadf; color: var(--green); font-style: normal; font-weight: 900; }
+  </style>
+</head>
+<body>
+  <section id="title" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="pill"><span class="dot"></span> Live on OKX.AI · Agent #5427</span>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">Prediction-market Finance Copilot</div>
+        <h1>From live market data to a paid, auditable decision.</h1>
+        <p class="lede">Agents discover PolyDesk, approve a bounded X Layer payment, and receive structured Polymarket intelligence they can consume immediately.</p>
+      </div>
+      <div class="panel"><img class="screenshot" src="./polydesk-pulse.png" alt=""></div>
+    </div>
+    <div class="footer"><span>Live data → HTTP 402 → buyer approval → JSON result → 0G proof</span><span>polydesk.trade</span></div>
+  </section>
+
+  <section id="stats" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="eyebrow">Marketplace proof</span>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <div class="metric">122</div>
+        <div class="metric-label">recorded uses on OKX.AI</div>
+        <p class="note">This is the public agent-level marketplace metric. It may include builder and reviewer tests, so we do not mislabel it as 122 unique customers.</p>
+        <div class="facts">
+          <div class="fact"><strong>#5427</strong><span>Live ASP identity</span></div>
+          <div class="fact"><strong>0.3 USDT</strong><span>Flagship LP Scout use</span></div>
+          <div class="fact"><strong>X Layer</strong><span>Agent payment rail</span></div>
+        </div>
+      </div>
+      <div class="panel"><img class="screenshot" src="./okx-agent-5427.png" alt=""></div>
+    </div>
+    <div class="footer"><span>Source: public OKX.AI Agent #5427 listing</span><span>Agent-level metric</span></div>
+  </section>
+
+  <section id="pulse" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="eyebrow">Live market intelligence</span>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <h2>Continuously re-ranked from Polymarket market and order-book data.</h2>
+        <p class="lede">Every candidate is scored using rewards, live spread, depth, liquidity, time to resolution, volatility and execution risk.</p>
+        <div class="facts">
+          <div class="fact"><strong>Live book</strong><span>Best bid, best ask and depth within two cents</span></div>
+          <div class="fact"><strong>Reward terms</strong><span>Daily pool, minimum size and maximum spread</span></div>
+          <div class="fact"><strong>Bounded output</strong><span>Maker-only checklist and human review flags</span></div>
+        </div>
+      </div>
+      <div class="panel"><img class="screenshot" src="./polydesk-pulse.png" alt=""></div>
+    </div>
+    <div class="footer"><span>Source: Polymarket Gamma markets/events + CLOB rewards and books</span><span>Fresh at request time</span></div>
+  </section>
+
+  <section id="machine" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="eyebrow">Machine-readable delivery</span>
+    </div>
+    <h2>Not a screenshot. A result another agent can use.</h2>
+    <div class="code-layout">
+      <pre>{
+  <span class="key">"ok"</span>: true,
+  <span class="key">"protocol"</span>: <span class="str">"A2MCP x402"</span>,
+  <span class="key">"payment"</span>: {
+    <span class="key">"amount"</span>: <span class="str">"0.3 USDT"</span>,
+    <span class="key">"network"</span>: <span class="str">"X Layer"</span>,
+    <span class="key">"transaction"</span>: <span class="str">"0x9393...25d32"</span>
+  },
+  <span class="key">"opportunities"</span>: [{
+    <span class="key">"title"</span>: <span class="str">"Clarity Act signed into law in 2026?"</span>,
+    <span class="key">"dailyReward"</span>: <span class="num">1000</span>,
+    <span class="key">"liveSpread"</span>: <span class="num">0.01</span>,
+    <span class="key">"depthAtTwoCents"</span>: <span class="num">293762.32</span>,
+    <span class="key">"lpExecutionRisk"</span>: <span class="str">"low"</span>
+  }],
+  <span class="key">"receipt"</span>: {
+    <span class="key">"provider"</span>: <span class="str">"OKX Agent Payments Protocol"</span>
+  },
+  <span class="key">"artifacts"</span>: {
+    <span class="key">"reportUrl"</span>: <span class="str">"https://polydesk.trade/report/..."</span>,
+    <span class="key">"proofHash"</span>: <span class="str">"28b1a3...f893f2"</span>
+  }
+}</pre>
+      <div class="machine-notes">
+        <div class="machine-note"><strong>Ranked operator data</strong><span>Spread, depth, rewards, minimum size, quote guide and execution risk.</span></div>
+        <div class="machine-note"><strong>Payment evidence</strong><span>Exact amount, network, payer-bound transaction and provider.</span></div>
+        <div class="machine-note"><strong>Agent handoff</strong><span>Stable report URL, activity IDs, proof hash and archive status.</span></div>
+        <div class="machine-note"><strong>Safety is data</strong><span>Human-review and no-market-order boundaries travel with the result.</span></div>
+        <div class="endpoint">GET /api/a2mcp/okx/polymarket-lp-scout</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rails" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="eyebrow">Two more agent rails</span>
+    </div>
+    <h2>Research, funding and execution—without custody.</h2>
+    <div class="rails">
+      <article class="rail">
+        <span class="pill">0.1 USDT · X Layer</span>
+        <h3>Polymarket Funding Checkout</h3>
+        <p>A buyer agent purchases a hosted handoff for funding a public Polymarket wallet with USDC from Base or Arbitrum.</p>
+        <div class="step"><b>1</b><span>Provide public wallet, amount and network.</span></div>
+        <div class="step"><b>2</b><span>Receive a hosted Hash PayLink checkout and fundingRequestId.</span></div>
+        <div class="step"><b>3</b><span>Track bridge settlement to provider-confirmed delivery and receipt.</span></div>
+        <div class="endpoint">POST /api/a2mcp/polymarket-funding-link</div>
+      </article>
+      <article class="rail">
+        <span class="pill">0.1 USDT · X Layer</span>
+        <h3>Buyer-Signed OPEN Handoff</h3>
+        <p>PolyDesk prepares and validates a capped BUY order. The buyer signs locally and submits directly to Polymarket.</p>
+        <div class="step"><b>1</b><span>Prepare a simple BUY intent and resolve live market constraints.</span></div>
+        <div class="step"><b>2</b><span>Buyer signs the exact FAK/FOK order locally; free preflight checks binding.</span></div>
+        <div class="step"><b>3</b><span>Receive the direct-submit CLOB payload. No key, secret or passphrase reaches PolyDesk.</span></div>
+        <div class="endpoint">POST /api/a2mcp/polymarket-signed-open</div>
+      </article>
+    </div>
+  </section>
+
+  <section id="proof" class="slide">
+    <div class="topline">
+      <div class="brand"><span class="mark">P</span>PolyDesk</div>
+      <span class="eyebrow">Verified final take</span>
+    </div>
+    <div class="proof-grid">
+      <div class="panel"><img class="proof-shot" src="./polydesk-final-report.png" alt=""></div>
+      <div class="proof-copy">
+        <h2>One paid call. Three layers of proof.</h2>
+        <div class="check"><i>✓</i><span><strong>Settlement:</strong> 0.3 USDT confirmed on X Layer.</span></div>
+        <div class="check"><i>✓</i><span><strong>Delivery:</strong> five ranked markets with execution constraints.</span></div>
+        <div class="check"><i>✓</i><span><strong>Archive:</strong> result independently anchored on 0G.</span></div>
+        <div class="endpoint">tx 0x9393f7ef7dab96fa8e8613fb68a6b2cca152bc8227c9cd4211eabbf357a25d32</div>
+      </div>
+    </div>
+    <div class="footer"><span>Buyer keeps trading authority.</span><span>PolyDesk supplies the decision and proof layer.</span></div>
+  </section>
+
+  <script>
+    const slide = new URLSearchParams(location.search).get('slide') || 'title'
+    document.getElementById(slide)?.classList.add('active')
+  </script>
+</body>
+</html>

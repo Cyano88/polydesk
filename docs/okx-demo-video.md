@@ -96,6 +96,27 @@ adds a regression test. Do not use the rehearsal report as the final close-up.
 This is the final evidence set. Its persisted receipt reports `0.3` and
 `USDT`, and its replay response identifies `OKX Agent Payments Protocol`.
 
+## Final 88-second edit package
+
+- Visual master: `demo-assets/polydesk-okx-88s-master.mp4`
+- Timed narration/captions: `demo-assets/polydesk-okx-88s.srt`
+- Machine-readable verified result excerpt: `demo-assets/agent-result.json`
+- Reusable slide source: `demo-assets/demo-slides.html`
+
+The edit presents the public `122 sold` field as **122 recorded agent-level
+marketplace uses**. OKX does not expose a per-service breakdown on the public
+Agent `5427` page, so the video does not claim that LP Scout alone produced all
+122 uses or that they represent 122 unique customers.
+
+The final service architecture shown is:
+
+1. LP Scout: live ranked operator intelligence with x402 settlement and proof.
+2. Funding Checkout: a hosted Hash PayLink handoff for funding a public
+   Polymarket wallet with USDC from Base or Arbitrum.
+3. Buyer-Signed OPEN: PolyDesk prepares and validates a capped BUY handoff;
+   the buyer signs locally and submits directly to Polymarket. PolyDesk never
+   receives the private key, CLOB secret, or passphrase.
+
 ## Claims to avoid
 
 - Do not call `122 sold` 122 customers or 122 organic purchases; say “122 recorded uses.”
