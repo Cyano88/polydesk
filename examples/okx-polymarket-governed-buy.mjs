@@ -8,9 +8,18 @@ import {
   orderToJsonV2,
 } from '@polymarket/clob-client-v2'
 
-const [ownerAddress, depositWalletAddress] = process.argv.slice(2)
+const [
+  ownerAddress,
+  depositWalletAddress,
+  maximumTotalDebitUsdc = '4',
+  orderAmountUsdc = '3.975',
+] = process.argv.slice(2)
 if (!/^0x[a-fA-F0-9]{40}$/.test(ownerAddress || '') || !/^0x[a-fA-F0-9]{40}$/.test(depositWalletAddress || '')) {
-  console.error('Usage: node examples/okx-polymarket-governed-buy.mjs <owner-eoa> <deposit-wallet>')
+  console.error('Usage: node examples/okx-polymarket-governed-buy.mjs <owner-eoa> <deposit-wallet> [maximum-total-debit-usdc] [order-amount-usdc]')
+  process.exit(1)
+}
+if (!(Number(maximumTotalDebitUsdc) > 0) || !(Number(orderAmountUsdc) > 0) || Number(orderAmountUsdc) > Number(maximumTotalDebitUsdc)) {
+  console.error('maximum-total-debit-usdc and order-amount-usdc must be positive, and the order amount cannot exceed the total debit cap.')
   process.exit(1)
 }
 
@@ -22,7 +31,8 @@ const CONFIG = {
   marketUrl: 'https://polymarket.com/event/fed-decision-in-july-181',
   marketSlug: 'will-there-be-no-change-in-fed-interest-rates-after-the-july-2026-meeting',
   outcome: 'Yes',
-  maximumAmountUsdc: '4',
+  maximumTotalDebitUsdc,
+  orderAmountUsdc,
   maximumPrice: 0.795,
   orderType: 'FAK',
 }
@@ -134,7 +144,7 @@ const prepare = requireOk('PolyDesk preparation failed', await jsonRequest(
       marketUrl: CONFIG.marketUrl,
       marketSlug: CONFIG.marketSlug,
       outcome: CONFIG.outcome,
-      maxSpendUsdc: CONFIG.maximumAmountUsdc,
+      maxSpendUsdc: CONFIG.orderAmountUsdc,
       wallet: CONFIG.depositWalletAddress,
       orderType: CONFIG.orderType,
     }),
@@ -181,7 +191,7 @@ const clobClient = new ClobClient({
 
 const signedOrder = await clobClient.createMarketOrder({
   tokenID: prepare.market.tokenId,
-  amount: Number(CONFIG.maximumAmountUsdc),
+  amount: Number(CONFIG.orderAmountUsdc),
   price: Number(prepare.market.executionPrice),
   side: Side.BUY,
   orderType: OrderType.FAK,
@@ -192,9 +202,26 @@ const signedOrder = await clobClient.createMarketOrder({
   version: 2,
 })
 const orderPayload = orderToJsonV2(signedOrder, credentials.key, OrderType.FAK, false, false)
+const makerAmountUsdc = Number(signedOrder.makerAmount) / 1_000_000
+const price = Number(prepare.market.executionPrice)
+const feeInfo = clobClient.feeInfos[prepare.market.tokenId]
+const builderCode = prepare.signingPlan.client.builderConfig.builderCode
+const builderTakerFeeRate = clobClient.builderFeeRates[builderCode]?.taker ?? 0
+if (!feeInfo || !Number.isFinite(feeInfo.rate) || !Number.isFinite(feeInfo.exponent)) {
+  throw new Error('The CLOB did not return fee metadata; refusing to pay for a governed handoff.')
+}
+const effectivePlatformFeeRate = feeInfo.rate * (price * (1 - price)) ** feeInfo.exponent
+const platformFeeUsdc = makerAmountUsdc / price * effectivePlatformFeeRate
+const builderFeeUsdc = makerAmountUsdc * builderTakerFeeRate
+const estimatedTotalDebitUsdc = Math.ceil((makerAmountUsdc + platformFeeUsdc + builderFeeUsdc) * 1_000_000) / 1_000_000
+if (estimatedTotalDebitUsdc > Number(CONFIG.maximumTotalDebitUsdc)) {
+  throw new Error(
+    `Fee-inclusive debit ${estimatedTotalDebitUsdc.toFixed(6)} pUSD exceeds the approved cap ${Number(CONFIG.maximumTotalDebitUsdc).toFixed(6)} pUSD.`,
+  )
+}
 
 const mandate = {
-  maximumAmountUsdc: CONFIG.maximumAmountUsdc,
+  maximumAmountUsdc: CONFIG.maximumTotalDebitUsdc,
   maximumPrice: String(CONFIG.maximumPrice),
   allowedTokenIds: [prepare.market.tokenId],
   allowedMarketUrls: [CONFIG.marketUrl],
@@ -340,7 +367,9 @@ console.log(JSON.stringify({
   externalOrderId,
   plan: {
     priceBoundary: prepare.market.executionPrice,
-    maximumSpendUsdc: CONFIG.maximumAmountUsdc,
+    orderAmountUsdc: CONFIG.orderAmountUsdc,
+    estimatedTotalDebitUsdc: estimatedTotalDebitUsdc.toFixed(6),
+    maximumTotalDebitUsdc: CONFIG.maximumTotalDebitUsdc,
     orderType: CONFIG.orderType,
     tokenId: prepare.market.tokenId,
   },
