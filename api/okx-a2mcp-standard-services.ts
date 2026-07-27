@@ -46,6 +46,26 @@ const fundingLinkBodyProperties = {
 
 const fundingLinkRequiredFields = ['ownerAddress', 'requiredBalanceUsdc'] as const
 
+function fundingLinkReplaySchema() {
+  return {
+    input: {
+      type: 'http',
+      method: 'POST',
+      bodyType: 'json',
+      body: {
+        type: 'object',
+        properties: fundingLinkBodyProperties,
+        required: fundingLinkRequiredFields,
+        additionalProperties: false,
+      },
+    },
+    output: {
+      type: 'json',
+      description: 'Verified Deposit Wallet readiness and, when funding is required, a hosted checkout URL plus status URL.',
+    },
+  }
+}
+
 function fundingLinkDiscoveryExtension() {
   const inputExample = {
     ownerAddress: '0x1111111111111111111111111111111111111111',
@@ -292,6 +312,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
             required: fundingLinkRequiredFields,
             additionalProperties: false,
           },
+          outputSchema: fundingLinkReplaySchema(),
         } : {}),
       },
     }),
@@ -348,9 +369,37 @@ async function getStandardServicesServer(req: Request) {
   return standardServicesServerPromise
 }
 
-function sendInstructions(res: Response, response: { status: number; headers: Record<string, string>; body?: unknown }) {
-  for (const [key, value] of Object.entries(response.headers)) res.setHeader(key, value)
-  return res.status(response.status).send(response.body)
+export function addFundingReplaySchema(
+  response: { status: number; headers: Record<string, string>; body?: unknown },
+  path: StandardServicePath,
+) {
+  if (path !== '/api/a2mcp/polymarket-funding-link' || response.status !== 402) return response
+  const paymentHeaderKey = Object.keys(response.headers).find(key => key.toLowerCase() === 'payment-required')
+  if (!paymentHeaderKey) return response
+
+  try {
+    const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
+    challenge.outputSchema = fundingLinkReplaySchema()
+    return {
+      ...response,
+      headers: {
+        ...response.headers,
+        [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64url'),
+      },
+    }
+  } catch {
+    return response
+  }
+}
+
+function sendInstructions(
+  res: Response,
+  response: { status: number; headers: Record<string, string>; body?: unknown },
+  path: StandardServicePath,
+) {
+  const prepared = addFundingReplaySchema(response, path)
+  for (const [key, value] of Object.entries(prepared.headers)) res.setHeader(key, value)
+  return res.status(prepared.status).send(prepared.body)
 }
 
 export default async function okxA2mcpStandardServiceHandler(req: Request, res: Response) {
@@ -378,7 +427,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       method: req.method,
     }
     const paymentResult = await httpServer.processHTTPRequest(context)
-    if (paymentResult.type === 'payment-error') return sendInstructions(res, paymentResult.response)
+    if (paymentResult.type === 'payment-error') return sendInstructions(res, paymentResult.response, path)
     if (paymentResult.type === 'no-payment-required') {
       return res.status(500).json({ ok: false, error: 'OKX x402 route is not protected' })
     }
@@ -389,7 +438,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       paymentResult.declaredExtensions,
       { request: context },
     )
-    if (!settlement.success) return sendInstructions(res, settlement.response)
+    if (!settlement.success) return sendInstructions(res, settlement.response, path)
 
     const requirements = paymentResult.paymentRequirements as PaymentRequirements
     const paidReq = req as Request & { payment?: Record<string, unknown> }

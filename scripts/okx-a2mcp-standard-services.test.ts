@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Request } from 'express'
-import { buildStandardServiceRouteConfig } from '../api/okx-a2mcp-standard-services.js'
+import {
+  addFundingReplaySchema,
+  buildStandardServiceRouteConfig,
+} from '../api/okx-a2mcp-standard-services.js'
 
 test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => {
   const req = {
@@ -65,4 +68,38 @@ test('funding-link challenge declares replayable POST parameters', async () => {
   assert.ok(unpaid.body?.inputSchema?.properties?.ownerAddress)
   assert.ok(unpaid.body?.inputSchema?.properties?.requiredBalanceUsdc)
   assert.deepEqual(unpaid.body?.inputSchema?.required, ['ownerAddress', 'requiredBalanceUsdc'])
+})
+
+test('funding-link 402 header exposes the legacy replay contract used by OKX buyer tooling', () => {
+  const challenge = {
+    x402Version: 2,
+    resource: { url: 'https://polydesk.trade/api/a2mcp/polymarket-funding-link' },
+    accepts: [{
+      scheme: 'exact',
+      network: 'eip155:196',
+      amount: '100000',
+      asset: '0x779ded0c9e1022225f8e0630b35a9b54be713736',
+      payTo: '0x631c96fba389f65da7093e559e8120b587ec7df4',
+      maxTimeoutSeconds: 600,
+    }],
+  }
+  const response = addFundingReplaySchema({
+    status: 402,
+    headers: {
+      'PAYMENT-REQUIRED': Buffer.from(JSON.stringify(challenge)).toString('base64url'),
+    },
+  }, '/api/a2mcp/polymarket-funding-link')
+  const decoded = JSON.parse(Buffer.from(response.headers['PAYMENT-REQUIRED'], 'base64url').toString('utf8')) as {
+    outputSchema?: {
+      input?: {
+        method?: string
+        body?: { properties?: Record<string, unknown>; required?: string[] }
+      }
+    }
+  }
+
+  assert.equal(decoded.outputSchema?.input?.method, 'POST')
+  assert.ok(decoded.outputSchema?.input?.body?.properties?.ownerAddress)
+  assert.ok(decoded.outputSchema?.input?.body?.properties?.requiredBalanceUsdc)
+  assert.deepEqual(decoded.outputSchema?.input?.body?.required, ['ownerAddress', 'requiredBalanceUsdc'])
 })
