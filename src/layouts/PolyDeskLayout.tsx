@@ -66,7 +66,14 @@ function PolyDeskWorkspace() {
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
-    let settledViewportHeight = viewport.height
+    const keyboardThreshold = 96
+    let settledViewportHeight = Math.max(viewport.height, window.innerHeight)
+    let settledViewportWidth = viewport.width
+    let keyboardWasOpen = false
+    const applyKeyboardState = (open: boolean) => {
+      keyboardWasOpen = open
+      setMobileKeyboardOpen(open)
+    }
     const editableHasFocus = () => {
       const activeElement = document.activeElement
       return activeElement instanceof HTMLInputElement
@@ -76,17 +83,33 @@ function PolyDeskWorkspace() {
     const updateKeyboardState = () => {
       setMobileViewportHeight(viewport.height)
       setMobileViewportTop(viewport.offsetTop)
-      const viewportReduction = settledViewportHeight - viewport.height
-      if (!editableHasFocus()) {
-        if (viewportReduction <= 120) {
-          settledViewportHeight = Math.max(settledViewportHeight, viewport.height)
-          setMobileKeyboardOpen(false)
-        } else {
-          setMobileKeyboardOpen(true)
-        }
+      const viewportWidthChanged = Math.abs(settledViewportWidth - viewport.width) > 80
+      if (viewportWidthChanged && !editableHasFocus()) {
+        settledViewportHeight = viewport.height
+        settledViewportWidth = viewport.width
+        setMobileKeyboardOpen(false)
         return
       }
-      setMobileKeyboardOpen(viewportReduction > 120)
+      const viewportReduction = Math.max(0, settledViewportHeight - viewport.height)
+      const viewportBottomGap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      const viewportIsCompact = viewport.width <= 1024
+      const keyboardOccupiesViewport = viewportIsCompact
+        && Math.max(viewportReduction, viewportBottomGap) > keyboardThreshold
+      if (!editableHasFocus()) {
+        // Keep the footer out of view until the keyboard has actually finished
+        // closing. focusout fires before the visual viewport returns on iOS.
+        if (keyboardWasOpen && keyboardOccupiesViewport) {
+          applyKeyboardState(true)
+          return
+        }
+        // A reduced viewport without a previously open keyboard is a normal
+        // resize, zoom or split-screen change. Adopt it as the new baseline.
+        settledViewportHeight = viewport.height
+        settledViewportWidth = viewport.width
+        applyKeyboardState(false)
+        return
+      }
+      applyKeyboardState(keyboardOccupiesViewport)
     }
     updateKeyboardState()
     viewport.addEventListener('resize', updateKeyboardState)
@@ -171,9 +194,9 @@ function PolyDeskWorkspace() {
 
   return (
     <div className={cn(
-      'flex min-h-screen flex-col bg-[#F5F5F7] font-inter [--polydesk-footer-height:calc(4rem+env(safe-area-inset-bottom))] dark:bg-[#111113]',
-      workspace === 'agent' && 'h-dvh overflow-hidden',
-    )} style={workspaceStyle} data-polydesk-keyboard-open={workspace === 'agent' && mobileKeyboardOpen ? 'true' : 'false'}>
+      'flex min-h-[100dvh] flex-col bg-[#F5F5F7] font-inter [--polydesk-footer-height:calc(4rem+env(safe-area-inset-bottom))] dark:bg-[#111113]',
+      workspace === 'agent' && 'h-[100dvh] overflow-hidden',
+    )} style={workspaceStyle} data-polydesk-keyboard-open={mobileKeyboardOpen ? 'true' : 'false'}>
       <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200 bg-white dark:border-white/10 dark:bg-[#111113]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
           <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' })} className="group flex items-center gap-2.5 focus:outline-none">
@@ -277,7 +300,7 @@ function PolyDeskWorkspace() {
 
       <footer className={cn(
         'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white dark:border-white/10 dark:bg-[#17171b]',
-        workspace === 'agent' && mobileKeyboardOpen && 'hidden',
+        mobileKeyboardOpen && 'hidden',
       )}>
         <nav
           aria-label="PolyDesk workspace"

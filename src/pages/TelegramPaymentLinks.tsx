@@ -6929,6 +6929,7 @@ export function PolyPortfolioPanel({
   const [tradingPusdBalance, setTradingPusdBalance] = useState<{ raw: string; formatted: string } | null>(null)
   const [tradingPusdLoading, setTradingPusdLoading] = useState(false)
   const [tradingPusdError, setTradingPusdError] = useState('')
+  const [tradingPusdFailureCount, setTradingPusdFailureCount] = useState(0)
   const [tradingWalletTab, setTradingWalletTab] = useState<'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor'>(initialPortfolioAction === 'trading' ? (initialTradingWalletTab ?? 'positions') : 'balance')
   const [tradingWalletNetwork, setTradingWalletNetwork] = useState<PolymarketBridgeNetwork>('base')
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
@@ -6986,11 +6987,14 @@ export function PolyPortfolioPanel({
   )
   const liveDataAddress = unsignedPortfolioAction === 'trading' ? tradingPortfolioAddress : watchedAddress
   const tradingPusdValue = tradingPusdBalance?.formatted ? Number(tradingPusdBalance.formatted) : null
-  const tradingPusdDisplay = tradingPusdLoading
-    ? null
-    : tradingPusdValue !== null && Number.isFinite(tradingPusdValue)
-      ? formatUsd(tradingPusdValue)
-      : '--'
+  const hasConfirmedTradingCash = tradingPusdValue !== null && Number.isFinite(tradingPusdValue)
+  const tradingPusdDisplay = hasConfirmedTradingCash ? formatUsd(tradingPusdValue) : '—'
+
+  useEffect(() => {
+    setTradingPusdBalance(null)
+    setTradingPusdError('')
+    setTradingPusdFailureCount(0)
+  }, [polymarketDepositWallet])
 
   useEffect(() => {
     if (signingWalletAddress) setWalletConnectError('')
@@ -7026,8 +7030,13 @@ export function PolyPortfolioPanel({
 
   const activePositionValue = useMemo(() => positionValueSum(activeOpenPositions), [activeOpenPositions])
   const claimableValue = useMemo(() => positionValueSum(claimablePositions), [claimablePositions])
-  const portfolioCashValue = Number.isFinite(tradingPusdValue) ? Number(tradingPusdValue) : 0
-  const ownedPortfolioValue = portfolioCashValue + activePositionValue + claimableValue
+  const hasConfirmedTradingPositions = Boolean(
+    tradingPortfolioAddress
+    && liveLoadedAddress.toLowerCase() === tradingPortfolioAddress.toLowerCase(),
+  )
+  const ownedPortfolioValue = hasConfirmedTradingCash && hasConfirmedTradingPositions
+    ? Number(tradingPusdValue) + activePositionValue + claimableValue
+    : null
   const orderOriginByAsset = useMemo(() => new Map(
     [...(bundle?.lpOrders ?? [])]
       .reverse()
@@ -7742,8 +7751,10 @@ export function PolyPortfolioPanel({
         raw: data.balance.raw ?? '0',
         formatted: data.balance.formatted ?? '0',
       })
-    } catch (err) {
-      setTradingPusdError(err instanceof Error ? err.message : 'Could not load pUSD balance.')
+      setTradingPusdFailureCount(0)
+    } catch {
+      setTradingPusdError('Balance temporarily unavailable.')
+      setTradingPusdFailureCount(count => count + 1)
     } finally {
       setTradingPusdLoading(false)
     }
@@ -9284,7 +9295,11 @@ export function PolyPortfolioPanel({
               </div>
             ))}
           </div>
-          {tradingPusdError && <p className="mt-3 text-xs text-amber-200 dark:text-amber-700">{tradingPusdError}</p>}
+          {tradingPusdFailureCount >= 2 && tradingPusdError && (
+            <p className="mt-3 text-xs text-white/60 dark:text-gray-500">
+              {tradingPusdError} Retrying automatically.
+            </p>
+          )}
         </section>
 
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">

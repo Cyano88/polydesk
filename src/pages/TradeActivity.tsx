@@ -116,7 +116,7 @@ export default function TradeActivity() {
   const [marketActivity, setMarketActivity] = useState<PolymarketActivity[]>([])
   const [scoutReports, setScoutReports] = useState<ScoutReport[]>([])
   const [tradingAddress, setTradingAddress] = useState('')
-  const [loading, setLoading] = useState(!localPreview)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [expandedActivityId, setExpandedActivityId] = useState('')
   const hasLoadedRef = useRef(localPreview)
@@ -126,7 +126,12 @@ export default function TradeActivity() {
       setLoading(false)
       return
     }
-    if (!ready || !authenticated) return
+    if (!ready) return
+    if (!authenticated) {
+      setLoading(false)
+      setError('')
+      return
+    }
     if (!hasLoadedRef.current) setLoading(true)
     setError('')
     try {
