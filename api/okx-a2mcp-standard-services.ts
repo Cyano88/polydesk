@@ -312,7 +312,6 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
             required: fundingLinkRequiredFields,
             additionalProperties: false,
           },
-          outputSchema: fundingLinkReplaySchema(),
         } : {}),
       },
     }),
@@ -379,7 +378,15 @@ export function addFundingReplaySchema(
 
   try {
     const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
-    challenge.outputSchema = fundingLinkReplaySchema()
+    const replaySchema = fundingLinkReplaySchema()
+    challenge.outputSchema = replaySchema
+    if (Array.isArray(challenge.accepts)) {
+      challenge.accepts = challenge.accepts.map(option => (
+        option && typeof option === 'object'
+          ? { ...option as Record<string, unknown>, outputSchema: replaySchema }
+          : option
+      ))
+    }
     return {
       ...response,
       headers: {

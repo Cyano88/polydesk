@@ -90,6 +90,14 @@ test('funding-link 402 header exposes the legacy replay contract used by OKX buy
     },
   }, '/api/a2mcp/polymarket-funding-link')
   const decoded = JSON.parse(Buffer.from(response.headers['PAYMENT-REQUIRED'], 'base64url').toString('utf8')) as {
+    accepts?: Array<{
+      outputSchema?: {
+        input?: {
+          method?: string
+          body?: { properties?: Record<string, unknown>; required?: string[] }
+        }
+      }
+    }>
     outputSchema?: {
       input?: {
         method?: string
@@ -102,4 +110,10 @@ test('funding-link 402 header exposes the legacy replay contract used by OKX buy
   assert.ok(decoded.outputSchema?.input?.body?.properties?.ownerAddress)
   assert.ok(decoded.outputSchema?.input?.body?.properties?.requiredBalanceUsdc)
   assert.deepEqual(decoded.outputSchema?.input?.body?.required, ['ownerAddress', 'requiredBalanceUsdc'])
+  assert.equal(decoded.accepts?.[0]?.outputSchema?.input?.method, 'POST')
+  assert.ok(decoded.accepts?.[0]?.outputSchema?.input?.body?.properties?.ownerAddress)
+  assert.deepEqual(
+    decoded.accepts?.[0]?.outputSchema?.input?.body?.required,
+    ['ownerAddress', 'requiredBalanceUsdc'],
+  )
 })
