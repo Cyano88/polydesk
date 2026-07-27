@@ -36,8 +36,8 @@ const serviceDefinitions = {
   },
   '/api/a2mcp/polymarket-portfolio-watch': {
     name: 'Polymarket Portfolio Watch',
-    description: 'Read-only Polymarket wallet positions, value, PnL, and claimable-position intelligence.',
-    tags: ['polymarket', 'portfolio', 'monitoring'],
+    description: 'Polymarket wallet positions plus exact recent BUY signals for buyer-verified governed copy preparation.',
+    tags: ['polymarket', 'portfolio', 'monitoring', 'copy-trading'],
     deliver: a2mcpPolymarketPortfolioWatchHandler,
   },
   '/api/a2mcp/polymarket-funding-link': {

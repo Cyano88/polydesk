@@ -37,6 +37,7 @@ CLI payment, or generate a second payment receipt.
 | `POST /api/a2mcp/polymarket-funding-link` | OKX-paid verified handoff to a Hash PayLink Base/Arbitrum checkout; refuses arbitrary or undeployed wallet targets |
 | `POST /api/a2mcp/polymarket-signed-open` | OKX-paid constraint validation and direct-submit handoff for a buyer-signed, capped BUY order |
 | `POST /api/polymarket-open/prepare` | Free intent-to-sign plan with live market resolution and public deposit-wallet readiness checks |
+| `POST /api/polymarket-copy/prepare` | Free exact-BUY verification, buyer Deposit Wallet derivation/match, and governed copy-order preparation |
 | `POST /api/polymarket-signed-open/validate` | Free validation of the exact signed OPEN body before the buyer pays |
 | `GET /api/health` | Service health |
 

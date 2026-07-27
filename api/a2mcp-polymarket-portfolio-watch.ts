@@ -22,6 +22,23 @@ type PolymarketPosition = {
   curPrice?: number | string
 }
 
+type PolymarketActivity = {
+  proxyWallet?: string
+  timestamp?: number | string
+  conditionId?: string
+  type?: string
+  size?: number | string
+  usdcSize?: number | string
+  transactionHash?: string
+  price?: number | string
+  asset?: string
+  side?: string
+  title?: string
+  slug?: string
+  eventSlug?: string
+  outcome?: string
+}
+
 function clean(value: unknown, max = 120) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -79,6 +96,9 @@ async function dataApiFetch<T>(path: string): Promise<T> {
 
 function summarizePosition(position: PolymarketPosition) {
   const title = clean(position.title || position.slug || position.market || 'Polymarket position', 180)
+  const conditionId = clean(position.conditionId || position.market || '', 120)
+  const tokenId = clean(position.asset || '', 96)
+  const eventSlug = clean(position.eventSlug || '', 180)
   const currentValue = roundUsd(asNumber(position.currentValue))
   const cashPnl = roundUsd(asNumber(position.cashPnl))
   const percentPnl = roundUsd(asNumber(position.percentPnl))
@@ -89,7 +109,10 @@ function summarizePosition(position: PolymarketPosition) {
     title,
     outcome: clean(position.outcome || 'Position', 80),
     slug: clean(position.slug || position.eventSlug || '', 180) || null,
-    marketId: clean(position.conditionId || position.market || position.asset || '', 120) || null,
+    eventSlug: eventSlug || null,
+    marketId: conditionId || null,
+    conditionId: /^0x[a-fA-F0-9]{64}$/.test(conditionId) ? conditionId : null,
+    tokenId: /^\d+$/.test(tokenId) ? tokenId : null,
     size,
     currentValue,
     cashPnl,
@@ -98,6 +121,45 @@ function summarizePosition(position: PolymarketPosition) {
     avgPrice: avgPrice ? Math.round(avgPrice * 10000) / 10000 : null,
     redeemable: Boolean(position.redeemable),
     endDate: clean(position.endDate || '', 48) || null,
+    copyIntent: (
+      /^0x[a-fA-F0-9]{64}$/.test(conditionId)
+      && /^\d+$/.test(tokenId)
+      && eventSlug
+      && position.redeemable !== true
+    ) ? {
+        selectionMode: 'POSITION',
+        conditionId,
+        tokenId,
+      } : null,
+  }
+}
+
+function summarizeBuySignal(activity: PolymarketActivity) {
+  const transactionHash = clean(activity.transactionHash, 80)
+  const tokenId = clean(activity.asset, 96)
+  const eventSlug = clean(activity.eventSlug, 180)
+  const timestamp = Number(activity.timestamp)
+  return {
+    signalId: transactionHash && tokenId ? `${transactionHash}:${tokenId}` : null,
+    watchedWallet: clean(activity.proxyWallet, 64) || null,
+    transactionHash: /^0x[a-fA-F0-9]{64}$/.test(transactionHash) ? transactionHash : null,
+    detectedAt: Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp * 1000).toISOString()
+      : null,
+    market: {
+      title: clean(activity.title || activity.slug || 'Polymarket market', 180),
+      url: eventSlug ? `https://polymarket.com/event/${encodeURIComponent(eventSlug)}` : null,
+      conditionId: clean(activity.conditionId, 96) || null,
+      tokenId: /^\d+$/.test(tokenId) ? tokenId : null,
+      outcome: clean(activity.outcome, 80) || null,
+    },
+    sourceExecution: {
+      side: clean(activity.side, 12).toUpperCase(),
+      size: roundUsd(asNumber(activity.size)),
+      usdcSize: roundUsd(asNumber(activity.usdcSize)),
+      price: Math.round(asNumber(activity.price) * 10000) / 10000,
+    },
+    nextAction: 'Call POST /api/polymarket-copy/prepare with this transactionHash, tokenId, the watched wallet, and the buyer owner EOA.',
   }
 }
 
@@ -115,9 +177,11 @@ export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request,
 
     const agent = clean(requestValue(req, 'agent') || req.headers['x-buyer-agent'] || req.headers['x-agent-slug'] || 'external-agent', 80)
     const limit = Math.max(1, Math.min(100, Number(requestValue(req, 'limit') || 50) || 50))
-    const [valueData, positionData] = await Promise.all([
+    const [valueData, positionData, activityData] = await Promise.all([
       dataApiFetch<unknown>(`/value?user=${encodeURIComponent(wallet)}`),
       dataApiFetch<unknown>(`/positions?user=${encodeURIComponent(wallet)}&sizeThreshold=0&limit=${limit}`),
+      dataApiFetch<unknown>(`/activity?user=${encodeURIComponent(wallet)}&type=TRADE&side=BUY&sortBy=TIMESTAMP&sortDirection=DESC&limit=${Math.min(limit, 50)}`)
+        .catch(() => null),
     ])
 
     const positions = Array.isArray(positionData) ? positionData.map(item => summarizePosition(item as PolymarketPosition)) : []
@@ -127,6 +191,12 @@ export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request,
     const totalPnl = roundUsd(openPositions.reduce((sum, position) => sum + position.cashPnl, 0))
     const topPositions = [...openPositions]
       .sort((a, b) => b.currentValue - a.currentValue)
+      .slice(0, 10)
+    const recentBuySignals = (Array.isArray(activityData) ? activityData : [])
+      .map(item => item as PolymarketActivity)
+      .filter(item => clean(item.type, 16).toUpperCase() === 'TRADE' && clean(item.side, 12).toUpperCase() === 'BUY')
+      .map(summarizeBuySignal)
+      .filter(signal => signal.transactionHash && signal.market.tokenId && signal.market.url)
       .slice(0, 10)
 
     res.json({
@@ -147,16 +217,30 @@ export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request,
         : `Wallet has no open Polymarket positions above the current watch threshold.`,
       topPositions,
       claimablePositions: claimable.slice(0, 10),
+      recentBuySignals,
+      copyTrading: {
+        mode: 'public-position-or-trade-to-buyer-signed-immediate-order',
+        prepareEndpoint: `${publicOrigin(req)}/api/polymarket-copy/prepare`,
+        selectionModes: ['POSITION', 'TRADE', 'AUTO_BEST_FIT'],
+        supportedOrderTypes: ['FAK', 'FOK'],
+        automaticSelectionMeaning: 'execution-quality ranking under a caller-supplied policy; not a profit forecast',
+        watchedWalletCanSignForBuyer: false,
+        requiresBuyerOwnerAndDerivedDepositWallet: true,
+        autonomousExecutionRequiresPreauthorizedMandate: true,
+      },
       source: {
         provider: 'Polymarket Data API',
-        endpoints: ['/value', '/positions'],
+        endpoints: ['/value', '/positions', '/activity?type=TRADE&side=BUY'],
+        activityAvailable: Array.isArray(activityData),
         checkedAt: new Date().toISOString(),
       },
       artifacts: {
         portfolioUrl: `${publicOrigin(req)}/?service=poly-portfolio`,
       },
       safety: [
-        'Read-only wallet monitoring; PolyDesk does not custody funds or place trades for buyer agents.',
+        'The watched wallet is a public signal source only and can never authorize a buyer trade.',
+        'Copy candidates come from exact public BUY activity, not inferred position changes.',
+        'PolyDesk does not custody buyer funds or receive buyer private keys.',
         'Portfolio values and PnL are live-data estimates and should be rechecked before acting.',
         'Claimable status should be confirmed on Polymarket before redemption.',
       ],
