@@ -18,6 +18,11 @@ type PolyDeskAgentService = {
     standard: 'x402' | 'none'
   }
   request?: {
+    authorization?: {
+      endpoint: string
+      method: 'POST'
+      description: string
+    }
     preparation?: {
       endpoint: string
       method: 'POST'
@@ -257,6 +262,63 @@ const services: PolyDeskAgentService[] = [
       'CLOB credentials remain buyer-local and are never claimed as server-verified',
       'the serialized order payload contains the buyer API-key identifier as owner',
       'Polymarket CLOB performs final cryptographic signature verification',
+      'PolyDesk never receives a private key, CLOB API secret, or CLOB passphrase',
+    ],
+  },
+  {
+    id: 'polymarket-governed-open',
+    title: 'Polymarket Governed Market OPEN',
+    description: 'Apply deterministic spending limits to an exact buyer-signed Polymarket BUY order and return APPROVE, ESCALATE, or BLOCK without receiving private keys or reusable CLOB credentials.',
+    category: 'trading',
+    endpoint: '/api/a2mcp/polymarket-governed-open',
+    method: 'POST',
+    pricing: { model: 'x402-fixed', amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    payment: { required: true, standard: 'x402' },
+    request: {
+      authorization: {
+        endpoint: '/api/polymarket-governed-open/authorize',
+        method: 'POST',
+        description: 'Return the canonical mandate and exact personal-sign message before order evaluation or payment.',
+      },
+      preflight: {
+        endpoint: '/api/polymarket-governed-open/validate',
+        method: 'POST',
+        description: 'Free deterministic mandate evaluation before paying the OKX x402 challenge.',
+      },
+      body: [
+        { name: 'externalOrderId', required: true, description: 'Caller-generated idempotency identifier, 8-80 safe characters.' },
+        { name: 'marketUrl', required: true, description: 'Canonical allowlisted polymarket.com market URL.' },
+        { name: 'marketTitle', required: true, description: 'Human-readable market title shown to the buyer.' },
+        { name: 'outcome', required: true, description: 'Outcome being bought.' },
+        { name: 'tokenId', required: true, description: 'Exact numeric Polymarket CLOB outcome token.' },
+        { name: 'signer', required: true, description: 'Buyer-controlled signer bound by the mandate.' },
+        { name: 'orderType', required: true, description: 'Immediate order type.', values: ['FAK', 'FOK'] },
+        { name: 'order', required: true, description: 'Exact buyer-signed Polymarket v2 BUY order.' },
+        { name: 'orderPayload', required: true, description: 'Exact direct-submit CLOB payload matching the signed order.' },
+        { name: 'mandate', required: true, description: 'Authority-signed maximum amount, maximum price, allowlisted token and market, order signer, authority signer, expiry, and optional human-approval threshold.' },
+      ],
+    },
+    output: [
+      'deterministic APPROVE, ESCALATE, or BLOCK decision',
+      'amount, price, market, token, signer, and expiry decision trace',
+      'order, mandate, and decision hashes',
+      'duplicate-safe externalOrderId binding in durable storage',
+      'exact buyer-local CLOB submission handoff only when approved',
+      'X Layer service-payment proof',
+    ],
+    artifacts: [
+      'executionId and externalOrderId',
+      'machine-readable policy decision trace',
+      'exact approved CLOB payload',
+    ],
+    safety: [
+      'BUY only; immediate FAK or FOK only',
+      'no language model decides whether the order is allowed',
+      'the authority signature binds the mandate to the policy version, X Layer, and externalOrderId',
+      'changed amount, price, market, token, signer, or externalOrderId binding is blocked',
+      'free preflight is available before payment',
+      'paid route refuses to challenge the buyer unless durable storage is ready',
+      'buyer generates CLOB headers locally and submits directly to Polymarket',
       'PolyDesk never receives a private key, CLOB API secret, or CLOB passphrase',
     ],
   },

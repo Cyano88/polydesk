@@ -11,6 +11,7 @@ import {
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
+import a2mcpPolymarketGovernedOpenHandler, { governedOpenReady } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import a2mcpPolymarketSignedOpenHandler from './a2mcp-polymarket-signed-open.js'
 import polyWorldcupNewsHandler from './poly-worldcup-news.js'
@@ -50,6 +51,13 @@ const serviceDefinitions = {
     description: 'Validate the constraints of a buyer-signed, capped Polymarket BUY payload and return a direct-submit handoff without receiving private keys, CLOB secrets, or passphrases.',
     tags: ['polymarket', 'intent-to-sign', 'signed-order', 'buyer-controlled'],
     deliver: a2mcpPolymarketSignedOpenHandler,
+  },
+  '/api/a2mcp/polymarket-governed-open': {
+    name: 'Polymarket Governed Market OPEN',
+    description: 'Apply a deterministic spending mandate to an exact buyer-signed Polymarket BUY order and return an APPROVE, ESCALATE, or BLOCK decision without receiving private keys or reusable CLOB credentials.',
+    tags: ['polymarket', 'governed-execution', 'buyer-signed', 'deterministic-policy'],
+    ready: governedOpenReady,
+    deliver: a2mcpPolymarketGovernedOpenHandler,
   },
 } as const
 
@@ -250,6 +258,9 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   const path = routePath(req) as StandardServicePath
   const service = serviceDefinitions[path]
   if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
+  if ('ready' in service && !service.ready()) {
+    return res.status(503).json({ ok: false, error: 'This paid service is not ready. No payment challenge was issued.' })
+  }
 
   try {
     const httpServer = await getStandardServicesServer(req)

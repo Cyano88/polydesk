@@ -26,6 +26,7 @@
     "test:worldcup-summary": "node --import tsx --test scripts/worldcup-final-summary.test.ts",
     "test:okx-lp-scout": "node --import tsx --test scripts/okx-a2mcp-lp-scout.test.ts",
     "test:signed-open": "node --import tsx --test scripts/polymarket-signed-open.test.ts",
+    "test:governed-open": "node --import tsx --test scripts/polymarket-governed-open.test.ts",
     "test:open-prepare": "node --import tsx --test scripts/polymarket-open-prepare.test.ts",
     "test:lp-context": "node --import tsx --test scripts/lp-context-intelligence.test.ts",
     "test:helper-memory": "node --import tsx --test scripts/helper-memory.test.ts",
