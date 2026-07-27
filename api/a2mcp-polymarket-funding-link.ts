@@ -15,6 +15,21 @@ const defaultDependencies: FundingDependencies = {
   createCheckout: createHashPayLinkPolymarketFundingCheckout,
 }
 
+type FundingReadiness = Awaited<ReturnType<typeof checkPolymarketAccountReadiness>>
+
+export type PolymarketFundingPreflight =
+  | { proceed: false; status: number; body: Record<string, unknown> }
+  | {
+      proceed: true
+      ownerAddress: string
+      amount: string
+      requiredBalanceUsdc: string
+      network: BridgeNetwork
+      buyerAgent: string
+      readiness: Extract<FundingReadiness, { ok: true }>
+      checkoutAmount: string
+    }
+
 function cleanText(value: unknown, max = 120) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -45,6 +60,112 @@ function networkLabel(network: BridgeNetwork) {
   return 'Base'
 }
 
+export async function preflightA2mcpPolymarketFundingLink(
+  req: Request,
+  dependencies: Pick<FundingDependencies, 'readiness'> = defaultDependencies,
+): Promise<PolymarketFundingPreflight> {
+  const ownerAddress = cleanText(requestValue(req, 'ownerAddress', 'owner', 'eoa'), 64)
+  const polymarketWallet = cleanText(requestValue(req, 'wallet', 'polymarketWallet', 'pmw'), 64)
+  const amount = cleanAmount(requestValue(req, 'amount', 'a'))
+  const requiredBalanceUsdc = cleanAmount(requestValue(req, 'requiredBalanceUsdc', 'requiredUsdc', 'maxSpendUsdc'))
+  const network = cleanNetwork(requestValue(req, 'network', 'n'))
+  const buyerAgent = cleanText(requestValue(req, 'agent') ?? req.headers['x-buyer-agent'] ?? req.headers['x-agent-slug'], 64) || 'external-agent'
+
+  if (!isAddress(ownerAddress)) {
+    return { proceed: false, status: 400, body: { ok: false, error: 'Provide the owner EOA that controls the Polymarket account.' } }
+  }
+  if (polymarketWallet && !isAddress(polymarketWallet)) {
+    return { proceed: false, status: 400, body: { ok: false, error: 'polymarketWallet must be a valid 0x address when supplied.' } }
+  }
+  if (!amount && !requiredBalanceUsdc) {
+    return {
+      proceed: false,
+      status: 400,
+      body: { ok: false, error: 'Provide amount for a direct top-up or requiredBalanceUsdc for a buy-readiness top-up.' },
+    }
+  }
+  if (network !== 'base' && network !== 'arbitrum') {
+    return { proceed: false, status: 400, body: { ok: false, error: 'Hash PayLink Polymarket funding supports Base or Arbitrum.' } }
+  }
+
+  const readiness = await dependencies.readiness({
+    ownerAddress,
+    ...(polymarketWallet ? { polymarketWallet } : {}),
+    requiredBalanceUsdc: requiredBalanceUsdc || '0',
+    sourceNetwork: network,
+    sourceToken: 'USDC',
+  })
+  if (!readiness.ok) {
+    const { status, ...body } = readiness
+    return { proceed: false, status, body }
+  }
+  const account = readiness.data.polymarketAccount
+  const funding = readiness.data.funding
+  if (!account.deployedOnPolygon) {
+    return {
+      proceed: false,
+      status: 409,
+      body: {
+        ...readiness.data,
+        error: 'Activate the derived Polymarket Deposit Wallet before creating a funding checkout.',
+      },
+    }
+  }
+  if (!funding.supportedAssetVerified || !funding.minimumUsdc) {
+    return {
+      proceed: false,
+      status: 503,
+      body: {
+        ...readiness.data,
+        error: 'Polymarket did not return a verified USDC funding route. No checkout was created.',
+      },
+    }
+  }
+  if (requiredBalanceUsdc && !funding.needed) {
+    return {
+      proceed: false,
+      status: 200,
+      body: {
+        ...readiness.data,
+        service: 'PolyDesk Polymarket Ready-to-Buy',
+        buyerAgent,
+        checkout: null,
+        nextAction: 'PREPARE_BUY',
+        message: 'The verified Polymarket Deposit Wallet already has the required pUSD balance.',
+      },
+    }
+  }
+
+  const liveMinimum = Number(funding.minimumUsdc)
+  const upstreamMinimum = 3
+  const minimumUsdc = Math.max(liveMinimum, upstreamMinimum)
+  const checkoutAmount = requiredBalanceUsdc
+    ? String(Math.max(Number(funding.suggestedAmountUsdc), minimumUsdc))
+    : amount
+  if (!checkoutAmount || !Number.isFinite(Number(checkoutAmount)) || Number(checkoutAmount) < minimumUsdc) {
+    return {
+      proceed: false,
+      status: 400,
+      body: {
+        ok: false,
+        error: `Provide at least ${minimumUsdc} USDC for this hosted checkout.`,
+        minimumUsdc,
+        providerMinimumUsdc: funding.minimumUsdc,
+      },
+    }
+  }
+  return {
+    proceed: true,
+    ownerAddress,
+    amount,
+    requiredBalanceUsdc,
+    network,
+    buyerAgent,
+    readiness,
+    checkoutAmount,
+  }
+}
+
 export function createA2mcpPolymarketFundingLinkHandler(dependencies: FundingDependencies = defaultDependencies) {
   return async function a2mcpPolymarketFundingLinkHandler(req: Request, res: Response) {
     if (req.method !== 'GET' && req.method !== 'POST') {
@@ -53,83 +174,11 @@ export function createA2mcpPolymarketFundingLinkHandler(dependencies: FundingDep
     }
 
     try {
-      const ownerAddress = cleanText(requestValue(req, 'ownerAddress', 'owner', 'eoa'), 64)
-      const polymarketWallet = cleanText(requestValue(req, 'wallet', 'polymarketWallet', 'pmw'), 64)
-      const amount = cleanAmount(requestValue(req, 'amount', 'a'))
-      const requiredBalanceUsdc = cleanAmount(requestValue(req, 'requiredBalanceUsdc', 'requiredUsdc', 'maxSpendUsdc'))
-      const network = cleanNetwork(requestValue(req, 'network', 'n'))
-      const buyerAgent = cleanText(requestValue(req, 'agent') ?? req.headers['x-buyer-agent'] ?? req.headers['x-agent-slug'], 64) || 'external-agent'
-
-      if (!isAddress(ownerAddress)) {
-        return res.status(400).json({
-          ok: false,
-          error: 'Provide the owner EOA that controls the Polymarket account.',
-        })
-      }
-      if (polymarketWallet && !isAddress(polymarketWallet)) {
-        return res.status(400).json({
-          ok: false,
-          error: 'polymarketWallet must be a valid 0x address when supplied.',
-        })
-      }
-      if (!amount && !requiredBalanceUsdc) {
-        return res.status(400).json({
-          ok: false,
-          error: 'Provide amount for a direct top-up or requiredBalanceUsdc for a buy-readiness top-up.',
-        })
-      }
-      if (network !== 'base' && network !== 'arbitrum') return res.status(400).json({ ok: false, error: 'Hash PayLink Polymarket funding supports Base or Arbitrum.' })
-
-      const readiness = await dependencies.readiness({
-        ownerAddress,
-        ...(polymarketWallet ? { polymarketWallet } : {}),
-        requiredBalanceUsdc: requiredBalanceUsdc || '0',
-        sourceNetwork: network,
-        sourceToken: 'USDC',
-      })
-      if (!readiness.ok) {
-        const { status, ...body } = readiness
-        return res.status(status).json(body)
-      }
+      const preflight = await preflightA2mcpPolymarketFundingLink(req, dependencies)
+      if (!preflight.proceed) return res.status(preflight.status).json(preflight.body)
+      const { readiness, network, buyerAgent, checkoutAmount } = preflight
       const account = readiness.data.polymarketAccount
       const funding = readiness.data.funding
-      if (!account.deployedOnPolygon) {
-        return res.status(409).json({
-          ...readiness.data,
-          error: 'Activate the derived Polymarket Deposit Wallet before creating a funding checkout.',
-        })
-      }
-      if (!funding.supportedAssetVerified || !funding.minimumUsdc) {
-        return res.status(503).json({
-          ...readiness.data,
-          error: 'Polymarket did not return a verified USDC funding route. No checkout was created.',
-        })
-      }
-      if (requiredBalanceUsdc && !funding.needed) {
-        return res.json({
-          ...readiness.data,
-          service: 'PolyDesk Polymarket Ready-to-Buy',
-          buyerAgent,
-          checkout: null,
-          nextAction: 'PREPARE_BUY',
-          message: 'The verified Polymarket Deposit Wallet already has the required pUSD balance.',
-        })
-      }
-
-      const liveMinimum = Number(funding.minimumUsdc)
-      const upstreamMinimum = 3
-      const minimumUsdc = Math.max(liveMinimum, upstreamMinimum)
-      const checkoutAmount = requiredBalanceUsdc
-        ? String(Math.max(Number(funding.suggestedAmountUsdc), minimumUsdc))
-        : amount
-      if (!checkoutAmount || !Number.isFinite(Number(checkoutAmount)) || Number(checkoutAmount) < minimumUsdc) {
-        return res.status(400).json({
-          ok: false,
-          error: `Provide at least ${minimumUsdc} USDC for this hosted checkout.`,
-          minimumUsdc,
-          providerMinimumUsdc: funding.minimumUsdc,
-        })
-      }
 
       const requestId = `a2mcp-${randomUUID()}`
       const returnUrl = `${polydeskOrigin()}/polydesk?service=portfolio&notice=polymarket-funding-complete&portfolio=external`

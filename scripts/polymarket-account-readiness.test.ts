@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { getAddress, parseUnits } from 'viem'
 import { checkPolymarketAccountReadiness } from '../api/polymarket-account-readiness.js'
-import { createA2mcpPolymarketFundingLinkHandler } from '../api/a2mcp-polymarket-funding-link.js'
+import {
+  createA2mcpPolymarketFundingLinkHandler,
+  preflightA2mcpPolymarketFundingLink,
+} from '../api/a2mcp-polymarket-funding-link.js'
 
 const owner = getAddress('0x1111111111111111111111111111111111111111')
 const depositWallet = getAddress('0x2222222222222222222222222222222222222222')
@@ -84,6 +87,26 @@ test('requires activation before funding an undeployed derived wallet', async ()
   assert.equal(result.data.state, 'activation_required')
   assert.equal(result.data.nextAction, 'SETUP_DEPOSIT_WALLET')
   assert.equal(result.data.polymarketAccount.collateral.balance, '0')
+})
+
+test('blocks an undeployed account before the x402 service fee', async () => {
+  const result = await preflightA2mcpPolymarketFundingLink({
+    method: 'POST',
+    headers: {},
+    query: {},
+    body: {
+      ownerAddress: owner,
+      requiredBalanceUsdc: '5',
+      network: 'base',
+    },
+  } as any, {
+    readiness: input => checkPolymarketAccountReadiness(input, readinessDependencies({ deployed: false })),
+  })
+
+  assert.equal(result.proceed, false)
+  if (result.proceed) return
+  assert.equal(result.status, 409)
+  assert.equal(result.body.nextAction, 'SETUP_DEPOSIT_WALLET')
 })
 
 test('funding handoff targets only the derived deployed wallet', async () => {
