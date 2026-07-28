@@ -48,6 +48,58 @@ const fundingLinkBodyProperties = {
 
 const fundingLinkRequiredFields = ['ownerAddress', 'requiredBalanceUsdc'] as const
 
+const governedTraderBodyProperties = {
+  externalOrderId: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 80,
+    description: 'Caller-generated idempotency key for this exact governed order.',
+  },
+  marketUrl: {
+    type: 'string',
+    format: 'uri',
+    description: 'Canonical polymarket.com event URL.',
+  },
+  marketTitle: { type: 'string', minLength: 1, maxLength: 240 },
+  outcome: { type: 'string', minLength: 1, maxLength: 120 },
+  tokenId: {
+    type: 'string',
+    pattern: '^[0-9]+$',
+    description: 'Exact Polymarket outcome token ID.',
+  },
+  signer: {
+    type: 'string',
+    pattern: '^0x[a-fA-F0-9]{40}$',
+    description: 'Buyer signer bound by the mandate and signed order.',
+  },
+  orderType: { type: 'string', enum: ['FAK', 'FOK'] },
+  order: {
+    type: 'object',
+    description: 'Exact buyer-signed Polymarket order.',
+  },
+  orderPayload: {
+    type: 'object',
+    description: 'Exact payload the buyer agent will submit directly to Polymarket.',
+  },
+  mandate: {
+    type: 'object',
+    description: 'Short-lived deterministic spending mandate and authority signature.',
+  },
+} as const
+
+const governedTraderRequiredFields = [
+  'externalOrderId',
+  'marketUrl',
+  'marketTitle',
+  'outcome',
+  'tokenId',
+  'signer',
+  'orderType',
+  'order',
+  'orderPayload',
+  'mandate',
+] as const
+
 function fundingLinkReplaySchema() {
   return {
     input: {
@@ -65,6 +117,89 @@ function fundingLinkReplaySchema() {
     output: {
       type: 'json',
       description: 'Verified Deposit Wallet readiness and, when funding is required, a hosted checkout URL plus status URL.',
+    },
+  }
+}
+
+function governedTraderReplaySchema() {
+  return {
+    input: Object.fromEntries(
+      Object.entries(governedTraderBodyProperties).map(([name, schema]) => [
+        name,
+        { ...schema, required: true },
+      ]),
+    ),
+    output: {
+      type: 'json',
+      description: 'APPROVE decision proof, exact direct-submit payload, service-payment proof, and completion instructions.',
+    },
+  }
+}
+
+function governedTraderDiscoveryExtension() {
+  return {
+    bazaar: {
+      info: {
+        input: {
+          type: 'http',
+          method: 'POST',
+          bodyType: 'json',
+          body: {
+            externalOrderId: 'caller:trade:unique-id',
+            marketUrl: 'https://polymarket.com/event/example-market',
+            marketTitle: 'Example market',
+            outcome: 'Yes',
+            tokenId: '123456789',
+            signer: '0x1111111111111111111111111111111111111111',
+            orderType: 'FAK',
+            order: {},
+            orderPayload: {},
+            mandate: {},
+          },
+        },
+        output: {
+          type: 'json',
+          example: {
+            ok: true,
+            decision: 'APPROVE',
+            executionId: 'pex_example',
+            nextAction: 'SUBMIT',
+          },
+        },
+      },
+      schema: {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: {
+          input: {
+            type: 'object',
+            properties: {
+              type: { const: 'http' },
+              method: { const: 'POST' },
+              bodyType: { const: 'json' },
+              body: {
+                type: 'object',
+                properties: governedTraderBodyProperties,
+                required: governedTraderRequiredFields,
+                additionalProperties: false,
+              },
+            },
+            required: ['type', 'method', 'bodyType', 'body'],
+            additionalProperties: false,
+          },
+          output: {
+            type: 'object',
+            properties: {
+              type: { const: 'json' },
+              example: { type: 'object' },
+            },
+            required: ['type', 'example'],
+            additionalProperties: false,
+          },
+        },
+        required: ['input', 'output'],
+        additionalProperties: false,
+      },
     },
   }
 }
@@ -283,7 +418,12 @@ function payerFromPayload(paymentPayload: PaymentPayload) {
 export function buildStandardServiceRouteConfig(req: Request, path: StandardServicePath, price: string, payTo: string): RouteConfig {
   const service = serviceDefinitions[path]
   const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
-  const discoveryExtensions = isFundingLink ? fundingLinkDiscoveryExtension() : {}
+  const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
+  const discoveryExtensions = isFundingLink
+    ? fundingLinkDiscoveryExtension()
+    : isGovernedTrader
+      ? governedTraderDiscoveryExtension()
+      : {}
   return {
     accepts: {
       scheme: 'exact',
@@ -329,6 +469,13 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
             type: 'object',
             properties: fundingLinkBodyProperties,
             required: fundingLinkRequiredFields,
+            additionalProperties: false,
+          },
+        } : isGovernedTrader ? {
+          inputSchema: {
+            type: 'object',
+            properties: governedTraderBodyProperties,
+            required: governedTraderRequiredFields,
             additionalProperties: false,
           },
         } : {}),
@@ -411,12 +558,35 @@ export function addFundingReplaySchema(
   }
 }
 
+export function addGovernedTraderReplaySchema(
+  response: { status: number; headers: Record<string, string>; body?: unknown },
+  path: StandardServicePath,
+) {
+  if (path !== '/api/a2mcp/polymarket-agent-flow' || response.status !== 402) return response
+  const paymentHeaderKey = Object.keys(response.headers).find(key => key.toLowerCase() === 'payment-required')
+  if (!paymentHeaderKey) return response
+
+  try {
+    const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
+    challenge.outputSchema = governedTraderReplaySchema()
+    return {
+      ...response,
+      headers: {
+        ...response.headers,
+        [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64url'),
+      },
+    }
+  } catch {
+    return response
+  }
+}
+
 function sendInstructions(
   res: Response,
   response: { status: number; headers: Record<string, string>; body?: unknown },
   path: StandardServicePath,
 ) {
-  const prepared = addFundingReplaySchema(response, path)
+  const prepared = addGovernedTraderReplaySchema(addFundingReplaySchema(response, path), path)
   for (const [key, value] of Object.entries(prepared.headers)) res.setHeader(key, value)
   return res.status(prepared.status).send(prepared.body)
 }
@@ -451,16 +621,25 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
     }
   }
   if (path === '/api/a2mcp/polymarket-agent-flow') {
-    const evaluation = evaluateGovernedOpenInput(req.body)
-    if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
-    if (evaluation.decision !== 'APPROVE') {
-      return res.status(409).json({
-        ok: false,
-        decision: evaluation.decision,
-        reasons: evaluation.reasons,
-        checks: evaluation.checks,
-        error: 'Only an APPROVE decision can proceed to the paid governed handoff. No payment challenge was issued.',
-      })
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? req.body as Record<string, unknown>
+      : {}
+    // OKX marketplace discovery probes this POST route with an empty body. Let
+    // the payment layer return its 402 plus the declared input schema. Real
+    // non-empty requests still receive the free deterministic preflight before
+    // any payment can be accepted.
+    if (Object.keys(body).length > 0) {
+      const evaluation = evaluateGovernedOpenInput(body)
+      if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
+      if (evaluation.decision !== 'APPROVE') {
+        return res.status(409).json({
+          ok: false,
+          decision: evaluation.decision,
+          reasons: evaluation.reasons,
+          checks: evaluation.checks,
+          error: 'Only an APPROVE decision can proceed to the paid governed handoff. No payment challenge was issued.',
+        })
+      }
     }
   }
   if ('ready' in service && !service.ready()) {
