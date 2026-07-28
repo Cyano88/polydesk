@@ -402,12 +402,31 @@ async function deliverFreeMarketplaceService(
     serviceUrl: path,
   }
 
+  const body = isRecord(req.body) ? req.body : {}
+  const hasBusinessInput = Object.keys(body).length > 0 || Object.keys(req.query || {}).length > 0
+  if (path === '/api/a2mcp/polymarket-funding-link' && !hasBusinessInput) {
+    return res.status(200).json({
+      ok: true,
+      service: 'PolyDesk Verified Polymarket Funding',
+      access: { model: 'free', feeUsdt: '0' },
+      purpose: 'Verify the owner-derived Polymarket Deposit Wallet and prepare a hosted funding checkout only when a live pUSD shortfall exists.',
+      inputSchema: {
+        type: 'object',
+        properties: fundingLinkBodyProperties,
+        required: fundingLinkRequiredFields,
+        additionalProperties: false,
+      },
+      method: 'POST',
+      endpoint: `${requestOrigin(req)}${path}`,
+      nextAction: 'CALL_WITH_OWNER_AND_REQUIRED_BALANCE',
+    })
+  }
+
   if (path !== '/api/a2mcp/polymarket-portfolio-watch') {
     return service.deliver(freeReq, res)
   }
 
-  const body = isRecord(req.body) ? req.body : {}
-  if (req.method === 'GET' || Object.keys(body).length === 0) {
+  if (req.method === 'GET' || !hasBusinessInput) {
     return res.status(200).json({
       ...flowDescriptor(req),
       access: { model: 'free', feeUsdt: '0' },
