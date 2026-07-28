@@ -30,6 +30,22 @@ test('OKX LP Scout advertises EIP-3009 exact without Permit2', () => {
   assert.equal(route.resource, 'https://polydesk.trade/api/a2mcp/okx/polymarket-lp-scout')
 })
 
+test('OKX LP Scout challenge binds to the actual Render request origin', () => {
+  const req = {
+    headers: {
+      host: 'polydesk-i96m.onrender.com',
+      'x-forwarded-proto': 'https',
+    },
+    protocol: 'http',
+  } as Request
+  const route = buildOkxLpScoutRouteConfig(
+    req,
+    '0.3',
+    '0x8f1b15fc1489262ce64ac8d6592bc8ebb31f07be',
+  )
+  assert.equal(route.resource, 'https://polydesk-i96m.onrender.com/api/a2mcp/okx/polymarket-lp-scout')
+})
+
 test('OKX LP Scout receipt labels match the settled USDT payment', () => {
   const payment = describeScoutPayment({
     verified: true,

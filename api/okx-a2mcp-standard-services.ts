@@ -10,11 +10,12 @@ import {
 } from '@okxweb3/x402-core/server'
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
-import a2mcpPolymarketFundingLinkHandler, { preflightA2mcpPolymarketFundingLink } from './a2mcp-polymarket-funding-link.js'
+import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
 import a2mcpPolymarketGovernedOpenHandler, {
   evaluateGovernedOpenInput,
   governedOpenReady,
 } from './a2mcp-polymarket-governed-open.js'
+import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import polyStreamHandler, { getPolyStreamFeed } from './poly-stream.js'
 
@@ -137,6 +138,26 @@ function fundingLinkDiscoveryExtension() {
 }
 
 const serviceDefinitions = {
+  // Agent #5427 compatibility routes. Keep these live until the marketplace
+  // listing has migrated to the newer football and governed-flow names.
+  '/api/a2mcp/worldcup-live-scores': {
+    name: 'World Cup Live Scores',
+    description: 'Provider-truth football fixtures, live scores, match events, and a canonical Polymarket event URL plus trade metadata when confidently resolved.',
+    tags: ['world-cup', 'football', 'live-data', 'polymarket'],
+    deliver: polyStreamHandler,
+  },
+  '/api/a2mcp/worldcup-market-news': {
+    name: 'World Cup Market News',
+    description: 'Current provider-sourced football headlines with canonical source links and deterministic Polymarket event matches where available.',
+    tags: ['world-cup', 'football', 'news', 'polymarket'],
+    deliver: polyWorldcupNewsHandler,
+  },
+  '/api/a2mcp/polymarket-portfolio-watch': {
+    name: 'Polymarket Portfolio Watch',
+    description: 'Polymarket wallet positions plus exact recent BUY signals for buyer-verified governed copy preparation.',
+    tags: ['polymarket', 'portfolio', 'monitoring', 'copy-trading'],
+    deliver: a2mcpPolymarketPortfolioWatchHandler,
+  },
   '/api/a2mcp/football-live-data': {
     name: 'Football Match Live Data',
     description: 'Provider-truth football fixtures, live scores, match events, and a canonical Polymarket event URL plus trade metadata when an active match market is confidently resolved.',
@@ -191,8 +212,16 @@ function publicOrigin(req: Request) {
   return env('RENDER_EXTERNAL_URL') || 'https://polydesk.trade'
 }
 
+function requestOrigin(req: Request) {
+  const forwardedProto = clean(req.headers['x-forwarded-proto']).split(',')[0]
+  const forwardedHost = clean(req.headers['x-forwarded-host']).split(',')[0]
+  const host = forwardedHost || clean(req.headers.host).split(',')[0]
+  if (host) return `${forwardedProto || req.protocol || 'https'}://${host}`
+  return publicOrigin(req)
+}
+
 function requestUrl(req: Request) {
-  return `${publicOrigin(req)}${req.originalUrl || req.url}`
+  return `${requestOrigin(req)}${req.originalUrl || req.url}`
 }
 
 function routePath(req: Request) {
@@ -278,7 +307,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
         version: '1',
       },
     },
-    resource: `${publicOrigin(req)}${path}`,
+    resource: `${requestOrigin(req)}${path}`,
     description: service.description,
     mimeType: 'application/json',
     extensions: {
@@ -401,7 +430,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   const path = routePath(req) as StandardServicePath
   const service = serviceDefinitions[path]
   if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
-  if (path === '/api/a2mcp/football-live-data') {
+  if (path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores') {
     const requestedDate = clean(req.query.date) || new Date().toISOString().slice(0, 10)
     const feed = await getPolyStreamFeed(/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10))
     if (!feed.matches.length) {
@@ -412,7 +441,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       })
     }
   }
-  if (path === '/api/a2mcp/football-news-brief') {
+  if (path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news') {
     const feed = await getPolyWorldcupNewsFeed()
     if (feed.mode !== 'live' || !feed.articles.length) {
       return res.status(503).json({
@@ -433,10 +462,6 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
         error: 'Only an APPROVE decision can proceed to the paid governed handoff. No payment challenge was issued.',
       })
     }
-  }
-  if (path === '/api/a2mcp/polymarket-funding-link') {
-    const preflight = await preflightA2mcpPolymarketFundingLink(req)
-    if (!preflight.proceed) return res.status(preflight.status).json(preflight.body)
   }
   if ('ready' in service && !service.ready()) {
     return res.status(503).json({ ok: false, error: 'This paid service is not ready. No payment challenge was issued.' })

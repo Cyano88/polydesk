@@ -41,8 +41,16 @@ function publicOrigin(req: Request) {
   return env('RENDER_EXTERNAL_URL') || 'https://polydesk.trade'
 }
 
+function requestOrigin(req: Request) {
+  const forwardedProto = clean(req.headers['x-forwarded-proto']).split(',')[0]
+  const forwardedHost = clean(req.headers['x-forwarded-host']).split(',')[0]
+  const host = forwardedHost || clean(req.headers.host).split(',')[0]
+  if (host) return `${forwardedProto || req.protocol || 'https'}://${host}`
+  return publicOrigin(req)
+}
+
 function requestUrl(req: Request) {
-  return `${publicOrigin(req)}${req.originalUrl || req.url}`
+  return `${requestOrigin(req)}${req.originalUrl || req.url}`
 }
 
 function routePath(req: Request) {
@@ -108,7 +116,7 @@ export function buildOkxLpScoutRouteConfig(req: Request, price: string, payTo: s
         version: '1',
       },
     },
-    resource: `${publicOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`,
+    resource: `${requestOrigin(req)}/api/a2mcp/okx/polymarket-lp-scout`,
     description: 'PolyDesk LP Scout report for buyer agents on OKX.AI.',
     mimeType: 'application/json',
     extensions: {
@@ -188,6 +196,7 @@ async function getOkxHttpServer(req: Request) {
       const price = env('OKX_X402_POLYMARKET_LP_SCOUT_PRICE') || DEFAULT_PRICE
       const routes: RoutesConfig = {
         'GET /api/a2mcp/okx/polymarket-lp-scout': buildOkxLpScoutRouteConfig(req, price, payTo),
+        'POST /api/a2mcp/okx/polymarket-lp-scout': buildOkxLpScoutRouteConfig(req, price, payTo),
       }
 
       const httpServer = new x402HTTPResourceServer(resourceServer, routes)
@@ -207,7 +216,10 @@ function sendInstructions(res: Response, response: { status: number; headers: Re
 }
 
 export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res: Response) {
-  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
+    return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  }
   try {
     const httpServer = await getOkxHttpServer(req)
     const adapter = adapterForRequest(req)
