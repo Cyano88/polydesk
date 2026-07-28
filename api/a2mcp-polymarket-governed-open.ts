@@ -509,9 +509,14 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ ok: false, error: 'Method not allowed.' })
   }
-  const paidReq = req as Request & { payment?: { verified?: boolean; payer?: string; transaction?: string } }
-  if (paidReq.payment?.verified !== true) {
-    return res.status(403).json({ ok: false, error: 'A verified OKX service payment is required.' })
+  const paidReq = req as Request & {
+    access?: { granted?: boolean; model?: string; provider?: string }
+    payment?: { verified?: boolean; payer?: string; transaction?: string }
+  }
+  const paidAccess = paidReq.payment?.verified === true
+  const freeAccess = paidReq.access?.granted === true && paidReq.access.model === 'free'
+  if (!paidAccess && !freeAccess) {
+    return res.status(403).json({ ok: false, error: 'Paid or marketplace-free service access is required.' })
   }
   if (!governedOpenReady()) {
     return res.status(503).json({ ok: false, error: 'PolyDesk governed OPEN durable storage is not configured.' })
@@ -541,7 +546,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
         orderHash: evaluation.orderHash,
         mandateHash: evaluation.mandateHash,
         decidedAt: new Date().toISOString(),
-        payer: clean(paidReq.payment?.payer, 96) || 'okx-buyer',
+        payer: clean(paidReq.payment?.payer, 96) || evaluation.signedOpen.signer.toLowerCase(),
         authoritySigner: clean(evaluation.mandate.authoritySigner, 80).toLowerCase(),
         market: {
           title: evaluation.signedOpen.marketTitle,
@@ -618,10 +623,22 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
       submittedByPolyDesk: false,
       finalSignatureAuthority: 'Polymarket CLOB',
     },
-    paymentProof: {
-      network: 'X Layer',
-      transaction: paidReq.payment?.transaction,
-    },
+    serviceAccess: paidReq.payment?.transaction
+      ? {
+          model: 'paid',
+          network: 'X Layer',
+          transaction: paidReq.payment.transaction,
+        }
+      : {
+          model: 'free',
+          provider: paidReq.access?.provider || 'OKX Marketplace',
+        },
+    ...(paidReq.payment?.transaction ? {
+      paymentProof: {
+        network: 'X Layer',
+        transaction: paidReq.payment.transaction,
+      },
+    } : {}),
   })
 }
 

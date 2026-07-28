@@ -21,8 +21,9 @@ function publicOrigin(req: Request) {
   return `${protocol}://${host}`.replace(/\/+$/, '')
 }
 
-function flowDescriptor(req: Request) {
+export function flowDescriptor(req: Request) {
   const origin = publicOrigin(req)
+  const freeMarketplaceAccess = (req as Request & { payment?: { kind?: string } }).payment?.kind === 'okx_marketplace_free'
   return {
     ok: true,
     service: 'PolyDesk Governed Polymarket Trader',
@@ -51,10 +52,12 @@ function flowDescriptor(req: Request) {
       },
       {
         step: 4,
-        action: 'AUTHORIZE_AND_PAY_SERVICE',
+        action: freeMarketplaceAccess ? 'AUTHORIZE_AND_RUN' : 'AUTHORIZE_AND_PAY_SERVICE',
         authorizeEndpoint: `${origin}/api/polymarket-governed-open/authorize`,
         validateEndpoint: `${origin}/api/polymarket-governed-open/validate`,
-        paidEndpoint: `${origin}/api/a2mcp/polymarket-agent-flow`,
+        executionEndpoint: freeMarketplaceAccess
+          ? `${origin}/api/a2mcp/polymarket-portfolio-watch`
+          : `${origin}/api/a2mcp/polymarket-agent-flow`,
         output: 'APPROVE, ESCALATE, or BLOCK. Only APPROVE returns the exact direct-submit payload.',
       },
       {
@@ -110,10 +113,16 @@ export default async function polymarketAgentFlowHandler(req: Request, res: Resp
     const { status, ...responseBody } = result
     return res.status(status).json(responseBody)
   }
+  const freeMarketplaceAccess = (req as Request & { payment?: { kind?: string } }).payment?.kind === 'okx_marketplace_free'
   return res.status(result.status).json({
     ...result.data,
     service: 'PolyDesk Governed Polymarket Trader',
     flowEndpoint: `${publicOrigin(req)}/api/polymarket-agent-flow`,
-    paidEndpoint: `${publicOrigin(req)}/api/a2mcp/polymarket-agent-flow`,
+    executionEndpoint: freeMarketplaceAccess
+      ? `${publicOrigin(req)}/api/a2mcp/polymarket-portfolio-watch`
+      : `${publicOrigin(req)}/api/a2mcp/polymarket-agent-flow`,
+    access: freeMarketplaceAccess
+      ? { model: 'free', feeUsdt: '0' }
+      : { model: 'paid' },
   })
 }

@@ -16,12 +16,19 @@ import a2mcpPolymarketGovernedOpenHandler, {
   governedOpenReady,
 } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
+import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
 import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import polyStreamHandler, { getPolyStreamFeed } from './poly-stream.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
+const FREE_MARKETPLACE_PATHS = new Set<string>([
+  '/api/a2mcp/worldcup-live-scores',
+  '/api/a2mcp/worldcup-market-news',
+  '/api/a2mcp/polymarket-portfolio-watch',
+  '/api/a2mcp/polymarket-funding-link',
+])
 
 const fundingLinkBodyProperties = {
   ownerAddress: {
@@ -276,21 +283,21 @@ const serviceDefinitions = {
   // Agent #5427 compatibility routes. Keep these live until the marketplace
   // listing has migrated to the newer football and governed-flow names.
   '/api/a2mcp/worldcup-live-scores': {
-    name: 'World Cup Live Scores',
+    name: 'Football Match Live Data',
     description: 'Provider-truth football fixtures, live scores, match events, and a canonical Polymarket event URL plus trade metadata when confidently resolved.',
     tags: ['world-cup', 'football', 'live-data', 'polymarket'],
     deliver: polyStreamHandler,
   },
   '/api/a2mcp/worldcup-market-news': {
-    name: 'World Cup Market News',
+    name: 'Football News Brief',
     description: 'Current provider-sourced football headlines with canonical source links and deterministic Polymarket event matches where available.',
     tags: ['world-cup', 'football', 'news', 'polymarket'],
     deliver: polyWorldcupNewsHandler,
   },
   '/api/a2mcp/polymarket-portfolio-watch': {
-    name: 'Polymarket Portfolio Watch',
-    description: 'Polymarket wallet positions plus exact recent BUY signals for buyer-verified governed copy preparation.',
-    tags: ['polymarket', 'portfolio', 'monitoring', 'copy-trading'],
+    name: 'Governed Polymarket Trader',
+    description: 'Watch or pick a Polymarket position, verify account readiness, enforce a short-lived signed mandate, and return an exact buyer-signed direct-submit handoff.',
+    tags: ['polymarket', 'portfolio', 'copy-trading', 'governed-execution', 'buyer-signed'],
     deliver: a2mcpPolymarketPortfolioWatchHandler,
   },
   '/api/a2mcp/football-live-data': {
@@ -361,6 +368,56 @@ function requestUrl(req: Request) {
 
 function routePath(req: Request) {
   return new URL(requestUrl(req)).pathname
+}
+
+export function isFreeMarketplacePath(path: string) {
+  return FREE_MARKETPLACE_PATHS.has(path)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+async function deliverFreeMarketplaceService(
+  req: Request,
+  res: Response,
+  path: StandardServicePath,
+) {
+  const service = serviceDefinitions[path]
+  const freeReq = req as Request & {
+    access?: Record<string, unknown>
+    payment?: Record<string, unknown>
+  }
+  freeReq.access = {
+    granted: true,
+    model: 'free',
+    provider: 'OKX Marketplace',
+    serviceUrl: path,
+  }
+  freeReq.payment = {
+    required: false,
+    amount: '0',
+    provider: 'OKX Marketplace free service',
+    kind: 'okx_marketplace_free',
+    serviceUrl: path,
+  }
+
+  if (path !== '/api/a2mcp/polymarket-portfolio-watch') {
+    return service.deliver(freeReq, res)
+  }
+
+  const body = isRecord(req.body) ? req.body : {}
+  if (req.method === 'GET' || Object.keys(body).length === 0) {
+    return res.status(200).json({
+      ...flowDescriptor(req),
+      access: { model: 'free', feeUsdt: '0' },
+      marketplaceEndpoint: `${requestOrigin(req)}${path}`,
+    })
+  }
+  if (body.externalOrderId && body.order && body.orderPayload && body.mandate) {
+    return a2mcpPolymarketGovernedOpenHandler(freeReq, res)
+  }
+  return polymarketAgentFlowHandler(freeReq, res)
 }
 
 function getHeader(req: Request, name: string) {
@@ -619,6 +676,9 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
         error: 'No current provider-sourced football brief is available. No payment challenge was issued.',
       })
     }
+  }
+  if (isFreeMarketplacePath(path)) {
+    return deliverFreeMarketplaceService(req, res, path)
   }
   if (path === '/api/a2mcp/polymarket-agent-flow') {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
