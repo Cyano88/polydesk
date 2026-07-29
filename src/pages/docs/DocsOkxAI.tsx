@@ -23,7 +23,7 @@ export default function DocsOkxAI() {
     <article className="space-y-10">
       <DocHeader
         title="OKX.AI marketplace services"
-        description="PolyDesk Agent #5427 exposes five machine-readable services. LP Scout is paid per call; the four marketplace-locked zero-fee services deliver directly without an x402 challenge."
+        description="PolyDesk Agent #5427 exposes five machine-readable pay-per-call services. Every registered endpoint uses a non-zero x402 challenge so OKX buyer tooling can capture and verify the paid replay."
       />
 
       <Section title="Service map">
@@ -31,20 +31,20 @@ export default function DocsOkxAI() {
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
             ['Polymarket LP Scout', '0.3 USDT', <Code>/api/a2mcp/okx/polymarket-lp-scout</Code>],
-            ['Football Match Live Data', 'Free', <Code>/api/a2mcp/worldcup-live-scores</Code>],
-            ['Football News Brief', 'Free', <Code>/api/a2mcp/worldcup-market-news</Code>],
-            ['Verified Polymarket Funding', 'Free', <Code>/api/a2mcp/polymarket-funding-link</Code>],
-            ['Governed Polymarket Trader', 'Free', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
+            ['Football Match Live Data', '0.1 USDT', <Code>/api/a2mcp/worldcup-live-scores</Code>],
+            ['Football News Brief', '0.1 USDT', <Code>/api/a2mcp/worldcup-market-news</Code>],
+            ['Verified Polymarket Funding', '0.1 USDT', <Code>/api/a2mcp/polymarket-funding-link</Code>],
+            ['Governed Polymarket Trader', '0.1 USDT', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
           ]}
         />
-        <Note>Prices and endpoints shown here match the current Agent #5427 marketplace records. Free calls return their JSON result directly. LP Scout issues a payable challenge only after its provider checks pass.</Note>
+        <Note>The backend contract shown here is the required target for Agent #5427. The four 0.1-USDT marketplace fees must also be reflected in the marketplace records before buyer testing.</Note>
       </Section>
 
       <Section title="How to call a service">
         <ol className="list-decimal space-y-2 pl-5">
           <li>Choose the exact endpoint from the service map.</li>
-          <li>For a free service, send the documented request and consume the HTTP 200 JSON response.</li>
-          <li>For LP Scout, read the HTTP 402 challenge, pay with OKX buyer tooling, and replay the request.</li>
+          <li>Send the documented request and read the HTTP 402 challenge.</li>
+          <li>Pay with OKX buyer tooling and replay the same request with the original business inputs.</li>
           <li>Store the returned machine-readable result or verified receipt.</li>
         </ol>
       </Section>

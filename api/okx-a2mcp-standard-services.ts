@@ -23,12 +23,6 @@ import polyStreamHandler, { getPolyStreamFeed } from './poly-stream.js'
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
-const FREE_MARKETPLACE_PATHS = new Set<string>([
-  '/api/a2mcp/worldcup-live-scores',
-  '/api/a2mcp/worldcup-market-news',
-  '/api/a2mcp/polymarket-portfolio-watch',
-  '/api/a2mcp/polymarket-funding-link',
-])
 
 const fundingLinkBodyProperties = {
   ownerAddress: {
@@ -107,6 +101,32 @@ const governedTraderRequiredFields = [
   'mandate',
 ] as const
 
+const portfolioWatchBodyProperties = {
+  action: {
+    type: 'string',
+    enum: ['DESCRIBE', 'WATCH', 'PREPARE'],
+    description: 'DESCRIBE returns the complete governed flow. WATCH inspects a public wallet. PREPARE selects and prepares a bounded buyer-controlled action.',
+  },
+  wallet: {
+    type: 'string',
+    pattern: '^0x[a-fA-F0-9]{40}$',
+    description: 'Public Polymarket wallet to inspect. This wallet never authorizes the buyer trade.',
+  },
+  ownerAddress: {
+    type: 'string',
+    pattern: '^0x[a-fA-F0-9]{40}$',
+    description: 'Buyer owner EOA used for account-readiness checks during PREPARE.',
+  },
+  selectionMode: {
+    type: 'string',
+    enum: ['POSITION', 'TRADE', 'AUTO_BEST_FIT'],
+  },
+  maxSpendUsdc: {
+    type: 'string',
+    pattern: '^[0-9]+(?:\\.[0-9]{1,6})?$',
+  },
+} as const
+
 function fundingLinkReplaySchema() {
   return {
     input: {
@@ -139,6 +159,21 @@ function governedTraderReplaySchema() {
     output: {
       type: 'json',
       description: 'APPROVE decision proof, exact direct-submit payload, service-payment proof, and completion instructions.',
+    },
+  }
+}
+
+function portfolioWatchReplaySchema() {
+  return {
+    input: Object.fromEntries(
+      Object.entries(portfolioWatchBodyProperties).map(([name, schema]) => [
+        name,
+        { ...schema, required: false },
+      ]),
+    ),
+    output: {
+      type: 'json',
+      description: 'A machine-readable governed-trading flow, public-wallet watch result, or bounded preparation result. An empty replay returns the complete flow descriptor.',
     },
   }
 }
@@ -279,6 +314,24 @@ function fundingLinkDiscoveryExtension() {
   }
 }
 
+async function deliverMarketplacePortfolioService(req: Request, res: Response) {
+  const body = isRecord(req.body) ? req.body : {}
+  const hasBusinessInput = Object.keys(body).length > 0 || Object.keys(req.query || {}).length > 0
+  if (req.method === 'GET' || !hasBusinessInput) {
+    return res.status(200).json({
+      ...flowDescriptor(req),
+      marketplaceEndpoint: `${requestOrigin(req)}/api/a2mcp/polymarket-portfolio-watch`,
+    })
+  }
+  if (body.externalOrderId && body.order && body.orderPayload && body.mandate) {
+    return a2mcpPolymarketGovernedOpenHandler(req, res)
+  }
+  if (body.action || body.selectionMode || body.ownerAddress || body.watchedWallet) {
+    return polymarketAgentFlowHandler(req, res)
+  }
+  return a2mcpPolymarketPortfolioWatchHandler(req, res)
+}
+
 const serviceDefinitions = {
   // Agent #5427 compatibility routes. Keep these live until the marketplace
   // listing has migrated to the newer football and governed-flow names.
@@ -298,7 +351,7 @@ const serviceDefinitions = {
     name: 'Governed Polymarket Trader',
     description: 'Watch or pick a Polymarket position, verify account readiness, enforce a short-lived signed mandate, and return an exact buyer-signed direct-submit handoff.',
     tags: ['polymarket', 'portfolio', 'copy-trading', 'governed-execution', 'buyer-signed'],
-    deliver: a2mcpPolymarketPortfolioWatchHandler,
+    deliver: deliverMarketplacePortfolioService,
   },
   '/api/a2mcp/football-live-data': {
     name: 'Football Match Live Data',
@@ -370,73 +423,8 @@ function routePath(req: Request) {
   return new URL(requestUrl(req)).pathname
 }
 
-export function isFreeMarketplacePath(path: string) {
-  return FREE_MARKETPLACE_PATHS.has(path)
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
-}
-
-async function deliverFreeMarketplaceService(
-  req: Request,
-  res: Response,
-  path: StandardServicePath,
-) {
-  const service = serviceDefinitions[path]
-  const freeReq = req as Request & {
-    access?: Record<string, unknown>
-    payment?: Record<string, unknown>
-  }
-  freeReq.access = {
-    granted: true,
-    model: 'free',
-    provider: 'OKX Marketplace',
-    serviceUrl: path,
-  }
-  freeReq.payment = {
-    required: false,
-    amount: '0',
-    provider: 'OKX Marketplace free service',
-    kind: 'okx_marketplace_free',
-    serviceUrl: path,
-  }
-
-  const body = isRecord(req.body) ? req.body : {}
-  const hasBusinessInput = Object.keys(body).length > 0 || Object.keys(req.query || {}).length > 0
-  if (path === '/api/a2mcp/polymarket-funding-link' && !hasBusinessInput) {
-    return res.status(200).json({
-      ok: true,
-      service: 'PolyDesk Verified Polymarket Funding',
-      access: { model: 'free', feeUsdt: '0' },
-      purpose: 'Verify the owner-derived Polymarket Deposit Wallet and prepare a hosted funding checkout only when a live pUSD shortfall exists.',
-      inputSchema: {
-        type: 'object',
-        properties: fundingLinkBodyProperties,
-        required: fundingLinkRequiredFields,
-        additionalProperties: false,
-      },
-      method: 'POST',
-      endpoint: `${requestOrigin(req)}${path}`,
-      nextAction: 'CALL_WITH_OWNER_AND_REQUIRED_BALANCE',
-    })
-  }
-
-  if (path !== '/api/a2mcp/polymarket-portfolio-watch') {
-    return service.deliver(freeReq, res)
-  }
-
-  if (req.method === 'GET' || !hasBusinessInput) {
-    return res.status(200).json({
-      ...flowDescriptor(req),
-      access: { model: 'free', feeUsdt: '0' },
-      marketplaceEndpoint: `${requestOrigin(req)}${path}`,
-    })
-  }
-  if (body.externalOrderId && body.order && body.orderPayload && body.mandate) {
-    return a2mcpPolymarketGovernedOpenHandler(freeReq, res)
-  }
-  return polymarketAgentFlowHandler(freeReq, res)
 }
 
 function getHeader(req: Request, name: string) {
@@ -495,6 +483,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
   const service = serviceDefinitions[path]
   const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
   const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
+  const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
   const discoveryExtensions = isFundingLink
     ? fundingLinkDiscoveryExtension()
     : isGovernedTrader
@@ -553,6 +542,12 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
             properties: governedTraderBodyProperties,
             required: governedTraderRequiredFields,
             additionalProperties: false,
+          },
+        } : isPortfolioWatch ? {
+          inputSchema: {
+            type: 'object',
+            properties: portfolioWatchBodyProperties,
+            additionalProperties: true,
           },
         } : {}),
       },
@@ -657,12 +652,38 @@ export function addGovernedTraderReplaySchema(
   }
 }
 
+export function addPortfolioWatchReplaySchema(
+  response: { status: number; headers: Record<string, string>; body?: unknown },
+  path: StandardServicePath,
+) {
+  if (path !== '/api/a2mcp/polymarket-portfolio-watch' || response.status !== 402) return response
+  const paymentHeaderKey = Object.keys(response.headers).find(key => key.toLowerCase() === 'payment-required')
+  if (!paymentHeaderKey) return response
+
+  try {
+    const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
+    challenge.outputSchema = portfolioWatchReplaySchema()
+    return {
+      ...response,
+      headers: {
+        ...response.headers,
+        [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64url'),
+      },
+    }
+  } catch {
+    return response
+  }
+}
+
 function sendInstructions(
   res: Response,
   response: { status: number; headers: Record<string, string>; body?: unknown },
   path: StandardServicePath,
 ) {
-  const prepared = addGovernedTraderReplaySchema(addFundingReplaySchema(response, path), path)
+  const prepared = addPortfolioWatchReplaySchema(
+    addGovernedTraderReplaySchema(addFundingReplaySchema(response, path), path),
+    path,
+  )
   for (const [key, value] of Object.entries(prepared.headers)) res.setHeader(key, value)
   return res.status(prepared.status).send(prepared.body)
 }
@@ -695,9 +716,6 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
         error: 'No current provider-sourced football brief is available. No payment challenge was issued.',
       })
     }
-  }
-  if (isFreeMarketplacePath(path)) {
-    return deliverFreeMarketplaceService(req, res, path)
   }
   if (path === '/api/a2mcp/polymarket-agent-flow') {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)

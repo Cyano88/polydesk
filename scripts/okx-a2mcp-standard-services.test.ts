@@ -4,8 +4,8 @@ import type { Request } from 'express'
 import {
   addFundingReplaySchema,
   addGovernedTraderReplaySchema,
+  addPortfolioWatchReplaySchema,
   buildStandardServiceRouteConfig,
-  isFreeMarketplacePath,
 } from '../api/okx-a2mcp-standard-services.js'
 
 test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => {
@@ -38,22 +38,25 @@ test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => 
   assert.equal(accepts.extra?.tokenSymbol, 'USDT')
 })
 
-test('Agent #5427 locked zero-fee compatibility routes bypass x402', () => {
+test('Agent #5427 registered compatibility routes all advertise non-zero exact payment', () => {
+  const req = {
+    headers: { host: 'polydesk.trade' },
+    protocol: 'https',
+  } as Request
   for (const path of [
     '/api/a2mcp/worldcup-live-scores',
     '/api/a2mcp/worldcup-market-news',
     '/api/a2mcp/polymarket-portfolio-watch',
     '/api/a2mcp/polymarket-funding-link',
   ] as const) {
-    assert.equal(isFreeMarketplacePath(path), true)
-  }
-  for (const path of [
-    '/api/a2mcp/okx/polymarket-lp-scout',
-    '/api/a2mcp/football-live-data',
-    '/api/a2mcp/football-news-brief',
-    '/api/a2mcp/polymarket-agent-flow',
-  ]) {
-    assert.equal(isFreeMarketplacePath(path), false)
+    const route = buildStandardServiceRouteConfig(
+      req,
+      path,
+      '0.1',
+      '0x631c96fba389f65da7093e559e8120b587ec7df4',
+    )
+    const accepts = route.accepts as { price: { amount: string } }
+    assert.equal(accepts.price.amount, '100000')
   }
 })
 
@@ -203,4 +206,38 @@ test('governed-trader 402 header exposes the replay contract at challenge level'
   assert.equal(decoded.outputSchema?.input?.externalOrderId?.required, true)
   assert.equal(decoded.outputSchema?.input?.orderPayload?.required, true)
   assert.equal(decoded.outputSchema?.input?.mandate?.required, true)
+})
+
+test('registered portfolio-watch challenge supports a replayable empty flow descriptor', () => {
+  const challenge = {
+    x402Version: 2,
+    resource: { url: 'https://polydesk.trade/api/a2mcp/polymarket-portfolio-watch' },
+    accepts: [{
+      scheme: 'exact',
+      network: 'eip155:196',
+      amount: '100000',
+      asset: '0x779ded0c9e1022225f8e0630b35a9b54be713736',
+      payTo: '0x631c96fba389f65da7093e559e8120b587ec7df4',
+      maxTimeoutSeconds: 600,
+    }],
+  }
+  const response = addPortfolioWatchReplaySchema({
+    status: 402,
+    headers: {
+      'PAYMENT-REQUIRED': Buffer.from(JSON.stringify(challenge)).toString('base64url'),
+    },
+  }, '/api/a2mcp/polymarket-portfolio-watch')
+  const decoded = JSON.parse(Buffer.from(response.headers['PAYMENT-REQUIRED'], 'base64url').toString('utf8')) as {
+    outputSchema?: {
+      input?: {
+        action?: { required?: boolean }
+        wallet?: { required?: boolean }
+      }
+      output?: { description?: string }
+    }
+  }
+
+  assert.equal(decoded.outputSchema?.input?.action?.required, false)
+  assert.equal(decoded.outputSchema?.input?.wallet?.required, false)
+  assert.match(String(decoded.outputSchema?.output?.description), /empty replay returns the complete flow descriptor/i)
 })
