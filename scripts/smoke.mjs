@@ -22,7 +22,7 @@ const checks = [
   { path: '/api/a2mcp/polymarket-funding-link', expect: [200, 503], label: 'free marketplace funding service' },
   { path: '/api/a2mcp/polymarket-funding-link', method: 'POST', body: {}, expect: [200, 503], label: 'free marketplace funding POST service' },
   { path: '/api/a2mcp/polymarket-portfolio-watch', method: 'POST', body: {}, expect: [200, 503], label: 'free marketplace governed trader' },
-  { path: '/api/a2mcp/polymarket-agent-flow', method: 'POST', body: {}, expect: [400, 503], label: 'governed trader preflight' },
+  { path: '/api/a2mcp/polymarket-agent-flow', method: 'POST', body: {}, expect: [402, 503], label: 'paid governed trader payment gate' },
   { path: '/api/polymarket-agent-flow', expect: [200], label: 'governed trader public flow' },
   { path: '/api/a2mcp/worldcup-live-scores', method: 'POST', body: {}, expect: [200, 503], label: 'free marketplace football live data' },
   { path: '/api/a2mcp/worldcup-market-news', method: 'POST', body: {}, expect: [200, 503], label: 'free marketplace football news' },
