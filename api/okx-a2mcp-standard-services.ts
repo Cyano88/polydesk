@@ -24,6 +24,7 @@ const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
 const FREE_MARKETPLACE_PATHS = new Set<string>([
+  '/api/a2mcp/worldcup-live-scores',
   '/api/a2mcp/worldcup-market-news',
   '/api/a2mcp/polymarket-portfolio-watch',
   '/api/a2mcp/polymarket-funding-link',

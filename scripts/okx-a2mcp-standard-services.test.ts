@@ -38,8 +38,9 @@ test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => 
   assert.equal(accepts.extra?.tokenSymbol, 'USDT')
 })
 
-test('Agent #5427 live-score route is paid while remaining locked zero-fee routes bypass x402', () => {
+test('Agent #5427 locked zero-fee compatibility routes bypass x402', () => {
   for (const path of [
+    '/api/a2mcp/worldcup-live-scores',
     '/api/a2mcp/worldcup-market-news',
     '/api/a2mcp/polymarket-portfolio-watch',
     '/api/a2mcp/polymarket-funding-link',
@@ -48,36 +49,12 @@ test('Agent #5427 live-score route is paid while remaining locked zero-fee route
   }
   for (const path of [
     '/api/a2mcp/okx/polymarket-lp-scout',
-    '/api/a2mcp/worldcup-live-scores',
     '/api/a2mcp/football-live-data',
     '/api/a2mcp/football-news-brief',
     '/api/a2mcp/polymarket-agent-flow',
   ]) {
     assert.equal(isFreeMarketplacePath(path), false)
   }
-})
-
-test('Agent #5427 live-score compatibility route advertises the same non-zero 0.1-USDT contract', () => {
-  const req = {
-    headers: { host: 'polydesk-i96m.onrender.com' },
-    protocol: 'https',
-  } as Request
-  const route = buildStandardServiceRouteConfig(
-    req,
-    '/api/a2mcp/worldcup-live-scores',
-    '0.1',
-    '0x631c96fba389f65da7093e559e8120b587ec7df4',
-  )
-  const accepts = route.accepts as {
-    scheme: string
-    network: string
-    price: { amount: string; asset: string }
-  }
-
-  assert.equal(accepts.scheme, 'exact')
-  assert.equal(accepts.network, 'eip155:196')
-  assert.equal(accepts.price.amount, '100000')
-  assert.equal(accepts.price.asset, '0x779ded0c9e1022225f8e0630b35a9b54be713736')
 })
 
 test('funding-link challenge declares replayable POST parameters', async () => {

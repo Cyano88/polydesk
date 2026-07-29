@@ -23,7 +23,7 @@ export default function DocsOkxAI() {
     <article className="space-y-10">
       <DocHeader
         title="OKX.AI marketplace services"
-        description="PolyDesk Agent #5427 exposes five focused x402 services. Information products are reusable JSON. Funding and trading services fail before payment when preflight checks do not pass."
+        description="PolyDesk Agent #5427 exposes five machine-readable services. LP Scout is paid per call; the four marketplace-locked zero-fee services deliver directly without an x402 challenge."
       />
 
       <Section title="Service map">
@@ -31,21 +31,21 @@ export default function DocsOkxAI() {
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
             ['Polymarket LP Scout', '0.3 USDT', <Code>/api/a2mcp/okx/polymarket-lp-scout</Code>],
-            ['Football Match Live Data', '0.1 USDT', <Code>/api/a2mcp/football-live-data</Code>],
-            ['Football News Brief', '0.1 USDT', <Code>/api/a2mcp/football-news-brief</Code>],
-            ['Verified Polymarket Funding', '0.1 USDT', <Code>/api/a2mcp/polymarket-funding-link</Code>],
-            ['Governed Polymarket Trader', '0.1 USDT', <Code>/api/a2mcp/polymarket-agent-flow</Code>],
+            ['Football Match Live Data', 'Free', <Code>/api/a2mcp/worldcup-live-scores</Code>],
+            ['Football News Brief', 'Free', <Code>/api/a2mcp/worldcup-market-news</Code>],
+            ['Verified Polymarket Funding', 'Free', <Code>/api/a2mcp/polymarket-funding-link</Code>],
+            ['Governed Polymarket Trader', 'Free', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
           ]}
         />
-        <Note>Prices shown here match the intended marketplace configuration. An unpaid call returns an OKX x402 challenge only after service-specific preflight succeeds.</Note>
+        <Note>Prices and endpoints shown here match the current Agent #5427 marketplace records. Free calls return their JSON result directly. LP Scout issues a payable challenge only after its provider checks pass.</Note>
       </Section>
 
-      <Section title="How x402 calls work">
+      <Section title="How to call a service">
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Call the service without a payment header.</li>
-          <li>Read the HTTP 402 challenge and non-empty <Code>accepts</Code> entry for USDT on X Layer.</li>
-          <li>Pay with OKX buyer tooling and replay the exact request body.</li>
-          <li>Consume the HTTP 200 machine-readable deliverable.</li>
+          <li>Choose the exact endpoint from the service map.</li>
+          <li>For a free service, send the documented request and consume the HTTP 200 JSON response.</li>
+          <li>For LP Scout, read the HTTP 402 challenge, pay with OKX buyer tooling, and replay the request.</li>
+          <li>Store the returned machine-readable result or verified receipt.</li>
         </ol>
       </Section>
 
@@ -59,7 +59,7 @@ export default function DocsOkxAI() {
         <ol className="list-decimal space-y-2 pl-5">
           <li>Sign the exact market order locally.</li>
           <li>Request and sign the mandate message from <Code>/api/polymarket-governed-open/authorize</Code>.</li>
-          <li>Use the free validator. Pay the governed x402 endpoint only when the result is <Code>APPROVE</Code>.</li>
+          <li>Use the free validator. Call the governed marketplace endpoint only when the result is <Code>APPROVE</Code>.</li>
           <li>Submit the returned exact payload directly to Polymarket.</li>
           <li>Send the <Code>executionId</Code>, Polymarket <Code>orderId</Code>, and Polygon <Code>transactionHash</Code> to <Code>/api/polymarket-agent-flow/complete</Code>.</li>
           <li>Sign the returned completion message and replay it. The receipt becomes publicly readable at <Code>/api/polymarket-agent-flow/receipt/&#123;executionId&#125;</Code>.</li>
