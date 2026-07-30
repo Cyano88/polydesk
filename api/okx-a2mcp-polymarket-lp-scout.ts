@@ -10,6 +10,7 @@ import {
 } from '@okxweb3/x402-core/server'
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
+import { recordDeliveredOkxCall } from './okx-rewards.js'
 import { scoutResponse } from './x402-polymarket-scout.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
@@ -270,6 +271,15 @@ export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res
       serviceUrl: '/api/a2mcp/okx/polymarket-lp-scout',
     }
 
+    res.once('finish', () => {
+      if (res.statusCode < 200 || res.statusCode >= 300) return
+      void recordDeliveredOkxCall({
+        payer: paidReq.payment?.payer,
+        transaction: paidReq.payment?.transaction,
+        amountAtomic: paidReq.payment?.amount,
+        servicePath: '/api/a2mcp/okx/polymarket-lp-scout',
+      }).catch(error => console.warn('[okx-rewards] could not record delivered call:', error instanceof Error ? error.message : String(error)))
+    })
     for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
     return res.json(await scoutResponse(paidReq))
   } catch (err) {

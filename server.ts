@@ -15,6 +15,7 @@ import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
 import okxA2mcpPolymarketLpScoutHandler from './api/okx-a2mcp-polymarket-lp-scout.js'
 import okxA2mcpStandardServiceHandler from './api/okx-a2mcp-standard-services.js'
+import okxRewardsHandler from './api/okx-rewards.js'
 import {
   polymarketGovernedOpenAuthorizationHandler,
   polymarketGovernedTradeCompleteHandler,
@@ -159,6 +160,7 @@ app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
+app.all('/api/okx-rewards', strictLimiter, okxRewardsHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)

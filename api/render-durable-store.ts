@@ -55,6 +55,10 @@ export async function mutateDurableJson<T>(key: string, mutate: (current: T | un
   const client = await requirePool().connect()
   try {
     await client.query('begin')
+    // Serialize mutations even before this key has a row. `FOR UPDATE` alone
+    // cannot lock an absent row, so two first writers could otherwise both
+    // read `undefined` and let the last commit overwrite the first.
+    await client.query('select pg_advisory_xact_lock(hashtext($1))', [key])
     const result = await client.query('select value from render_durable_kv where store_key = $1 for update', [key])
     const current = result.rows[0]?.value as T | undefined
     const next = await mutate(current)

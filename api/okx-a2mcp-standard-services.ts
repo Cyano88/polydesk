@@ -10,6 +10,7 @@ import {
 } from '@okxweb3/x402-core/server'
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
+import { recordDeliveredOkxCall } from './okx-rewards.js'
 import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
 import a2mcpPolymarketGovernedOpenHandler, {
   evaluateGovernedOpenInput,
@@ -778,6 +779,15 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       seller: requirements.payTo,
       serviceUrl: path,
     }
+    res.once('finish', () => {
+      if (res.statusCode < 200 || res.statusCode >= 300) return
+      void recordDeliveredOkxCall({
+        payer: paidReq.payment?.payer,
+        transaction: paidReq.payment?.transaction,
+        amountAtomic: paidReq.payment?.amount,
+        servicePath: path,
+      }).catch(error => console.warn('[okx-rewards] could not record delivered call:', error instanceof Error ? error.message : String(error)))
+    })
     for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
     return service.deliver(paidReq, res)
   } catch (err) {

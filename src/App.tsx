@@ -10,6 +10,7 @@ const Opportunity = lazy(() => import('./pages/Opportunity'))
 const DocsLayout = lazy(() => import('./pages/docs/DocsLayout'))
 const DocsOverview = lazy(() => import('./pages/docs/DocsOverview'))
 const DocsOkxAI = lazy(() => import('./pages/docs/DocsOkxAI'))
+const OkxRewards = lazy(() => import('./pages/OkxRewards'))
 
 function RouteLoading() {
   return <PolyDeskLoadingState fullScreen label="Opening PolyDesk" />
@@ -22,6 +23,7 @@ export default function App() {
         <Route element={<PolyDeskLayout />}>
           <Route path="/" element={<PolyDesk />} />
           <Route path="/polydesk" element={<PolyDesk />} />
+          <Route path="/rewards" element={<OkxRewards />} />
         </Route>
         <Route path="/about" element={<About />} />
         <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />

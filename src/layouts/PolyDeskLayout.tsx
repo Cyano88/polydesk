@@ -4,6 +4,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
   Activity as PulseIcon,
   Copy,
+  Gift,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -207,6 +208,15 @@ function PolyDeskWorkspace() {
           </Link>
 
           <div className="flex items-center gap-1.5">
+            <Link
+              to="/rewards"
+              aria-label="Open PolyDesk OKX rewards"
+              title="PolyDesk OKX rewards"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 dark:border-white/10 dark:bg-[#1c1c20] dark:text-gray-200 dark:hover:bg-white/[0.08]"
+            >
+              <Gift className="h-3.5 w-3.5" />
+              <span>Rewards</span>
+            </Link>
             <button
               type="button"
               onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}
