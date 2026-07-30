@@ -5,7 +5,7 @@ import { okxMarketplaceServices, okxMarketplaceServiceUrl } from '../lib/okxMark
 type CampaignResponse = {
   ok: boolean
   campaign: {
-    status: 'preview' | 'active'
+    status: 'preview' | 'recording' | 'active'
     startsAt: string | null
     endsAt: string | null
     instantPoolUsdt: number
@@ -14,6 +14,7 @@ type CampaignResponse = {
     leaderboardPoolUsdt: number
     prizesUsdt: readonly number[]
     paidInstantClaims: number
+    reservedInstantClaims: number
     token: string
     network: string
   }
@@ -43,6 +44,7 @@ export default function OkxRewards() {
   const [receiptReference, setReceiptReference] = useState('')
   const [verification, setVerification] = useState<Verification | null>(null)
   const [checking, setChecking] = useState(false)
+  const [claiming, setClaiming] = useState(false)
 
   useEffect(() => {
     fetch('/api/okx-rewards')
@@ -65,6 +67,22 @@ export default function OkxRewards() {
       setVerification({ ok: false, error: 'Receipt verification is temporarily unavailable.' })
     } finally {
       setChecking(false)
+    }
+  }
+
+  async function claimReward() {
+    setClaiming(true)
+    try {
+      const response = await fetch('/api/okx-rewards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim', receiptReference }),
+      })
+      setVerification(await response.json())
+    } catch {
+      setVerification({ ok: false, error: 'Reward reservation is temporarily unavailable.' })
+    } finally {
+      setClaiming(false)
     }
   }
 
@@ -158,6 +176,17 @@ export default function OkxRewards() {
                 </div>
               ) : verification.error}
             </div>
+          )}
+
+          {active && verification?.ok && verification.proof?.reward && (
+            <button
+              type="button"
+              disabled={claiming}
+              onClick={() => void claimReward()}
+              className="mt-3 h-12 w-full rounded-2xl bg-emerald-600 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {claiming ? 'Reserving reward...' : 'Claim 1 USDT0'}
+            </button>
           )}
 
           {!active && (

@@ -28,6 +28,9 @@ type RewardProof = {
   amountAtomic: string
   deliveredAt: string
   claimState: 'unclaimed' | 'reserved' | 'paid'
+  claimId?: string
+  reservedAt?: string
+  payoutTransactionHash?: string
 }
 
 type RewardState = {
@@ -68,24 +71,33 @@ function campaignDate(name: string) {
 }
 
 function excludedWallets() {
-  return new Set(
-    clean(process.env.POLYDESK_OKX_REWARD_EXCLUDED_WALLETS)
+  return new Set([
+    ...clean(process.env.POLYDESK_OKX_REWARD_EXCLUDED_WALLETS)
       .split(',')
       .map(value => payerAddress(value))
       .filter(Boolean),
-  )
+    payerAddress(process.env.OKX_X402_PAY_TO),
+    payerAddress(process.env.OKX_X402_SELLER_ADDRESS),
+    payerAddress(process.env.TREASURY_ADDRESS),
+    payerAddress(process.env.POLYDESK_OKX_REWARDS_PAYOUT_ADDRESS),
+  ].filter(Boolean))
 }
 
 export function okxRewardCampaignStatus(now = new Date()) {
   const approved = envFlag('POLYDESK_OKX_REWARDS_APPROVED')
   const recording = envFlag('POLYDESK_OKX_REWARDS_RECORDING')
+  const claimsEnabled = envFlag('POLYDESK_OKX_REWARDS_CLAIMS_ENABLED')
   const startsAt = campaignDate('POLYDESK_OKX_REWARDS_STARTS_AT')
   const endsAt = campaignDate('POLYDESK_OKX_REWARDS_ENDS_AT')
   const inWindow = Boolean(startsAt && endsAt && now >= startsAt! && now <= endsAt!)
+  const campaignRunning = approved && recording && inWindow
   return {
-    status: approved && recording && inWindow ? 'active' as const : 'preview' as const,
+    status: campaignRunning
+      ? claimsEnabled ? 'active' as const : 'recording' as const
+      : 'preview' as const,
     approved,
     recording,
+    claimsEnabled,
     startsAt: startsAt?.toISOString() ?? null,
     endsAt: endsAt?.toISOString() ?? null,
   }
@@ -99,7 +111,7 @@ export async function recordDeliveredOkxCall(input: {
   deliveredAt?: Date
 }) {
   const campaign = okxRewardCampaignStatus(input.deliveredAt)
-  if (campaign.status !== 'active') return { recorded: false, reason: 'campaign_inactive' as const }
+  if (campaign.status === 'preview') return { recorded: false, reason: 'campaign_inactive' as const }
 
   const service = SERVICE_BY_PATH[input.servicePath as EligibleServicePath]
   const payer = payerAddress(input.payer)
@@ -177,8 +189,66 @@ export function verifyRewardReference(reference: unknown, state: RewardState | u
       deliveredAt: proof.deliveredAt,
       claimState: proof.claimState,
       reward: proof.claimState === 'unclaimed' ? '1 USDT0' : null,
+      claimId: proof.claimId ?? null,
     },
   }
+}
+
+export function reserveInstantReward(reference: unknown, current: RewardState | undefined, now = new Date()) {
+  const transaction = transactionHash(reference)
+  if (!transaction) return { ok: false as const, status: 400, error: 'Enter a full X Layer transaction hash.' }
+  const receiptHash = hashReceipt(transaction)
+  const state = current ?? { proofs: {} }
+  const proof = state.proofs[receiptHash]
+  if (!proof) return { ok: false as const, status: 404, error: 'No eligible delivered PolyDesk call matches this reference.' }
+  if (proof.claimState !== 'unclaimed') {
+    return {
+      ok: false as const,
+      status: 409,
+      error: proof.claimState === 'paid' ? 'This payer already received the instant reward.' : 'This reward is already reserved for payout.',
+    }
+  }
+  const payerAlreadyClaimed = Object.values(state.proofs).some(item =>
+    item.payer === proof.payer && item.claimState !== 'unclaimed')
+  if (payerAlreadyClaimed) {
+    return { ok: false as const, status: 409, error: 'This payer has already used the one-time instant reward.' }
+  }
+  const reserved = Object.values(state.proofs).filter(item => item.claimState !== 'unclaimed').length
+  if (reserved >= INSTANT_REWARD_LIMIT) {
+    return { ok: false as const, status: 410, error: 'The 50-user instant reward pool is fully reserved.' }
+  }
+
+  const claimId = `okxr_${crypto.createHash('sha256').update(`${receiptHash}:${proof.payer}`).digest('hex').slice(0, 24)}`
+  const nextProof: RewardProof = {
+    ...proof,
+    claimState: 'reserved',
+    claimId,
+    reservedAt: now.toISOString(),
+  }
+  return {
+    ok: true as const,
+    claimId,
+    payoutAddress: proof.payer,
+    state: {
+      proofs: {
+        ...state.proofs,
+        [receiptHash]: nextProof,
+      },
+    },
+    proof: {
+      serviceName: proof.serviceName,
+      payer: maskedAddress(proof.payer),
+      reward: '1 USDT0',
+      claimState: 'reserved' as const,
+    },
+  }
+}
+
+function operatorAuthorized(req: Request) {
+  const expected = clean(process.env.POLYDESK_OKX_REWARDS_OPERATOR_KEY)
+  const provided = clean(req.headers['x-okx-rewards-operator-key'])
+  if (expected.length < 32 || provided.length !== expected.length) return false
+  return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
 export default async function okxRewardsHandler(req: Request, res: Response) {
@@ -188,6 +258,24 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
   const proofs = Object.values(state?.proofs ?? {})
 
   if (req.method === 'GET') {
+    if (clean(req.query.view) === 'payout-queue') {
+      if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
+      return res.status(200).json({
+        ok: true,
+        payouts: proofs
+          .filter(proof => proof.claimState === 'reserved')
+          .map(proof => ({
+            claimId: proof.claimId,
+            payer: proof.payer,
+            amountAtomic: String(INSTANT_REWARD_ATOMIC),
+            asset: '0x779ded0c9e1022225f8e0630b35a9b54be713736',
+            network: 'eip155:196',
+            sourceTransactionHash: proof.transactionHash,
+            serviceId: proof.serviceId,
+            reservedAt: proof.reservedAt,
+          })),
+      })
+    }
     return res.status(200).json({
       ok: true,
       campaign: {
@@ -200,17 +288,37 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
         token: 'USDT0',
         network: 'X Layer',
         paidInstantClaims: proofs.filter(proof => proof.claimState === 'paid').length,
+        reservedInstantClaims: proofs.filter(proof => proof.claimState === 'reserved').length,
       },
       leaderboard: leaderboard(proofs),
     })
   }
 
   if (req.method === 'POST') {
-    if (clean(req.body?.action) !== 'verify') {
-      return res.status(400).json({ ok: false, error: 'Only verification is available before campaign approval.' })
+    const action = clean(req.body?.action)
+    if (action === 'verify') {
+      const result = verifyRewardReference(req.body?.receiptReference, state)
+      return res.status(result.ok ? 200 : result.status).json(result)
     }
-    const result = verifyRewardReference(req.body?.receiptReference, state)
-    return res.status(result.ok ? 200 : result.status).json(result)
+    if (action === 'claim') {
+      if (campaign.status !== 'active') {
+        return res.status(409).json({ ok: false, error: 'Claims are not active yet.' })
+      }
+      let reservation: ReturnType<typeof reserveInstantReward> | undefined
+      await mutateDurableJson<RewardState>(STORE_KEY, current => {
+        reservation = reserveInstantReward(req.body?.receiptReference, current)
+        return reservation.ok ? reservation.state : current ?? { proofs: {} }
+      })
+      if (!reservation) return res.status(500).json({ ok: false, error: 'Could not reserve this reward.' })
+      if (!reservation.ok) return res.status(reservation.status).json(reservation)
+      return res.status(200).json({
+        ok: true,
+        claimId: reservation.claimId,
+        proof: reservation.proof,
+        message: 'Reward reserved. The payout can only be sent to the verified payer address.',
+      })
+    }
+    return res.status(400).json({ ok: false, error: 'Unsupported action.' })
   }
 
   res.setHeader('Allow', 'GET, POST')

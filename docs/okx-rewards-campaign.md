@@ -48,12 +48,13 @@ Do not configure these flags until OKX approves the promotion and the dates are 
 ```text
 POLYDESK_OKX_REWARDS_APPROVED=true
 POLYDESK_OKX_REWARDS_RECORDING=true
+POLYDESK_OKX_REWARDS_CLAIMS_ENABLED=true
 POLYDESK_OKX_REWARDS_STARTS_AT=<ISO-8601 timestamp>
 POLYDESK_OKX_REWARDS_ENDS_AT=<ISO-8601 timestamp>
 POLYDESK_OKX_REWARD_EXCLUDED_WALLETS=<comma-separated operator and test addresses>
 ```
 
-The present implementation records and verifies eligible delivery proofs. It does not transfer rewards. A separate payout worker must be implemented, funded, rate-limited and tested before claims are activated.
+The present implementation records and verifies eligible delivery proofs and can atomically reserve the first 50 one-per-payer instant claims. An operator-authenticated queue exposes only reserved payouts. It does not transfer rewards or mark them paid. A separate payout worker with on-chain transfer verification must be implemented, funded, rate-limited and tested before claims are activated.
 
 ## Approval message
 
