@@ -1,6 +1,5 @@
 import { ArrowUpRight, CircleDollarSign, CreditCard, FlaskConical, LockKeyhole } from 'lucide-react'
-
-const OKX_MARKETPLACE_URL = 'https://www.okx.ai/agents'
+import { okxMarketplaceServices, okxMarketplaceServiceUrl } from '../lib/okxMarketplaceServices'
 
 const plannedServices = [
   { icon: FlaskConical, title: 'Market apps' },
@@ -41,11 +40,25 @@ export default function AppPay() {
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-gray-950 text-[9px] tracking-normal text-white dark:bg-white dark:text-gray-950">OKX</span>
           Available now
         </div>
-        <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Use PolyDesk services on OKX</h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">Search <strong className="font-black text-gray-700 dark:text-gray-200">PolyDesk</strong> on OKX to call our endpoints or build with the returned data.</p>
-        <a href={OKX_MARKETPLACE_URL} target="_blank" rel="noopener noreferrer" className="polydesk-primary-cta mt-5">
-          Find PolyDesk on OKX <ArrowUpRight className="h-4 w-4" />
-        </a>
+        <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Choose a PolyDesk service on OKX</h2>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">Open the exact service card, then tap <strong className="font-black text-gray-700 dark:text-gray-200">Use now</strong> for its agent-ready instruction.</p>
+        <div className="mt-5 grid gap-2">
+          {okxMarketplaceServices.map(service => (
+            <a
+              key={service.serviceId}
+              href={okxMarketplaceServiceUrl(service)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.05]"
+            >
+              <span>
+                <span className="block text-sm font-black text-gray-950 dark:text-white">{service.name}</span>
+                <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">{service.summary}</span>
+              </span>
+              <ArrowUpRight className="h-4 w-4 shrink-0" />
+            </a>
+          ))}
+        </div>
       </section>
     </div>
   )

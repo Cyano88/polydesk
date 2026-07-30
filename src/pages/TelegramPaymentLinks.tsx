@@ -46,6 +46,12 @@ import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+import {
+  matchOkxMarketplaceService,
+  okxMarketplaceServiceLinks,
+  okxMarketplaceServiceUrl,
+  wantsOkxMarketplaceServices,
+} from '../lib/okxMarketplaceServices'
 
 export { LpScoutPanel } from './LpScoutPanel'
 export type { LpScoutPrefill } from './LpScoutPanel'
@@ -1754,6 +1760,7 @@ export function TelegramHelperPanel({
   const [askError, setAskError] = useState('')
   const [helperToast, setHelperToast] = useState('')
   const [clearHistoryPending, setClearHistoryPending] = useState(false)
+  const [okxServicePickerPending, setOkxServicePickerPending] = useState(false)
   const [profile, setProfile] = useState<HelperProfile | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
   const [profileError, setProfileError] = useState('')
@@ -2109,6 +2116,7 @@ export function TelegramHelperPanel({
     setPolyDeskSubMode('')
     setPaylinkDraft(null)
     setPolyPortfolioFundingDraft(null)
+    setOkxServicePickerPending(false)
     setQuestion('')
     setAskError('')
     suppressThreadHydrationRef.current = true
@@ -2126,6 +2134,7 @@ export function TelegramHelperPanel({
       setMessages([])
       setPaylinkDraft(null)
       setPolyPortfolioFundingDraft(null)
+      setOkxServicePickerPending(false)
       setQuestion('')
       setAskError('')
       return
@@ -2137,6 +2146,7 @@ export function TelegramHelperPanel({
     setMessages([])
     setPaylinkDraft(null)
     setPolyPortfolioFundingDraft(null)
+    setOkxServicePickerPending(false)
     setQuestion('')
     setAskError('')
   }
@@ -3110,6 +3120,51 @@ export function TelegramHelperPanel({
 
   async function handlePolyDeskConversation(nextQuestion: string) {
     if (helperMode !== 'polydesk') return false
+    const selectedOkxService = matchOkxMarketplaceService(nextQuestion)
+    const wantsOkxServices = wantsOkxMarketplaceServices(nextQuestion)
+    if (okxServicePickerPending) {
+      if (/^(?:cancel|stop|never\s*mind|nevermind)$/i.test(nextQuestion.trim())) {
+        setOkxServicePickerPending(false)
+        finishHelperMessage(nextQuestion, {
+          answer: 'OKX service selection cancelled. You can keep using PolyDesk here.',
+        })
+        return true
+      }
+      if (selectedOkxService) {
+        setOkxServicePickerPending(false)
+        finishHelperMessage(nextQuestion, {
+          answer: `Open ${selectedOkxService.name} below. This targets its exact OKX service card; tap Use now for the agent-ready instruction.`,
+          actionLink: {
+            label: `Open ${selectedOkxService.name}`,
+            url: okxMarketplaceServiceUrl(selectedOkxService),
+          },
+        })
+        return true
+      }
+      finishHelperMessage(nextQuestion, {
+        answer: 'Choose one service: Football Match Live Data, Football News Brief, Verified Polymarket Funding, Governed Polymarket Trader, or Polymarket LP Scout.',
+        actionLinks: okxMarketplaceServiceLinks(),
+      })
+      return true
+    }
+    if (wantsOkxServices && selectedOkxService) {
+      finishHelperMessage(nextQuestion, {
+        answer: `Open ${selectedOkxService.name} below. This targets its exact OKX service card; tap Use now for the agent-ready instruction.`,
+        actionLink: {
+          label: `Open ${selectedOkxService.name}`,
+          url: okxMarketplaceServiceUrl(selectedOkxService),
+        },
+      })
+      return true
+    }
+    if (wantsOkxServices) {
+      setOkxServicePickerPending(true)
+      finishHelperMessage(nextQuestion, {
+        answer: 'Which PolyDesk pay-per-call service do you want to use?',
+        actionLinks: okxMarketplaceServiceLinks(),
+      })
+      return true
+    }
     const wantsOwnedMonitor = /\b(?:watch|track|monitor)\b.{0,24}\b(?:my|own)\b.{0,24}\b(?:portfolio|account|positions?|trades?|lp orders?)\b/i.test(nextQuestion)
       || /\b(?:my|own)\b.{0,24}\b(?:portfolio|account|positions?|trades?|lp orders?)\b.{0,24}\b(?:watch|track|monitor)\b/i.test(nextQuestion)
     if (wantsOwnedMonitor) {

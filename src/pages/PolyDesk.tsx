@@ -94,7 +94,7 @@ export default function PolyDesk() {
     price: number
   } | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
-  const welcomeText = 'Welcome back. Ask about your portfolio, live football, football news, or LP opportunities.'
+  const welcomeText = 'Welcome back. Ask about your portfolio, funding, governed trades, live football, football news, or LP opportunities. Type "I want to use PolyDesk pay-per-call services" to choose an exact OKX service.'
 
   const ownerKey = useMemo(() => {
     const privyIdentity = user?.id?.trim()
@@ -221,12 +221,6 @@ export default function PolyDesk() {
               initialNotice=""
               lockedHelperMode="polydesk"
               welcomeText={welcomeText}
-              welcomeAction={{
-                prefix: 'PolyDesk Agent is live on OKX AI for agents to use or resell.',
-                label: 'okx.ai/agents/5427…',
-                url: 'https://www.okx.ai/agents/5427?source=search',
-                suffix: 'Circle listing coming soon.',
-              }}
               inputPlaceholder="Ask Desk Agent..."
               hideTopDivider
               autoQuestion={agentMessage || undefined}

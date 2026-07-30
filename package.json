@@ -32,6 +32,7 @@
     "test:account-readiness": "node --import tsx --test scripts/polymarket-account-readiness.test.ts",
     "test:lp-context": "node --import tsx --test scripts/lp-context-intelligence.test.ts",
     "test:helper-memory": "node --import tsx --test scripts/helper-memory.test.ts",
+    "test:okx-discovery": "node --import tsx --test scripts/okx-marketplace-discovery.test.ts",
     "demo:okx:preflight": "node scripts/okx-demo-preflight.mjs",
     "example:open-prepare": "node examples/polymarket-open-prepare.mjs",
     "env:check": "node scripts/validate-env.mjs",
