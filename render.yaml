@@ -146,3 +146,29 @@ services:
         sync: false
       - key: OKX_PAYMENT_REALM
         value: polydesk.trade
+      - key: POLYDESK_OKX_REWARDS_APPROVED
+        value: "false"
+      - key: POLYDESK_OKX_REWARDS_RECORDING
+        value: "false"
+      - key: POLYDESK_OKX_REWARDS_CLAIMS_ENABLED
+        value: "false"
+      - key: POLYDESK_OKX_REWARDS_PAYOUTS_ENABLED
+        value: "false"
+      - key: POLYDESK_OKX_REWARDS_LEADERBOARD_ENABLED
+        value: "false"
+      - key: POLYDESK_OKX_REWARDS_STARTS_AT
+        sync: false
+      - key: POLYDESK_OKX_REWARDS_ENDS_AT
+        sync: false
+      - key: POLYDESK_OKX_REWARD_EXCLUDED_WALLETS
+        sync: false
+      - key: POLYDESK_OKX_REWARDS_PAYOUT_ADDRESS
+        sync: false
+      - key: POLYDESK_OKX_REWARDS_DAILY_PAYOUT_LIMIT_ATOMIC
+        value: "5000000"
+      - key: POLYDESK_OKX_REWARDS_MIN_CONFIRMATIONS
+        value: "3"
+      - key: POLYDESK_OKX_REWARDS_OPERATOR_KEY
+        sync: false
+      - key: POLYDESK_OKX_REWARDS_XLAYER_RPC_URL
+        sync: false

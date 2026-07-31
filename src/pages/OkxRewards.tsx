@@ -6,11 +6,13 @@ type CampaignResponse = {
   ok: boolean
   campaign: {
     status: 'preview' | 'recording' | 'active'
+    approved: boolean
     startsAt: string | null
     endsAt: string | null
     instantPoolUsdt: number
     instantRewardUsdt: number
     instantRewardLimit: number
+    leaderboardEnabled: boolean
     leaderboardPoolUsdt: number
     prizesUsdt: readonly number[]
     paidInstantClaims: number
@@ -87,6 +89,8 @@ export default function OkxRewards() {
   }
 
   const active = campaign?.campaign.status === 'active'
+  const approved = campaign?.campaign.approved === true
+  const leaderboardEnabled = campaign?.campaign.leaderboardEnabled === true
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
@@ -95,7 +99,7 @@ export default function OkxRewards() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-bold text-gray-700 dark:bg-white/[0.07] dark:text-gray-200">
               <Gift className="h-3.5 w-3.5" />
-              {active ? 'Three-week campaign' : 'Campaign preview'}
+              {active ? 'Verified-use pilot is live' : approved ? 'Approved pilot — launch pending' : 'Campaign preview'}
             </div>
             <h1 className="mt-5 max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white sm:text-5xl">
               Use PolyDesk on OKX.AI. Earn from verified calls.
@@ -105,17 +109,19 @@ export default function OkxRewards() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 self-start">
+          <div className={`grid gap-3 self-start ${leaderboardEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="rounded-2xl bg-gray-950 p-5 text-white dark:bg-white dark:text-gray-950">
               <p className="text-xs font-semibold opacity-60">Instant pool</p>
               <p className="mt-2 text-2xl font-semibold">50 USDT0</p>
               <p className="mt-1 text-xs opacity-60">1 each for 50 users</p>
             </div>
-            <div className="rounded-2xl bg-gray-100 p-5 text-gray-950 dark:bg-white/[0.07] dark:text-white">
-              <p className="text-xs font-semibold text-gray-500">Leaderboard</p>
-              <p className="mt-2 text-2xl font-semibold">500 USDT0</p>
-              <p className="mt-1 text-xs text-gray-500">Top four users</p>
-            </div>
+            {leaderboardEnabled && (
+              <div className="rounded-2xl bg-gray-100 p-5 text-gray-950 dark:bg-white/[0.07] dark:text-white">
+                <p className="text-xs font-semibold text-gray-500">Leaderboard</p>
+                <p className="mt-2 text-2xl font-semibold">500 USDT0</p>
+                <p className="mt-1 text-xs text-gray-500">Top four users</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -171,7 +177,7 @@ export default function OkxRewards() {
                   <div>
                     <p className="font-bold">{verification.proof.serviceName}</p>
                     <p className="mt-1 text-xs opacity-75">Payer {verification.proof.payer}</p>
-                    <p className="mt-2 font-semibold">{verification.proof.reward ?? 'Already claimed'}</p>
+                    <p className="mt-2 font-semibold">{verification.proof.reward ?? 'Claim already submitted'}</p>
                   </div>
                 </div>
               ) : verification.error}
@@ -185,19 +191,21 @@ export default function OkxRewards() {
               onClick={() => void claimReward()}
               className="mt-3 h-12 w-full rounded-2xl bg-emerald-600 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {claiming ? 'Reserving reward...' : 'Claim 1 USDT0'}
+              {claiming ? 'Submitting claim...' : 'Submit claim for review'}
             </button>
           )}
 
           {!active && (
             <p className="mt-4 text-xs leading-5 text-gray-400">
-              Verification preview only. Claims remain disabled until OKX confirms the campaign and the public start time is announced.
+              {approved
+                ? 'The pilot is approved. Claims remain disabled until the public start time and funded payout wallet are announced.'
+                : 'Verification preview only. Claims remain disabled until campaign approval and the public start time are confirmed.'}
             </p>
           )}
         </div>
       </section>
 
-      <section className="mt-6 rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b]">
+      {leaderboardEnabled && <section className="mt-6 rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b]">
         <div className="flex items-center gap-2">
           <Trophy className="h-4 w-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-950 dark:text-white">Leaderboard rules</h2>
@@ -207,7 +215,11 @@ export default function OkxRewards() {
           <p className="rounded-2xl bg-gray-50 p-4 dark:bg-white/[0.04]">Use at least two different services to qualify.</p>
           <p className="rounded-2xl bg-gray-50 p-4 dark:bg-white/[0.04]">Failed, refunded, test and duplicate calls do not count.</p>
         </div>
-      </section>
+      </section>}
+
+      <p className="mx-auto mt-5 max-w-3xl text-center text-xs leading-5 text-gray-400">
+        One claim per paying wallet. Claims are reviewed before payout. Coordinated, operator, test, refunded, duplicate or undelivered activity is not eligible.
+      </p>
     </main>
   )
 }
