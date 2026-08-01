@@ -35,6 +35,7 @@
     "test:okx-discovery": "node --import tsx --test scripts/okx-marketplace-discovery.test.ts",
     "test:okx-rewards": "node --import tsx --test scripts/okx-rewards.test.ts",
     "rewards:payout:dry-run": "tsx scripts/okx-rewards-payout-worker.ts",
+    "rewards:proofs:dry-run": "tsx scripts/okx-rewards-proof-audit.ts",
     "rewards:review": "tsx scripts/okx-rewards-review.ts",
     "rewards:launch:check": "tsx scripts/okx-rewards-launch-check.ts",
     "demo:okx:preflight": "node scripts/okx-demo-preflight.mjs",

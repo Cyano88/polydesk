@@ -75,8 +75,11 @@ Claims are accepted only inside the published campaign window. The separately co
 The repository includes a read-only queue worker:
 
 ```text
+npm run rewards:proofs:dry-run
 npm run rewards:payout:dry-run
 ```
+
+The proof audit lists only eligible unclaimed receipt references and masked payer addresses. It does not submit claims or reserve funds.
 
 Before launch, run:
 
