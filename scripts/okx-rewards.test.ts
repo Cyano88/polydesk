@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import test from 'node:test'
 import { encodeAbiParameters, encodeEventTopics } from 'viem'
 import {
+  authorizePrivateRehearsalPayout,
   leaseInstantRewardPayout,
   markInstantRewardPaid,
   okxRewardCampaignStatus,
@@ -287,6 +288,56 @@ test('payout leasing produces one exact bounded transfer plan and never re-lease
     assert.equal(retry.ok, false)
     if (!retry.ok) assert.equal(retry.status, 404)
   })
+})
+
+test('private rehearsal authorization is exact, idempotent and limited to one reserved claim', () => {
+  const claimId = 'okxr_111111111111111111111111'
+  const secondClaimId = 'okxr_222222222222222222222222'
+  const secondReceiptHash = crypto.createHash('sha256').update('second').digest('hex')
+  const state = {
+    proofs: {
+      [receiptHash]: {
+        receiptHash,
+        transactionHash,
+        payer: payerWallet,
+        serviceId: 33343,
+        serviceName: 'Football Match Live Data',
+        servicePath: '/api/a2mcp/worldcup-live-scores' as const,
+        amountAtomic: '100000',
+        deliveredAt: '2026-08-01T12:00:00.000Z',
+        claimState: 'reserved' as const,
+        claimId,
+        reservedAt: '2026-08-01T12:01:00.000Z',
+      },
+      [secondReceiptHash]: {
+        receiptHash: secondReceiptHash,
+        transactionHash: `0x${'cd'.repeat(32)}`,
+        payer: '0x3333333333333333333333333333333333333333',
+        serviceId: 33346,
+        serviceName: 'Football News Brief',
+        servicePath: '/api/a2mcp/worldcup-market-news' as const,
+        amountAtomic: '100000',
+        deliveredAt: '2026-08-01T12:00:00.000Z',
+        claimState: 'reserved' as const,
+        claimId: secondClaimId,
+        reservedAt: '2026-08-01T12:01:00.000Z',
+      },
+    },
+  }
+  const authorized = authorizePrivateRehearsalPayout(
+    state,
+    { claimId },
+    new Date('2026-08-01T12:02:00.000Z'),
+  )
+  assert.equal(authorized.ok, true)
+  if (!authorized.ok) return
+  assert.equal(authorized.proof.rehearsalPayoutAuthorizedAt, '2026-08-01T12:02:00.000Z')
+  const duplicate = authorizePrivateRehearsalPayout(authorized.state, { claimId })
+  assert.equal(duplicate.ok, true)
+  if (duplicate.ok) assert.equal(duplicate.duplicate, true)
+  const second = authorizePrivateRehearsalPayout(authorized.state, { claimId: secondClaimId })
+  assert.equal(second.ok, false)
+  if (!second.ok) assert.equal(second.status, 409)
 })
 
 test('paid transition is idempotent and rejects transaction reuse across claims', () => {

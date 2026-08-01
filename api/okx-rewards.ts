@@ -44,6 +44,7 @@ type RewardProof = {
   reservedAt?: string
   reviewedAt?: string
   reviewReason?: string
+  rehearsalPayoutAuthorizedAt?: string
   payoutAttempt?: number
   payoutLeaseId?: string
   payoutLeaseOwner?: string
@@ -56,6 +57,48 @@ type RewardProof = {
 
 type RewardState = {
   proofs: Record<string, RewardProof>
+}
+
+export function authorizePrivateRehearsalPayout(
+  current: RewardState | undefined,
+  input: { claimId: unknown },
+  now = new Date(),
+) {
+  const state = current ?? { proofs: {} }
+  const claimId = validClaimId(input.claimId)
+  if (!claimId) return { ok: false as const, status: 400, error: 'A valid reward claim ID is required.' }
+  const proof = Object.values(state.proofs).find(item => item.claimId === claimId)
+  if (!proof) return { ok: false as const, status: 404, error: 'Reward claim was not found.' }
+  if (proof.rehearsalPayoutAuthorizedAt) {
+    return { ok: true as const, duplicate: true as const, state, proof }
+  }
+  if (proof.claimState !== 'reserved') {
+    return { ok: false as const, status: 409, error: 'Only a reviewed and reserved claim can be authorized for rehearsal.' }
+  }
+  const priorRehearsal = Object.values(state.proofs).some(item =>
+    item.claimId !== claimId && Boolean(item.rehearsalPayoutAuthorizedAt))
+  if (priorRehearsal) {
+    return { ok: false as const, status: 409, error: 'A private payout rehearsal has already been authorized.' }
+  }
+  const authorizedProof: RewardProof = {
+    ...proof,
+    rehearsalPayoutAuthorizedAt: now.toISOString(),
+  }
+  return {
+    ok: true as const,
+    duplicate: false as const,
+    state: {
+      proofs: {
+        ...state.proofs,
+        [proof.receiptHash]: authorizedProof,
+      },
+    },
+    proof: authorizedProof,
+  }
+}
+
+function isPrivateRehearsalPayout(proof: RewardProof | undefined) {
+  return Boolean(proof?.rehearsalPayoutAuthorizedAt)
 }
 
 export function rewardServiceForPaidCall(servicePath: string, amountAtomic: unknown) {
@@ -611,9 +654,32 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
         ? { ok: true, claimId: req.body?.claimId, decision: result.decision }
         : result)
     }
+    if (action === 'authorize-rehearsal-payout') {
+      if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
+      if (campaign.status !== 'recording' || campaign.claimsEnabled || campaign.payoutsEnabled) {
+        return res.status(409).json({ ok: false, error: 'Private rehearsal authorization is not available.' })
+      }
+      let result: ReturnType<typeof authorizePrivateRehearsalPayout> | undefined
+      await mutateDurableJson<RewardState>(STORE_KEY, current => {
+        result = authorizePrivateRehearsalPayout(current, { claimId: req.body?.claimId })
+        return result.ok ? result.state : current ?? { proofs: {} }
+      })
+      if (!result) return res.status(500).json({ ok: false, error: 'Could not authorize the rehearsal payout.' })
+      return res.status(result.ok ? 200 : result.status).json(result.ok
+        ? {
+            ok: true,
+            duplicate: result.duplicate,
+            claimId: result.proof.claimId,
+            authorizedAt: result.proof.rehearsalPayoutAuthorizedAt,
+            message: 'This claim alone may complete the private payout rehearsal. Public payouts remain disabled.',
+          }
+        : result)
+    }
     if (action === 'lease-payout') {
       if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
-      if (!campaign.payoutsEnabled) {
+      const requestedClaimId = validClaimId(req.body?.claimId)
+      const requestedProof = proofs.find(proof => proof.claimId === requestedClaimId)
+      if (!campaign.payoutsEnabled && !isPrivateRehearsalPayout(requestedProof)) {
         return res.status(409).json({ ok: false, error: 'Reward payouts are not active.' })
       }
       let result: ReturnType<typeof leaseInstantRewardPayout> | undefined
@@ -640,6 +706,9 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
       const payoutTransaction = transactionHash(req.body?.transactionHash)
       const candidate = proofs.find(proof => proof.claimId === claimId)
       const payout = payoutConfiguration()
+      if (!campaign.payoutsEnabled && !isPrivateRehearsalPayout(candidate)) {
+        return res.status(409).json({ ok: false, error: 'Reward payouts are not active.' })
+      }
       if (
         candidate?.claimState === 'paid'
         && payoutTransaction
