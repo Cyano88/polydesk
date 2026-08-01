@@ -698,9 +698,6 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
     }
     if (action === 'confirm-payout') {
       if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
-      if (!campaign.payoutsEnabled) {
-        return res.status(409).json({ ok: false, error: 'Reward payouts are not active.' })
-      }
       const claimId = validClaimId(req.body?.claimId)
       const leaseId = clean(req.body?.leaseId)
       const payoutTransaction = transactionHash(req.body?.transactionHash)
