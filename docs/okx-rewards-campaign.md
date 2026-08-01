@@ -103,12 +103,14 @@ It prints the operator queue and totals only. It has no signer and cannot broadc
 
 ## Operator flow
 
-1. Inspect the authenticated queue. Submitted claims are review candidates; reserved claims are payout candidates.
-2. Approve a claim with `npm run rewards:review -- <claimId> approve` or reject it with `npm run rewards:review -- <claimId> reject <short reason>`.
-3. Run `npm run rewards:payout:dry-run` and compare the exact recipient, token and amount.
-4. Send exactly 1 USDT0 from the dedicated campaign wallet to the verified payer.
-5. Submit the transaction hash through the authenticated `confirm-payout` action.
-6. The server marks the claim paid only after confirming the exact X Layer transfer.
+1. Inspect recorded proof references with `npm run rewards:proofs:dry-run`.
+2. Before public launch only, submit one genuine external buyer receipt with `npm run rewards:rehearsal:submit -- <transactionHash>`. This operator-only action does not open public claims.
+3. Inspect the authenticated queue. Submitted claims are review candidates; reserved claims are payout candidates.
+4. Approve a claim with `npm run rewards:review -- <claimId> approve` or reject it with `npm run rewards:review -- <claimId> reject <short reason>`.
+5. Run `npm run rewards:payout:dry-run` and compare the exact recipient, token and amount.
+6. Send exactly 1 USDT0 from the dedicated campaign wallet to the verified payer.
+7. Submit the transaction hash through the authenticated `confirm-payout` action.
+8. The server marks the claim paid only after confirming the exact X Layer transfer.
 
 ## Approval record
 

@@ -576,6 +576,25 @@ export default async function okxRewardsHandler(req: Request, res: Response) {
 
   if (req.method === 'POST') {
     const action = clean(req.body?.action)
+    if (action === 'submit-rehearsal-claim') {
+      if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
+      if (campaign.status !== 'recording' || campaign.claimsEnabled) {
+        return res.status(409).json({ ok: false, error: 'Private rehearsal submission is not available.' })
+      }
+      let reservation: ReturnType<typeof reserveInstantReward> | undefined
+      await mutateDurableJson<RewardState>(STORE_KEY, current => {
+        reservation = reserveInstantReward(req.body?.receiptReference, current)
+        return reservation.ok ? reservation.state : current ?? { proofs: {} }
+      })
+      if (!reservation) return res.status(500).json({ ok: false, error: 'Could not submit the rehearsal claim.' })
+      if (!reservation.ok) return res.status(reservation.status).json(reservation)
+      return res.status(200).json({
+        ok: true,
+        claimId: reservation.claimId,
+        proof: reservation.proof,
+        message: 'One verified claim was submitted for private rehearsal review. Public claims remain disabled.',
+      })
+    }
     if (action === 'review-claim') {
       if (!operatorAuthorized(req)) return res.status(401).json({ ok: false, error: 'Unauthorized' })
       let result: ReturnType<typeof reviewInstantRewardClaim> | undefined
