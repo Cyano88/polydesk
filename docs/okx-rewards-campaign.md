@@ -81,6 +81,8 @@ npm run rewards:payout:dry-run
 
 The proof audit lists only eligible unclaimed receipt references and masked payer addresses. It does not submit claims or reserve funds.
 
+Before asking a rehearsal buyer to pay, run `npm run rewards:wallet:check -- <address>` inside the production environment. It returns only whether that address is excluded and never prints the configured exclusion list.
+
 Before launch, run:
 
 ```text
