@@ -1,3 +1,5 @@
+import { Contract, JsonRpcProvider } from 'ethers'
+
 const value = (name: string) => String(process.env[name] ?? '').trim()
 const flag = (name: string) => value(name).toLowerCase() === 'true'
 const address = (name: string) => /^0x[a-fA-F0-9]{40}$/.test(value(name)) ? value(name).toLowerCase() : ''
@@ -22,6 +24,8 @@ const exclusions = value('POLYDESK_OKX_REWARD_EXCLUDED_WALLETS')
 const dailyLimit = /^\d+$/.test(value('POLYDESK_OKX_REWARDS_DAILY_PAYOUT_LIMIT_ATOMIC'))
   ? BigInt(value('POLYDESK_OKX_REWARDS_DAILY_PAYOUT_LIMIT_ATOMIC'))
   : 0n
+const rpcUrl = value('POLYDESK_OKX_REWARDS_XLAYER_RPC_URL')
+const requiredPoolAtomic = 50_000_000n
 
 add('campaign approval recorded', flag('POLYDESK_OKX_REWARDS_APPROVED'), 'POLYDESK_OKX_REWARDS_APPROVED must be true')
 add('delivery recording enabled', flag('POLYDESK_OKX_REWARDS_RECORDING'), 'Recording must start with the published campaign window')
@@ -31,9 +35,38 @@ add('payout wallet is separate', Boolean(payoutAddress) && !sellerAddresses.incl
 add('daily payout ceiling safe', dailyLimit > 0n && dailyLimit <= 5_000_000n, `${dailyLimit.toString()} atomic units; maximum is 5000000`)
 add('operator key configured', value('POLYDESK_OKX_REWARDS_OPERATOR_KEY').length >= 32, 'Secret is checked by length and never printed')
 add('durable database configured', Boolean(value('DATABASE_URL') || value('POSTGRES_URL')), 'A Postgres URL is required for atomic claims')
-add('X Layer RPC configured', /^https:\/\//i.test(value('POLYDESK_OKX_REWARDS_XLAYER_RPC_URL')), 'An HTTPS X Layer RPC URL is required')
+add('X Layer RPC configured', /^https:\/\//i.test(rpcUrl), 'An HTTPS X Layer RPC URL is required')
 add('test wallets excluded', exclusions.length > 0, `${exclusions.length} explicit excluded wallet(s)`)
 add('leaderboard remains disabled', !flag('POLYDESK_OKX_REWARDS_LEADERBOARD_ENABLED'), 'Phase 1 contains only the 50-USDT0 instant pilot')
+
+if (payoutAddress && /^https:\/\//i.test(rpcUrl)) {
+  try {
+    const provider = new JsonRpcProvider(rpcUrl, 196, { staticNetwork: true })
+    const network = await provider.getNetwork()
+    add('RPC resolves X Layer', network.chainId === 196n, `Resolved chain ID ${network.chainId.toString()}`)
+    const usdt0 = new Contract(
+      '0x779ded0c9e1022225f8e0630b35a9b54be713736',
+      ['function balanceOf(address account) view returns (uint256)'],
+      provider,
+    )
+    const balanceAtomic = BigInt(await usdt0.balanceOf(payoutAddress))
+    add(
+      'instant pool fully funded',
+      balanceAtomic >= requiredPoolAtomic,
+      `${balanceAtomic.toString()} atomic USDT0 available; ${requiredPoolAtomic.toString()} required`,
+    )
+  } catch (error) {
+    add(
+      'RPC resolves X Layer',
+      false,
+      error instanceof Error ? `RPC check failed: ${error.message}` : 'RPC check failed',
+    )
+    add('instant pool fully funded', false, `${requiredPoolAtomic.toString()} atomic USDT0 required`)
+  }
+} else {
+  add('RPC resolves X Layer', false, 'A valid payout address and HTTPS RPC URL are required')
+  add('instant pool fully funded', false, `${requiredPoolAtomic.toString()} atomic USDT0 required`)
+}
 
 const ok = checks.every(check => check.ok)
 console.log(JSON.stringify({

@@ -198,7 +198,7 @@ export default function OkxRewards() {
           {!active && (
             <p className="mt-4 text-xs leading-5 text-gray-400">
               {approved
-                ? 'The pilot is approved. Claims remain disabled until the public start time and funded payout wallet are announced.'
+                ? 'The pilot is approved. Claims remain disabled while the reward pool is funded and the private payout rehearsal is completed.'
                 : 'Verification preview only. Claims remain disabled until campaign approval and the public start time are confirmed.'}
             </p>
           )}

@@ -84,7 +84,7 @@ Before launch, run:
 npm run rewards:launch:check
 ```
 
-It verifies the dates, dedicated payout address, five-USDT0 daily ceiling, database, RPC, exclusions, operator authentication and the default-off leaderboard without printing secrets or moving funds.
+It verifies the dates, dedicated payout address, full 50-USDT0 wallet balance, X Layer chain ID, five-USDT0 daily ceiling, database, RPC, exclusions, operator authentication and the default-off leaderboard without printing secrets or moving funds.
 
 It prints the operator queue and totals only. It has no signer and cannot broadcast. Automatic transfers remain deliberately unimplemented until the dedicated payout wallet is selected, approved and tested.
 
