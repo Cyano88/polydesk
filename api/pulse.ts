@@ -3,6 +3,7 @@ import { buildLiveScout } from './x402-polymarket-scout.js'
 
 type PulseOpportunity = {
   title?: string
+  marketSlug?: string
   marketUrl?: string
   image?: string
   description?: string

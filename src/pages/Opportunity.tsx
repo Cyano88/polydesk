@@ -6,6 +6,7 @@ import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOppor
 
 type Opportunity = {
   title?: string
+  marketSlug?: string
   marketUrl?: string
   image?: string
   description?: string

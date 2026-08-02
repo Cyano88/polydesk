@@ -101,6 +101,7 @@ function amountInput(value: number) {
 export function PolymarketLimitOrderTicket({
   marketTitle,
   marketUrl,
+  marketSlug: exactMarketSlug,
   yesQuote,
   noQuote,
   tickSize: rawTickSize,
@@ -111,6 +112,7 @@ export function PolymarketLimitOrderTicket({
 }: {
   marketTitle: string
   marketUrl: string
+  marketSlug?: string
   yesQuote?: unknown
   noQuote?: unknown
   tickSize?: unknown
@@ -288,6 +290,7 @@ export function PolymarketLimitOrderTicket({
           outcome,
           maxSpendUsdc: amount,
           wallet: funderAddress,
+          ...(exactMarketSlug ? { marketSlug: exactMarketSlug } : {}),
           orderType: journey === 'buy-now' ? 'FAK' : 'GTC',
           ...(journey === 'earn-rewards' ? { limitPrice: price } : {}),
         }),

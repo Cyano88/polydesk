@@ -840,6 +840,7 @@ function formatOpportunitySignal(opportunity: ReturnType<typeof serializeOpportu
 function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: string) {
   return {
     title: opportunity.title,
+    marketSlug: opportunity.slug,
     marketUrl: opportunity.marketUrl,
     image: opportunity.image,
     description: opportunity.description,

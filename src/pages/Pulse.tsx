@@ -7,6 +7,7 @@ const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLi
 
 type PulseOpportunity = {
   title?: string
+  marketSlug?: string
   marketUrl?: string
   image?: string
   description?: string
@@ -383,6 +384,7 @@ export default function Pulse() {
                 <PolymarketLimitOrderTicket
                   marketTitle={selected.title || 'Polymarket market'}
                   marketUrl={selected.marketUrl}
+                  marketSlug={selected.marketSlug}
                   yesQuote={selected.suggestedYesBid}
                   noQuote={selected.suggestedNoBid}
                   tickSize={selected.tickSize}
