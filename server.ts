@@ -35,6 +35,7 @@ import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
 import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
+import polydeskA2aTradingAgentHandler, { polydeskA2aTradingReceiptHandler } from './api/polydesk-a2a-trading-agent.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-funding.js'
 import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
@@ -156,6 +157,8 @@ app.post('/api/polymarket-portfolio', (req, res, next) => {
 app.all('/api/polymarket-portfolio', readLimiter, polymarketPortfolioHandler)
 app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRelayerBuilderSignerHandler)
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
+app.all('/api/a2a/polydesk-trading-agent', strictLimiter, polydeskA2aTradingAgentHandler)
+app.get('/api/a2a/polydesk-trading-agent/receipt/:missionId', readLimiter, polydeskA2aTradingReceiptHandler)
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)

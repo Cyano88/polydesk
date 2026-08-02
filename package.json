@@ -34,6 +34,7 @@
     "test:helper-memory": "node --import tsx --test scripts/helper-memory.test.ts",
     "test:okx-discovery": "node --import tsx --test scripts/okx-marketplace-discovery.test.ts",
     "test:okx-rewards": "node --import tsx --test scripts/okx-rewards.test.ts",
+    "test:a2a-trading": "node --import tsx --test scripts/polydesk-a2a-trading-agent.test.ts",
     "rewards:payout:dry-run": "tsx scripts/okx-rewards-payout-worker.ts",
     "rewards:proofs:dry-run": "tsx scripts/okx-rewards-proof-audit.ts",
     "rewards:rehearsal:submit": "tsx scripts/okx-rewards-rehearsal-submit.ts",

@@ -23,7 +23,7 @@ export default function DocsOkxAI() {
     <article className="space-y-10">
       <DocHeader
         title="OKX.AI marketplace services"
-        description="PolyDesk Agent #5427 exposes five machine-readable pay-per-call services. Every registered endpoint uses a non-zero x402 challenge so OKX buyer tooling can capture and verify the paid replay."
+        description="PolyDesk Agent #5427 exposes five machine-readable A2MCP services. A new overarching A2A trading service is being prepared to coordinate watch, readiness, funding, bounded execution and public PnL evidence in one accepted task."
       />
 
       <Section title="Service map">
@@ -38,6 +38,19 @@ export default function DocsOkxAI() {
           ]}
         />
         <Note>The backend contract shown here is the required target for Agent #5427. The four 0.1-USDT marketplace fees must also be reflected in the marketplace records before buyer testing.</Note>
+      </Section>
+
+      <Section title="New A2A trading agent">
+        <p><strong>PolyDesk Trading Agent</strong> takes a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits. It verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
+        <ol className="list-decimal space-y-2 pl-5">
+          <li>Publish a task with an explicit Polymarket BUY cap.</li>
+          <li>PolyDesk waits for <Code>job_accepted</Code>.</li>
+          <li>Select <Code>TRADE</Code>, <Code>POSITION</Code>, or <Code>AUTO_BEST_FIT</Code>.</li>
+          <li>Complete the single returned readiness action, if any.</li>
+          <li>OKX validates and executes the short-lived signal under the buyer grant.</li>
+          <li>Read the public open or realized PnL receipt.</li>
+        </ol>
+        <Note>AUTO_BEST_FIT ranks execution quality under explicit spread, depth, price and time rules. It is not a profit forecast. PolyDesk never receives wallet keys or reusable CLOB credentials.</Note>
       </Section>
 
       <Section title="How to call a service">

@@ -172,3 +172,5 @@ services:
         sync: false
       - key: POLYDESK_OKX_REWARDS_XLAYER_RPC_URL
         sync: false
+      - key: POLYDESK_A2A_OPERATOR_KEY
+        sync: false
