@@ -4,12 +4,13 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
   Activity as PulseIcon,
   Copy,
+  Gift,
   LayoutDashboard,
   LogOut,
   Moon,
   Radar,
   Sun,
-} from 'lucide-react'
+} from '../components/icons'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { cn } from '../lib/utils'
@@ -209,12 +210,12 @@ function PolyDeskWorkspace() {
           <div className="flex items-center gap-1.5">
             <Link
               to="/rewards"
-              aria-label="Open PolyDesk Trading Agent"
-              title="PolyDesk Trading Agent"
+              aria-label="Open PolyDesk rewards"
+              title="PolyDesk rewards"
               className="inline-flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 dark:border-white/10 dark:bg-[#1c1c20] dark:text-gray-200 dark:hover:bg-white/[0.08]"
             >
-              <PolyDeskAgentIcon header isStatic className="!h-3.5 !w-3.5" />
-              <span>Trading Agent</span>
+              <Gift className="h-4 w-4" />
+              <span>Rewards</span>
             </Link>
             <button
               type="button"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from './icons'
 import {
   polyDeskCreateOwnerApiKey,
   polyDeskEnsurePolygonProvider,

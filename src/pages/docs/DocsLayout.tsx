@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { ExternalLink, Menu, X } from 'lucide-react'
+import { ExternalLink, Menu, X } from '../../components/icons'
 
 const sections = [
   {

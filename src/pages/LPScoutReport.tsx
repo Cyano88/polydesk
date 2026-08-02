@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Download, ExternalLink, FileText, Loader2, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Download, ExternalLink, FileText, Loader2, Share2, ShieldCheck, TriangleAlert } from '../components/icons'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import { PolymarketLimitOrderTicket } from '../components/PolymarketLimitOrderTicket'
 import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOpportunityShareImage'

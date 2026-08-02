@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Download, ExternalLink, Loader2, Radar, Share2 } from 'lucide-react'
+import { ArrowRight, Check, Download, ExternalLink, Loader2, Radar, Share2 } from '../components/icons'
 import { Link, useParams } from 'react-router-dom'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOpportunityShareImage'

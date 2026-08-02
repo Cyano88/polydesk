@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, CheckCircle2, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CheckCircle2, ExternalLink, Loader2, ShieldCheck } from '../components/icons'
 import { useNavigate } from 'react-router-dom'
 import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'
 import { rememberLpScoutActivity } from '../lib/polydeskTradeActivity'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, CheckCircle2, ExternalLink, Gift, LineChart, WalletCards } from 'lucide-react'
+import { ArrowRight, CheckCircle2, ExternalLink, Gift } from '../components/icons'
 import {
   okxMarketplaceServices,
   okxMarketplaceServiceUrl,
@@ -121,194 +121,123 @@ export default function OkxRewards() {
   const rewardLimit = campaignInfo?.instantRewardLimit ?? 50
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-      <section className="overflow-hidden rounded-[28px] border border-gray-200 bg-white dark:border-white/10 dark:bg-[#18181b]">
-        <div className="grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.15fr_.85fr] lg:items-center">
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-7 sm:px-6 sm:py-10">
+      <section className="border-b border-gray-200 pb-8 dark:border-white/10 sm:pb-10">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-950 text-white dark:bg-white dark:text-gray-950">
+            <Gift className="h-4 w-4" />
+          </span>
+          <p className="text-xs font-semibold">PolyDesk on OKX.AI</p>
+        </div>
+        <div className="mt-6 grid gap-7 md:grid-cols-[1fr_15rem] md:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">PolyDesk on OKX.AI</p>
-            <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.05em] text-gray-950 dark:text-white sm:text-6xl">
-              One agent. One bounded Polymarket trade.
+            <h1 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white sm:text-5xl">
+              Give PolyDesk one trade. Keep control of the wallet.
             </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-7 text-gray-500 dark:text-gray-400 sm:text-base">
-              Start from a public signal. PolyDesk checks account readiness, applies your spend and price limits, prepares one BUY for execution through your Agentic Wallet, and returns public PnL evidence.
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400 sm:text-base">
+              Send a public Polymarket signal and your limits. PolyDesk checks readiness, returns the one action needed, prepares a bounded BUY, and records public PnL evidence.
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <a
-                href={okxMarketplaceServiceUrl(okxTradingAgentService)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950"
-              >
-                Start a trading mission <ArrowRight className="h-4 w-4" />
-              </a>
-              <a
-                href="#mission-flow"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-gray-200 px-6 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/[0.05]"
-              >
-                See how it works
-              </a>
-            </div>
           </div>
-
-          <div className="rounded-[24px] bg-gray-950 p-6 text-white dark:bg-white dark:text-gray-950">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-55">Trading Agent</p>
-            <p className="mt-4 text-2xl font-semibold tracking-tight">{okxTradingAgentService.subscriptionUsdtMonthly} USDT / month</p>
-            <p className="mt-1 text-sm opacity-65">{okxTradingAgentService.freeTrialDays}-day free trial</p>
-            <div className="mt-6 space-y-3 border-t border-white/15 pt-5 text-sm dark:border-black/10">
-              {['Buyer-controlled execution', 'Funding and approval next actions', 'Public, recomputable PnL receipt'].map(item => (
-                <div key={item} className="flex items-center gap-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <dl className="border-l-2 border-gray-950 pl-4 dark:border-white">
+            <dt className="text-xs font-medium text-gray-400">Trading membership</dt>
+            <dd className="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{okxTradingAgentService.subscriptionUsdtMonthly} USDT / month</dd>
+            <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">{okxTradingAgentService.freeTrialDays}-day free trial</dd>
+          </dl>
+        </div>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <a href={okxMarketplaceServiceUrl(okxTradingAgentService)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gray-950 px-5 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950">
+            Start a trading mission <ArrowRight className="h-4 w-4" />
+          </a>
+          <a href="#how-it-works" className="inline-flex h-11 items-center justify-center rounded-full border border-gray-300 px-5 text-sm font-semibold text-gray-700 transition hover:border-gray-400 dark:border-white/15 dark:text-gray-200">
+            How it works
+          </a>
         </div>
       </section>
 
-      <section id="mission-flow" className="mt-6 rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b] sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">One clear mission</p>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">From public signal to verifiable outcome</h2>
-        <div className="mt-6 grid gap-3 md:grid-cols-4">
-          {missionSteps.map(([title, body], index) => (
-            <article key={title} className="rounded-2xl bg-gray-50 p-5 dark:bg-white/[0.04]">
-              <span className="text-xs font-semibold text-gray-400">0{index + 1}</span>
-              <h3 className="mt-4 text-sm font-semibold text-gray-950 dark:text-white">{title}</h3>
-              <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b] sm:p-8">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+      <section id="how-it-works" className="border-b border-gray-200 py-8 dark:border-white/10">
+        <div className="grid gap-6 sm:grid-cols-[13rem_1fr]">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Built-in tools</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">Use the complete agent or call one tool</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">One mission</p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">Four steps, one result</h2>
           </div>
-          <p className="max-w-md text-xs leading-5 text-gray-500 dark:text-gray-400">The Trading Agent coordinates these services. Builders can still buy each API directly when they need only one result.</p>
+          <ol className="divide-y divide-gray-200 border-y border-gray-200 dark:divide-white/10 dark:border-white/10">
+            {missionSteps.map(([title, body], index) => (
+              <li key={title} className="grid gap-1 py-3 sm:grid-cols-[2rem_9rem_1fr] sm:items-baseline">
+                <span className="text-xs font-semibold text-gray-400">0{index + 1}</span>
+                <strong className="text-sm font-semibold text-gray-950 dark:text-white">{title}</strong>
+                <span className="text-xs leading-5 text-gray-500 dark:text-gray-400">{body}</span>
+              </li>
+            ))}
+          </ol>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      </section>
+
+      <section className="border-b border-gray-200 py-8 dark:border-white/10">
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Direct tools</p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">Need one result instead?</h2>
+          </div>
+          <p className="max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Buy one API call without starting a full trading mission.</p>
+        </div>
+        <div className="mt-5 divide-y divide-gray-200 border-y border-gray-200 dark:divide-white/10 dark:border-white/10">
           {okxMarketplaceServices.map(service => (
-            <a
-              key={service.serviceId}
-              href={okxMarketplaceServiceUrl(service)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 p-4 transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.04]"
-            >
+            <a key={service.serviceId} href={okxMarketplaceServiceUrl(service)} target="_blank" rel="noreferrer" className="grid gap-1 py-3 transition hover:opacity-65 sm:grid-cols-[1fr_7rem_1.5rem] sm:items-center">
               <span>
                 <span className="block text-sm font-semibold text-gray-950 dark:text-white">{service.name}</span>
-                <span className="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">{service.summary}</span>
-                <span className="mt-3 block text-[11px] font-semibold text-gray-400">{directServicePrices[service.serviceId]} / call</span>
+                <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">{service.summary}</span>
               </span>
-              <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+              <span className="text-xs font-semibold text-gray-500 sm:text-right dark:text-gray-400">{directServicePrices[service.serviceId]} / call</span>
+              <ExternalLink className="hidden h-4 w-4 justify-self-end text-gray-400 sm:block" />
             </a>
           ))}
         </div>
       </section>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_.9fr]">
-        <div className="rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b] sm:p-8">
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-            <Gift className="h-4 w-4" />
-            <p className="text-xs font-semibold uppercase tracking-[0.16em]">Verified tester program</p>
-          </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">Direct API rewards remain separate</h2>
-          <p className="mt-3 text-sm leading-7 text-gray-500 dark:text-gray-400">
-            The independently funded 50-USDT0 pilot verifies delivered pay-per-call services and pays only the recovered X Layer payer. A2A subscription missions will join only after their accepted-job and PnL proofs are recorded end to end.
-          </p>
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-gray-50 p-4 dark:bg-white/[0.04]">
-              <p className="text-xs text-gray-400">Rewards paid</p>
-              <p className="mt-2 text-xl font-semibold text-gray-950 dark:text-white">{paidRewards} / {rewardLimit}</p>
+      <section className="py-8">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2">
+              <Gift className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+              <h2 className="text-xl font-semibold tracking-tight text-gray-950 dark:text-white">Verified-use rewards</h2>
             </div>
-            <div className="rounded-2xl bg-gray-50 p-4 dark:bg-white/[0.04]">
-              <p className="text-xs text-gray-400">Campaign window</p>
-              <p className="mt-2 text-sm font-semibold text-gray-950 dark:text-white">{dateLabel(campaignInfo?.startsAt ?? null)} – {dateLabel(campaignInfo?.endsAt ?? null)}</p>
-            </div>
+            <p className="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+              PolyDesk has reserved 50 USDT0: 1 USDT0 for each of the first 50 unique wallets with a verified, delivered direct API call on X Layer. A2A rewards open only after the full trade and PnL proof is verified.
+            </p>
+            <p className="mt-3 text-xs font-medium text-gray-400">
+              {paidRewards} of {rewardLimit} paid · {dateLabel(campaignInfo?.startsAt ?? null)} – {dateLabel(campaignInfo?.endsAt ?? null)}
+            </p>
           </div>
-          <p className="mt-4 text-xs leading-5 text-gray-400">
-            {directRewardsActive
-              ? 'Public direct-API claims are open.'
-              : 'Proof recording is active; public claims remain closed until the launch gate is enabled.'}
-          </p>
+          <span className={`inline-flex w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${directRewardsActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-300'}`}>
+            {directRewardsActive ? 'Claims open' : 'Opening soon'}
+          </span>
         </div>
 
-        <div className="rounded-[24px] border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-[#18181b] sm:p-8">
-          {directRewardsActive ? (
-            <>
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <WalletCards className="h-4 w-4" />
-                <p className="text-xs font-semibold uppercase tracking-[0.16em]">Claim a direct API reward</p>
-              </div>
-              <label className="mt-5 block text-sm font-semibold text-gray-800 dark:text-gray-100" htmlFor="receipt-reference">
-                X Layer payment transaction
-              </label>
-              <input
-                id="receipt-reference"
-                value={receiptReference}
-                onChange={event => setReceiptReference(event.target.value)}
-                placeholder="0x..."
-                className="mt-2 h-12 w-full rounded-2xl border border-gray-200 bg-white px-4 font-mono text-xs text-gray-900 outline-none transition focus:border-gray-400 dark:border-white/10 dark:bg-[#111113] dark:text-white"
-              />
-              <button
-                type="button"
-                disabled={checking || !receiptReference.trim()}
-                onClick={() => void verifyReceipt()}
-                className="mt-3 h-12 w-full rounded-full bg-gray-950 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-gray-950"
-              >
-                {checking ? 'Verifying…' : 'Verify delivered call'}
+        {directRewardsActive && (
+          <div className="mt-6 border-t border-gray-200 pt-6 dark:border-white/10">
+            <label className="text-sm font-semibold text-gray-800 dark:text-gray-100" htmlFor="receipt-reference">X Layer payment transaction</label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input id="receipt-reference" value={receiptReference} onChange={event => setReceiptReference(event.target.value)} placeholder="0x..." className="h-11 min-w-0 flex-1 rounded-xl border border-gray-300 bg-transparent px-4 font-mono text-xs text-gray-900 outline-none focus:border-gray-500 dark:border-white/15 dark:text-white" />
+              <button type="button" disabled={checking || !receiptReference.trim()} onClick={() => void verifyReceipt()} className="h-11 rounded-full bg-gray-950 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-gray-950">
+                {checking ? 'Verifying…' : 'Verify call'}
               </button>
-
-              {verification && (
-                <div className={`mt-4 rounded-2xl p-4 text-sm ${verification.ok ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-400/10 dark:text-red-200'}`}>
-                  {verification.ok && verification.proof ? (
-                    <div className="flex gap-3">
-                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-                      <div>
-                        <p className="font-semibold">{verification.proof.serviceName}</p>
-                        <p className="mt-1 text-xs opacity-75">Payer {verification.proof.payer}</p>
-                        <p className="mt-2 text-xs font-semibold">{verification.message ?? verification.proof.reward ?? `Status: ${verification.proof.claimState}`}</p>
-                      </div>
-                    </div>
-                  ) : verification.error}
-                </div>
-              )}
-
-              {verification?.ok && verification.proof?.reward && (
-                <button
-                  type="button"
-                  disabled={claiming}
-                  onClick={() => void claimReward()}
-                  className="mt-3 h-12 w-full rounded-full bg-emerald-600 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {claiming ? 'Submitting…' : 'Submit for review'}
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="flex h-full min-h-64 flex-col justify-between rounded-2xl bg-gray-50 p-5 dark:bg-white/[0.04]">
-              <div>
-                <LineChart className="h-5 w-5 text-gray-500" />
-                <h2 className="mt-5 text-xl font-semibold text-gray-950 dark:text-white">A2A proof comes first</h2>
-                <p className="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">The public tester claim opens after one approved subscription mission completes the full accepted-task, trade, and PnL-receipt flow.</p>
-              </div>
-              <a
-                href={okxMarketplaceServiceUrl(okxTradingAgentService)}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-950 dark:text-white"
-              >
-                View the Trading Agent <ArrowRight className="h-4 w-4" />
-              </a>
             </div>
-          )}
-        </div>
+            {verification && (
+              <div className={`mt-3 flex gap-3 border-l-2 pl-3 text-sm ${verification.ok ? 'border-emerald-500 text-emerald-800 dark:text-emerald-300' : 'border-red-500 text-red-700 dark:text-red-300'}`}>
+                {verification.ok && verification.proof ? <><CheckCircle2 className="h-5 w-5 shrink-0" /><span><strong>{verification.proof.serviceName}</strong> · {verification.message ?? verification.proof.reward ?? `Status: ${verification.proof.claimState}`}</span></> : verification.error}
+              </div>
+            )}
+            {verification?.ok && verification.proof?.reward && (
+              <button type="button" disabled={claiming} onClick={() => void claimReward()} className="mt-3 text-sm font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">
+                {claiming ? 'Submitting…' : 'Submit reward claim'}
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
-      <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-5 text-gray-400">
-        PolyDesk never requests wallet secrets. Trading remains subject to the buyer’s written limits and Agentic Wallet authorization. Rewards are independently funded by PolyDesk, not OKX.
+      <p className="border-t border-gray-200 pt-5 text-xs leading-5 text-gray-400 dark:border-white/10">
+        PolyDesk never requests wallet secrets. The buyer’s written limits and Agentic Wallet authorization remain in control. Rewards are funded by PolyDesk, not OKX.
       </p>
     </main>
   )

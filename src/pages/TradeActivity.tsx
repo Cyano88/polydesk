@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { ChevronDown, CircleDollarSign, ExternalLink, History, Radar } from 'lucide-react'
+import { ChevronDown, CircleDollarSign, ExternalLink, History, Radar } from '../components/icons'
 import { Link, useSearchParams } from 'react-router-dom'
 import { readSavedLpScoutActivity, type SavedLpScoutActivity } from '../lib/polydeskTradeActivity'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'

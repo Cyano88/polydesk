@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Bot, CircleDollarSign, LineChart, ShieldCheck, Trophy, Wallet } from 'lucide-react'
+import { ArrowRight, Bot, CircleDollarSign, LineChart, ShieldCheck, Trophy, Wallet } from '../components/icons'
 
 const cards = [
   { icon: Bot, title: 'Desk Agent', body: 'Negotiates tasks, guides funding, and helps users understand market state before signing.' },
@@ -22,7 +22,7 @@ export default function About() {
             to="/"
             className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/15 px-4 text-sm font-bold text-white/90"
           >
-            Open app <ArrowRight size={15} />
+            Open app <ArrowRight className="h-4 w-4" />
           </Link>
         </nav>
 
@@ -42,7 +42,7 @@ export default function About() {
           const Icon = card.icon
           return (
             <article key={card.title} className="min-h-40 rounded-lg border border-white/10 bg-white/[0.06] p-5">
-              <Icon className="text-sky-300" size={20} />
+              <Icon className="h-5 w-5 text-sky-300" />
               <strong className="mt-4 block text-lg">{card.title}</strong>
               <span className="mt-2 block text-sm leading-6 text-slate-300">{card.body}</span>
             </article>

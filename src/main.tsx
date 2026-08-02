@@ -1,6 +1,10 @@
 import React, { lazy, Suspense, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { PolyDeskLoadingState } from './components/PolyDeskLoadState'
+import '@fontsource/inter/latin-400.css'
+import '@fontsource/inter/latin-500.css'
+import '@fontsource/inter/latin-600.css'
+import '@fontsource/inter/latin-700.css'
 import './styles.css'
 
 const ProductApp = lazy(() => import('./ProductApp'))

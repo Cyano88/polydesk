@@ -31,7 +31,7 @@ import {
   UserRound,
   UsersRound,
   Wallet,
-} from 'lucide-react'
+} from '../components/icons'
 import { cn } from '../lib/utils'
 import { EVM_TREASURY } from '../lib/chains'
 import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRight, Check, ExternalLink, LineChart, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Check, ExternalLink, LineChart, type IconComponent } from '../components/icons'
 import { cn } from '../lib/utils'
 import AgentWorkspace from './AgentWorkspace'
 
@@ -20,7 +20,7 @@ export type LpScoutOption = {
   title: string
   body: string
   amount: string
-  icon: LucideIcon
+  icon: IconComponent
   inputLabel?: string
   inputPlaceholder?: string
 }

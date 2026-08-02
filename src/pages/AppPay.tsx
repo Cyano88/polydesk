@@ -1,4 +1,4 @@
-import { ArrowUpRight, CircleDollarSign, CreditCard, FlaskConical, LockKeyhole } from 'lucide-react'
+import { ArrowUpRight, CircleDollarSign, CreditCard, FlaskConical, LockKeyhole } from '../components/icons'
 import { okxMarketplaceServices, okxMarketplaceServiceUrl } from '../lib/okxMarketplaceServices'
 
 const plannedServices = [

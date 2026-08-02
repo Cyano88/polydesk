@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ExternalLink, Radio, Share2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Radio, Share2 } from '../components/icons'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 

@@ -1,4 +1,4 @@
-import { ArrowUp, Plus, Square } from 'lucide-react'
+import { ArrowUp, Plus, Square } from './icons'
 import { cn } from '../lib/utils'
 
 type DynamicSendButtonProps = {

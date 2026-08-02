@@ -1,4 +1,4 @@
-import { CheckCheck, Copy, Mail, MessageCircle, Send, X } from 'lucide-react'
+import { CheckCheck, Copy, Mail, MessageCircle, Send, X } from './icons'
 import { cn } from '../lib/utils'
 
 type PayLinkShareSheetProps = {
