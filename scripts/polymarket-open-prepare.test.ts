@@ -205,7 +205,7 @@ test('uses current asks instead of a stale last-trade quote and enforces minimum
   }
 })
 
-test('defaults to immediate FAK and rejects resting GTC orders', async () => {
+test('supports both immediate purchases and resting reward quotes', async () => {
   const defaultOrder = await preparePolymarketOpen(input({ orderType: undefined }), dependencies())
   assert.equal(defaultOrder.ok, true)
   if (defaultOrder.ok) {
@@ -218,6 +218,25 @@ test('defaults to immediate FAK and rejects resting GTC orders', async () => {
     orderType: 'GTC',
     limitPrice: '0.49',
   }), dependencies())
-  assert.equal(resting.ok, false)
-  if (!resting.ok) assert.match(resting.error, /immediate FAK or FOK/i)
+  assert.equal(resting.ok, true)
+  if (resting.ok) {
+    assert.equal(resting.data.signingPlan.submit.orderType, 'GTC')
+    assert.equal(resting.data.signingPlan.submit.postOnly, true)
+    assert.equal(resting.data.market.executionPrice, '0.49')
+    assert.equal(resting.data.market.executionPriceSource, 'customer-limit')
+    assert.equal(resting.data.signingPlan.createOrder.price, 0.49)
+    assert.equal(resting.data.signingPlan.createOrder.size, Number((7 / 0.49).toFixed(6)))
+  }
+})
+
+test('rejects a resting reward quote that would execute immediately', async () => {
+  const result = await preparePolymarketOpen(input({
+    orderType: 'GTC',
+    limitPrice: '0.50',
+  }), dependencies())
+  assert.equal(result.ok, false)
+  if (!result.ok) {
+    assert.equal(result.status, 409)
+    assert.match(result.error, /stay below the current sell price/i)
+  }
 })

@@ -26,10 +26,15 @@ type PreparedLimit = {
   wallet: { address: string }
   signingPlan: {
     client: { builderConfig: { builderCode: string } }
-    createOrder: {
+    createOrder?: {
       tokenID: string
       price: number
       size: number
+    }
+    createMarketOrder?: {
+      tokenID: string
+      amount: number
+      price: number
     }
   }
 }
@@ -120,6 +125,7 @@ export function PolymarketLimitOrderTicket({
   const { authenticated, getAccessToken } = usePrivy()
   const { wallets } = useWallets()
   const [profile, setProfile] = useState<TradingProfile | null>(null)
+  const [journey, setJourney] = useState<'buy-now' | 'earn-rewards'>('earn-rewards')
   const [outcome, setOutcome] = useState<'YES' | 'NO'>(initialOutcome)
   const [price, setPrice] = useState(initialOutcome === 'NO' ? cleanPrice(noQuote, tickSize) : initialPrice)
   const [amount, setAmount] = useState(initialRewardSpend > 0 ? amountInput(initialRewardSpend) : '1')
@@ -130,6 +136,7 @@ export function PolymarketLimitOrderTicket({
     price: string
     amount: string
     outcome: 'YES' | 'NO'
+    journey: 'buy-now' | 'earn-rewards'
   } | null>(null)
   const [marketPosition, setMarketPosition] = useState<MarketPosition | null>(null)
   const [cancelContext, setCancelContext] = useState<{
@@ -180,7 +187,7 @@ export function PolymarketLimitOrderTicket({
     () => minimumRewardSpend(rewardMinShares, price),
     [price, rewardMinShares],
   )
-  const belowRewardMinimum = requiredRewardSpend > 0 && Number(amount) < requiredRewardSpend
+  const belowRewardMinimum = journey === 'earn-rewards' && requiredRewardSpend > 0 && Number(amount) < requiredRewardSpend
   const rewardShares = Number(rewardMinShares)
   const combinedRewardSetup = Number(estimatedRewardCapitalUsdc)
 
@@ -238,7 +245,7 @@ export function PolymarketLimitOrderTicket({
     return () => window.clearInterval(timer)
   }, [loadMarketPosition])
 
-  async function placeLimitOrder() {
+  async function placeOrder() {
     setNotice('')
     setPlaced(null)
     if (!authenticated) {
@@ -260,7 +267,7 @@ export function PolymarketLimitOrderTicket({
       setNotice('Enter a valid USDC amount.')
       return
     }
-    if (!/^\d+(?:\.\d{1,6})?$/.test(price) || Number(price) <= 0 || Number(price) >= 1) {
+    if (journey === 'earn-rewards' && (!/^\d+(?:\.\d{1,6})?$/.test(price) || Number(price) <= 0 || Number(price) >= 1)) {
       setNotice('Enter a limit price between 0 and 1.')
       return
     }
@@ -271,7 +278,7 @@ export function PolymarketLimitOrderTicket({
 
     setBusy(true)
     try {
-      setNotice('Reviewing the live market and wallet readiness.')
+      setNotice(journey === 'buy-now' ? 'Checking the live price and wallet.' : 'Checking your reward quote and wallet.')
       const planResponse = await fetch('/api/polymarket-open/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -281,12 +288,12 @@ export function PolymarketLimitOrderTicket({
           outcome,
           maxSpendUsdc: amount,
           wallet: funderAddress,
-          orderType: 'GTC',
-          limitPrice: price,
+          orderType: journey === 'buy-now' ? 'FAK' : 'GTC',
+          ...(journey === 'earn-rewards' ? { limitPrice: price } : {}),
         }),
       })
       const planBody = await planResponse.json().catch(() => ({})) as { ok?: boolean; error?: string } & Partial<PreparedLimit>
-      if (!planResponse.ok || !planBody.ok) throw new Error(planBody.error || 'The limit order could not be prepared.')
+      if (!planResponse.ok || !planBody.ok) throw new Error(planBody.error || 'This action could not be prepared.')
       const plan = planBody as PreparedLimit
       if (!plan.readyForLocalSigning) throw new Error(plan.issues?.[0] || 'Fund or approve the Polymarket wallet before placing this order.')
 
@@ -327,36 +334,49 @@ export function PolymarketLimitOrderTicket({
         funderAddress,
       })
 
-      setNotice('Confirm the limit order in your wallet.')
-      const signedOrder = await signingClient.createOrder({
-        tokenID: plan.signingPlan.createOrder.tokenID,
-        price: plan.signingPlan.createOrder.price,
-        size: plan.signingPlan.createOrder.size,
-        side: Side.BUY,
-        builderCode: plan.signingPlan.client.builderConfig.builderCode,
-      }, {
+      setNotice(journey === 'buy-now' ? 'Confirm the purchase in your wallet.' : 'Confirm the reward quote in your wallet.')
+      const sdkOptions = {
         tickSize: plan.market.tickSize as '0.1' | '0.01' | '0.001' | '0.0001',
         negRisk: plan.market.negRisk,
-        version: 2,
-      })
+        version: 2 as const,
+      }
+      const sdkOrderType = journey === 'buy-now' ? OrderType.FAK : OrderType.GTC
+      const signedOrder = journey === 'buy-now'
+        ? await signingClient.createMarketOrder({
+            tokenID: plan.signingPlan.createMarketOrder!.tokenID,
+            amount: plan.signingPlan.createMarketOrder!.amount,
+            price: plan.signingPlan.createMarketOrder!.price,
+            side: Side.BUY,
+            orderType: OrderType.FAK,
+            builderCode: plan.signingPlan.client.builderConfig.builderCode,
+          }, sdkOptions)
+        : await signingClient.createOrder({
+            tokenID: plan.signingPlan.createOrder!.tokenID,
+            price: plan.signingPlan.createOrder!.price,
+            size: plan.signingPlan.createOrder!.size,
+            side: Side.BUY,
+            builderCode: plan.signingPlan.client.builderConfig.builderCode,
+          }, sdkOptions)
       const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
         providerChainId: await polyDeskProviderChainId(provider),
         ownerAddress: activeOwner,
         funderAddress,
       })
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
-      const orderPayload = orderToJsonV2(signedOrder as any, credentials.key, OrderType.GTC, false, true)
+      const orderPayload = orderToJsonV2(signedOrder as any, credentials.key, sdkOrderType, false, journey === 'earn-rewards')
       const handoffResponse = await fetch('/api/polymarket-builder-handoff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          source: orderSource === 'watch-position' ? 'watch-position-limit' : 'lp-scout-limit',
+          source: journey === 'buy-now'
+            ? orderSource === 'watch-position' ? 'watch-position-buy' : 'lp-scout-buy'
+            : orderSource === 'watch-position' ? 'watch-position-limit' : 'lp-scout-limit',
           marketTitle,
           marketUrl,
           outcome: plan.market.outcome,
           tokenId: plan.market.tokenId,
           signer: funderAddress,
-          orderType: OrderType.GTC,
+          orderType: sdkOrderType,
           order: signedOrder,
           orderPayload,
         }),
@@ -379,7 +399,7 @@ export function PolymarketLimitOrderTicket({
         orderBody,
         userHeaders: Object.fromEntries(Object.entries(l2Headers).map(([key, value]) => [key, String(value)])),
         remoteBuilderSigner: handoff.remoteBuilderSigner,
-        fallbackMessage: 'Polymarket rejected the limit order.',
+        fallbackMessage: 'Polymarket rejected the order.',
         debug: polyDeskOrderSubmitDebug({
           providerChainId: await polyDeskProviderChainId(provider),
           ownerAddress: activeOwner,
@@ -392,12 +412,13 @@ export function PolymarketLimitOrderTicket({
       const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
       setPlaced({
         orderId: submittedOrderId || undefined,
-        price,
+        price: journey === 'buy-now' ? plan.market.executionPrice : price,
         amount,
         outcome,
+        journey,
       })
-      if (submittedOrderId) setCancelContext({ orderId: submittedOrderId, walletClient, credentials })
-      if (submittedOrderId) {
+      if (submittedOrderId && journey === 'earn-rewards') setCancelContext({ orderId: submittedOrderId, walletClient, credentials })
+      if (submittedOrderId && journey === 'earn-rewards') {
         try {
           await fetch('/api/polymarket-portfolio', {
             method: 'POST',
@@ -411,8 +432,8 @@ export function PolymarketLimitOrderTicket({
               marketUrl,
               outcome: plan.market.outcome || outcome,
               side: 'BUY',
-              price: plan.signingPlan.createOrder.price,
-              originalSize: plan.signingPlan.createOrder.size,
+              price: plan.signingPlan.createOrder!.price,
+              originalSize: plan.signingPlan.createOrder!.size,
               origin: orderSource,
             }),
           })
@@ -423,7 +444,7 @@ export function PolymarketLimitOrderTicket({
       }
       setNotice('')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The limit order could not be placed.')
+      setNotice(error instanceof Error ? error.message : journey === 'buy-now' ? 'The purchase could not be completed.' : 'The reward quote could not be placed.')
     } finally {
       setBusy(false)
     }
@@ -463,7 +484,7 @@ export function PolymarketLimitOrderTicket({
       }
       setCancelContext(null)
       setPlaced(null)
-      setNotice('Limit order cancelled.')
+      setNotice('Reward quote cancelled.')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The order could not be cancelled.')
     } finally {
@@ -486,13 +507,17 @@ export function PolymarketLimitOrderTicket({
               <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-500 text-white">
                 <CheckCircle2 className="h-4 w-4" />
               </span>
-              Limit order submitted
+              {placed.journey === 'buy-now' ? 'Purchase submitted' : 'Reward quote submitted'}
             </div>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${placed.outcome === 'YES' ? 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300'}`}>
               {placed.outcome}
             </span>
           </div>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{placed.amount} USDC at {placed.price} · resting until matched.</p>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {placed.journey === 'buy-now'
+              ? `${placed.amount} USDC submitted at a protected live price.`
+              : `${placed.amount} USDC at ${placed.price} · available until matched or cancelled.`}
+          </p>
 
           {hasPosition ? (
             <div className="mt-4 grid grid-cols-3 divide-x divide-gray-200 border-y border-gray-200 py-3 dark:divide-white/10 dark:border-white/10">
@@ -514,7 +539,9 @@ export function PolymarketLimitOrderTicket({
             </div>
           ) : (
             <p className="mt-4 border-y border-gray-200 py-3 text-xs leading-5 text-gray-500 dark:border-white/10 dark:text-gray-400">
-              No filled position yet. Live P&amp;L appears here after Polymarket matches the order.
+              {placed.journey === 'buy-now'
+                ? 'The purchase was submitted. Live P&L appears when Polymarket reports the position.'
+                : 'No filled position yet. Live P&L appears after another trader matches your quote.'}
             </p>
           )}
 
@@ -527,7 +554,9 @@ export function PolymarketLimitOrderTicket({
           </div>
         </div>
         <p className="border-t border-gray-200 bg-gray-50 px-4 py-2.5 text-[10px] text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400">
-          LP rewards settle separately after Polymarket scores eligible liquidity.
+          {placed.journey === 'buy-now'
+            ? 'This is a market purchase, not a market-reward quote.'
+            : 'Market rewards settle separately after Polymarket scores eligible liquidity.'}
         </p>
       </div>
     )
@@ -535,6 +564,32 @@ export function PolymarketLimitOrderTicket({
 
   return (
     <div className="space-y-4 border-t border-gray-100 pt-5 dark:border-white/10">
+      <div className="grid grid-cols-2 rounded-xl bg-gray-100 p-1 dark:bg-white/[0.06]">
+        {([
+          ['buy-now', 'Buy now'],
+          ['earn-rewards', 'Earn market rewards'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setJourney(value)
+              setPlaced(null)
+              setNotice('')
+              if (value === 'buy-now') setAmount('1')
+              else if (requiredRewardSpend > 0) setAmount(amountInput(requiredRewardSpend))
+            }}
+            className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition ${journey === value ? 'bg-white text-gray-950 shadow-sm dark:bg-[#242429] dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] leading-5 text-gray-500 dark:text-gray-400">
+        {journey === 'buy-now'
+          ? 'Buy available shares immediately. Any amount that cannot be filled now is cancelled automatically.'
+          : 'Leave your price available for other traders. You can cancel it, and eligible quotes may share the market reward pool.'}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         {(['YES', 'NO'] as const).map(value => (
           <button
@@ -544,7 +599,7 @@ export function PolymarketLimitOrderTicket({
               const nextPrice = cleanPrice(value === 'YES' ? yesQuote : noQuote, tickSize)
               const nextMinimum = minimumRewardSpend(rewardMinShares, nextPrice)
               setOutcome(value)
-              if (nextMinimum > 0 && Number(amount) < nextMinimum) setAmount(amountInput(nextMinimum))
+              if (journey === 'earn-rewards' && nextMinimum > 0 && Number(amount) < nextMinimum) setAmount(amountInput(nextMinimum))
             }}
             className={`rounded-xl border px-3 py-2.5 text-xs font-bold transition-all ${
               outcome === value
@@ -560,26 +615,29 @@ export function PolymarketLimitOrderTicket({
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 divide-x divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className={`${journey === 'earn-rewards' ? 'grid-cols-2 divide-x' : 'grid-cols-1'} grid divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-white/[0.03]`}>
+        {journey === 'earn-rewards' && (
+          <label className="px-3 py-3">
+            <span className="block text-[10px] font-semibold uppercase text-gray-400">Your price</span>
+            <input value={price} onChange={event => setPrice(event.target.value)} onBlur={() => setPrice(cleanPrice(price, tickSize))} inputMode="decimal" step={tickSize} className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" placeholder="0.50" />
+          </label>
+        )}
         <label className="px-3 py-3">
-          <span className="block text-[10px] font-semibold uppercase text-gray-400">Your price</span>
-          <input value={price} onChange={event => setPrice(event.target.value)} onBlur={() => setPrice(cleanPrice(price, tickSize))} inputMode="decimal" step={tickSize} className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" placeholder="0.50" />
-        </label>
-        <label className="px-3 py-3">
-          <span className="block text-[10px] font-semibold uppercase text-gray-400">Amount</span>
+          <span className="block text-[10px] font-semibold uppercase text-gray-400">USDC to use</span>
           <input value={amount} onChange={event => setAmount(event.target.value)} inputMode="decimal" className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" placeholder="1" />
         </label>
       </div>
       <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-        <span>Estimated {estimatedShares ? estimatedShares.toFixed(2) : '0'} shares</span>
-        <span>Waits for a match</span>
+        <span>{journey === 'earn-rewards' ? `Estimated ${estimatedShares ? estimatedShares.toFixed(2) : '0'} shares` : 'Final shares depend on available prices'}</span>
+        <span>{journey === 'earn-rewards' ? 'Stays available' : 'Executes immediately'}</span>
       </div>
-      {requiredRewardSpend > 0 && (
+      {journey === 'earn-rewards' && requiredRewardSpend > 0 && (
         <p className={`text-[11px] leading-5 ${belowRewardMinimum ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
           This {outcome} order needs at least {amountInput(requiredRewardSpend)} USDC ({rewardShares.toLocaleString(undefined, { maximumFractionDigits: 2 })} shares) to meet the displayed reward minimum.
           {Number.isFinite(combinedRewardSetup) && combinedRewardSetup > 0 ? ` Estimated two-sided setup: ≈${combinedRewardSetup.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC.` : ''}
         </p>
       )}
+      {journey === 'earn-rewards' ? <>
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10 dark:bg-white/10">
         {[
           ['Max payout', projected.payout, 'text-gray-950 dark:text-white'],
@@ -593,9 +651,18 @@ export function PolymarketLimitOrderTicket({
           </div>
         ))}
       </div>
-      <p className="text-[10px] leading-4 text-gray-400">Projection assumes a full fill and winning resolution; fees and LP rewards are excluded.</p>
-      <button type="button" onClick={() => void placeLimitOrder()} disabled={busy || belowRewardMinimum} className="polydesk-primary-cta w-full disabled:cursor-not-allowed disabled:opacity-50">
-        {busy ? 'Reviewing order' : belowRewardMinimum ? `Minimum ${amountInput(requiredRewardSpend)} USDC` : authenticated ? 'Review and sign' : 'Sign in to place order'}
+      <p className="text-[10px] leading-4 text-gray-400">Projection assumes a full fill and winning resolution; fees and market rewards are excluded.</p>
+      </> : (
+        <p className="rounded-xl bg-blue-50 px-3 py-3 text-[11px] leading-5 text-blue-800 dark:bg-blue-400/10 dark:text-blue-200">
+          PolyDesk checks the live order book before signing. You may receive fewer shares if only part of your purchase is available.
+        </p>
+      )}
+      <button type="button" onClick={() => void placeOrder()} disabled={busy || belowRewardMinimum} className="polydesk-primary-cta w-full disabled:cursor-not-allowed disabled:opacity-50">
+        {busy
+          ? journey === 'buy-now' ? 'Checking live price' : 'Checking reward quote'
+          : belowRewardMinimum ? `Minimum ${amountInput(requiredRewardSpend)} USDC`
+          : authenticated ? journey === 'buy-now' ? 'Review purchase' : 'Review reward quote'
+          : 'Sign in to continue'}
       </button>
       {notice && <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{notice}</p>}
     </div>
@@ -739,7 +806,7 @@ export function PolymarketOpenOrdersPanel() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-gray-950 dark:text-white">Open orders</p>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Live limit orders waiting on Polymarket.</p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Orders currently available for other traders to match.</p>
         </div>
         {!orders && (
           <button type="button" onClick={() => void loadOrders()} disabled={busy} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">

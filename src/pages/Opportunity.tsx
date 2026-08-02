@@ -63,7 +63,7 @@ export default function Opportunity() {
         if (!cancelled) setData(response.ok ? body : { ...body, ok: false })
       })
       .catch(() => {
-        if (!cancelled) setData({ ok: false, error: 'This LP opportunity could not be loaded.' })
+        if (!cancelled) setData({ ok: false, error: 'This market reward opportunity could not be loaded.' })
       })
     return () => { cancelled = true }
   }, [slug])
@@ -84,9 +84,10 @@ export default function Opportunity() {
   const makerPlan = useMemo(() => {
     if (!opportunity) return []
     return [
+      'Choose Buy now or Earn market rewards.',
       'Choose YES or NO.',
       'Enter how much USDC you want to use.',
-      'Review and sign. Your order will wait for someone to match it.',
+      'Review the action in plain language, then sign with your wallet.',
     ]
   }, [opportunity])
 
@@ -142,7 +143,7 @@ export default function Opportunity() {
   if (!data) {
     return (
       <main className="min-h-screen bg-[#2f5bff]">
-        <PolyDeskLoadingState fullScreen label="Opening LP opportunity" />
+        <PolyDeskLoadingState fullScreen label="Opening market reward opportunity" />
       </main>
     )
   }
@@ -153,7 +154,7 @@ export default function Opportunity() {
         <section className="w-full max-w-md rounded-2xl bg-white p-6 text-center text-gray-950">
           <Radar className="mx-auto h-7 w-7 text-blue-600" />
           <h1 className="mt-4 text-xl font-semibold tracking-tight">Opportunity unavailable</h1>
-          <p className="mt-2 text-sm leading-6 text-gray-500">{data.error || 'The live market no longer meets the LP filter.'}</p>
+          <p className="mt-2 text-sm leading-6 text-gray-500">{data.error || 'The live market no longer meets the reward filter.'}</p>
           <Link to="/polydesk?service=pulse" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
             Open Pulse <ArrowRight className="h-4 w-4" />
           </Link>
@@ -261,7 +262,7 @@ export default function Opportunity() {
             </div>
 
             <Link to={`/polydesk?service=pulse&opportunity=${encodeURIComponent(slug)}`} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3.5 text-sm font-semibold text-white">
-              Choose price and amount <ArrowRight className="h-4 w-4" />
+              Open trading choices <ArrowRight className="h-4 w-4" />
             </Link>
             {shareNotice && <p className="mt-2 text-center text-[10px] font-medium text-gray-500">{shareNotice}</p>}
 

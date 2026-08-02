@@ -69,7 +69,8 @@ export type PrepareOpenInput = {
   outcome: string
   maxSpendUsdc: string
   wallet: string
-  orderType: 'FAK' | 'FOK'
+  orderType: 'FAK' | 'FOK' | 'GTC'
+  limitPrice?: string
   marketSlug?: string
   tokenId?: string
 }
@@ -131,6 +132,7 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
   const maxSpendUsdc = clean(value.maxSpendUsdc ?? value.amount, 32)
   const wallet = clean(value.wallet ?? value.polymarketWallet, 80)
   const orderType = clean(value.orderType || 'FAK', 12).toUpperCase()
+  const limitPrice = clean(value.limitPrice, 32)
   const marketSlug = clean(value.marketSlug, 180)
   const tokenId = clean(value.tokenId, 96)
 
@@ -157,8 +159,11 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
     return { ok: false, status: 400, error: 'maxSpendUsdc must be a positive amount with at most 6 decimals.' }
   }
   if (!isAddress(wallet)) return { ok: false, status: 400, error: 'A valid public Polymarket deposit-wallet address is required.' }
-  if (orderType !== 'FAK' && orderType !== 'FOK') {
-    return { ok: false, status: 400, error: 'External OPEN supports immediate FAK or FOK BUY orders only.' }
+  if (orderType !== 'FAK' && orderType !== 'FOK' && orderType !== 'GTC') {
+    return { ok: false, status: 400, error: 'Choose either an immediate purchase or a resting reward quote.' }
+  }
+  if (orderType === 'GTC' && (!/^\d+(?:\.\d{1,6})?$/.test(limitPrice) || Number(limitPrice) <= 0 || Number(limitPrice) >= 1)) {
+    return { ok: false, status: 400, error: 'A resting reward quote requires a price between 0 and 1.' }
   }
   if (tokenId && !/^\d+$/.test(tokenId)) return { ok: false, status: 400, error: 'tokenId must be a numeric CLOB token ID.' }
   return {
@@ -169,7 +174,8 @@ function parseInput(value: unknown): { ok: true; value: PrepareOpenInput } | { o
       outcome,
       maxSpendUsdc,
       wallet: getAddress(wallet),
-      orderType: orderType as 'FAK' | 'FOK',
+      orderType: orderType as 'FAK' | 'FOK' | 'GTC',
+      ...(limitPrice ? { limitPrice } : {}),
       ...(marketSlug ? { marketSlug } : {}),
       ...(tokenId ? { tokenId } : {}),
     },
@@ -354,6 +360,19 @@ function executionPrice(book: OrderBook, amount: number, orderType: 'FAK' | 'FOK
   }
 }
 
+function restingPrice(book: OrderBook, requestedPrice: string) {
+  const price = Number(requestedPrice)
+  const asks = (Array.isArray(book.asks) ? book.asks : [])
+    .map(level => Number(level.price))
+    .filter(value => Number.isFinite(value) && value > 0 && value < 1)
+    .sort((a, b) => a - b)
+  const bestAsk = asks[0]
+  if (bestAsk !== undefined && price >= bestAsk) {
+    return { ok: false as const, error: `Your reward quote must stay below the current sell price of ${bestAsk}.` }
+  }
+  return { ok: true as const, price, bestAsk }
+}
+
 function priceString(value: number, tickSize: string) {
   const decimals = Math.max(0, (tickSize.split('.')[1] || '').length)
   return value.toFixed(decimals)
@@ -393,9 +412,12 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   if (!/^(?:0\.)?\d+$/.test(tickSize) || Number(tickSize) <= 0 || !/^\d+(?:\.\d+)?$/.test(minimumOrderSize)) {
     return { ok: false as const, status: 502, error: 'Polymarket order book is missing valid tick-size or minimum-size metadata.' }
   }
-  const immediateFill = executionPrice(book, Number(input.maxSpendUsdc), input.orderType)
-  if (!immediateFill.ok) return { ok: false as const, status: 409, error: immediateFill.error, ...(immediateFill.availableUsdc ? { availableUsdc: immediateFill.availableUsdc } : {}) }
-  const orderPrice = immediateFill.price
+  const immediateOrder = input.orderType !== 'GTC'
+  const pricePlan = input.orderType === 'GTC'
+    ? restingPrice(book, input.limitPrice || '')
+    : executionPrice(book, Number(input.maxSpendUsdc), input.orderType)
+  if (!pricePlan.ok) return { ok: false as const, status: 409, error: pricePlan.error, ...('availableUsdc' in pricePlan && pricePlan.availableUsdc ? { availableUsdc: pricePlan.availableUsdc } : {}) }
+  const orderPrice = pricePlan.price
   const normalizedPrice = priceString(orderPrice, tickSize)
   if (Math.abs(Number(normalizedPrice) - orderPrice) > 1e-9) {
     return { ok: false as const, status: 409, error: `Limit price must follow this market's ${tickSize} tick size.` }
@@ -424,7 +446,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   if (!walletState.deployed) issues.push('Deposit wallet is not deployed on Polygon.')
   if (walletState.balanceRaw < amountRaw) issues.push('pUSD balance is below maxSpendUsdc.')
   if (walletState.allowanceRaw < amountRaw) issues.push(`pUSD allowance to the ${negRisk ? 'Neg Risk ' : ''}CTF Exchange V2 is below maxSpendUsdc.`)
-  if (immediateFill?.partialFillPossible) issues.push('Current liquidity can only partially fill this FAK order.')
+  if (immediateOrder && 'partialFillPossible' in pricePlan && pricePlan.partialFillPossible) issues.push('The available market may fill only part of this purchase.')
 
   const now = dependencies.now()
   const expiresAtMs = now + PLAN_TTL_MS
@@ -467,9 +489,9 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         bookTimestamp: clean(book.timestamp, 64) || null,
         clobReportedLastTradePrice: clean(book.last_trade_price, 32) || null,
         executionPrice: normalizedPrice,
-        executionPriceSource: 'current-asks',
-        availableUsdc: immediateFill.availableUsdc,
-        partialFillPossible: immediateFill.partialFillPossible,
+        executionPriceSource: immediateOrder ? 'current-asks' : 'customer-limit',
+        availableUsdc: 'availableUsdc' in pricePlan ? pricePlan.availableUsdc : null,
+        partialFillPossible: 'partialFillPossible' in pricePlan ? pricePlan.partialFillPossible : false,
       },
       wallet: {
         address: input.wallet,
@@ -495,14 +517,23 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
           funderAddress: input.wallet,
           builderConfig: { builderCode },
         },
-        createMarketOrder: {
-          tokenID: resolved.tokenId,
-          amount: Number(input.maxSpendUsdc),
-          price: Number(normalizedPrice),
-          side: 'BUY',
-          orderType: input.orderType,
-          userUSDCBalance: Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS)),
-        },
+        ...(immediateOrder ? {
+          createMarketOrder: {
+            tokenID: resolved.tokenId,
+            amount: Number(input.maxSpendUsdc),
+            price: Number(normalizedPrice),
+            side: 'BUY',
+            orderType: input.orderType,
+            userUSDCBalance: Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS)),
+          },
+        } : {
+          createOrder: {
+            tokenID: resolved.tokenId,
+            price: Number(normalizedPrice),
+            size: estimatedShares,
+            side: 'BUY',
+          },
+        }),
         options: {
           tickSize,
           negRisk,
@@ -511,7 +542,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         submit: {
           method: 'postOrder',
           orderType: input.orderType,
-          postOnly: false,
+          postOnly: !immediateOrder,
           deferExec: false,
         },
       },
@@ -527,7 +558,9 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
       issues,
       next: issues.length
         ? 'Fix the listed public readiness issues, then request a fresh plan.'
-        : 'Create and sign this market order locally with the official SDK, then send only the signed order payload to the PolyDesk signed OPEN preflight.',
+        : immediateOrder
+          ? 'Review and sign the immediate purchase locally with the official SDK.'
+          : 'Review and sign the resting reward quote locally with the official SDK.',
       privacy: {
         accepted: ['public wallet address', 'market intent', 'maximum spend'],
         neverSend: ['private key', 'seed phrase', 'CLOB secret', 'CLOB passphrase'],
