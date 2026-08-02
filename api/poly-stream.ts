@@ -55,6 +55,9 @@ type ScoreFeed = {
   displayDate: string
   updatedAt: string
   matches: ScoreMatch[]
+  query?: {
+    team?: string
+  }
 }
 
 type CacheEntry = {
@@ -183,6 +186,20 @@ function isAllowedPolymarketMatchUrl(value: string) {
   if (process.env.POLYMARKET_ALLOW_GENERIC_URLS?.trim() === '1') return true
   const parsed = new URL(url)
   return /^\/(?:event|sports\/(?:soccer|football))\/[a-z0-9-]+\/?$/i.test(parsed.pathname)
+}
+
+function requestBody(req: Request) {
+  return req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {}
+}
+
+export function requestTeam(req: Request) {
+  const body = requestBody(req)
+  const bodyFilter = asRecord(body.filter)
+  const bodyFilters = asRecord(body.filters)
+  const queryValue = Array.isArray(req.query.team) ? req.query.team[0] : req.query.team
+  return asString(queryValue ?? body.team ?? bodyFilter.team ?? bodyFilters.team).slice(0, 100)
 }
 
 function exactPolymarketUrl(title: string, ids: string[] = []) {
@@ -571,6 +588,28 @@ function fanVibeFeedUrl() {
   return envValue('POLY_STREAM_FANVIBE_FEED_URL') || envValue('FANVIBE_WORLD_CUP_FEED_URL')
 }
 
+export function matchHasTeam(match: Pick<ScoreMatch, 'title'>, requestedTeam: string) {
+  const requestedTerms = teamSearchTerms(requestedTeam)
+  if (!requestedTerms.length) return false
+  const [home, away] = splitFixtureTitle(match.title)
+  const teams = [home, away].map(normalizeSearchText).filter(Boolean)
+  return teams.some(team => requestedTerms.some(term => team === term))
+}
+
+function teamTimeline(matches: ScoreMatch[], requestedTeam: string) {
+  const matching = dedupeMatches(matches.filter(match => matchHasTeam(match, requestedTeam)))
+  const live = matching.filter(match => match.tag === 'Live')
+  const recent = matching
+    .filter(match => match.tag === 'Result')
+    .sort((a, b) => matchTimeValue(b) - matchTimeValue(a))
+    .slice(0, 5)
+  const upcoming = matching
+    .filter(match => match.tag !== 'Result' && match.tag !== 'Live')
+    .sort((a, b) => matchTimeValue(a) - matchTimeValue(b))
+    .slice(0, 5)
+  return dedupeMatches([...live, ...recent, ...upcoming])
+}
+
 function fanVibeStatusText(fixtureStatus: string, stateStatus: string) {
   const status = (stateStatus || fixtureStatus || 'scheduled').toLowerCase()
   if (/(live|in[- ]?play|1h|2h|first half|second half)/.test(status)) return 'Live'
@@ -731,6 +770,18 @@ export function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
     withCommonParams(`/fixtures/between/${startDate}/${isoDate(21)}`, league),
     withCommonParams('/fixtures/upcoming', league),
   ])
+}
+
+export function sportmonksTeamSearchUrl(requestedTeam: string) {
+  const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
+  const include = process.env.POLY_STREAM_INCLUDE?.trim()
+    || 'participants;state;scores;venue;periods;events;league'
+  const url = new URL(`${base}/fixtures/search/${encodeURIComponent(requestedTeam)}`)
+  url.searchParams.set('include', include)
+  url.searchParams.set('includes', include)
+  url.searchParams.set('per_page', String(Math.min(50, fixtureLimit())))
+  url.searchParams.set('order', 'desc')
+  return url.toString()
 }
 
 function sportmonksFixtureDetailUrl(fixtureId: string) {
@@ -1309,16 +1360,19 @@ async function fetchFanVibeMatches(selectedDate: string): Promise<ScoreMatch[]> 
   }
 }
 
-async function fetchProviderMatches(selectedDate: string): Promise<ScoreMatch[]> {
+async function fetchProviderMatches(selectedDate: string, requestedTeam = ''): Promise<ScoreMatch[]> {
   const fanVibeUrl = fanVibeFeedUrl()
   if (fanVibeUrl) {
     try {
       const matches = await fetchFanVibeMatches(selectedDate)
-      if (matches.length) {
+      const relevantMatches = requestedTeam ? teamTimeline(matches, requestedTeam) : matches
+      if (relevantMatches.length) {
         lastProviderSource = 'fanvibe-football'
-        return matches
+        return relevantMatches
       }
-      lastProviderError = 'FanVibe feed returned no football fixtures.'
+      lastProviderError = requestedTeam
+        ? `FanVibe returned no fixtures for ${requestedTeam}.`
+        : 'FanVibe feed returned no football fixtures.'
     } catch (err) {
       lastProviderError = err instanceof Error ? err.message : 'FanVibe feed failed.'
     }
@@ -1328,13 +1382,33 @@ async function fetchProviderMatches(selectedDate: string): Promise<ScoreMatch[]>
   const apiKey = envValue('POLY_STREAM_API_KEY', 'SPORTS_API_KEY')
   if (!apiKey) return []
 
+  if (requestedTeam && provider !== 'api-football' && provider !== 'api-sports') {
+    try {
+      const searched = await fetchProviderUrl(provider, apiKey, sportmonksTeamSearchUrl(requestedTeam))
+      const relevantMatches = teamTimeline(searched, requestedTeam)
+      if (relevantMatches.length) {
+        lastProviderSource = provider
+        const detailed = await enrichSportmonksDetails(relevantMatches, apiKey)
+        return enrichMatchesWithPolymarket(detailed)
+      }
+      lastProviderError = `Sportmonks returned no accessible fixtures for ${requestedTeam}.`
+      return []
+    } catch (err) {
+      lastProviderError = err instanceof Error ? err.message : `Sportmonks search failed for ${requestedTeam}.`
+      return []
+    }
+  }
+
   const mode = fixtureMode()
   const modes: FixtureMode[] = mode === 'auto' ? ['live', 'next'] : mode === 'last' ? ['next'] : [mode]
   const batches = await Promise.all(modes.map(current => fetchProviderMode(provider, apiKey, current).catch(err => {
     lastProviderError = err instanceof Error ? err.message : 'Score provider failed.'
     return [] as ScoreMatch[]
   })))
-  const matches = selectMatchday(dedupeMatches(batches.flat()), selectedDate)
+  const selectedMatches = requestedTeam
+    ? teamTimeline(batches.flat(), requestedTeam)
+    : selectMatchday(dedupeMatches(batches.flat()), selectedDate)
+  const matches = selectedMatches
     .sort((a, b) => matchRank(a) - matchRank(b) || matchTimeValue(a) - matchTimeValue(b))
     .slice(0, fixtureLimit())
   const detailedMatches = provider === 'api-football' || provider === 'api-sports'
@@ -1344,7 +1418,7 @@ async function fetchProviderMatches(selectedDate: string): Promise<ScoreMatch[]>
   return enrichMatchesWithPolymarket(detailedMatches)
 }
 
-export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed & { providerError?: string }> {
+export async function getPolyStreamFeed(selectedDate: string, requestedTeam = ''): Promise<ScoreFeed & { providerError?: string }> {
   const ttl = 0
   if (ttl > 0 && cache && cache.expiresAt > Date.now()) return { ...cache.feed, providerError: lastProviderError }
 
@@ -1354,7 +1428,7 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
 
   try {
     lastProviderSource = ''
-    const matches = providerConfigured ? await fetchProviderMatches(selectedDate) : []
+    const matches = providerConfigured ? await fetchProviderMatches(selectedDate, requestedTeam) : []
     if (matches.length) lastProviderError = ''
     else if (providerConfigured && !lastProviderError) lastProviderError = 'Provider returned no live or upcoming football matches available to this subscription.'
     const feed: ScoreFeed = {
@@ -1366,6 +1440,7 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
       displayDate: matches[0] ? matchDateKey(matches[0]) || selectedDate : selectedDate,
       updatedAt: new Date().toISOString(),
       matches,
+      query: requestedTeam ? { team: requestedTeam } : undefined,
     }
     cache = ttl > 0 ? { expiresAt: Date.now() + ttl, feed } : null
     return { ...feed, providerError: lastProviderError }
@@ -1380,6 +1455,7 @@ export async function getPolyStreamFeed(selectedDate: string): Promise<ScoreFeed
       displayDate: selectedDate,
       updatedAt: new Date().toISOString(),
       matches: [],
+      query: requestedTeam ? { team: requestedTeam } : undefined,
     }
     cache = ttl > 0 ? { expiresAt: Date.now() + Math.min(ttl, 15_000), feed } : null
     return { ...feed, providerError: lastProviderError }
@@ -1392,10 +1468,19 @@ export default async function polyStreamHandler(req: Request, res: Response) {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
-  const feed = await getPolyStreamFeed(requestDate(req))
-  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
-    ? req.body as Record<string, unknown>
-    : {}
+  const requestedTeam = requestTeam(req)
+  const preflightFeed = (req as Request & { polyStreamPreflightFeed?: Awaited<ReturnType<typeof getPolyStreamFeed>> }).polyStreamPreflightFeed
+  const feed = preflightFeed ?? await getPolyStreamFeed(requestDate(req), requestedTeam)
+  const body = requestBody(req)
   const debug = req.query.debug === '1' || body.debug === '1'
-  return res.json(debug ? feed : { ...feed, providerError: undefined })
+  const publicFeed = {
+    ...feed,
+    matches: feed.matches.map(match => ({
+      ...match,
+      canonicalUrl: match.polymarketUrl || match.sourceUrl || null,
+      polymarketUrl: match.polymarketUrl || null,
+    })),
+    providerError: undefined,
+  }
+  return res.json(debug ? { ...publicFeed, providerError: feed.providerError } : publicFeed)
 }

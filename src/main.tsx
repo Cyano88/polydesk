@@ -8,6 +8,11 @@ import '@fontsource/inter/latin-700.css'
 import './styles.css'
 
 const ProductApp = lazy(() => import('./ProductApp'))
+const CHUNK_RECOVERY_KEY = 'polydesk:chunk-recovery:v1'
+
+function isChunkLoadFailure(error: Error) {
+  return /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(error.message)
+}
 
 class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
@@ -18,6 +23,14 @@ class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error:
 
   componentDidCatch(error: Error) {
     console.error('[polydesk:error-boundary]', error)
+    if (!isChunkLoadFailure(error)) return
+    try {
+      if (window.sessionStorage.getItem(CHUNK_RECOVERY_KEY) === error.message) return
+      window.sessionStorage.setItem(CHUNK_RECOVERY_KEY, error.message)
+      window.location.reload()
+    } catch {
+      // The visible error state remains available when storage or reload is blocked.
+    }
   }
 
   render() {
@@ -30,6 +43,9 @@ class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error:
           <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
             Reopen PolyDesk. If it repeats, send this message to support.
           </p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-gray-950 px-3 py-2 text-sm font-semibold text-white dark:bg-white dark:text-gray-950">
+            Reload PolyDesk
+          </button>
           <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-gray-50 p-3 text-xs text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
             {this.state.error.message}
           </pre>
@@ -48,3 +64,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </AppErrorBoundary>
   </React.StrictMode>,
 )
+
+window.setTimeout(() => {
+  try {
+    window.sessionStorage.removeItem(CHUNK_RECOVERY_KEY)
+  } catch {
+    // Session storage is optional.
+  }
+}, 10_000)

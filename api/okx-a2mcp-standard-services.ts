@@ -19,11 +19,25 @@ import a2mcpPolymarketGovernedOpenHandler, {
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
 import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
-import polyStreamHandler, { getPolyStreamFeed } from './poly-stream.js'
+import polyStreamHandler, { getPolyStreamFeed, requestTeam } from './poly-stream.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
+
+const footballLiveBodyProperties = {
+  team: {
+    type: 'string',
+    minLength: 2,
+    maxLength: 100,
+    description: 'Optional exact club or national-team name. Unsupported teams return a non-billable not-found response.',
+  },
+  date: {
+    type: 'string',
+    pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+    description: 'Optional UTC fixture date in YYYY-MM-DD format. Defaults to today.',
+  },
+} as const
 
 const fundingLinkBodyProperties = {
   ownerAddress: {
@@ -485,6 +499,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
   const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
   const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
   const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
+  const isFootballLive = path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores'
   const discoveryExtensions = isFundingLink
     ? fundingLinkDiscoveryExtension()
     : isGovernedTrader
@@ -548,6 +563,12 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
           inputSchema: {
             type: 'object',
             properties: portfolioWatchBodyProperties,
+            additionalProperties: true,
+          },
+        } : isFootballLive ? {
+          inputSchema: {
+            type: 'object',
+            properties: footballLiveBodyProperties,
             additionalProperties: true,
           },
         } : {}),
@@ -699,15 +720,30 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   const service = serviceDefinitions[path]
   if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
   if (path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores') {
-    const requestedDate = clean(req.query.date) || new Date().toISOString().slice(0, 10)
-    const feed = await getPolyStreamFeed(/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10))
+    const body = isRecord(req.body) ? req.body : {}
+    const requestedDate = clean(req.query.date) || clean(body.date) || new Date().toISOString().slice(0, 10)
+    const requestedTeam = requestTeam(req)
+    const feed = await getPolyStreamFeed(
+      /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10),
+      requestedTeam,
+    )
     if (!feed.matches.length) {
-      return res.status(503).json({
+      const providerLookupFailed = Boolean(feed.providerError)
+        && !/returned no (?:accessible )?fixtures/i.test(feed.providerError || '')
+      const providerUnavailable = feed.providerStatus === 'error'
+        || feed.providerStatus === 'not_configured'
+        || providerLookupFailed
+      return res.status(requestedTeam && !providerUnavailable ? 404 : 503).json({
         ok: false,
-        error: 'No provider-truth football match data is available. No payment challenge was issued.',
+        code: requestedTeam && !providerUnavailable ? 'TEAM_NOT_FOUND_OR_NOT_COVERED' : 'FOOTBALL_PROVIDER_UNAVAILABLE',
+        error: requestedTeam && !providerUnavailable
+          ? `No provider-truth fixtures were found for ${requestedTeam}. No payment challenge was issued.`
+          : 'No provider-truth football match data is available. No payment challenge was issued.',
+        requestedTeam: requestedTeam || undefined,
         providerStatus: feed.providerStatus,
       })
     }
+    ;(req as Request & { polyStreamPreflightFeed?: typeof feed }).polyStreamPreflightFeed = feed
   }
   if (path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news') {
     const feed = await getPolyWorldcupNewsFeed()

@@ -60,6 +60,25 @@ test('Agent #5427 registered compatibility routes all advertise non-zero exact p
   }
 })
 
+test('football live challenge documents team and date without requiring either filter', async () => {
+  const req = {
+    headers: { host: 'polydesk.trade' },
+    protocol: 'https',
+  } as Request
+  const route = buildStandardServiceRouteConfig(
+    req,
+    '/api/a2mcp/worldcup-live-scores',
+    '0.1',
+    '0x631c96fba389f65da7093e559e8120b587ec7df4',
+  )
+  const unpaid = await route.unpaidResponseBody?.({} as never) as {
+    body?: { inputSchema?: { properties?: Record<string, unknown>; required?: string[] } }
+  }
+  assert.ok(unpaid.body?.inputSchema?.properties?.team)
+  assert.ok(unpaid.body?.inputSchema?.properties?.date)
+  assert.equal(unpaid.body?.inputSchema?.required, undefined)
+})
+
 test('funding-link challenge declares replayable POST parameters', async () => {
   const req = {
     headers: { host: 'polydesk.trade' },

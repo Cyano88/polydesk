@@ -102,6 +102,8 @@ function sendSpaIndex(res: Response, meta?: { title?: string; description?: stri
   const titledHtml = meta?.title
     ? html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeMeta(meta.title)}</title>`)
     : html
+  res.setHeader('Cache-Control', 'no-store, max-age=0')
+  res.setHeader('Pragma', 'no-cache')
   res.type('html').send(titledHtml.replace('</head>', `${tags}<script src="/runtime-config.js"></script></head>`))
 }
 

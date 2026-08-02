@@ -28,6 +28,13 @@ const productStyles = readFileSync(new URL('../src/styles.css', import.meta.url)
 const server = readFileSync(new URL('../server.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 const main = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8')
+
+test('SPA shell prevents stale deploy HTML and recovers one failed lazy chunk load', () => {
+  assert.match(server, /Cache-Control', 'no-store, max-age=0'/)
+  assert.match(main, /Failed to fetch dynamically imported module/)
+  assert.match(main, /window\.location\.reload\(\)/)
+  assert.match(main, /polydesk:chunk-recovery:v1/)
+})
 const productApp = readFileSync(new URL('../src/ProductApp.tsx', import.meta.url), 'utf8')
 const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8')
 const rateLimit = readFileSync(new URL('../api/rate-limit.ts', import.meta.url), 'utf8')
