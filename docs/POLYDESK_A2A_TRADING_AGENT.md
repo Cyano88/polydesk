@@ -66,6 +66,8 @@ Do not request or receive wallet secrets. If my derived Deposit Wallet needs fun
 
 ## Worker lifecycle
 
+The production runner is `scripts/polydesk-a2a-worker.ts`. It is deliberately separate from the public Render API: Render prepares immutable missions, while an always-on A2A runtime receives accepted jobs and invokes the runner.
+
 ### 1. Wait for acceptance
 
 Applying is not acceptance. The worker must not prepare or deliver paid work until OKX reports `job_accepted`.
@@ -203,6 +205,10 @@ The price ceiling is rounded down to whole cents so the signal never exceeds the
 ```powershell
 npm run typecheck:server
 npm run test:a2a-trading
+npm run test:a2a-worker
+npm run a2a:worker -- --request examples/polydesk-a2a-worker-request.json --dry-run
 ```
 
-Both must pass before deployment. After deployment, verify the public descriptor, then run a sandbox/small-cap accepted task before listing the A2A service broadly.
+All four commands must pass before deployment. The dry-run never calls OKX, PolyDesk, or Polymarket and never submits a trade. After deployment, verify the public descriptor, then run one explicitly approved small-cap accepted task before describing the service as production-autonomous.
+
+VPS deployment and recovery instructions are in [`POLYDESK_A2A_WORKER.md`](./POLYDESK_A2A_WORKER.md).

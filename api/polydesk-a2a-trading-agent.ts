@@ -293,7 +293,7 @@ export async function prepareA2aTradingSignal(
     return { ok: false as const, status: 503, error: 'Durable A2A mission storage is not configured.' }
   }
 
-  const jobId = clean(value.jobId, 64)
+  const jobId = clean(value.jobId, 80)
   const watchedWallet = clean(value.watchedWallet, 80)
   const ownerAddress = clean(value.ownerAddress, 80)
   const selectionMode = clean(value.selectionMode || (value.transactionHash ? 'TRADE' : 'POSITION'), 24).toUpperCase()
@@ -304,7 +304,9 @@ export async function prepareA2aTradingSignal(
   const expiresAtMs = Date.parse(expiresAt)
   const nowMs = dependencies.now()
 
-  if (!/^[A-Za-z0-9_-]{6,64}$/.test(jobId)) return { ok: false as const, status: 400, error: 'jobId has an unsupported format.' }
+  if (!/^0x[a-fA-F0-9]{64}$/.test(jobId) && !/^[A-Za-z0-9_-]{6,64}$/.test(jobId)) {
+    return { ok: false as const, status: 400, error: 'jobId has an unsupported format.' }
+  }
   if (!isAddress(watchedWallet)) return { ok: false as const, status: 400, error: 'watchedWallet must be a public EVM address.' }
   if (!isAddress(ownerAddress)) return { ok: false as const, status: 400, error: 'ownerAddress must be the buyer owner EOA.' }
   if (!['TRADE', 'POSITION', 'AUTO_BEST_FIT'].includes(selectionMode)) return { ok: false as const, status: 400, error: 'selectionMode is unsupported.' }
@@ -367,13 +369,16 @@ export async function prepareA2aTradingSignal(
       return { ok: false as const, status: 409, error: 'This jobId is already bound to different mission inputs.', missionId }
     }
     const remainingTtl = Math.min(MAX_TTL_SECONDS, Math.floor((Date.parse(existing.mandate.expiresAt) - nowMs) / 1000))
-    if (existing.autoTrade && remainingTtl < MIN_TTL_SECONDS) {
+    if (remainingTtl < MIN_TTL_SECONDS) {
       return { ok: false as const, status: 409, error: 'The existing mission mandate has expired.', missionId }
     }
-    const replayMission = existing.autoTrade
-      ? { ...existing, autoTrade: { ...existing.autoTrade, ttlSec: Math.min(existing.autoTrade.ttlSec, remainingTtl) } }
-      : existing
-    return { ok: true as const, status: 200, data: replayMission, idempotentReplay: true }
+    if (existing.autoTrade) {
+      const replayMission = {
+        ...existing,
+        autoTrade: { ...existing.autoTrade, ttlSec: Math.min(existing.autoTrade.ttlSec, remainingTtl) },
+      }
+      return { ok: true as const, status: 200, data: replayMission, idempotentReplay: true }
+    }
   }
   if (expiresAtMs - nowMs < MIN_TTL_SECONDS * 1000) {
     return { ok: false as const, status: 400, error: 'expiresAt must leave at least 30 seconds for safe delivery.' }
@@ -408,7 +413,7 @@ export async function prepareA2aTradingSignal(
     jobId,
     inputHash,
     state: autoTrade ? 'signal_ready' : 'requires_action',
-    createdAt: timestamp,
+    createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
     buyer: {
       ownerAddress: getAddress(ownerAddress),
@@ -435,7 +440,8 @@ export async function prepareA2aTradingSignal(
   }
   const stored = await dependencies.mutateMission(missionKey(missionId), current => {
     if (current && current.inputHash !== inputHash) throw new Error('MISSION_INPUT_DRIFT')
-    return current ?? mission
+    if (current?.autoTrade) return current
+    return mission
   }).catch(error => {
     if (error instanceof Error && error.message === 'MISSION_INPUT_DRIFT') return null
     throw error

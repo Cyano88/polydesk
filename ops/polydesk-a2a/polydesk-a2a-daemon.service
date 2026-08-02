@@ -1,0 +1,28 @@
+[Unit]
+Description=PolyDesk OKX A2A runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polydesk
+Group=polydesk
+WorkingDirectory=/opt/polydesk-a2a/workspace
+Environment=HOME=/home/polydesk
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/polydesk-a2a/worker.env
+ExecStart=/usr/local/bin/okx-a2a run
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/polydesk-a2a /opt/polydesk-a2a/workspace /home/polydesk
+
+[Install]
+WantedBy=multi-user.target

@@ -9,6 +9,7 @@ const ownerAddress = '0x2222222222222222222222222222222222222222'
 const depositWallet = '0x3333333333333333333333333333333333333333'
 const conditionId = `0x${'12'.repeat(32)}`
 const transactionHash = `0x${'ab'.repeat(32)}`
+const realJobId = `0x${'cd'.repeat(32)}`
 
 function request(overrides: Record<string, unknown> = {}) {
   return {
@@ -71,6 +72,13 @@ test('refuses work before job_accepted', async () => {
   if (result.ok) return
   assert.equal(result.status, 409)
   assert.match(result.error, /job_accepted/)
+})
+
+test('accepts a real 66-character OKX task ID', async () => {
+  const result = await prepareA2aTradingSignal(request({ jobId: realJobId }), dependencies())
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.jobId, realJobId)
 })
 
 test('rejects any request containing secret material', async () => {
@@ -148,6 +156,38 @@ test('returns a funding action without emitting a trade signal', async () => {
   assert.equal(result.data.state, 'requires_action')
   assert.equal(result.data.autoTrade, undefined)
   assert.deepEqual(result.data.nextAction, { type: 'FUND', requiredBalanceUsdc: '5.25' })
+})
+
+test('refreshes one funded mission into a signal without changing its identity', async () => {
+  let attempt = 0
+  const deps = dependencies({
+    prepareCopy: async () => {
+      attempt += 1
+      return {
+        ok: true,
+        status: 200,
+        data: {
+          sourceSignal: { conditionId, tokenId: '111', outcome: 'Yes' },
+          buyerAccount: { ownerAddress, depositWalletAddress: depositWallet },
+          nextAction: attempt === 1
+            ? { type: 'FUND', requiredBalanceUsdc: '5.25' }
+            : { type: 'SIGN' },
+        },
+      } as any
+    },
+  })
+  const awaitingFunds = await prepareA2aTradingSignal(request(), deps)
+  assert.equal(awaitingFunds.ok, true)
+  if (!awaitingFunds.ok) return
+  assert.equal(awaitingFunds.data.state, 'requires_action')
+
+  const ready = await prepareA2aTradingSignal(request(), deps)
+  assert.equal(ready.ok, true)
+  if (!ready.ok) return
+  assert.equal(ready.data.state, 'signal_ready')
+  assert.equal(ready.data.missionId, awaitingFunds.data.missionId)
+  assert.equal(ready.data.createdAt, awaitingFunds.data.createdAt)
+  assert.ok(ready.data.autoTrade)
 })
 
 test('binds a job ID to one immutable mission input', async () => {
