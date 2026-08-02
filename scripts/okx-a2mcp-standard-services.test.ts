@@ -79,6 +79,25 @@ test('football live challenge documents team and date without requiring either f
   assert.equal(unpaid.body?.inputSchema?.required, undefined)
 })
 
+test('football news challenge documents relevance filters', async () => {
+  const req = {
+    headers: { host: 'polydesk.trade' },
+    protocol: 'https',
+  } as Request
+  const route = buildStandardServiceRouteConfig(
+    req,
+    '/api/a2mcp/worldcup-market-news',
+    '0.1',
+    '0x631c96fba389f65da7093e559e8120b587ec7df4',
+  )
+  const unpaid = await route.unpaidResponseBody?.({} as never) as {
+    body?: { inputSchema?: { properties?: Record<string, unknown> } }
+  }
+  assert.ok(unpaid.body?.inputSchema?.properties?.team)
+  assert.ok(unpaid.body?.inputSchema?.properties?.league)
+  assert.ok(unpaid.body?.inputSchema?.properties?.type)
+})
+
 test('funding-link challenge declares replayable POST parameters', async () => {
   const req = {
     headers: { host: 'polydesk.trade' },

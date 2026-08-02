@@ -18,7 +18,7 @@ import a2mcpPolymarketGovernedOpenHandler, {
 } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
-import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
+import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed, requestFootballNewsQuery } from './poly-worldcup-news.js'
 import polyStreamHandler, { getPolyStreamFeed, requestTeam } from './poly-stream.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
@@ -36,6 +36,26 @@ const footballLiveBodyProperties = {
     type: 'string',
     pattern: '^\\d{4}-\\d{2}-\\d{2}$',
     description: 'Optional UTC fixture date in YYYY-MM-DD format. Defaults to today.',
+  },
+} as const
+
+const footballNewsBodyProperties = {
+  team: {
+    type: 'string',
+    minLength: 2,
+    maxLength: 100,
+    description: 'Optional exact team name. If no relevant provider article exists, no payment challenge is issued.',
+  },
+  league: {
+    type: 'string',
+    minLength: 2,
+    maxLength: 100,
+    description: 'Optional league name, such as La Liga.',
+  },
+  type: {
+    type: 'string',
+    enum: ['pre-match', 'post-match', 'all'],
+    description: 'Select previews, recaps, or both. Defaults to all.',
   },
 } as const
 
@@ -500,6 +520,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
   const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
   const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
   const isFootballLive = path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores'
+  const isFootballNews = path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news'
   const discoveryExtensions = isFundingLink
     ? fundingLinkDiscoveryExtension()
     : isGovernedTrader
@@ -569,6 +590,12 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
           inputSchema: {
             type: 'object',
             properties: footballLiveBodyProperties,
+            additionalProperties: true,
+          },
+        } : isFootballNews ? {
+          inputSchema: {
+            type: 'object',
+            properties: footballNewsBodyProperties,
             additionalProperties: true,
           },
         } : {}),
@@ -746,13 +773,20 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
     ;(req as Request & { polyStreamPreflightFeed?: typeof feed }).polyStreamPreflightFeed = feed
   }
   if (path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news') {
-    const feed = await getPolyWorldcupNewsFeed()
+    const query = requestFootballNewsQuery(req)
+    const feed = await getPolyWorldcupNewsFeed(query)
     if (feed.mode !== 'live' || !feed.articles.length) {
-      return res.status(503).json({
+      const filtered = Boolean(query.team || query.league)
+      return res.status(filtered && feed.providerConfigured ? 404 : 503).json({
         ok: false,
-        error: 'No current provider-sourced football brief is available. No payment challenge was issued.',
+        code: filtered && feed.providerConfigured ? 'FOOTBALL_NEWS_NOT_FOUND' : 'FOOTBALL_NEWS_PROVIDER_UNAVAILABLE',
+        error: filtered && feed.providerConfigured
+          ? 'No relevant provider-sourced football brief matched this request. No payment challenge was issued.'
+          : 'No current provider-sourced football brief is available. No payment challenge was issued.',
+        query,
       })
     }
+    ;(req as Request & { footballNewsPreflightFeed?: typeof feed }).footballNewsPreflightFeed = feed
   }
   if (path === '/api/a2mcp/polymarket-agent-flow') {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)

@@ -540,7 +540,7 @@ function normalizeSportmonks(match: ProviderMatch): ScoreMatch | null {
     stats: sportmonksStats(match),
     weather: sportmonksWeather(match),
     marketContext: publicMarketContext(title, status),
-    sourceUrl: fixtureId ? `https://www.sportmonks.com/football/fixtures/${fixtureId}` : '',
+    sourceUrl: fixtureId ? `https://api.sportmonks.com/v3/football/fixtures/${fixtureId}` : '',
     polymarketUrl: exactPolymarketUrl(title, [`sportmonks:${fixtureId}`, `league:${leagueId}:${home}:${away}`]),
   }
 }
@@ -579,7 +579,7 @@ function normalizeApiFootball(match: ProviderMatch): ScoreMatch | null {
     awayScore: exposeScore ? asScore(goals.away) : undefined,
     clock: typeof elapsed === 'number' ? `${elapsed}'` : '',
     marketContext: publicMarketContext(title, asString(status.long) || 'Scheduled'),
-    sourceUrl: '',
+    sourceUrl: fixtureId ? `${DEFAULT_API_FOOTBALL_BASE}/fixtures?id=${fixtureId}` : '',
     polymarketUrl: exactPolymarketUrl(title, [`api-football:${fixtureId}`, `league:${leagueId}:${home}:${away}`]),
   }
 }

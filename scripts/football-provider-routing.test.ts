@@ -95,6 +95,7 @@ test('team-specific provider response never leaks an unrelated fixture', async (
     const feed = await getPolyStreamFeed('2026-08-02', 'Real Madrid')
     assert.equal(feed.matches.length, 1)
     assert.equal(feed.matches[0].title, 'Real Madrid vs Barcelona')
+    assert.equal(feed.matches[0].sourceUrl, 'https://api.sportmonks.com/v3/football/fixtures/1')
     assert.deepEqual(feed.query, { team: 'Real Madrid' })
   } finally {
     globalThis.fetch = originalFetch

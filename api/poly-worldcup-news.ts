@@ -2,6 +2,12 @@ import type { Request, Response } from 'express'
 
 type ProviderArticle = Record<string, unknown>
 
+export type FootballNewsQuery = {
+  team?: string
+  league?: string
+  type?: 'pre-match' | 'post-match' | 'all'
+}
+
 export type PolyWorldCupArticle = {
   title: string
   description: string
@@ -36,8 +42,9 @@ const DEFAULT_QUERY = '(football OR soccer) AND (match OR league OR tournament)'
 const DEFAULT_CACHE_MS = 15 * 60 * 1000
 const FALLBACK_IMAGE = '/brand/world-globe.png'
 const DEFAULT_NEWS_API_URL = 'https://gnews.io/api/v4/search'
+const DEFAULT_SPORTMONKS_BASE = 'https://api.sportmonks.com/v3/football'
 
-let cache: CacheEntry | null = null
+const cache = new Map<string, CacheEntry>()
 
 export function polyWorldcupArticleId(article: Pick<PolyWorldCupArticle, 'title' | 'url'>, index = 0) {
   const input = `${article.title}|${article.url}|${index}`.toLowerCase()
@@ -60,6 +67,56 @@ function envValue(primary: string, fallback: string) {
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function asId(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value))
+  const text = asString(value)
+  return /^\d+$/.test(text) ? text : ''
+}
+
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeNewsQuery(query: FootballNewsQuery = {}): FootballNewsQuery {
+  const type = query.type === 'pre-match' || query.type === 'post-match' ? query.type : 'all'
+  return {
+    team: asString(query.team).slice(0, 100) || undefined,
+    league: asString(query.league).slice(0, 100) || undefined,
+    type,
+  }
+}
+
+function newsCacheKey(query: FootballNewsQuery) {
+  return JSON.stringify(normalizeNewsQuery(query))
+}
+
+export function requestFootballNewsQuery(req: Request): FootballNewsQuery {
+  const body = asRecord(req.body)
+  const filters = asRecord(body.filters)
+  const queryValue = (name: string) => {
+    const value = req.query[name]
+    return Array.isArray(value) ? value[0] : value
+  }
+  return normalizeNewsQuery({
+    team: asString(queryValue('team') ?? body.team ?? filters.team),
+    league: asString(queryValue('league') ?? body.league ?? filters.league),
+    type: asString(queryValue('type') ?? body.type ?? filters.type) as FootballNewsQuery['type'],
+  })
 }
 
 function articleSource(article: ProviderArticle) {
@@ -200,7 +257,102 @@ async function relatedPolymarketMarkets(article: PolyWorldCupArticle) {
     .slice(0, 3)
 }
 
-async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
+function sportmonksArticleText(article: ProviderArticle) {
+  const fixture = asRecord(article.fixture)
+  const league = asRecord(article.league)
+  return [
+    asString(article.title),
+    asString(fixture.name),
+    asString(league.name),
+  ].filter(Boolean).join(' ')
+}
+
+function sportmonksLines(article: ProviderArticle) {
+  const lines = Array.isArray(article.lines) ? article.lines : []
+  return lines
+    .map(value => {
+      if (typeof value === 'string') return value.trim()
+      const line = asRecord(value)
+      return asString(line.text)
+        || asString(line.line)
+        || asString(line.content)
+        || asString(line.description)
+        || asString(line.body)
+    })
+    .filter(Boolean)
+    .join(' ')
+}
+
+function sportmonksArticleMatches(article: ProviderArticle, query: FootballNewsQuery) {
+  const text = normalizeSearchText(sportmonksArticleText(article))
+  const team = normalizeSearchText(query.team || '')
+  const league = normalizeSearchText(query.league || '')
+  if (team && !text.includes(team)) return false
+  if (league && !text.includes(league)) return false
+  return true
+}
+
+function normalizeSportmonksArticle(article: ProviderArticle): PolyWorldCupArticle | null {
+  const title = asString(article.title)
+  if (!title) return null
+  const fixture = asRecord(article.fixture)
+  const league = asRecord(article.league)
+  const fixtureId = asId(article.fixture_id) || asId(fixture.id)
+  const type = asString(article.type).toLowerCase()
+  const url = fixtureId
+    ? `https://api.sportmonks.com/v3/football/fixtures/${fixtureId}`
+    : 'https://api.sportmonks.com/v3/football/news'
+  return {
+    title,
+    description: sportmonksLines(article) || asString(fixture.name) || 'Sportmonks provider-truth football update.',
+    source: 'Sportmonks Football News',
+    image: asString(league.image_path) || FALLBACK_IMAGE,
+    url,
+    publishedAt: asString(article.updated_at) || asString(article.created_at),
+    tag: type.includes('post') ? 'Results' : 'Fixtures',
+    polymarketMarkets: [],
+  }
+}
+
+export function sportmonksNewsUrls(query: FootballNewsQuery = {}) {
+  const normalized = normalizeNewsQuery(query)
+  const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
+  const types = normalized.type === 'all' ? ['pre-match', 'post-match'] : [normalized.type || 'pre-match']
+  return types.map(type => {
+    const url = new URL(`${base}/news/${type}`)
+    url.searchParams.set('include', 'league;fixture;lines')
+    url.searchParams.set('order', 'desc')
+    url.searchParams.set('per_page', '25')
+    return url.toString()
+  })
+}
+
+async function fetchSportmonksArticles(query: FootballNewsQuery): Promise<PolyWorldCupArticle[]> {
+  const apiKey = envValue('POLY_STREAM_API_KEY', 'SPORTS_API_KEY')
+  if (!apiKey) return []
+  const responses = await Promise.allSettled(sportmonksNewsUrls(query).map(async value => {
+    const url = new URL(value)
+    url.searchParams.set('api_token', apiKey)
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(12_000),
+    })
+    if (!response.ok) throw new Error(`Sportmonks News returned ${response.status}`)
+    return extractArticles(await response.json())
+  }))
+  const normalized = responses
+    .filter((result): result is PromiseFulfilledResult<ProviderArticle[]> => result.status === 'fulfilled')
+    .flatMap(result => result.value)
+    .filter(article => sportmonksArticleMatches(article, query))
+    .map(normalizeSportmonksArticle)
+    .filter(Boolean) as PolyWorldCupArticle[]
+  return Promise.all(dedupeArticles(normalized).slice(0, 10).map(async article => ({
+    ...article,
+    polymarketMarkets: await relatedPolymarketMarkets(article).catch(() => []),
+  })))
+}
+
+async function fetchProviderArticles(query: FootballNewsQuery = {}): Promise<PolyWorldCupArticle[]> {
   const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
   const configuredUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
   const apiUrl = configuredUrl || (apiKey ? DEFAULT_NEWS_API_URL : '')
@@ -209,7 +361,8 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
   const url = new URL(apiUrl)
   const queryParam = process.env.POLY_NEWS_QUERY_PARAM?.trim() || 'q'
   const limitParam = process.env.POLY_NEWS_LIMIT_PARAM?.trim() || 'max'
-  if (!url.searchParams.has(queryParam)) url.searchParams.set(queryParam, envValue('POLY_NEWS_QUERY', 'NEWS_QUERY') || DEFAULT_QUERY)
+  const requestedTerms = [query.team, query.league].filter(Boolean).join(' ')
+  if (!url.searchParams.has(queryParam)) url.searchParams.set(queryParam, requestedTerms || envValue('POLY_NEWS_QUERY', 'NEWS_QUERY') || DEFAULT_QUERY)
   if (!url.searchParams.has(limitParam)) url.searchParams.set(limitParam, process.env.POLY_NEWS_LIMIT?.trim() || '10')
   if (!url.searchParams.has('lang')) url.searchParams.set('lang', process.env.POLY_NEWS_LANG?.trim() || 'en')
 
@@ -229,6 +382,12 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
     if (!response.ok) throw new Error(`News provider returned ${response.status}`)
     const payload = await response.json()
     const normalized = (extractArticles(payload).map(normalizeArticle).filter(Boolean) as PolyWorldCupArticle[])
+      .filter(article => {
+        const text = normalizeSearchText(`${article.title} ${article.description}`)
+        const team = normalizeSearchText(query.team || '')
+        const league = normalizeSearchText(query.league || '')
+        return (!team || text.includes(team)) && (!league || text.includes(league))
+      })
       .sort((a, b) => articleTimeValue(b) - articleTimeValue(a))
       .slice(0, 10)
     return Promise.all(normalized.map(async article => ({
@@ -240,31 +399,44 @@ async function fetchProviderArticles(): Promise<PolyWorldCupArticle[]> {
   }
 }
 
-export async function getPolyWorldcupNewsFeed() {
+export async function getPolyWorldcupNewsFeed(requestedQuery: FootballNewsQuery = {}) {
+  const query = normalizeNewsQuery(requestedQuery)
+  const key = newsCacheKey(query)
   const cacheMs = Number(envValue('POLY_NEWS_CACHE_MS', 'NEWS_CACHE_MS') || DEFAULT_CACHE_MS)
   const ttl = Number.isFinite(cacheMs) && cacheMs > 0 ? cacheMs : DEFAULT_CACHE_MS
-  if (cache && cache.expiresAt > Date.now()) {
+  const cached = cache.get(key)
+  if (cached && cached.expiresAt > Date.now()) {
     return {
-      ...cache.feed,
-      freshnessSeconds: Math.floor((Date.now() - Date.parse(cache.feed.updatedAt)) / 1000),
+      ...cached.feed,
+      query,
+      freshnessSeconds: Math.floor((Date.now() - Date.parse(cached.feed.updatedAt)) / 1000),
     }
   }
 
-  const providerConfigured = Boolean(envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY') || envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
+  const sportmonksConfigured = Boolean(envValue('POLY_STREAM_API_KEY', 'SPORTS_API_KEY'))
+  const fallbackConfigured = Boolean(envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY') || envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
+  const providerConfigured = sportmonksConfigured || fallbackConfigured
   try {
-    const providerArticles = await fetchProviderArticles()
+    const sportmonksArticles = sportmonksConfigured
+      ? await fetchSportmonksArticles(query).catch(() => [])
+      : []
+    const providerArticles = sportmonksArticles.length
+      ? sportmonksArticles
+      : await fetchProviderArticles(query)
     const articles = dedupeArticles(providerArticles)
     const feed = {
       ok: true as const,
       providerConfigured,
-      source: providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'unavailable',
+      source: sportmonksArticles.length
+        ? 'sportmonks'
+        : providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'unavailable',
       mode: providerArticles.length ? 'live' as const : 'unavailable' as const,
       updatedAt: new Date().toISOString(),
       freshnessSeconds: 0,
       articles,
     }
-    cache = { expiresAt: Date.now() + ttl, feed }
-    return feed
+    cache.set(key, { expiresAt: Date.now() + ttl, feed })
+    return { ...feed, query }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     const feed = {
@@ -277,8 +449,8 @@ export async function getPolyWorldcupNewsFeed() {
       error: detail.slice(0, 240),
       articles: [],
     }
-    cache = { expiresAt: Date.now() + Math.min(ttl, 60_000), feed }
-    return feed
+    cache.set(key, { expiresAt: Date.now() + Math.min(ttl, 60_000), feed })
+    return { ...feed, query }
   }
 }
 
@@ -288,9 +460,9 @@ export default async function polyWorldcupNewsHandler(req: Request, res: Respons
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
-  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
-    ? req.body as Record<string, unknown>
-    : {}
-  if (req.query.force === '1' || body.force === '1') cache = null
-  return res.json(await getPolyWorldcupNewsFeed())
+  const body = asRecord(req.body)
+  const query = requestFootballNewsQuery(req)
+  if (req.query.force === '1' || body.force === '1') cache.delete(newsCacheKey(query))
+  const preflightFeed = (req as Request & { footballNewsPreflightFeed?: Awaited<ReturnType<typeof getPolyWorldcupNewsFeed>> }).footballNewsPreflightFeed
+  return res.json(preflightFeed ?? await getPolyWorldcupNewsFeed(query))
 }
