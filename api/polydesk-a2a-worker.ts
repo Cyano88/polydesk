@@ -3,11 +3,13 @@ import { getAddress, isAddress } from 'viem'
 import type { AutoTradeSignal } from './polydesk-a2a-trading-agent.js'
 
 type JsonRecord = Record<string, unknown>
+const SUPPORTED_A2A_SERVICE_IDS = new Set(['38484', '38496'] as const)
+type SupportedA2aServiceId = '38484' | '38496'
 
 export type A2aWorkerRequest = {
   schema: 'polydesk-a2a-worker-request-v1'
   agentId: '5427'
-  serviceId: '38484'
+  serviceId: SupportedA2aServiceId
   jobId: string
   taskStatus: 'job_accepted'
   buyerAgentId: string
@@ -107,7 +109,10 @@ export function validateA2aWorkerRequest(value: unknown): A2aWorkerRequest {
   if (unknown) throw new Error(`Unsupported worker field: ${unknown}.`)
   if (value.schema !== 'polydesk-a2a-worker-request-v1') throw new Error('Worker request schema is unsupported.')
   if (String(value.agentId) !== '5427') throw new Error('Worker is restricted to PolyDesk Agent #5427.')
-  if (String(value.serviceId) !== '38484') throw new Error('Worker is restricted to PolyDesk Trading Agent service #38484.')
+  const serviceId = String(value.serviceId)
+  if (!SUPPORTED_A2A_SERVICE_IDS.has(serviceId as SupportedA2aServiceId)) {
+    throw new Error('Worker is restricted to PolyDesk A2A services #38484 and #38496.')
+  }
   const jobId = String(value.jobId ?? '').trim()
   if (!validJobId(jobId)) throw new Error('jobId is invalid.')
   if (value.taskStatus !== 'job_accepted') throw new Error('Worker executes only job_accepted tasks.')
@@ -132,7 +137,7 @@ export function validateA2aWorkerRequest(value: unknown): A2aWorkerRequest {
     ...value,
     schema: 'polydesk-a2a-worker-request-v1',
     agentId: '5427',
-    serviceId: '38484',
+    serviceId: serviceId as SupportedA2aServiceId,
     jobId,
     taskStatus: 'job_accepted',
     buyerAgentId,

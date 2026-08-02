@@ -23,13 +23,14 @@ export default function DocsOkxAI() {
     <article className="space-y-10">
       <DocHeader
         title="OKX.AI marketplace services"
-        description="PolyDesk Agent #5427 exposes five machine-readable A2MCP services. A new overarching A2A trading service is being prepared to coordinate watch, readiness, funding, bounded execution and public PnL evidence in one accepted task."
+        description="PolyDesk Agent #5427 exposes one A2A trading membership and five machine-readable A2MCP tools for direct use."
       />
 
       <Section title="Service map">
         <Table
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
+            ['PolyDesk Trading Membership #38496', '5 USDT / month, 3-day trial', 'OKX A2A task'],
             ['Polymarket LP Scout', '0.3 USDT', <Code>/api/a2mcp/okx/polymarket-lp-scout</Code>],
             ['Football Match Live Data', '0.1 USDT', <Code>/api/a2mcp/worldcup-live-scores</Code>],
             ['Football News Brief', '0.1 USDT', <Code>/api/a2mcp/worldcup-market-news</Code>],
@@ -37,11 +38,11 @@ export default function DocsOkxAI() {
             ['Governed Polymarket Trader', '0.1 USDT', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
           ]}
         />
-        <Note>The backend contract shown here is the required target for Agent #5427. The four 0.1-USDT marketplace fees must also be reflected in the marketplace records before buyer testing.</Note>
+        <Note>The A2A membership coordinates the full mission. The five A2MCP services remain independent pay-per-call tools for agents that need only one result.</Note>
       </Section>
 
-      <Section title="New A2A trading agent">
-        <p><strong>PolyDesk Trading Agent</strong> takes a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits. It verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
+      <Section title="A2A trading membership">
+        <p><strong>PolyDesk Trading Membership #38496</strong> takes a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits. It verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Publish a task with an explicit Polymarket BUY cap.</li>
           <li>PolyDesk waits for <Code>job_accepted</Code>.</li>

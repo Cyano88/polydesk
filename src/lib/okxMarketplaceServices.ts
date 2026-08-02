@@ -10,6 +10,14 @@ export type OkxMarketplaceService = {
 const OKX_AGENT_ID = 5427
 const OKX_AGENT_URL = `https://www.okx.ai/agents/${OKX_AGENT_ID}`
 
+export const okxTradingAgentService = {
+  serviceId: 38496,
+  name: 'PolyDesk Trading Membership',
+  summary: 'One bounded Polymarket BUY from public signal through account readiness, buyer-controlled execution, and public PnL evidence.',
+  subscriptionUsdtMonthly: 5,
+  freeTrialDays: 3,
+} as const
+
 export const okxMarketplaceServices: OkxMarketplaceService[] = [
   {
     key: 'football-live',

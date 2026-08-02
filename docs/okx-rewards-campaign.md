@@ -1,14 +1,20 @@
-# PolyDesk OKX Rewards Campaign
+# PolyDesk OKX Trading Agent Campaign
 
 Status: approved pilot; public claims and payouts remain disabled until the funded campaign wallet and public dates are configured.
 
-## Public offer
+## Product priority
+
+The public campaign leads with the PolyDesk Trading Agent subscription. It coordinates one bounded Polymarket BUY from a public signal through account readiness, buyer-controlled execution, and public PnL evidence. The five paid A2MCP services remain visible as direct tools the A2A agent can call.
+
+The A2A subscription has its own proof model. It must not be submitted to the direct-API transaction-hash claim path. A2A tester rewards remain closed until PolyDesk records an accepted OKX job, its delivered autotrade instruction, the buyer-controlled execution, and the resulting public PnL receipt as one verifiable mission.
+
+## Direct-API pilot offer
 
 - Phase 1 duration: three weeks.
 - Instant pool: 50 USDT0, paid as 1 USDT0 to the first 50 eligible unique payers.
 - Network: X Layer.
 
-The previously proposed 500-USDT0 leaderboard is not part of Phase 1. It remains disabled unless it receives separate funding, published rules and an explicit activation flag.
+The previously proposed 500-USDT0 leaderboard is not part of Phase 1. It remains disabled unless it receives separate funding, published rules and an explicit activation flag. It is not advertised on the A2A campaign page.
 
 ## Eligible activity
 

@@ -21,11 +21,17 @@ The existing A2MCP endpoints remain reusable direct services. The A2A agent is t
 
 The A2A marketplace task has no public service endpoint. The private operator API documented below is the internal bridge used by the PolyDesk worker after OKX sends `job_accepted`.
 
-## Proposed marketplace service
+## Marketplace services
 
-**Name:** PolyDesk Trading Agent
+**Primary membership:** PolyDesk Trading Membership `#38496`
 
-**Type:** A2A, per call
+**Type:** A2A subscription
+
+**Subscription:** 5 USDT per month
+
+**Free trial:** 3 days
+
+The original single-purchase PolyDesk Trading Agent `#38484` remains available at 0.1 USDT per task. Both service IDs use the same bounded worker and safety policy; the membership is the campaign and hackathon entry point.
 
 **Description:**
 

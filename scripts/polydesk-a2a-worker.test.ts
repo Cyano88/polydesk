@@ -63,12 +63,13 @@ function harness(overrides: Partial<A2aWorkerDependencies> = {}) {
 
 test('accepts a real 66-character OKX job id and rejects secret fields', () => {
   assert.equal(validateA2aWorkerRequest(request()).jobId, jobId)
+  assert.equal(validateA2aWorkerRequest(request({ serviceId: '38496' })).serviceId, '38496')
   assert.throws(() => validateA2aWorkerRequest({ ...request(), privateKey: 'secret' }), /secret material/)
 })
 
 test('refuses the wrong agent, service, or task state', () => {
   assert.throws(() => validateA2aWorkerRequest({ ...request(), agentId: '9239' }), /#5427/)
-  assert.throws(() => validateA2aWorkerRequest({ ...request(), serviceId: '33345' }), /#38484/)
+  assert.throws(() => validateA2aWorkerRequest({ ...request(), serviceId: '33345' }), /#38484 and #38496/)
   assert.throws(() => validateA2aWorkerRequest({ ...request(), taskStatus: 'created' }), /job_accepted/)
 })
 
