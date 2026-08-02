@@ -70,6 +70,15 @@ type MarketPosition = {
   percentPnl?: number
 }
 
+type SubmittedRewardQuote = {
+  orderId: string
+  outcome: 'YES' | 'NO'
+  price: string
+  amount: string
+}
+
+type RewardScoringState = 'checking' | 'eligible' | 'not-eligible' | 'unknown'
+
 function tickDecimals(tickSize: string) {
   return tickSize.split('.')[1]?.length ?? 0
 }
@@ -141,6 +150,8 @@ export function PolymarketLimitOrderTicket({
     journey: 'buy-now' | 'earn-rewards'
   } | null>(null)
   const [marketPosition, setMarketPosition] = useState<MarketPosition | null>(null)
+  const [rewardQuotes, setRewardQuotes] = useState<SubmittedRewardQuote[]>([])
+  const [rewardScoring, setRewardScoring] = useState<Record<string, RewardScoringState>>({})
   const [cancelContext, setCancelContext] = useState<{
     orderId: string
     walletClient: any
@@ -177,6 +188,8 @@ export function PolymarketLimitOrderTicket({
     setAmount(nextMinimum > 0 ? amountInput(nextMinimum) : '1')
     setNotice('')
     setPlaced(null)
+    setRewardQuotes([])
+    setRewardScoring({})
   }, [initialOutcome, marketUrl, noQuote, rewardMinShares, tickSize, yesQuote])
 
   const estimatedShares = useMemo(() => {
@@ -246,6 +259,37 @@ export function PolymarketLimitOrderTicket({
     }, 30000)
     return () => window.clearInterval(timer)
   }, [loadMarketPosition])
+
+  useEffect(() => {
+    if (!cancelContext || !rewardQuotes.some(quote => quote.orderId)) return
+    const timer = window.setTimeout(() => void refreshRewardScoring(), 4_500)
+    return () => window.clearTimeout(timer)
+  }, [cancelContext, rewardQuotes])
+
+  async function refreshRewardScoring() {
+    if (!cancelContext) return
+    const quotes = rewardQuotes.filter(quote => quote.orderId)
+    if (!quotes.length) return
+    setRewardScoring(current => Object.fromEntries(quotes.map(quote => [quote.orderId, current[quote.orderId] === 'eligible' ? 'eligible' : 'checking'])))
+    const { createL2Headers } = await import('@polymarket/clob-client-v2')
+    const results = await Promise.all(quotes.map(async quote => {
+      try {
+        const headers = await createL2Headers(cancelContext.walletClient, cancelContext.credentials, {
+          method: 'GET',
+          requestPath: '/order-scoring',
+        })
+        const response = await fetch(`https://clob.polymarket.com/order-scoring?order_id=${encodeURIComponent(quote.orderId)}`, {
+          headers: Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, String(value)])),
+        })
+        const body = await response.json().catch(() => ({})) as { scoring?: boolean }
+        if (!response.ok || typeof body.scoring !== 'boolean') return [quote.orderId, 'unknown'] as const
+        return [quote.orderId, body.scoring ? 'eligible' : 'not-eligible'] as const
+      } catch {
+        return [quote.orderId, 'unknown'] as const
+      }
+    }))
+    setRewardScoring(Object.fromEntries(results))
+  }
 
   async function placeOrder() {
     setNotice('')
@@ -413,6 +457,13 @@ export function PolymarketLimitOrderTicket({
         }),
       }) as Record<string, unknown>
       const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
+      if (submittedOrderId && journey === 'earn-rewards') {
+        setRewardQuotes(current => [
+          ...current.filter(quote => quote.outcome !== outcome),
+          { orderId: submittedOrderId, outcome, price, amount },
+        ])
+        setRewardScoring(current => ({ ...current, [submittedOrderId]: 'checking' }))
+      }
       setPlaced({
         orderId: submittedOrderId || undefined,
         price: journey === 'buy-now' ? plan.market.executionPrice : price,
@@ -485,6 +536,8 @@ export function PolymarketLimitOrderTicket({
           body: JSON.stringify({ action: 'mark-lp-order-cancelled', orderId: cancelContext.orderId }),
         }).catch(() => undefined)
       }
+      setRewardQuotes(current => current.filter(quote => quote.orderId !== cancelContext.orderId))
+      setRewardScoring(current => Object.fromEntries(Object.entries(current).filter(([orderId]) => orderId !== cancelContext.orderId)))
       setCancelContext(null)
       setPlaced(null)
       setNotice('Reward quote cancelled.')
@@ -495,6 +548,17 @@ export function PolymarketLimitOrderTicket({
     }
   }
 
+  function addComplementaryRewardQuote(currentOutcome: 'YES' | 'NO') {
+    const nextOutcome = currentOutcome === 'YES' ? 'NO' : 'YES'
+    const nextPrice = cleanPrice(nextOutcome === 'YES' ? yesQuote : noQuote, tickSize)
+    const nextMinimum = minimumRewardSpend(rewardMinShares, nextPrice)
+    setOutcome(nextOutcome)
+    setPrice(nextPrice)
+    setAmount(nextMinimum > 0 ? amountInput(nextMinimum) : '1')
+    setPlaced(null)
+    setNotice('The other side is ready. Review its price and amount before signing.')
+  }
+
   if (placed) {
     const pnl = Number(marketPosition?.cashPnl)
     const pnlPercent = Number(marketPosition?.percentPnl)
@@ -502,6 +566,8 @@ export function PolymarketLimitOrderTicket({
     const costBasis = Number(marketPosition?.avgPrice) * Number(marketPosition?.size)
     const hasPosition = Boolean(marketPosition && Number.isFinite(currentValue) && Number.isFinite(pnl))
     const positivePnl = pnl >= 0
+    const complementaryOutcome = placed.outcome === 'YES' ? 'NO' : 'YES'
+    const complementarySubmitted = rewardQuotes.some(quote => quote.outcome === complementaryOutcome)
     return (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#17171b]">
         <div className="p-4">
@@ -521,6 +587,28 @@ export function PolymarketLimitOrderTicket({
               ? `${placed.amount} USDC submitted at a protected live price.`
               : `${placed.amount} USDC at ${placed.price} · available until matched or cancelled.`}
           </p>
+
+          {placed.journey === 'earn-rewards' && rewardQuotes.length > 0 && (
+            <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.04]">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Reward status</p>
+                <button type="button" onClick={() => void refreshRewardScoring()} className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">Check again</button>
+              </div>
+              {rewardQuotes.map(quote => {
+                const status = rewardScoring[quote.orderId] || 'checking'
+                const label = status === 'eligible'
+                  ? 'Reward eligible'
+                  : status === 'not-eligible' ? 'Not scoring yet'
+                    : status === 'unknown' ? 'Status unavailable' : 'Checking eligibility'
+                return (
+                  <div key={quote.orderId} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{quote.outcome} · {quote.price} · {quote.amount} USDC</span>
+                    <span className={status === 'eligible' ? 'text-emerald-600 dark:text-emerald-400' : status === 'not-eligible' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}>{label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {hasPosition ? (
             <div className="mt-4 grid grid-cols-3 divide-x divide-gray-200 border-y border-gray-200 py-3 dark:divide-white/10 dark:border-white/10">
@@ -549,6 +637,14 @@ export function PolymarketLimitOrderTicket({
           )}
 
           <div className="mt-3 flex items-center justify-end gap-3">
+            {placed.journey === 'earn-rewards' && !complementarySubmitted && (
+              <button type="button" onClick={() => addComplementaryRewardQuote(placed.outcome)} disabled={busy} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">
+                Add {complementaryOutcome} reward quote
+              </button>
+            )}
+            {placed.journey === 'earn-rewards' && complementarySubmitted && (
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Both sides submitted</span>
+            )}
             {cancelContext && (
               <button type="button" onClick={() => void cancelPlacedOrder()} disabled={busy} className="text-xs font-semibold text-rose-600 dark:text-rose-400">
                 {busy ? 'Cancelling' : 'Cancel order'}
@@ -679,6 +775,7 @@ export function PolymarketOpenOrdersPanel() {
   const [orders, setOrders] = useState<OpenOrder[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [orderScoring, setOrderScoring] = useState<Record<string, RewardScoringState>>({})
   const [session, setSession] = useState<{
     walletClient: any
     credentials: { key: string; secret: string; passphrase: string }
@@ -734,6 +831,26 @@ export function PolymarketOpenOrdersPanel() {
     return nextSession
   }
 
+  async function loadOrderScoring(rows: OpenOrder[], auth: NonNullable<typeof session>) {
+    const withIds = rows.map(order => ({ order, orderId: String(order.id || order.orderID || '') })).filter(item => item.orderId)
+    setOrderScoring(Object.fromEntries(withIds.map(item => [item.orderId, 'checking'])))
+    const { createL2Headers } = await import('@polymarket/clob-client-v2')
+    const results = await Promise.all(withIds.map(async ({ orderId }) => {
+      try {
+        const headers = await createL2Headers(auth.walletClient, auth.credentials, { method: 'GET', requestPath: '/order-scoring' })
+        const response = await fetch(`https://clob.polymarket.com/order-scoring?order_id=${encodeURIComponent(orderId)}`, {
+          headers: Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, String(value)])),
+        })
+        const body = await response.json().catch(() => ({})) as { scoring?: boolean }
+        if (!response.ok || typeof body.scoring !== 'boolean') return [orderId, 'unknown'] as const
+        return [orderId, body.scoring ? 'eligible' : 'not-eligible'] as const
+      } catch {
+        return [orderId, 'unknown'] as const
+      }
+    }))
+    setOrderScoring(Object.fromEntries(results))
+  }
+
   async function loadOrders() {
     setBusy(true)
     setNotice('')
@@ -754,7 +871,9 @@ export function PolymarketOpenOrdersPanel() {
         : body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)
           ? (body as { data: unknown[] }).data
           : []
-      setOrders(rows.filter(item => item && typeof item === 'object') as OpenOrder[])
+      const openOrders = rows.filter(item => item && typeof item === 'object') as OpenOrder[]
+      setOrders(openOrders)
+      await loadOrderScoring(openOrders, auth)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Open orders could not be loaded.')
     } finally {
@@ -795,6 +914,7 @@ export function PolymarketOpenOrdersPanel() {
         }).catch(() => undefined)
       }
       setOrders(current => current?.filter(item => String(item.id || item.orderID || '') !== orderId) ?? [])
+      setOrderScoring(current => Object.fromEntries(Object.entries(current).filter(([key]) => key !== orderId)))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The order could not be cancelled.')
     } finally {
@@ -825,11 +945,15 @@ export function PolymarketOpenOrdersPanel() {
             const orderId = String(order.id || order.orderID || '')
             const original = Number(order.original_size || 0)
             const matched = Number(order.size_matched || 0)
+            const scoring = orderScoring[orderId] || 'checking'
             return (
               <div key={orderId} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2.5 dark:border-white/10">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">{order.outcome || order.side || 'Limit order'} · {order.price || '—'}</p>
                   <p className="mt-0.5 text-[10px] text-gray-400">{Math.max(0, original - matched).toLocaleString()} shares remaining</p>
+                  <p className={`mt-1 text-[10px] font-semibold ${scoring === 'eligible' ? 'text-emerald-600 dark:text-emerald-400' : scoring === 'not-eligible' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-400'}`}>
+                    {scoring === 'eligible' ? 'Reward eligible' : scoring === 'not-eligible' ? 'Not scoring yet' : scoring === 'unknown' ? 'Status unavailable' : 'Checking eligibility'}
+                  </p>
                 </div>
                 <button type="button" onClick={() => void cancelOrder(order)} disabled={busy} className="shrink-0 text-xs font-semibold text-red-500">Cancel</button>
               </div>
