@@ -39,9 +39,11 @@ POLYDESK_A2A_OPERATOR_KEY=replace_with_render_operator_key
 POLYDESK_A2A_URL=https://polydesk-i96m.onrender.com/api/a2a/polydesk-trading-agent
 POLYDESK_A2A_RECEIPT_ORIGIN=https://polydesk.trade/api/a2a/polydesk-trading-agent
 POLYDESK_A2A_WORKER_STATE=/var/lib/polydesk-a2a/worker.json
-ONCHAINOS_BIN=/usr/local/bin/onchainos
+ONCHAINOS_BIN=/home/polydesk/.local/bin/onchainos
 OKX_A2A_BIN=/usr/local/bin/okx-a2a
 ```
+
+The supplied VPS installer uses the per-user OnchainOS path `/home/polydesk/.local/bin/onchainos`; keep the environment file aligned with the path printed by the installer.
 
 Use mode `600` and make the file readable only by the dedicated worker user. Never place the operator key in Git, task text, XMTP messages, or logs.
 

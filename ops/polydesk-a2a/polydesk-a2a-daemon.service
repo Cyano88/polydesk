@@ -9,7 +9,7 @@ User=polydesk
 Group=polydesk
 WorkingDirectory=/opt/polydesk-a2a/workspace
 Environment=HOME=/home/polydesk
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/polydesk/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/etc/polydesk-a2a/worker.env
 ExecStart=/usr/local/bin/okx-a2a run
 Restart=always
