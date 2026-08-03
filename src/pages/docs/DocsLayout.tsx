@@ -4,9 +4,14 @@ import { ExternalLink, Menu, X } from '../../components/icons'
 
 const sections = [
   {
-    label: 'PolyDesk',
+    label: 'Product',
     links: [
-      { label: 'Overview', path: '/docs', end: true },
+      { label: 'Product guide', path: '/docs', end: true },
+    ],
+  },
+  {
+    label: 'Agent services',
+    links: [
       { label: 'OKX.AI services', path: '/docs/okx-ai' },
     ],
   },
