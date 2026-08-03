@@ -16,6 +16,16 @@ test('documentation starts with the main PolyDesk product surfaces', async () =>
   assert.ok(source.indexOf('Where Hash PayLink fits') < source.indexOf('For agents and developers'))
 })
 
+test('documentation hero explains the consumer outcome before technical terms', async () => {
+  const source = await readFile(overviewPath, 'utf8')
+
+  assert.ok(source.includes('From a live signal to a verified action.'))
+  assert.ok(source.includes('Open Pulse'))
+  assert.ok(source.includes('Ask the Agent'))
+  assert.ok(source.indexOf('Choose what you want to do') < source.indexOf('Start with the product'))
+  assert.ok(source.indexOf('Plain-English glossary') > source.indexOf('For agents and developers'))
+})
+
 test('documentation navigation prioritizes the product guide', async () => {
   const source = await readFile(layoutPath, 'utf8')
 

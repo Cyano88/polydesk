@@ -1,15 +1,34 @@
 import { Link } from 'react-router-dom'
-import { Code, CodeBlock, DocHeader, Note, Section, Table } from './components'
+import { Code, CodeBlock, Note, Section, Table } from './components'
 
 const publicWatchExample = `https://polydesk.trade/polydesk?service=portfolio&portfolio=watch`
 
 export default function DocsOverview() {
   return (
     <article className="space-y-12">
-      <DocHeader
-        title="Use PolyDesk"
-        description="Browse live Polymarket opportunities, inspect accounts, ask the Agent, research LP markets, fund a verified account, and keep a record of each action. Sign in only when an action needs your wallet or private account state."
-      />
+      <header className="border-b border-gray-200 pb-9">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">PolyDesk product guide</p>
+        <h1 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-gray-950 sm:text-5xl">From a live signal to a verified action.</h1>
+        <p className="mt-4 max-w-2xl text-lg leading-8 text-gray-600">PolyDesk helps you find what is happening on Polymarket, understand public positions, fund the correct account, and act without giving PolyDesk your private keys.</p>
+        <div className="mt-7 flex flex-wrap gap-3">
+          <Link className="inline-flex min-h-11 items-center rounded-lg bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800" to="/polydesk?service=pulse">Open Pulse</Link>
+          <Link className="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50" to="/polydesk?agent=1">Ask the Agent</Link>
+        </div>
+        <p className="mt-4 text-sm text-gray-500">Browse first. Connect only when you want to use your own account, sign, pay, or save something.</p>
+      </header>
+
+      <Section title="Choose what you want to do">
+        <Table
+          headers={['Your goal', 'Start here']}
+          rows={[
+            ['Find a live market or football opportunity', <Link className="font-semibold text-gray-950 hover:underline" to="/polydesk?service=pulse">Open Pulse</Link>],
+            ['Understand what a public Polymarket account owns', <Link className="font-semibold text-gray-950 hover:underline" to="/polydesk?service=portfolio&portfolio=watch">Open Watch</Link>],
+            ['Research markets that may qualify for liquidity rewards', <Link className="font-semibold text-gray-950 hover:underline" to="/polydesk?service=lp-scout">Open LP Scout</Link>],
+            ['Fund your account or another verified account', <Link className="font-semibold text-gray-950 hover:underline" to="/polydesk?service=portfolio&portfolio=external">Open Tip</Link>],
+            ['Let PolyDesk direct you to the right tool', <Link className="font-semibold text-gray-950 hover:underline" to="/polydesk?agent=1">Ask the Agent</Link>],
+          ]}
+        />
+      </Section>
 
       <Section title="Start with the product">
         <p>These are the main PolyDesk surfaces, in the same order you see them in the app.</p>
@@ -66,7 +85,21 @@ export default function DocsOverview() {
           <li>Need account funding? Use Verified Polymarket Funding with the owner EOA.</li>
           <li>Need a governed trade? Read <Code>/api/polymarket-agent-flow</Code> and follow its single <Code>nextAction</Code>.</li>
         </ol>
-        <p><Link className="font-medium text-blue-700 hover:underline" to="/docs/okx-ai">Continue to the OKX.AI service guide →</Link></p>
+        <p><Link className="font-medium text-blue-700 hover:underline" to="/docs/okx-ai">Continue to the OKX.AI service guide</Link></p>
+      </Section>
+
+      <Section title="Plain-English glossary">
+        <Table
+          headers={['Term', 'Meaning']}
+          rows={[
+            ['Position', 'A YES or NO outcome that an account currently owns.'],
+            ['Liquidity', 'Orders available for other people to buy or sell against.'],
+            ['LP Scout', 'Research that checks market depth, spread, reward rules, and risk before you place liquidity orders.'],
+            ['Deposit Wallet', 'The Polymarket funding address derived for a specific owner wallet. PolyDesk verifies the match before creating a checkout.'],
+            ['Governed trade', 'A trade checked against written limits such as maximum spend, price, market, and expiry before it can proceed.'],
+            ['Receipt', 'The payment or execution evidence returned after a completed action.'],
+          ]}
+        />
       </Section>
 
       <Section title="Trust boundary">
