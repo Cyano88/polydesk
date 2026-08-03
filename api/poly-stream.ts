@@ -766,7 +766,7 @@ export function sportmonksUrls(mode: FixtureMode, baseOnly = false, ignoreConfig
     if (mode === 'live') return [withCommonParams('/livescores/inplay')]
     if (mode === 'last') return [withCommonParams(`/fixtures/between/${isoDate(-7)}/${isoDate()}`)]
     const startDate = process.env.POLY_STREAM_START_DATE?.trim() || isoDate()
-    return [withCommonParams(`/fixtures/between/${startDate}/${isoDate(7)}`)]
+    return [withCommonParams(`/fixtures/between/${startDate}/${isoDate(21)}`)]
   }
   if (mode === 'live') return leagues.map(league => withCommonParams('/livescores', league))
   if (mode === 'last') return leagues.map(league => withCommonParams('/fixtures/latest', league))

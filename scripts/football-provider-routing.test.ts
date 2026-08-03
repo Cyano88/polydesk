@@ -21,7 +21,9 @@ test('Sportmonks works without a hard-coded league allowlist', () => {
     assert.match(live[0], /\/football\/livescores\/inplay\?/)
     assert.doesNotMatch(live[0], /fixtureLeagues/)
     assert.equal(upcoming.length, 1)
-    assert.match(upcoming[0], /\/football\/fixtures\/between\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}\?/)
+    const expectedEnd = new Date()
+    expectedEnd.setUTCDate(expectedEnd.getUTCDate() + 21)
+    assert.match(upcoming[0], new RegExp(`/football/fixtures/between/\\d{4}-\\d{2}-\\d{2}/${expectedEnd.toISOString().slice(0, 10)}\\?`))
     assert.doesNotMatch(upcoming[0], /fixtureLeagues/)
     assert.equal(new URL(upcoming[0]).searchParams.get('includes'), null)
   } finally {
