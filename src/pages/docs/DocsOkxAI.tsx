@@ -18,6 +18,14 @@ const flowExample = `curl -X POST https://polydesk.trade/api/polymarket-agent-fl
     }
   }'`
 
+const footballExample = `curl -X POST https://polydesk.trade/api/a2mcp/worldcup-live-scores \\
+  -H "content-type: application/json" \\
+  -d '{"team":"Real Madrid"}'`
+
+const newsExample = `curl -X POST https://polydesk.trade/api/a2mcp/worldcup-market-news \\
+  -H "content-type: application/json" \\
+  -d '{"team":"Real Madrid","type":"prematch"}'`
+
 export default function DocsOkxAI() {
   return (
     <article className="space-y-10">
@@ -61,6 +69,12 @@ export default function DocsOkxAI() {
           <li>Pay with OKX buyer tooling and replay the same request with the original business inputs.</li>
           <li>Store the returned machine-readable result or verified receipt.</li>
         </ol>
+      </Section>
+
+      <Section title="Try the football services">
+        <p>Both calls validate provider coverage before issuing a payment challenge. The team filter is optional; unsupported teams return a non-billable not-found response instead of unrelated data.</p>
+        <CodeBlock lang="bash">{footballExample}</CodeBlock>
+        <CodeBlock lang="bash">{newsExample}</CodeBlock>
       </Section>
 
       <Section title="Copy-paste governed trader preparation">

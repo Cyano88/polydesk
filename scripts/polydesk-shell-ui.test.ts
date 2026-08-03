@@ -44,13 +44,15 @@ const alertMonitor = readFileSync(new URL('../api/polymarket-alert-monitor.ts', 
 const alertRules = readFileSync(new URL('../api/polymarket-alert-rules.ts', import.meta.url), 'utf8')
 const emailProvider = readFileSync(new URL('../api/email-provider.ts', import.meta.url), 'utf8')
 
-test('unresolved authentication restores once, then keeps the product publicly browsable', () => {
+test('unresolved authentication restores once, then keeps the product publicly browsable without a global sign-in prompt', () => {
   const restoringGuard = layout.indexOf('if (!localPreview && (!ready || (authenticated && !walletsReady)))')
   assert.ok(restoringGuard >= 0)
   assert.match(layout, /Restoring your desk/)
   assert.match(layout, /import\.meta\.env\.DEV && searchParams\.get\('preview'\) === '1'/)
   assert.match(layout, /const previewMode = localPreview \|\| !authenticated/)
-  assert.match(layout, /debugLabel="polydesk-header-sign-in"/)
+  assert.match(layout, /<Link to=\{makeTo\('pulse'\)\} className="group flex items-center/)
+  assert.doesNotMatch(layout, /debugLabel="polydesk-header-sign-in"/)
+  assert.doesNotMatch(layout, />\s*Sign in\s*</)
   assert.doesNotMatch(layout, /if \(!localPreview && !authenticated\)/)
   assert.match(polyDeskPage, /const browsePreview = localPreview \|\| !user/)
 })
@@ -427,7 +429,7 @@ test('active product surfaces share the premium CTA system without the legacy se
   assert.match(productStyles, /min-height: 44px/)
   assert.match(productStyles, /\.polydesk-primary-cta--compact/)
   assert.match(productStyles, /\.polydesk-primary-cta:focus-visible/)
-  assert.match(layout, /polydesk-primary-cta polydesk-primary-cta--compact/)
+  assert.doesNotMatch(layout, /polydesk-header-sign-in/)
   assert.match(agentWorkspace, /polydesk-primary-cta mt-4 w-full/)
   assert.match(paymentLinks, /polydesk-primary-cta polydesk-primary-cta--compact shrink-0/)
   assert.match(paymentLinks, /polydesk-primary-cta w-full/)

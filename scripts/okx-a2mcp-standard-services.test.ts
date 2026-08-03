@@ -7,6 +7,16 @@ import {
   addPortfolioWatchReplaySchema,
   buildStandardServiceRouteConfig,
 } from '../api/okx-a2mcp-standard-services.js'
+import { polyDeskAgentServices } from '../api/a2mcp-services.js'
+
+test('public service catalog documents optional football relevance filters', () => {
+  const services = polyDeskAgentServices()
+  const matchData = services.find(service => service.id === 'football-live-data')
+  const news = services.find(service => service.id === 'football-news-brief')
+  assert.ok(matchData?.input.includes('optional exact team name'))
+  assert.ok(news?.input.includes('optional exact team name'))
+  assert.ok(news?.input.includes('optional league name'))
+})
 
 test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => {
   const req = {

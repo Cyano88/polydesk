@@ -12,7 +12,6 @@ import {
   Sun,
 } from '../components/icons'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
-import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { cn } from '../lib/utils'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import PolyDeskAgentIcon from '../components/PolyDeskAgentIcon'
@@ -200,7 +199,7 @@ function PolyDeskWorkspace() {
     )} style={workspaceStyle} data-polydesk-keyboard-open={mobileKeyboardOpen ? 'true' : 'false'}>
       <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200 bg-white dark:border-white/10 dark:bg-[#111113]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
-          <Link to={makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' })} className="group flex items-center gap-2.5 focus:outline-none">
+          <Link to={makeTo('pulse')} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
               <PolymarketMark className="h-5 w-5" />
             </span>
@@ -250,15 +249,6 @@ function PolyDeskWorkspace() {
                 </div>
               )}
             </div>
-            ) : !localPreview ? (
-              <PrivyConnectButton
-                debugLabel="polydesk-header-sign-in"
-                loginOptions={{ loginMethods: ['email', 'wallet'] }}
-                logoutOnAuthenticated={false}
-                className="polydesk-primary-cta polydesk-primary-cta--compact"
-              >
-                Sign in
-              </PrivyConnectButton>
             ) : null}
           </div>
         </div>
