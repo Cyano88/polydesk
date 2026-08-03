@@ -759,7 +759,6 @@ export function sportmonksUrls(mode: FixtureMode, baseOnly = false, ignoreConfig
   const withCommonParams = (path: string, league?: string) => {
     const url = new URL(`${base}${path}`)
     url.searchParams.set('include', include)
-    url.searchParams.set('includes', include)
     if (league) url.searchParams.set('filters', `fixtureLeagues:${league}`)
     return url.toString()
   }
@@ -784,7 +783,6 @@ export function sportmonksTeamSearchUrl(requestedTeam: string) {
     || 'participants;state;scores;venue;periods;events;league'
   const url = new URL(`${base}/fixtures/search/${encodeURIComponent(requestedTeam)}`)
   url.searchParams.set('include', include)
-  url.searchParams.set('includes', include)
   url.searchParams.set('per_page', String(Math.min(50, fixtureLimit())))
   url.searchParams.set('order', 'desc')
   return url.toString()

@@ -23,6 +23,7 @@ test('Sportmonks works without a hard-coded league allowlist', () => {
     assert.equal(upcoming.length, 1)
     assert.match(upcoming[0], /\/football\/fixtures\/between\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}\?/)
     assert.doesNotMatch(upcoming[0], /fixtureLeagues/)
+    assert.equal(new URL(upcoming[0]).searchParams.get('includes'), null)
   } finally {
     if (previous.ids === undefined) delete process.env.POLY_STREAM_LEAGUE_IDS
     else process.env.POLY_STREAM_LEAGUE_IDS = previous.ids
@@ -75,6 +76,7 @@ test('team-specific Sportmonks lookup uses the official fixture-search endpoint'
   const url = new URL(sportmonksTeamSearchUrl('Real Madrid'))
   assert.equal(url.pathname, '/v3/football/fixtures/search/Real%20Madrid')
   assert.match(url.searchParams.get('include') || '', /participants/)
+  assert.equal(url.searchParams.get('includes'), null)
   assert.equal(url.searchParams.get('per_page'), '50')
   assert.equal(url.searchParams.get('order'), 'desc')
 })
