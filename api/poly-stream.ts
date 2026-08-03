@@ -88,6 +88,12 @@ function fixtureMode(): FixtureMode {
   return mode === 'live' || mode === 'next' || mode === 'last' ? mode : 'auto'
 }
 
+export function providerModes(mode: FixtureMode): FixtureMode[] {
+  if (mode === 'auto') return ['live', 'next', 'last']
+  if (mode === 'last') return ['next', 'last']
+  return [mode]
+}
+
 function fixtureLimit() {
   const configured = Number(process.env.POLY_STREAM_LIMIT?.trim())
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_FIXTURE_LIMIT
@@ -1404,7 +1410,7 @@ async function fetchProviderMatches(selectedDate: string, requestedTeam = ''): P
   }
 
   const mode = fixtureMode()
-  const modes: FixtureMode[] = mode === 'auto' ? ['live', 'next'] : mode === 'last' ? ['next'] : [mode]
+  const modes = providerModes(mode)
   const batches = await Promise.all(modes.map(current => fetchProviderMode(provider, apiKey, current).catch(err => {
     lastProviderError = err instanceof Error ? err.message : 'Score provider failed.'
     return [] as ScoreMatch[]

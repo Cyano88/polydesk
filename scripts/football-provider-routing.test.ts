@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Request } from 'express'
-import { getPolyStreamFeed, matchHasTeam, requestTeam, sportmonksTeamSearchUrl, sportmonksUrls } from '../api/poly-stream.js'
+import { getPolyStreamFeed, matchHasTeam, providerModes, requestTeam, sportmonksTeamSearchUrl, sportmonksUrls } from '../api/poly-stream.js'
 
 test('Sportmonks works without a hard-coded league allowlist', () => {
   const previous = {
@@ -64,6 +64,11 @@ test('Sportmonks can retry without a stale configured league filter', () => {
     if (previous.sportsUrl === undefined) delete process.env.SPORTS_API_URL
     else process.env.SPORTS_API_URL = previous.sportsUrl
   }
+})
+
+test('automatic football coverage includes recent results when no match is live', () => {
+  assert.deepEqual(providerModes('auto'), ['live', 'next', 'last'])
+  assert.deepEqual(providerModes('last'), ['next', 'last'])
 })
 
 test('team-specific Sportmonks lookup uses the official fixture-search endpoint', () => {
