@@ -738,10 +738,10 @@ function isoDate(offsetDays = 0) {
   return date.toISOString().slice(0, 10)
 }
 
-export function sportmonksUrls(mode: FixtureMode, baseOnly = false) {
+export function sportmonksUrls(mode: FixtureMode, baseOnly = false, ignoreConfiguredLeagues = false) {
   const explicit = envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
   if (explicit) return [explicit]
-  const leagues = configuredLeagueIds()
+  const leagues = ignoreConfiguredLeagues ? [] : configuredLeagueIds()
   const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
   const baseInclude = 'participants;state;scores;venue;periods;events;league'
   const liveInclude = process.env.POLY_STREAM_LIVE_INCLUDE?.trim() || baseInclude
@@ -1157,8 +1157,12 @@ async function fetchProviderMode(provider: string, apiKey: string, mode: Fixture
       lastError = err instanceof Error ? err.message : 'Score provider failed.'
     }
   }
-  if (!results.length && lastError && provider !== 'api-football' && provider !== 'api-sports') {
-    for (const url of sportmonksUrls(mode, true)) {
+  const usesSportmonks = provider !== 'api-football' && provider !== 'api-sports'
+  const canRetryWithoutLeagueFilter = usesSportmonks
+    && !envValue('POLY_STREAM_API_URL', 'SPORTS_API_URL')
+    && configuredLeagueIds().length > 0
+  if (!results.length && usesSportmonks && (lastError || canRetryWithoutLeagueFilter)) {
+    for (const url of sportmonksUrls(mode, true, canRetryWithoutLeagueFilter)) {
       try {
         const matches = await fetchProviderUrl(provider, apiKey, url)
         if (matches.length) results.push(...matches)
