@@ -52,13 +52,13 @@ function LocalPreviewOverview({
       </div>
       <div className="polydesk-card p-5">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Total value</p>
-        <p className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">—</p>
+        <p className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">N/A</p>
         <p className="mt-1 text-xs text-gray-400">Connect your account to load live balances.</p>
         <div className="mt-5 grid grid-cols-3 gap-2 border-t border-gray-100 pt-4 dark:border-white/10">
           {['Trading balance', 'Open positions', 'Claimable'].map(label => (
             <div key={label}>
               <p className="text-[10px] leading-4 text-gray-400">{label}</p>
-              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">—</p>
+              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">N/A</p>
             </div>
           ))}
         </div>

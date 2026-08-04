@@ -6,10 +6,17 @@ import {
   okxMarketplaceServices,
   okxMarketplaceServiceUrl,
   okxTradingAgentService,
+  okxTradingTaskService,
   wantsOkxMarketplaceServices,
 } from '../src/lib/okxMarketplaceServices.js'
 
 test('publishes the overarching A2A trading service separately from direct API tools', () => {
+  assert.equal(okxTradingTaskService.serviceId, 38484)
+  assert.equal(okxTradingTaskService.priceUsdt, 0.1)
+  assert.equal(
+    okxMarketplaceServiceUrl(okxTradingTaskService),
+    'https://www.okx.ai/agents/5427?source=polydesk#service-38484',
+  )
   assert.equal(okxTradingAgentService.serviceId, 38496)
   assert.equal(okxTradingAgentService.subscriptionUsdtMonthly, 5)
   assert.equal(okxTradingAgentService.freeTrialDays, 3)
@@ -27,7 +34,7 @@ test('publishes the five verified OKX service-card links', () => {
       okxMarketplaceServiceUrl(service),
       `https://www.okx.ai/agents/5427?source=polydesk#service-${service.serviceId}`,
     )
-    assert.match(service.endpoint, /^https:\/\/polydesk-i96m\.onrender\.com\/api\/a2mcp\//)
+    assert.match(service.endpoint, /^https:\/\/polydesk\.trade\/api\/a2mcp\//)
   }
   assert.equal(okxMarketplaceServiceLinks().length, 5)
 })

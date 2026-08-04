@@ -949,7 +949,7 @@ export function PolymarketOpenOrdersPanel() {
             return (
               <div key={orderId} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2.5 dark:border-white/10">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">{order.outcome || order.side || 'Limit order'} · {order.price || '—'}</p>
+                  <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">{order.outcome || order.side || 'Limit order'} · {order.price || 'N/A'}</p>
                   <p className="mt-0.5 text-[10px] text-gray-400">{Math.max(0, original - matched).toLocaleString()} shares remaining</p>
                   <p className={`mt-1 text-[10px] font-semibold ${scoring === 'eligible' ? 'text-emerald-600 dark:text-emerald-400' : scoring === 'not-eligible' ? 'text-amber-700 dark:text-amber-300' : 'text-gray-400'}`}>
                     {scoring === 'eligible' ? 'Reward eligible' : scoring === 'not-eligible' ? 'Not scoring yet' : scoring === 'unknown' ? 'Status unavailable' : 'Checking eligibility'}

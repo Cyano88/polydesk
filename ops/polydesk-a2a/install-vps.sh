@@ -46,7 +46,7 @@ if [[ ! -e /etc/polydesk-a2a/worker.env ]]; then
   umask 027
   printf '%s\n' \
     'POLYDESK_A2A_OPERATOR_KEY=SET_BEFORE_START' \
-    'POLYDESK_A2A_URL=https://polydesk-i96m.onrender.com/api/a2a/polydesk-trading-agent' \
+    'POLYDESK_A2A_URL=https://polydesk.trade/api/a2a/polydesk-trading-agent' \
     'POLYDESK_A2A_RECEIPT_ORIGIN=https://polydesk.trade/api/a2a/polydesk-trading-agent' \
     'POLYDESK_A2A_WORKER_STATE=/var/lib/polydesk-a2a/worker.json' \
     'ONCHAINOS_BIN=/home/polydesk/.local/bin/onchainos' \

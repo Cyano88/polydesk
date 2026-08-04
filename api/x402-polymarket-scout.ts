@@ -160,7 +160,7 @@ function requestOrigin(req: Request) {
   const forwardedHost = cleanHeader(req.headers['x-forwarded-host'])
   const host = forwardedHost || cleanHeader(req.headers.host)
   if (host) return `${forwardedProto || req.protocol || 'https'}://${host}`
-  return process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://polydesk-i96m.onrender.com'
+  return process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://polydesk.trade'
 }
 
 function absoluteUrl(req: Request, path: string) {

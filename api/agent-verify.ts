@@ -3,7 +3,7 @@
  *
  * Trustless payment verification for AI agents.
  *
- * Queries the PayLinkArchive contract on 0G Mainnet (Chain ID 16661) directly —
+ * Queries the PayLinkArchive contract on 0G Mainnet (Chain ID 16661) directly.
  * no Hash PayLink server state involved. Any agent, anywhere, can call this
  * endpoint and receive a cryptographically verifiable payment proof.
  *
@@ -73,7 +73,7 @@ export default async function handler(req: Request, res: Response) {
     const contract = new ethers.Contract(ARCHIVE_ADDR, ARCHIVE_ABI, provider)
     const latest   = await withTimeout(provider.getBlockNumber(), '0G payment verification')
 
-    // Query PaymentArchived events filtered by eventId (indexed — ethers handles keccak256)
+    // Query PaymentArchived events filtered by eventId. Ethers handles the indexed keccak256 value.
     const events = await withTimeout(contract.queryFilter(
       contract.filters.PaymentArchived(eventId),
       FROM_BLOCK,
@@ -89,7 +89,7 @@ export default async function handler(req: Request, res: Response) {
       return res.status(402).json({
         verified: false,
         error:    'No verified payment found for this payer on 0G Storage',
-        hint:     'Payment may still be archiving (~30–60s after confirmation)',
+        hint:     'Payment may still be archiving about 30 to 60 seconds after confirmation.',
       })
     }
 

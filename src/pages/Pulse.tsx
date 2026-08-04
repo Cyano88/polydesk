@@ -366,8 +366,8 @@ export default function Pulse() {
           <div className="space-y-5 p-5">
             <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 border-b border-gray-100 pb-4 dark:border-white/10">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Suggested quotes</p>
-              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">YES <span className="ml-1 text-sm text-gray-950 dark:text-white">{selected.suggestedYesBid ?? '—'}</span></p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">NO <span className="ml-1 text-sm text-gray-950 dark:text-white">{selected.suggestedNoBid ?? '—'}</span></p>
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-200">YES <span className="ml-1 text-sm text-gray-950 dark:text-white">{selected.suggestedYesBid ?? 'N/A'}</span></p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">NO <span className="ml-1 text-sm text-gray-950 dark:text-white">{selected.suggestedNoBid ?? 'N/A'}</span></p>
             </div>
 
             <div className="space-y-2">

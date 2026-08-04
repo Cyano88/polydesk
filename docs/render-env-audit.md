@@ -6,7 +6,7 @@ Date: 2026-07-09
 
 Audited local Hash PayLink Render config:
 
-- `C:\Users\USER\Desktop\polymarket-lp-sentinel\hashkey-paylink\render.yaml`
+- `<path-to-hash-paylink>/render.yaml`
 
 This audit only records env names and ownership. Secret values are not copied or printed.
 

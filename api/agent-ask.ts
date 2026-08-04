@@ -1,7 +1,7 @@
 /**
  * POST /api/agent-ask
  *
- * Payment-gated AI service endpoint — demonstrates the Hash PayLink agentic
+ * Payment-gated AI service endpoint. Demonstrates the Hash PayLink agentic
  * economy primitive. Any AI service can use this pattern to require verified
  * payment before rendering a response.
  *
@@ -1256,12 +1256,12 @@ export default async function handler(req: Request, res: Response) {
         error:           'Payment required',
         paymentRequired: true,
         message:         `No verified payment found for "${payer}" on event ${eventId}.`,
-        hint:            'Payment may still be archiving to 0G (~30–60s after confirmation)',
+        hint:            'Payment may still be archiving to 0G about 30 to 60 seconds after confirmation.',
         paymentLink:     `https://hashpaylink.com/pay?v=1&id=${encodeURIComponent(eventId)}`,
       })
     }
 
-    // 2. Payment verified — get AI response
+    // 2. Payment verified. Get the AI response.
     const helperRouting = classifyHelperRequest(question, helperMode)
     const usageTier: HelperUsageTier = helperRouting.qualityMode === 'deep' ? 'deep' : 'simple'
     const usagePreview = await getHelperPromptUsageStatus(eventId, access.payment.payer, usageTier)

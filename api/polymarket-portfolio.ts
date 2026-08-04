@@ -1329,7 +1329,7 @@ export default async function handler(req: Request, res: Response) {
     const bodyAction = req.method === 'POST' ? cleanString((req.body ?? {}).action, 32).toLowerCase() : ''
     const action = bodyAction || queryAction
 
-    // Public proxy actions — no auth required, used for live read.
+    // Public proxy actions require no authentication and are used for live reads.
     if (req.method === 'GET' && action === 'value') {
       const address = cleanString(req.query.address, 64)
       if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
@@ -1909,7 +1909,7 @@ export default async function handler(req: Request, res: Response) {
     }
 
     if (action === 'save-alert-settings') {
-      // 0 means "loss alerts disabled" — see evaluateAlerts. 95 is the
+      // 0 means "loss alerts disabled". See evaluateAlerts. 95 is the
       // generous upper bound (anything beyond is effectively the same as off).
       const loss = Math.max(0, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
       const resolved = Boolean(body.resolvedAlertsEnabled)

@@ -13,7 +13,7 @@ For every inbound object with `message.source == "system"` and `message.event` p
 For Agent `5427`, the PolyDesk worker may run only when all of these are true:
 
 - the authoritative event is `job_accepted`;
-- the selected marketplace service is `38484`;
+- the selected marketplace service is `38484` or `38496`;
 - the buyer task contains the public inputs required by `polydesk-a2a-worker-request-v1`;
 - the exact buyer autotrade grant authorizes a Polymarket BUY for the written amount.
 
@@ -25,7 +25,7 @@ Create a temporary JSON request containing only:
 
 - `schema`, fixed to `polydesk-a2a-worker-request-v1`;
 - `agentId`, fixed to `5427`;
-- `serviceId`, fixed to `38484`;
+- `serviceId`, copied from the accepted task and restricted to `38484` or `38496`;
 - the real `jobId` and `buyerAgentId` from the accepted task;
 - `taskStatus`, fixed to `job_accepted`;
 - public `watchedWallet` and buyer `ownerAddress`;

@@ -24,7 +24,7 @@ function clean(value: unknown) {
 }
 
 function baseUrl() {
-  return clean(process.env.POLYDESK_BASE_URL) || clean(process.env.PUBLIC_POLYDESK_ORIGIN) || 'https://polydesk-i96m.onrender.com'
+  return clean(process.env.POLYDESK_BASE_URL) || clean(process.env.PUBLIC_POLYDESK_ORIGIN) || 'https://polydesk.trade'
 }
 
 export function getAgentLegalProfile(agentSlug = 'polydesk-agent'): AgentLegalProfile {

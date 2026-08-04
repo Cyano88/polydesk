@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:10,000
+PolyDesk turns live prediction-market data into paid, auditable decisions that another agent can use.
+
+2
+00:00:10,000 --> 00:00:20,000
+Agent 5427 has recorded 123 marketplace uses. That public count may include tests, so we treat it as activity, not 123 unique customers.
+
+3
+00:00:20,000 --> 00:00:34,000
+LP Scout continuously re-ranks Polymarket opportunities using live spread, depth, rewards, liquidity, time to resolution, volatility and execution risk.
+
+4
+00:00:34,000 --> 00:00:50,000
+Each paid call returns structured JSON: payment evidence, ranked operator data, safety boundaries, a stable report and an independently verifiable proof hash.
+
+5
+00:00:50,000 --> 00:01:05,000
+PolyDesk also gives agents two rails: verified Polymarket funding, and governed watch, pick or copy trading without handing PolyDesk custody of the buyer’s account.
+
+6
+00:01:05,000 --> 00:01:17,000
+The research call itself proves settlement, delivery and archive: 0.3 USDT on X Layer, five ranked markets, and a result anchored on 0G.
+
+7
+00:01:17,000 --> 00:01:29,000
+Before funding, PolyDesk verifies the relationship between the buyer EOA and the Polymarket deposit wallet. In this pilot, five USDC on Base arrived as five pUSD.
+
+8
+00:01:29,000 --> 00:01:43,000
+For execution, the agent proposes an exact order. A deterministic mandate checks the market, amount, cap, expiry, nonce and duplicate state before the x402 payment and submission.
+
+9
+00:01:43,000 --> 00:01:58,000
+The result was real: five YES shares matched at an average price of 0.55 for 2.75 pUSD. The response includes the Polymarket transaction, order ID and complete proof chain.

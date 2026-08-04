@@ -4,7 +4,7 @@
 
 **Primary category:** Finance Copilot
 
-**One-line promise:** PolyDesk turns live prediction-market liquidity data into a paid, bounded operator decision that another agent can buy on X Layer—without handing PolyDesk a trading key.
+**One-line promise:** PolyDesk turns live prediction-market liquidity data into a paid, bounded operator decision that another agent can buy on X Layer without handing PolyDesk a trading key.
 
 The demo proves one complete path:
 
@@ -25,21 +25,21 @@ Do not tour every PolyDesk feature. Mention the buyer-controlled signed-order wo
 
 | Time | Screen | Voiceover |
 | --- | --- | --- |
-| 0–7s | OKX.AI Agent `5427`, with PolyDesk and LP Scout visible | “Prediction-market agents have plenty of data. What they lack is a fast, paid decision they can safely act on.” |
-| 7–18s | `polydesk.trade` Pulse, showing the live ranked opportunity list | “PolyDesk reads current Polymarket markets, rewards and order-book conditions, then ranks opportunities by spread, depth, reward and execution risk.” |
-| 18–28s | Return to LP Scout on OKX.AI and open **Use now** | “Any buyer agent can discover PolyDesk on OKX.AI and call the LP Scout service.” |
-| 28–41s | Terminal: request the endpoint and show the fresh quote | “The endpoint responds with a real HTTP 402 challenge: 0.3 USDT on X Layer, using OKX Agent Payments.” |
-| 41–53s | Show the OKX confirmation card, then approve | “The buyer sees the exact asset, amount and recipient before money moves. I approve this single service payment.” |
-| 53–70s | Terminal: payment and automatic replay complete | “OKX signs and settles the payment, then replays the same request. PolyDesk does not receive the buyer’s private key or trading credentials.” |
-| 70–83s | Show the returned report: top market, spread, depth, reward, minimum size, risk/checklist | “The deliverable is not a generic answer. It is a current operator report with the evidence and constraints needed for a liquidity decision.” |
-| 83–90s | Show the confirmed X Layer transaction and archived 0G proof beside the report | “That is PolyDesk: live intelligence, buyer-approved payment and an independently auditable result—in one agent-to-agent flow.” |
+| 0 to 7s | OKX.AI Agent `5427`, with PolyDesk and LP Scout visible | “Prediction-market agents have plenty of data. What they lack is a fast, paid decision they can safely act on.” |
+| 7 to 18s | `polydesk.trade` Pulse, showing the live ranked opportunity list | “PolyDesk reads current Polymarket markets, rewards and order-book conditions, then ranks opportunities by spread, depth, reward and execution risk.” |
+| 18 to 28s | Return to LP Scout on OKX.AI and open **Use now** | “Any buyer agent can discover PolyDesk on OKX.AI and call the LP Scout service.” |
+| 28 to 41s | Terminal: request the endpoint and show the fresh quote | “The endpoint responds with a real HTTP 402 challenge: 0.3 USDT on X Layer, using OKX Agent Payments.” |
+| 41 to 53s | Show the OKX confirmation card, then approve | “The buyer sees the exact asset, amount and recipient before money moves. I approve this single service payment.” |
+| 53 to 70s | Terminal: payment and automatic replay complete | “OKX signs and settles the payment, then replays the same request. PolyDesk does not receive the buyer’s private key or trading credentials.” |
+| 70 to 83s | Show the returned report: top market, spread, depth, reward, minimum size, risk/checklist | “The deliverable is not a generic answer. It is a current operator report with the evidence and constraints needed for a liquidity decision.” |
+| 83 to 90s | Show the confirmed X Layer transaction and archived 0G proof beside the report | “That is PolyDesk: live intelligence, buyer-approved payment and an independently auditable result in one agent-to-agent flow.” |
 
 ## Recording commands
 
 Run the read-only check:
 
 ```powershell
-cd C:\Users\USER\Desktop\polydesk
+cd <path-to-polydesk>
 npm.cmd run demo:okx:preflight
 ```
 
@@ -127,6 +127,6 @@ The final service architecture shown is:
 
 ## Submission caption
 
-**PolyDesk — a paid prediction-market Finance Copilot on OKX.AI**
+**PolyDesk: a paid prediction-market Finance Copilot on OKX.AI**
 
 An agent discovers a live Polymarket liquidity opportunity, reviews an explicit 0.3 USDT X Layer payment, and receives a replayed operator report with market evidence, execution constraints and settlement proof. PolyDesk provides the decision layer; the buyer keeps trading authority.

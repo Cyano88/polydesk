@@ -6,11 +6,11 @@ export type ChainKey = 'base' | 'arc' | 'solana' | 'arbitrum'
 // ─── Platform fee engine ─────────────────────────────────────────────────────
 /** 0.2% platform fee in basis points (20 bps). Collected by Hash PayLink settlement flows. */
 export const PLATFORM_FEE_BPS = 20
-/** EVM treasury — receives the platform fee on supported EVM USDC networks. */
+/** EVM treasury receives the platform fee on supported EVM USDC networks. */
 export const EVM_TREASURY = '0xcE5dF9e1115F81a2Fc2F65941B20B820d508e753' as `0x${string}`
-/** Multicall3 — canonical address on all EVM chains; used for atomic permit+split */
+/** Multicall3 is the canonical address on all EVM chains; used for atomic permit+split. */
 export const MULTICALL3_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976CA11' as `0x${string}`
-/** @deprecated — use EVM_TREASURY */
+/** @deprecated Use EVM_TREASURY. */
 export const PLATFORM_TREASURY = EVM_TREASURY
 
 export { base as baseMainnet }
@@ -46,9 +46,9 @@ export const arcChain = defineChain({
   testnet: true,
 })
 
-// ─── Mainnet values — uncomment + swap in above when Arc mainnet launches ─────
+// Mainnet values: uncomment and swap in above when Arc mainnet launches.
 // export const arcChain = defineChain({
-//   id: /* Arc Mainnet Chain ID — TBA */,
+//   id: /* Arc Mainnet Chain ID: TBA */,
 //   name: 'Arc',
 //   nativeCurrency: { decimals: 18, name: 'USD Coin', symbol: 'USDC' },
 //   rpcUrls: {
@@ -88,7 +88,7 @@ export const CHAIN_META = {
     asset: 'USDC',
     decimals: 6,
     chainId: 5042002,
-    // Arc native USDC precompile — symbol=USDC, decimals=6
+    // Arc native USDC precompile: symbol=USDC, decimals=6
     // Ref: https://docs.arc.network/arc/references/contract-addresses
     tokenAddress: '0x3600000000000000000000000000000000000000' as `0x${string}`,
     explorerUrl: 'https://testnet.arcscan.app',

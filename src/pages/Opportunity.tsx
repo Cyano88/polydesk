@@ -33,13 +33,13 @@ type OpportunityResponse = {
 
 function number(value: unknown, maximumFractionDigits = 0) {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : '—'
+  return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : 'N/A'
 }
 
 function quote(value: unknown, tickSize = '0.01') {
   const parsed = Number(value)
   const digits = tickSize.split('.')[1]?.length ?? 2
-  return Number.isFinite(parsed) ? parsed.toFixed(digits) : '—'
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : 'N/A'
 }
 
 function riskLabel(value: string | undefined) {
@@ -204,10 +204,10 @@ export default function Opportunity() {
 
             <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 sm:grid-cols-4">
               {[
-                ['Price gap', Number.isFinite(Number(opportunity.liveSpread)) ? `${(Number(opportunity.liveSpread) * 100).toFixed(1)}c` : '—'],
+                ['Price gap', Number.isFinite(Number(opportunity.liveSpread)) ? `${(Number(opportunity.liveSpread) * 100).toFixed(1)}c` : 'N/A'],
                 ['Shares near price', number(opportunity.depthAtTwoCents)],
-                ['Est. reward setup', opportunity.estimatedRewardCapitalUsdc == null ? '—' : `≈${number(opportunity.estimatedRewardCapitalUsdc, 2)} USDC`],
-                ['Ends in', opportunity.daysToResolve == null ? '—' : `${number(opportunity.daysToResolve)} days`],
+                ['Est. reward setup', opportunity.estimatedRewardCapitalUsdc == null ? 'N/A' : `≈${number(opportunity.estimatedRewardCapitalUsdc, 2)} USDC`],
+                ['Ends in', opportunity.daysToResolve == null ? 'N/A' : `${number(opportunity.daysToResolve)} days`],
               ].map(([label, value]) => (
                 <div key={label} className="!bg-white px-3 py-3">
                   <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>

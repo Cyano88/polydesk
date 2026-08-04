@@ -1,0 +1,85 @@
+{
+  "agentId": "5427",
+  "agentName": "PolyDesk",
+  "verifiedAt": "2026-07-27T17:49:51.2211422+01:00",
+  "publicOrigin": "https://polydesk.trade",
+  "listingState": {
+    "status": "listed",
+    "recordedUses": 123,
+    "issue": "The marketplace still points to retired Render and World Cup service routes.",
+    "updateBlocker": {
+      "serviceRecordId": "33343",
+      "message": "service in use, only name/description can be modified"
+    }
+  },
+  "productionChecks": [
+    {
+      "service": "Service catalog",
+      "method": "GET",
+      "endpoint": "https://polydesk.trade/api/a2mcp/services",
+      "status": 200
+    },
+    {
+      "service": "Polymarket LP Scout",
+      "method": "GET",
+      "endpoint": "https://polydesk.trade/api/a2mcp/okx/polymarket-lp-scout",
+      "status": 402,
+      "acceptsCount": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "amountAtomic": "300000",
+      "amountHuman": "0.3 USDT",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "payTo": "0x8f1b15fc1489262ce64ac8d6592bc8ebb31f07be"
+    },
+    {
+      "service": "Football Match Live Data",
+      "method": "GET",
+      "endpoint": "https://polydesk.trade/api/a2mcp/football-live-data",
+      "status": 402,
+      "acceptsCount": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "amountAtomic": "100000",
+      "amountHuman": "0.1 USDT",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "payTo": "0x8f1b15fc1489262ce64ac8d6592bc8ebb31f07be"
+    },
+    {
+      "service": "Football News Brief",
+      "method": "POST",
+      "endpoint": "https://polydesk.trade/api/a2mcp/football-news-brief",
+      "status": 402,
+      "acceptsCount": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "amountAtomic": "100000",
+      "amountHuman": "0.1 USDT",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "payTo": "0x8f1b15fc1489262ce64ac8d6592bc8ebb31f07be"
+    },
+    {
+      "service": "Verified Polymarket Funding",
+      "method": "POST",
+      "endpoint": "https://polydesk.trade/api/a2mcp/polymarket-funding-link",
+      "emptyRequestStatus": 400,
+      "emptyRequestError": "Provide the owner EOA that controls the Polymarket account.",
+      "interpretation": "The route is deployed and intentionally runs wallet-readiness validation before issuing a payment challenge."
+    },
+    {
+      "service": "Governed Polymarket Trader",
+      "method": "POST",
+      "endpoint": "https://polydesk.trade/api/a2mcp/polymarket-agent-flow",
+      "emptyRequestStatus": 400,
+      "emptyRequestError": "externalOrderId must be 8-80 letters, numbers, colons, underscores, or hyphens.",
+      "interpretation": "The route is deployed and intentionally validates the mandate and trade request before issuing a payment challenge."
+    }
+  ],
+  "existingDemo": {
+    "video": "demo-assets/polydesk-okx-88s-master.mp4",
+    "captions": "demo-assets/polydesk-okx-88s.srt",
+    "machineReadableResult": "demo-assets/agent-result.json",
+    "verifiedSettlement": "0x9393f7ef7dab96fa8e8613fb68a6b2cca152bc8227c9cd4211eabbf357a25d32",
+    "verifiedAmount": "0.3 USDT"
+  }
+}

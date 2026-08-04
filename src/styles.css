@@ -178,7 +178,7 @@
 /* ── Dark mode overrides ──────────────────────────────────────────────────────
    Applied when ThemeContext adds class="dark" to <html>.
    Uses higher specificity (html.dark .class) so no !important needed.
-   Light mode is completely untouched — every rule here is scoped to html.dark.
+   Light mode is completely untouched. Every rule here is scoped to html.dark.
 ──────────────────────────────────────────────────────────────────────────────── */
 
 html.dark body {
@@ -186,14 +186,14 @@ html.dark body {
   color: #eeeeee;
 }
 
-/* ── Surfaces — 3-level hierarchy: page / card / input ─────────────────────── */
+/* Surfaces: 3-level hierarchy: page / card / input. */
 html.dark .bg-white           { background-color: #1e1e1e; }
 html.dark .bg-gray-50         { background-color: #252525; }
 html.dark .bg-gray-100        { background-color: #2a2a2a; }
 html.dark .bg-gray-200        { background-color: #383838; }
 html.dark .bg-gray-300        { background-color: #555555; }  /* inactive toggle tracks */
 
-/* Opacity variants — Tailwind treats e.g. bg-gray-50/60 as a separate class */
+/* Opacity variants. Tailwind treats e.g. bg-gray-50/60 as a separate class. */
 html.dark .bg-gray-50\/60     { background-color: #252525; }
 html.dark .bg-gray-50\/80     { background-color: #252525; }
 html.dark .bg-blue-50\/60     { background-color: rgba(0, 113, 227, 0.10); }
@@ -206,7 +206,7 @@ html.dark .bg-white\/80       { background-color: rgba(18, 18, 18, 0.92); }
 html.dark .bg-white\/50       { background-color: rgba(18, 18, 18, 0.50); }
 html.dark .bg-gray-100\/80    { background-color: rgba(42, 42, 42, 0.80); }
 
-/* ── Payment card headerBg gradients — all 5 chain tints + success card ─────
+/* Payment card headerBg gradients: all 5 chain tints plus success card.
    Each chain uses a light pastel gradient (from-blue-50 to-sky-50 etc).
    Override to a dark, subtly-tinted version so text stays readable.
 ──────────────────────────────────────────────────────────────────────────────── */
@@ -269,7 +269,7 @@ html.dark .border-white\/60   { border-color: rgba(255, 255, 255, 0.06); }
 html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #333333; }
 html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #333333; }
 
-/* ── Text — near-white hierarchy ───────────────────────────────────────────── */
+/* Text: near-white hierarchy. */
 html.dark .text-gray-900      { color: #eeeeee; }
 html.dark .text-gray-800      { color: #e0e0e0; }
 html.dark .text-gray-700      { color: #cccccc; }
@@ -401,7 +401,7 @@ html.dark .text-red-600       { color: #f87171; }
 html.dark .text-red-500       { color: #f87171; }
 html.dark .text-red-400       { color: #fca5a5; }
 
-/* ── Gradient border — swap white fill for dark card surface ────────────────── */
+/* Gradient border: swap white fill for dark card surface. */
 html.dark .gradient-border {
   background: linear-gradient(#1e1e1e, #1e1e1e) padding-box,
     linear-gradient(135deg, #0071e3, #34aadc) border-box;

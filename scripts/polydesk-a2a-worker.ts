@@ -20,7 +20,7 @@ const requestIndex = args.indexOf('--request')
 const requestPath = requestIndex >= 0 ? args[requestIndex + 1] : ''
 const execute = args.includes('--execute')
 const dryRun = args.includes('--dry-run') || !execute
-const baseUrl = String(process.env.POLYDESK_A2A_URL || 'https://polydesk-i96m.onrender.com/api/a2a/polydesk-trading-agent').replace(/\/+$/, '')
+const baseUrl = String(process.env.POLYDESK_A2A_URL || 'https://polydesk.trade/api/a2a/polydesk-trading-agent').replace(/\/+$/, '')
 const receiptOrigin = String(process.env.POLYDESK_A2A_RECEIPT_ORIGIN || 'https://polydesk.trade/api/a2a/polydesk-trading-agent').replace(/\/+$/, '')
 const statePath = resolve(process.env.POLYDESK_A2A_WORKER_STATE || './data/polydesk-a2a-worker.json')
 const operatorKey = String(process.env.POLYDESK_A2A_OPERATOR_KEY || '').trim()

@@ -14,7 +14,7 @@ export function truncateAddress(address: string, chars = 4): string {
   return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`
 }
 
-/** Format an HSK amount for display (legacy — kept for backwards compat) */
+/** Format an HSK amount for display (legacy, kept for backwards compat) */
 export function formatHSK(amount: string | number): string {
   return formatAmount(amount, 18)
 }
@@ -31,7 +31,7 @@ export function formatAmount(amount: string | number, decimals = 18): string {
 }
 
 /** Encode an ERC-20 transfer call with optional memo appended to calldata.
- *  The memo bytes are appended AFTER the standard ABI-encoded transfer args —
+ *  The memo bytes are appended AFTER the standard ABI-encoded transfer args.
  *  they are stored on-chain in the transaction input data but ignored by the
  *  ERC-20 contract (which reads only the first 68 bytes for transfer). */
 const ERC20_TRANSFER_ABI = [

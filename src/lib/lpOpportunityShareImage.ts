@@ -40,13 +40,13 @@ function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, wi
 
 function format(value: unknown, maximumFractionDigits = 0) {
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : '—'
+  return Number.isFinite(parsed) ? parsed.toLocaleString(undefined, { maximumFractionDigits }) : 'N/A'
 }
 
 function quote(value: unknown, tickSize = '0.01') {
   const parsed = Number(value)
   const digits = tickSize.split('.')[1]?.length ?? 2
-  return Number.isFinite(parsed) ? parsed.toFixed(digits) : '—'
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : 'N/A'
 }
 
 function wrapLines(context: CanvasRenderingContext2D, value: string, maxWidth: number, maxLines: number) {
@@ -158,9 +158,9 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
     context.fillText('USDC', 134 + reportRewardWidth, 507)
 
     const reportMetrics = [
-      { label: 'Spread', value: data.liveSpread == null ? '—' : `${format(data.liveSpread, 1)}c`, x: 528, width: 140 },
-      { label: 'Min setup', value: data.estimatedRewardCapitalUsdc == null ? '—' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, x: 688, width: 160 },
-      { label: 'Ends', value: data.daysToResolve == null ? '—' : `${format(data.daysToResolve)}d`, x: 868, width: 124 },
+      { label: 'Spread', value: data.liveSpread == null ? 'N/A' : `${format(data.liveSpread, 1)}c`, x: 528, width: 140 },
+      { label: 'Min setup', value: data.estimatedRewardCapitalUsdc == null ? 'N/A' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, x: 688, width: 160 },
+      { label: 'Ends', value: data.daysToResolve == null ? 'N/A' : `${format(data.daysToResolve)}d`, x: 868, width: 124 },
     ]
     reportMetrics.forEach(metric => {
       roundedRect(context, metric.x, 410, metric.width, 132, 18)
@@ -189,7 +189,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   drawLabel(context, 'Min setup', 550, 450)
   context.fillStyle = INK
   context.font = '700 30px Inter, Arial, sans-serif'
-  context.fillText(data.estimatedRewardCapitalUsdc == null ? '—' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, 550, 506)
+  context.fillText(data.estimatedRewardCapitalUsdc == null ? 'N/A' : `≈${format(data.estimatedRewardCapitalUsdc, 2)}`, 550, 506)
 
   roundedRect(context, 766, 410, 226, 132, 18)
   context.fillStyle = '#f9fafb'
@@ -197,7 +197,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   drawLabel(context, 'Ends in', 800, 450)
   context.fillStyle = INK
   context.font = '700 42px Inter, Arial, sans-serif'
-  context.fillText(data.daysToResolve == null ? '—' : `${format(data.daysToResolve)} days`, 800, 510)
+  context.fillText(data.daysToResolve == null ? 'N/A' : `${format(data.daysToResolve)} days`, 800, 510)
 
   }
 

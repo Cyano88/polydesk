@@ -30,14 +30,15 @@ export default function DocsOkxAI() {
   return (
     <article className="space-y-10">
       <DocHeader
-        title="OKX.AI marketplace services"
-        description="PolyDesk Agent #5427 exposes one A2A trading membership and five machine-readable A2MCP tools for direct use."
+        title="Buy one result or delegate the complete mission."
+        description="PolyDesk Agent #5427 lets an agent buy one direct result, delegate one bounded trading task, or subscribe to recurring trading access without rebuilding PolyDesk infrastructure."
       />
 
       <Section title="Service map">
         <Table
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
+            ['PolyDesk Trading Task #38484', '0.1 USDT / task', 'OKX A2A task'],
             ['PolyDesk Trading Membership #38496', '5 USDT / month, 3-day trial', 'OKX A2A task'],
             ['Polymarket LP Scout', '0.3 USDT', <Code>/api/a2mcp/okx/polymarket-lp-scout</Code>],
             ['Football Match Live Data', '0.1 USDT', <Code>/api/a2mcp/worldcup-live-scores</Code>],
@@ -46,11 +47,12 @@ export default function DocsOkxAI() {
             ['Governed Polymarket Trader', '0.1 USDT', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
           ]}
         />
-        <Note>The A2A membership coordinates the full mission. The five A2MCP services remain independent pay-per-call tools for agents that need only one result.</Note>
+        <Note>The one-off task and membership coordinate the same bounded mission. The five A2MCP services remain independent pay-per-call tools for agents that need only one result.</Note>
       </Section>
 
-      <Section title="A2A trading membership">
-        <p><strong>PolyDesk Trading Membership #38496</strong> takes a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits. It verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
+      <Section title="A2A governed trading">
+        <p><strong>PolyDesk Trading Task #38484</strong> provides one bounded mission for 0.1 USDT. <strong>PolyDesk Trading Membership #38496</strong> provides recurring access for 5 USDT per month with a 3-day trial. Both take a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits.</p>
+        <p>PolyDesk verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Publish a task with an explicit Polymarket BUY cap.</li>
           <li>PolyDesk waits for <Code>job_accepted</Code>.</li>
@@ -60,6 +62,20 @@ export default function DocsOkxAI() {
           <li>Read the public open or realized PnL receipt.</li>
         </ol>
         <Note>AUTO_BEST_FIT ranks execution quality under explicit spread, depth, price and time rules. It is not a profit forecast. PolyDesk never receives wallet keys or reusable CLOB credentials.</Note>
+      </Section>
+
+      <Section title="Infrastructure roles">
+        <Table
+          headers={['Infrastructure', 'Role in this flow']}
+          rows={[
+            ['Polymarket', 'Provides markets, order books, positions, and public execution evidence.'],
+            ['Sportmonks', 'Provides source-backed football fixtures, scores, events, and news.'],
+            ['ZeroScout', 'Verifies and stores the intelligence attached to paid LP Scout results.'],
+            ['Hash PayLink', 'Provides funding checkout, payment verification, settlement status, and receipts.'],
+            ['OKX.AI', 'Distributes Agent #5427, its direct tools, and its governed A2A tasks.'],
+            ['X Layer', 'Settles pay-per-use USDT payments for marketplace services.'],
+          ]}
+        />
       </Section>
 
       <Section title="How to call a service">

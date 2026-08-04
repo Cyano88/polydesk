@@ -58,7 +58,7 @@ function publicOrigin(req: Request) {
   const configured = clean(process.env.PUBLIC_APP_URL || process.env.VITE_PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || '', 180)
   if (configured) return configured.replace(/\/+$/, '')
   const proto = clean(req.headers['x-forwarded-proto'] || req.protocol || 'https', 16).split(',')[0] || 'https'
-  const host = clean(req.headers['x-forwarded-host'] || req.headers.host || 'polydesk-i96m.onrender.com', 120).split(',')[0]
+  const host = clean(req.headers['x-forwarded-host'] || req.headers.host || 'polydesk.trade', 120).split(',')[0]
   return `${proto}://${host}`.replace(/\/+$/, '')
 }
 

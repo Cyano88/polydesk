@@ -3104,7 +3104,7 @@ export function TelegramHelperPanel({
         Number.isFinite(spread) && spread > 0 ? `${spread.toFixed(1)}c spread` : '',
         Number.isFinite(minimum) && minimum > 0 ? `about ${minimum.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC minimum setup` : '',
       ].filter(Boolean)
-      return `${rank}. ${opportunity.title}${details.length ? ` — ${details.join(', ')}` : ''}`
+      return `${rank}. ${opportunity.title}${details.length ? `: ${details.join(', ')}` : ''}`
     })
     return {
       answer: `PolyDesk's strongest live LP opportunities:\n${lines.join('\n')}`,
@@ -4775,7 +4775,7 @@ function HelperLiveScoreWidget({ matches }: { matches: PolyStreamMatch[] }) {
               <p className="min-w-0 truncate text-left text-xs font-semibold text-gray-900 dark:text-white">{home}</p>
               <div className="min-w-[4.25rem] text-center">
                 <p className="text-base font-black tracking-tight text-gray-950 dark:text-white">
-                  {hasScore ? `${match.homeScore}–${match.awayScore}` : state.center}
+                  {hasScore ? `${match.homeScore}-${match.awayScore}` : state.center}
                 </p>
                 <p className={cn(
                   'mt-0.5 text-[9px] font-bold uppercase tracking-wide',
@@ -6594,7 +6594,7 @@ type PolymarketPosition = {
   negRisk?: boolean
 }
 
-function formatUsd(value: unknown, fallback = '—') {
+function formatUsd(value: unknown, fallback = 'N/A') {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return fallback
   if (Math.abs(n) >= 10_000) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -6620,7 +6620,7 @@ function normalizePortfolioValue(value: unknown) {
 
 function formatPercent(value: unknown) {
   const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n)) return 'N/A'
   const sign = n > 0 ? '+' : ''
   return `${sign}${n.toFixed(1)}%`
 }
@@ -7186,7 +7186,7 @@ export function PolyPortfolioPanel({
   const liveDataAddress = unsignedPortfolioAction === 'trading' ? tradingPortfolioAddress : watchedAddress
   const tradingPusdValue = tradingPusdBalance?.formatted ? Number(tradingPusdBalance.formatted) : null
   const hasConfirmedTradingCash = tradingPusdValue !== null && Number.isFinite(tradingPusdValue)
-  const tradingPusdDisplay = hasConfirmedTradingCash ? formatUsd(tradingPusdValue) : '—'
+  const tradingPusdDisplay = hasConfirmedTradingCash ? formatUsd(tradingPusdValue) : 'N/A'
 
   useEffect(() => {
     setTradingPusdBalance(null)
@@ -8992,7 +8992,7 @@ export function PolyPortfolioPanel({
     return <PolyDeskLoadingState label="Syncing portfolio" />
   }
 
-  // Connect screen — no saved profile yet
+  // Connect screen with no saved profile yet
   if (!unsignedPortfolioAction) {
     const portfolioActions = [
       ['watch', 'Watch Polymarket account', watchedAddress ? `Watching ${shortHex(watchedAddress)}` : 'Read-only alerts for any public profile.'],
@@ -9920,7 +9920,7 @@ export function PolyPortfolioPanel({
                   className="w-20 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm tabular-nums dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
                 />
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {settingsDraft.lossThresholdPercent === 0 ? 'Loss alerts off — set above 0 to enable' : '% drop triggers an alert'}
+                  {settingsDraft.lossThresholdPercent === 0 ? 'Loss alerts off. Set above 0 to enable' : '% drop triggers an alert'}
                 </span>
               </div>
             </div>
@@ -10072,7 +10072,7 @@ export function PolyPortfolioPanel({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{position.title ?? 'Polymarket position'}</p>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        {position.outcome ?? '—'} · {formatUsd(position.currentValue)}
+                        {position.outcome ?? 'N/A'} · {formatUsd(position.currentValue)}
                       </p>
                     </div>
                     <div className="text-right">

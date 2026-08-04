@@ -4,6 +4,7 @@ import {
   okxMarketplaceServices,
   okxMarketplaceServiceUrl,
   okxTradingAgentService,
+  okxTradingTaskService,
 } from '../lib/okxMarketplaceServices'
 
 type CampaignResponse = {
@@ -66,6 +67,11 @@ const missionSteps = [
 function dateLabel(value: string | null) {
   if (!value) return 'Dates to be announced'
   return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
+}
+
+function campaignDateRange(startsAt: string | null, endsAt: string | null) {
+  if (!startsAt && !endsAt) return 'Dates to be announced'
+  return `${dateLabel(startsAt)} to ${dateLabel(endsAt)}`
 }
 
 export default function OkxRewards() {
@@ -139,14 +145,18 @@ export default function OkxRewards() {
             </p>
           </div>
           <dl className="border-l-2 border-gray-950 pl-4 dark:border-white">
-            <dt className="text-xs font-medium text-gray-400">Trading membership</dt>
-            <dd className="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{okxTradingAgentService.subscriptionUsdtMonthly} USDT / month</dd>
-            <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">{okxTradingAgentService.freeTrialDays}-day free trial</dd>
+            <dt className="text-xs font-medium text-gray-400">Governed trading</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{okxTradingTaskService.priceUsdt} USDT / task</dd>
+            <dd className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">or {okxTradingAgentService.subscriptionUsdtMonthly} USDT / month</dd>
+            <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">{okxTradingAgentService.freeTrialDays}-day membership trial</dd>
           </dl>
         </div>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <a href={okxMarketplaceServiceUrl(okxTradingTaskService)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gray-950 px-5 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950">
+            Buy one trading task <ArrowRight className="h-4 w-4" />
+          </a>
           <a href={okxMarketplaceServiceUrl(okxTradingAgentService)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gray-950 px-5 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950">
-            Start a trading mission <ArrowRight className="h-4 w-4" />
+            Start membership <ArrowRight className="h-4 w-4" />
           </a>
           <a href="#how-it-works" className="inline-flex h-11 items-center justify-center rounded-full border border-gray-300 px-5 text-sm font-semibold text-gray-700 transition hover:border-gray-400 dark:border-white/15 dark:text-gray-200">
             How it works
@@ -205,7 +215,7 @@ export default function OkxRewards() {
               PolyDesk has reserved 50 USDT0: 1 USDT0 for each of the first 50 unique wallets with a verified, delivered direct API call on X Layer. A2A rewards open only after the full trade and PnL proof is verified.
             </p>
             <p className="mt-3 text-xs font-medium text-gray-400">
-              {paidRewards} of {rewardLimit} paid · {dateLabel(campaignInfo?.startsAt ?? null)} – {dateLabel(campaignInfo?.endsAt ?? null)}
+              {paidRewards} of {rewardLimit} paid · {campaignDateRange(campaignInfo?.startsAt ?? null, campaignInfo?.endsAt ?? null)}
             </p>
           </div>
           <span className={`inline-flex w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${directRewardsActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-white/[0.06] dark:text-gray-300'}`}>

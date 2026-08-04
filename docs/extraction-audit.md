@@ -2,9 +2,9 @@
 
 Date: 2026-07-08
 
-Source repo: `C:\Users\USER\Desktop\polymarket-lp-sentinel\hashkey-paylink`
+Source repo: `<path-to-hash-paylink>`
 
-Target repo: `C:\Users\USER\Desktop\polydesk`
+Target repo: `<path-to-polydesk>`
 
 ## Known-Good Source Commits
 

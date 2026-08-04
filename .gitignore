@@ -7,3 +7,6 @@ data/
 .DS_Store
 *.log
 *.tsbuildinfo
+.playwright-cli/
+output/
+demo-assets/*.mp4

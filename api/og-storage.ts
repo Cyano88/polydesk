@@ -1,11 +1,11 @@
 /**
- * 0G Storage — fire-and-forget archive layer for Hash PayLink payment records.
+ * 0G Storage provides a fire-and-forget archive layer for Hash PayLink payment records.
  *
  * Every confirmed payment in multi-payer collection mode is uploaded as a JSON
  * blob to 0G decentralized storage. The root hash (content address) is then
  * anchored on-chain via PayLinkArchive.sol deployed on 0G mainnet (chain 16661).
  *
- * This is intentionally non-blocking — if 0G upload fails the payment record
+ * This is intentionally non-blocking. If 0G upload fails, the payment record
  * is still captured in the server registry. 0G is the permanent archive layer,
  * not the primary store.
  *
@@ -141,12 +141,12 @@ async function retryArchiveStep<T>(label: string, work: () => Promise<T>, attemp
 /**
  * Upload a payment record to 0G Storage and anchor the root hash on-chain.
  * Returns { rootHash, ogTxHash } on success, null on any failure.
- * Never throws — all errors are caught and logged.
+ * Never throws. All errors are caught and logged.
  */
 async function archivePaymentUnlocked(entry: ArchiveRecord): Promise<ArchiveOutcome> {
   const signer = getSigner()
   if (!signer) {
-    console.warn('[0g] OG_STORAGE_KEY not set — skipping archive')
+    console.warn('[0g] OG_STORAGE_KEY not set. Skipping archive.')
     return archiveFailure('config', 'OG_STORAGE_KEY not set', false)
   }
 
@@ -179,12 +179,12 @@ async function archivePaymentUnlocked(entry: ArchiveRecord): Promise<ArchiveOutc
       console.error('[0g] upload error:', uploadErr)
       return archiveFailure('upload', uploadErr)
     }
-    console.log(`[0g] uploaded payment record — rootHash: ${rootHash}`)
+    console.log(`[0g] uploaded payment record. rootHash: ${rootHash}`)
 
     // 3. Anchor root hash on-chain via PayLinkArchive contract
     const archiveAddr = process.env.OG_ARCHIVE_ADDRESS
     if (!archiveAddr || !ethers.isAddress(archiveAddr)) {
-      console.warn('[0g] OG_ARCHIVE_ADDRESS not set — skipping on-chain anchor')
+      console.warn('[0g] OG_ARCHIVE_ADDRESS not set. Skipping on-chain anchor.')
       return archiveFailure('config', 'OG_ARCHIVE_ADDRESS not set or invalid', false)
     }
 
@@ -203,7 +203,7 @@ async function archivePaymentUnlocked(entry: ArchiveRecord): Promise<ArchiveOutc
         '0G archive transaction',
       ))
       await retryArchiveStep('anchor confirmation', () => withTimeout(tx.wait(), OG_ANCHOR_TIMEOUT_MS, '0G archive confirmation'))
-      console.log(`[0g] anchored on-chain — tx: ${tx.hash}`)
+      console.log(`[0g] anchored on-chain. tx: ${tx.hash}`)
       return { ok: true, result: { rootHash, ogTxHash: tx.hash as string } }
     } catch (anchorErr) {
       console.warn('[0g] on-chain anchor failed:', errorText(anchorErr))
