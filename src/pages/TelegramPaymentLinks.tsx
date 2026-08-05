@@ -6597,6 +6597,7 @@ type PolymarketPosition = {
 }
 
 function formatUsd(value: unknown, fallback = 'N/A') {
+  if (value === null || value === undefined || value === '') return fallback
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return fallback
   if (Math.abs(n) >= 10_000) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -6799,7 +6800,11 @@ export async function polyDeskCreateOwnerApiKey(
   debug?: { providerChainId?: string; ownerAddress?: string; funderAddress?: string },
 ) {
   async function serverTime() {
-    const response = await fetch('https://clob.polymarket.com/time', { cache: 'no-store' }).catch(() => null)
+    const response = await polyDeskTimedRequest(
+      fetch('https://clob.polymarket.com/time', { cache: 'no-store' }),
+      'Polymarket server time',
+      5000,
+    ).catch(() => null)
     if (!response?.ok) return undefined
     const data = await response.json().catch(() => null) as unknown
     const value = typeof data === 'number'
@@ -6812,10 +6817,12 @@ export async function polyDeskCreateOwnerApiKey(
   const authTimestamp = await serverTime()
   async function authRequest(method: 'POST' | 'GET', path: '/auth/api-key' | '/auth/derive-api-key') {
     const l1Headers = await createL1Headers(walletClient, 137, undefined, authTimestamp)
-    const response = await fetch(`https://clob.polymarket.com${path}`, {
-      method,
-      headers: polyDeskStringRecord(l1Headers),
-    })
+    const response = await polyDeskTimedRequest(
+      fetch(`https://clob.polymarket.com${path}`, { method, headers: polyDeskStringRecord(l1Headers) }),
+      'Polymarket authorization',
+      10000,
+    ).catch(() => null)
+    if (!response) return { error: 'Polymarket authorization timed out.', status: 0, path }
     const data = await response.json().catch(() => ({}))
     const creds = polyDeskNormalizeClobCreds(data)
     if (response.ok && creds) return creds
@@ -6994,6 +7001,16 @@ export async function submitPolymarketOrderFromBrowser({
     throw new Error(polyDeskResponseError(data, fallbackMessage))
   }
   return data
+}
+
+function polyDeskTimedRequest<T>(promise: Promise<T>, label: string, timeoutMs = 12000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out.`)), timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer)
+  })
 }
 
 export function PolyPortfolioPanel({
@@ -7284,11 +7301,11 @@ export function PolyPortfolioPanel({
         chain: polygon,
         transport: custom(provider),
       })
-      const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
+      const credentials = await polyDeskTimedRequest(polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
         providerChainId: await polyDeskProviderChainId(provider),
         ownerAddress: activeOwner,
         funderAddress: polymarketDepositWallet,
-      })
+      }), 'Polymarket wallet authorization', 25000)
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
       const client = new ClobClient({
         host: 'https://clob.polymarket.com',
@@ -7300,20 +7317,29 @@ export function PolyPortfolioPanel({
       })
       const date = new Date().toISOString().slice(0, 10)
       const orderIds = openLpOrders.map(order => order.orderId).filter(Boolean)
-      const [userMarkets, currentMarkets, percentages, scoring] = await Promise.all([
-        client.getUserEarningsAndMarketsConfig(date),
-        client.getCurrentRewards(),
-        client.getRewardPercentages(),
-        client.areOrdersScoring({ orderIds }),
+      const rewardResults = await Promise.allSettled([
+        polyDeskTimedRequest(client.getUserEarningsAndMarketsConfig(date), 'Reward earnings'),
+        polyDeskTimedRequest(client.getCurrentRewards(), 'Reward markets'),
+        polyDeskTimedRequest(client.getRewardPercentages(), 'Reward percentages'),
+        polyDeskTimedRequest(client.areOrdersScoring({ orderIds }), 'Order scoring'),
       ])
-      setLpRewardSnapshots(buildPolymarketLpRewardSnapshots({
+      const userMarkets = rewardResults[0].status === 'fulfilled' ? rewardResults[0].value : []
+      const currentMarkets = rewardResults[1].status === 'fulfilled' ? rewardResults[1].value : []
+      const percentages = rewardResults[2].status === 'fulfilled' ? rewardResults[2].value : {}
+      const scoring = rewardResults[3].status === 'fulfilled' ? rewardResults[3].value : {}
+      const failedRequests = rewardResults.filter(result => result.status === 'rejected').length
+      if (failedRequests === rewardResults.length) throw new Error('Polymarket reward data did not respond. Please retry.')
+      const snapshots = buildPolymarketLpRewardSnapshots({
         orders: openLpOrders,
         userMarkets,
         currentMarkets,
         percentages,
         scoring,
-      }))
+      })
+      setLpRewardSnapshots(snapshots)
       setLpRewardsLoaded(true)
+      if (Object.keys(snapshots).length === 0) setLpRewardsNotice('Polymarket returned no reward record for this open quote yet.')
+      else if (failedRequests > 0) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
     } catch (error) {
       setLpRewardsNotice(error instanceof Error ? error.message : 'Reward earnings are temporarily unavailable.')
     } finally {
@@ -7347,11 +7373,11 @@ export function PolyPortfolioPanel({
         import('viem/chains'),
       ])
       const walletClient = createWalletClient({ account: activeOwner as `0x${string}`, chain: polygon, transport: custom(provider) })
-      const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
+      const credentials = await polyDeskTimedRequest(polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
         providerChainId: await polyDeskProviderChainId(provider),
         ownerAddress: activeOwner,
         funderAddress: polymarketDepositWallet,
-      })
+      }), 'Polymarket wallet authorization', 25000)
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
       const client = new ClobClient({
         host: 'https://clob.polymarket.com', chain: 137, signer: walletClient, creds: credentials,

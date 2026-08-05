@@ -8,7 +8,7 @@ export type PolymarketLpRewardSnapshot = {
   conditionId: string
   scoring: boolean | null
   earningPercentage: number | null
-  earnedTodayUsdc: number
+  earnedTodayUsdc: number | null
   estimatedDailyUsdc: number | null
 }
 
@@ -46,7 +46,7 @@ function rewardAssetRates(value: unknown) {
 
 function earnedTodayUsdc(value: unknown) {
   const earnings = record(value)?.earnings
-  if (!Array.isArray(earnings)) return 0
+  if (!Array.isArray(earnings)) return null
   return earnings.reduce((total, item) => {
     const row = record(item)
     const earningsValue = finiteNumber(row?.earnings)

@@ -311,6 +311,19 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.equal(snapshots['order-1'].earnedTodayUsdc, 0.25)
   assert.equal(snapshots['order-1'].estimatedDailyUsdc, 2.6)
   assert.equal(snapshots['order-1'].scoring, true)
+  const partial = buildPolymarketLpRewardSnapshots({
+    orders: [{ orderId: 'order-1', assetId: '123' }],
+    userMarkets: [],
+    currentMarkets: [{ condition_id: '0xmarket', tokens: [{ token_id: '123' }], rewards_config: [{ rate_per_day: 130 }] }],
+    percentages: { '0xmarket': 2 },
+    scoring: {},
+  })
+  assert.equal(partial['order-1'].earnedTodayUsdc, null)
+  assert.equal(partial['order-1'].estimatedDailyUsdc, 2.6)
+  assert.match(paymentLinks, /timeoutMs = 12000/)
+  assert.match(paymentLinks, /Promise\.allSettled/)
+  assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
+  assert.match(paymentLinks, /value === null \|\| value === undefined \|\| value === ''/)
   assert.match(paymentLinks, /Cancel quote/)
   assert.match(paymentLinks, /Close position/)
   assert.match(paymentLinks, /Remove the unmatched quote\?/)
