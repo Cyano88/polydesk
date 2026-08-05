@@ -325,6 +325,8 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.equal(calculatePolymarketLpNetResult({ rewardsToday: null, makerRebatesToday: 0.1, positionPnl: 0 }), null)
   assert.match(paymentLinks, /timeoutMs = 12000/)
   assert.match(paymentLinks, /Promise\.allSettled/)
+  assert.match(paymentLinks, /client\.getOrder\(order\.orderId\)/)
+  assert.match(paymentLinks, /resolvedTrackedLpOrders/)
   assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
   assert.match(paymentLinks, /value === null \|\| value === undefined \|\| value === ''/)
   assert.match(paymentLinks, /Cancel quote/)

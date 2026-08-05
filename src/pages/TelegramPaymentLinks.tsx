@@ -7351,22 +7351,35 @@ export function PolyPortfolioPanel({
         if (!response.ok || !data.ok) throw new Error(data.error || 'Maker rebates are temporarily unavailable.')
         return data.rebates ?? []
       })()
+      const orderMarketRequest = Promise.all(trackedLpOrders.map(async order => {
+        if (order.marketId) return { orderId: order.orderId, marketId: order.marketId, assetId: order.assetId }
+        const remote = await polyDeskTimedRequest(client.getOrder(order.orderId), 'LP order market', 8000).catch(() => null)
+        return {
+          orderId: order.orderId,
+          marketId: remote?.market ?? null,
+          assetId: remote?.asset_id ?? order.assetId,
+        }
+      }))
       const rewardResults = await Promise.allSettled([
         polyDeskTimedRequest(client.getUserEarningsAndMarketsConfig(date), 'Reward earnings'),
         polyDeskTimedRequest(client.getCurrentRewards(), 'Reward markets'),
         polyDeskTimedRequest(client.getRewardPercentages(), 'Reward percentages'),
         orderIds.length > 0 ? polyDeskTimedRequest(client.areOrdersScoring({ orderIds }), 'Order scoring') : Promise.resolve({}),
         polyDeskTimedRequest(rebateRequest, 'Maker rebates'),
+        orderMarketRequest,
       ])
       const userMarkets = rewardResults[0].status === 'fulfilled' ? rewardResults[0].value : []
       const currentMarkets = rewardResults[1].status === 'fulfilled' ? rewardResults[1].value : []
       const percentages = rewardResults[2].status === 'fulfilled' ? rewardResults[2].value : {}
       const scoring = rewardResults[3].status === 'fulfilled' ? rewardResults[3].value : {}
       const rebates = rewardResults[4].status === 'fulfilled' ? rewardResults[4].value : null
-      const failedRequests = rewardResults.filter(result => result.status === 'rejected').length
-      if (failedRequests === rewardResults.length) throw new Error('Polymarket reward data did not respond. Please retry.')
+      const orderMarkets = rewardResults[5].status === 'fulfilled' ? rewardResults[5].value : []
+      const failedRequests = rewardResults.slice(0, 5).filter(result => result.status === 'rejected').length
+      if (failedRequests === 5) throw new Error('Polymarket reward data did not respond. Please retry.')
+      const orderMarketById = new Map(orderMarkets.map(order => [order.orderId, order] as const))
+      const resolvedTrackedLpOrders = trackedLpOrders.map(order => ({ ...order, ...orderMarketById.get(order.orderId) }))
       const snapshots = buildPolymarketLpRewardSnapshots({
-        orders: trackedLpOrders,
+        orders: resolvedTrackedLpOrders,
         userMarkets,
         currentMarkets,
         percentages,
