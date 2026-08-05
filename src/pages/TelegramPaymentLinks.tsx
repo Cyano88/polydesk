@@ -44,6 +44,7 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
+import { buildPolymarketLpRewardSnapshots, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import {
@@ -6557,6 +6558,7 @@ type PolymarketPortfolioBundle = {
   lpOrders?: Array<{
     orderId: string
     assetId?: string | null
+    marketId?: string | null
     marketTitle: string
     marketUrl: string
     outcome: string | null
@@ -7132,6 +7134,12 @@ export function PolyPortfolioPanel({
   const [tradingWalletNetwork, setTradingWalletNetwork] = useState<PolymarketBridgeNetwork>('base')
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
   const [positionStatusTab, setPositionStatusTab] = useState<'orders' | PolymarketPositionStatus>('orders')
+  const [lpRewardSnapshots, setLpRewardSnapshots] = useState<Record<string, PolymarketLpRewardSnapshot>>({})
+  const [lpRewardsLoading, setLpRewardsLoading] = useState(false)
+  const [lpRewardsLoaded, setLpRewardsLoaded] = useState(false)
+  const [lpRewardsNotice, setLpRewardsNotice] = useState('')
+  const [lpOrderCancelBusy, setLpOrderCancelBusy] = useState('')
+  const [pendingLpOrderCancel, setPendingLpOrderCancel] = useState<NonNullable<PolymarketPortfolioBundle['lpOrders']>[number] | null>(null)
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
   function selectTradingTab(tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') {
@@ -7245,6 +7253,137 @@ export function PolyPortfolioPanel({
     () => (bundle?.lpOrders ?? []).filter(order => order.status === 'live' || order.status === 'partial'),
     [bundle?.lpOrders],
   )
+
+  async function loadLpRewardEarnings() {
+    if (lpRewardsLoading || openLpOrders.length === 0) return
+    if (!savedTradingAddress || !polymarketDepositWallet) {
+      setLpRewardsNotice('Activate the Polymarket wallet before loading reward earnings.')
+      return
+    }
+    const ownerWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
+      ?? privyWallets.find(wallet => wallet.address?.toLowerCase() === signingWalletAddress.toLowerCase())
+    if (!ownerWallet || typeof ownerWallet.getEthereumProvider !== 'function') {
+      setLpRewardsNotice('Connect the owner wallet to load reward earnings.')
+      return
+    }
+
+    setLpRewardsLoading(true)
+    setLpRewardsNotice('')
+    try {
+      if (typeof ownerWallet.switchChain === 'function') await ownerWallet.switchChain(137)
+      const provider = await ownerWallet.getEthereumProvider()
+      await polyDeskEnsurePolygonProvider(provider)
+      const activeOwner = await polyDeskProviderAccount(provider)
+      const [{ ClobClient, SignatureTypeV2, createL1Headers }, { createWalletClient, custom }, { polygon }] = await Promise.all([
+        import('@polymarket/clob-client-v2'),
+        import('viem'),
+        import('viem/chains'),
+      ])
+      const walletClient = createWalletClient({
+        account: activeOwner as `0x${string}`,
+        chain: polygon,
+        transport: custom(provider),
+      })
+      const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
+        providerChainId: await polyDeskProviderChainId(provider),
+        ownerAddress: activeOwner,
+        funderAddress: polymarketDepositWallet,
+      })
+      if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
+      const client = new ClobClient({
+        host: 'https://clob.polymarket.com',
+        chain: 137,
+        signer: walletClient,
+        creds: credentials,
+        signatureType: SignatureTypeV2.POLY_1271,
+        funderAddress: polymarketDepositWallet,
+      })
+      const date = new Date().toISOString().slice(0, 10)
+      const orderIds = openLpOrders.map(order => order.orderId).filter(Boolean)
+      const [userMarkets, currentMarkets, percentages, scoring] = await Promise.all([
+        client.getUserEarningsAndMarketsConfig(date),
+        client.getCurrentRewards(),
+        client.getRewardPercentages(),
+        client.areOrdersScoring({ orderIds }),
+      ])
+      setLpRewardSnapshots(buildPolymarketLpRewardSnapshots({
+        orders: openLpOrders,
+        userMarkets,
+        currentMarkets,
+        percentages,
+        scoring,
+      }))
+      setLpRewardsLoaded(true)
+    } catch (error) {
+      setLpRewardsNotice(error instanceof Error ? error.message : 'Reward earnings are temporarily unavailable.')
+    } finally {
+      setLpRewardsLoading(false)
+    }
+  }
+
+  async function cancelPortfolioLpOrder(order: NonNullable<PolymarketPortfolioBundle['lpOrders']>[number]) {
+    if (lpOrderCancelBusy) return
+    if (!savedTradingAddress || !polymarketDepositWallet) {
+      setLpRewardsNotice('Activate the Polymarket wallet before cancelling this quote.')
+      return
+    }
+    const ownerWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
+      ?? privyWallets.find(wallet => wallet.address?.toLowerCase() === signingWalletAddress.toLowerCase())
+    if (!ownerWallet || typeof ownerWallet.getEthereumProvider !== 'function') {
+      setLpRewardsNotice('Connect the owner wallet to cancel this quote.')
+      return
+    }
+
+    setLpOrderCancelBusy(order.orderId)
+    setLpRewardsNotice('')
+    try {
+      if (typeof ownerWallet.switchChain === 'function') await ownerWallet.switchChain(137)
+      const provider = await ownerWallet.getEthereumProvider()
+      await polyDeskEnsurePolygonProvider(provider)
+      const activeOwner = await polyDeskProviderAccount(provider)
+      const [{ ClobClient, SignatureTypeV2, createL1Headers }, { createWalletClient, custom }, { polygon }] = await Promise.all([
+        import('@polymarket/clob-client-v2'),
+        import('viem'),
+        import('viem/chains'),
+      ])
+      const walletClient = createWalletClient({ account: activeOwner as `0x${string}`, chain: polygon, transport: custom(provider) })
+      const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
+        providerChainId: await polyDeskProviderChainId(provider),
+        ownerAddress: activeOwner,
+        funderAddress: polymarketDepositWallet,
+      })
+      if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
+      const client = new ClobClient({
+        host: 'https://clob.polymarket.com', chain: 137, signer: walletClient, creds: credentials,
+        signatureType: SignatureTypeV2.POLY_1271, funderAddress: polymarketDepositWallet,
+      })
+      const result = await client.cancelOrder({ orderID: order.orderId }) as { canceled?: string[]; not_canceled?: Record<string, string>; error?: string }
+      if (!result.canceled?.includes(order.orderId)) {
+        throw new Error(result.error || Object.values(result.not_canceled ?? {})[0] || 'Polymarket did not confirm cancellation.')
+      }
+      const token = await getAccessToken()
+      let portfolioSynced = false
+      if (token) {
+        const syncResponse = await fetch('/api/polymarket-portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'mark-lp-order-cancelled', orderId: order.orderId }),
+        }).catch(() => null)
+        portfolioSynced = Boolean(syncResponse?.ok)
+      }
+      setLpRewardSnapshots(current => Object.fromEntries(Object.entries(current).filter(([orderId]) => orderId !== order.orderId)))
+      setBundle(current => current ? { ...current, lpOrders: (current.lpOrders ?? []).filter(item => item.orderId !== order.orderId) } : current)
+      setLpRewardsNotice(portfolioSynced
+        ? 'Quote cancelled. Any shares already matched remain in Live positions until you close them.'
+        : 'Quote cancelled on Polymarket. Portfolio history will resync automatically.')
+      if (portfolioSynced) await fetchBundle()
+      if (tradingPortfolioAddress) await fetchLiveData(tradingPortfolioAddress)
+    } catch (error) {
+      setLpRewardsNotice(error instanceof Error ? error.message : 'The quote could not be cancelled.')
+    } finally {
+      setLpOrderCancelBusy('')
+    }
+  }
 
   const positionsByStatus = useMemo(
     () => positionStatusTab === 'orders'
@@ -9732,14 +9871,22 @@ export function PolyPortfolioPanel({
                 </button>
               ))}
             </div>
+            {positionStatusTab === 'orders' && lpRewardsNotice && (
+              <p className={cn('mt-3 rounded-xl px-3 py-2 text-xs font-medium', lpRewardsNotice.startsWith('Quote cancelled') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
+                {lpRewardsNotice}
+              </p>
+            )}
             {positionStatusTab === 'orders' ? (
               openLpOrders.length === 0 ? (
                 <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No open LP orders.</p>
               ) : (
                 <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(156,163,175,0.35)_transparent]">
+                  <button type='button' onClick={() => void loadLpRewardEarnings()} disabled={lpRewardsLoading || Boolean(lpOrderCancelBusy)} className='rounded-lg border px-2 py-1 text-xs font-semibold'>
+                    {lpRewardsLoading ? 'Loading...' : lpRewardsLoaded ? 'Refresh earnings' : 'Show earnings'}
+                  </button>
                   {openLpOrders.slice(0, 8).map(order => (
-                    <a
-                      key={order.orderId}
+                    <div key={order.orderId}>
+                      <a
                       href={order.marketUrl}
                       target="_blank"
                       rel="noreferrer"
@@ -9756,7 +9903,26 @@ export function PolyPortfolioPanel({
                           {order.status === 'partial' ? 'Partial' : 'Open'}
                         </span>
                       </div>
-                    </a>
+                      {lpRewardSnapshots[order.orderId] && (
+                        <>
+                        <p className='mt-1 text-xs text-emerald-700'>
+                          Earned today {formatUsd(lpRewardSnapshots[order.orderId].earnedTodayUsdc)} · Est. {formatUsd(lpRewardSnapshots[order.orderId].estimatedDailyUsdc)}/day
+                        </p>
+                        <p className='mt-0.5 text-[10px] font-medium text-gray-500'>
+                          {lpRewardSnapshots[order.orderId].scoring === true ? 'Scoring now' : lpRewardSnapshots[order.orderId].scoring === false ? 'Not scoring' : 'Scoring unavailable'} · {lpRewardSnapshots[order.orderId].earningPercentage === null ? 'Reward share unavailable' : `${lpRewardSnapshots[order.orderId].earningPercentage.toFixed(2)}% reward share`}
+                        </p>
+                        </>
+                      )}
+                      </a>
+                      <button
+                      type='button'
+                      onClick={() => setPendingLpOrderCancel(order)}
+                      disabled={Boolean(lpOrderCancelBusy)}
+                      className='polydesk-primary-cta polydesk-primary-cta--compact mt-1'
+                    >
+                      {lpOrderCancelBusy === order.orderId ? 'Cancelling...' : 'Cancel quote'}
+                      </button>
+                    </div>
                   ))}
                 </div>
               )
@@ -9811,7 +9977,7 @@ export function PolyPortfolioPanel({
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300 dark:hover:border-white/20 dark:hover:text-white"
                           >
                             {sellBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                            Sell
+                            Close position
                           </button>
                         )}
                         {claimable && (
@@ -10110,6 +10276,35 @@ export function PolyPortfolioPanel({
           </ul>
         )}
       </div>
+      )}
+      {pendingLpOrderCancel && (
+        <div role='dialog' aria-modal='true' aria-labelledby='cancel-lp-order-title' className='fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center'>
+          <div className='w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#111216]'>
+            <p className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>Cancel LP quote</p>
+            <h3 id='cancel-lp-order-title' className='mt-2 text-base font-semibold tracking-tight text-gray-950 dark:text-white'>Remove the unmatched quote?</h3>
+            <div className='mt-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]'>
+              <p className='line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white'>{pendingLpOrderCancel.marketTitle}</p>
+              <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+                {pendingLpOrderCancel.outcome || 'LP order'} · {Math.max(0, Number(pendingLpOrderCancel.originalSize || 0) - Number(pendingLpOrderCancel.matchedSize || 0)).toLocaleString()} unmatched shares
+              </p>
+            </div>
+            <p className='mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400'>Cancelling removes only the unmatched remainder. Shares already matched stay under Live positions until you close them.</p>
+            <div className='mt-4 grid grid-cols-2 gap-2'>
+              <button type='button' onClick={() => setPendingLpOrderCancel(null)} className='min-h-[42px] rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:text-gray-200'>Keep quote</button>
+              <button
+                type='button'
+                onClick={() => {
+                  const order = pendingLpOrderCancel
+                  setPendingLpOrderCancel(null)
+                  void cancelPortfolioLpOrder(order)
+                }}
+                className='polydesk-primary-cta w-full'
+              >
+                Cancel quote
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {pendingSellPosition && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center">

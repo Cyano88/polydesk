@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { buildPolymarketLpRewardSnapshots } from '../src/lib/polymarketRewards'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -291,6 +292,32 @@ test('market reward ticket separates instant buying, two-sided quotes, scoring, 
   assert.match(builderHandoff, /source === 'lp-scout-limit' \|\| source === 'lp-scout-buy'/)
   assert.match(builderHandoff, /source === 'watch-position-limit' \|\| source === 'watch-position-buy'/)
   assert.doesNotMatch(limitOrderTicket, /Starting LP order monitoring|Set up portfolio monitoring from Overview/)
+})
+
+test('portfolio LP rewards use official share and daily pool data', () => {
+  const snapshots = buildPolymarketLpRewardSnapshots({
+    orders: [{ orderId: 'order-1', assetId: '123' }],
+    userMarkets: [{
+      condition_id: '0xmarket',
+      tokens: [{ token_id: '123' }],
+      earning_percentage: 2,
+      rewards_config: [{ rate_per_day: 130, asset_address: 'usdc' }],
+      earnings: [{ earnings: 0.25, asset_address: 'usdc', asset_rate: 1 }],
+    }],
+    currentMarkets: [],
+    percentages: {},
+    scoring: { 'order-1': true },
+  })
+  assert.equal(snapshots['order-1'].earnedTodayUsdc, 0.25)
+  assert.equal(snapshots['order-1'].estimatedDailyUsdc, 2.6)
+  assert.equal(snapshots['order-1'].scoring, true)
+  assert.match(paymentLinks, /Cancel quote/)
+  assert.match(paymentLinks, /Close position/)
+  assert.match(paymentLinks, /Remove the unmatched quote\?/)
+  assert.match(paymentLinks, /Shares already matched stay under Live positions/)
+  assert.match(paymentLinks, /Scoring now/)
+  assert.match(paymentLinks, /reward share/)
+  assert.doesNotMatch(paymentLinks, /window\.confirm/)
 })
 
 test('public LP opportunities use a stable share route and truthful Polymarket-style ticket', () => {
