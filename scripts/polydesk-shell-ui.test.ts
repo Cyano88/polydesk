@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { buildPolymarketLpRewardSnapshots } from '../src/lib/polymarketRewards'
+import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult } from '../src/lib/polymarketRewards'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -320,6 +320,9 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   })
   assert.equal(partial['order-1'].earnedTodayUsdc, null)
   assert.equal(partial['order-1'].estimatedDailyUsdc, 2.6)
+  assert.equal(calculatePolymarketLpNetResult({ rewardsToday: 0.25, makerRebatesToday: 0.1, positionPnl: 2.4 }), 2.75)
+  assert.equal(calculatePolymarketLpNetResult({ rewardsToday: 0.25, makerRebatesToday: 0.1, positionPnl: -1 }), -0.65)
+  assert.equal(calculatePolymarketLpNetResult({ rewardsToday: null, makerRebatesToday: 0.1, positionPnl: 0 }), null)
   assert.match(paymentLinks, /timeoutMs = 12000/)
   assert.match(paymentLinks, /Promise\.allSettled/)
   assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
@@ -330,6 +333,14 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /Shares already matched stay under Live positions/)
   assert.match(paymentLinks, /Scoring now/)
   assert.match(paymentLinks, /reward share/)
+  assert.match(paymentLinks, /Net LP result/)
+  assert.match(paymentLinks, /Today plus current LP positions/)
+  assert.match(paymentLinks, /Rewards today/)
+  assert.match(paymentLinks, /Maker rebates/)
+  assert.match(paymentLinks, /Position P&amp;L/)
+  assert.match(portfolioApi, /action === 'rebates'/)
+  assert.match(portfolioApi, /\/rebates\/current\?date=/)
+  assert.match(limitOrderTicket, /marketId: submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
 })
 

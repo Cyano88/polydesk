@@ -463,6 +463,7 @@ export function PolymarketLimitOrderTicket({
         }),
       }) as Record<string, unknown>
       const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
+      const submittedMarketId = typeof result.market === 'string' && /^0x[a-fA-F0-9]{64}$/.test(result.market) ? result.market : ''
       if (submittedOrderId && journey === 'earn-rewards') {
         setRewardQuotes(current => [
           ...current.filter(quote => quote.outcome !== outcome),
@@ -487,6 +488,7 @@ export function PolymarketLimitOrderTicket({
               action: 'register-lp-order',
               orderId: submittedOrderId,
               positionAddress: funderAddress,
+              marketId: submittedMarketId,
               assetId: plan.market.tokenId,
               marketTitle,
               marketUrl,

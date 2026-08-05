@@ -402,6 +402,22 @@ async function dataApiFetch<T>(path: string): Promise<T> {
   }
 }
 
+async function clobPublicFetch<T>(path: string): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(`${CLOB_API_ORIGIN}${path}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    })
+    const data = await response.json().catch(() => null) as unknown
+    if (!response.ok) throw new Error(`Polymarket CLOB HTTP ${response.status}`)
+    return data as T
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 type PolymarketPosition = {
   conditionId?: string
   asset?: string
@@ -1344,6 +1360,24 @@ export default async function handler(req: Request, res: Response) {
       const url = `/positions?user=${encodeURIComponent(address)}&sizeThreshold=${encodeURIComponent(sizeThreshold)}&limit=${encodeURIComponent(limit)}`
       const data = await dataApiFetch<unknown>(url)
       return res.json({ ok: true, positions: Array.isArray(data) ? data : [] })
+    }
+    if (req.method === 'GET' && action === 'rebates') {
+      const address = cleanString(req.query.address, 64)
+      if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
+      const requestedDate = cleanString(req.query.date, 10)
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10)
+      const data = await clobPublicFetch<unknown>(`/rebates/current?date=${encodeURIComponent(date)}&maker_address=${encodeURIComponent(address)}`)
+      const rebates = (Array.isArray(data) ? data : []).flatMap(item => {
+        if (!item || typeof item !== 'object') return []
+        const row = item as Record<string, unknown>
+        const amount = Number(row.rebated_fees_usdc)
+        const conditionId = cleanString(row.condition_id, 96).toLowerCase()
+        const makerAddress = cleanString(row.maker_address, 64).toLowerCase()
+        return makerAddress === address.toLowerCase() && conditionId && Number.isFinite(amount) && amount >= 0
+          ? [{ conditionId, amountUsdc: amount }]
+          : []
+      })
+      return res.json({ ok: true, date, rebates })
     }
     if (req.method === 'GET' && action === 'activity') {
       const address = cleanString(req.query.address, 64)

@@ -44,7 +44,7 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
-import { buildPolymarketLpRewardSnapshots, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
+import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import {
@@ -6604,6 +6604,13 @@ function formatUsd(value: unknown, fallback = 'N/A') {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+function formatSignedUsd(value: unknown, fallback = 'N/A') {
+  const n = numberOrNull(value)
+  if (n === null) return fallback
+  const amount = formatUsd(Math.abs(n), fallback)
+  return n > 0 ? `+${amount}` : n < 0 ? `-${amount}` : amount
+}
+
 function normalizePortfolioValue(value: unknown) {
   if (typeof value === 'number') return { value }
   if (Array.isArray(value)) {
@@ -6644,6 +6651,7 @@ function polymarketPositionKey(position: PolymarketPosition) {
 }
 
 function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
   const n = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(n) ? n : null
 }
@@ -7155,6 +7163,8 @@ export function PolyPortfolioPanel({
   const [lpRewardsLoading, setLpRewardsLoading] = useState(false)
   const [lpRewardsLoaded, setLpRewardsLoaded] = useState(false)
   const [lpRewardsNotice, setLpRewardsNotice] = useState('')
+  const [lpRewardsEarnedToday, setLpRewardsEarnedToday] = useState<number | null>(null)
+  const [lpMakerRebatesToday, setLpMakerRebatesToday] = useState<number | null>(null)
   const [lpOrderCancelBusy, setLpOrderCancelBusy] = useState('')
   const [pendingLpOrderCancel, setPendingLpOrderCancel] = useState<NonNullable<PolymarketPortfolioBundle['lpOrders']>[number] | null>(null)
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
@@ -7266,13 +7276,28 @@ export function PolyPortfolioPanel({
       .filter(order => order.assetId)
       .map(order => [String(order.assetId), order.origin ?? 'lp-scout'] as const),
   ), [bundle?.lpOrders])
+  const trackedLpOrders = useMemo(
+    () => (bundle?.lpOrders ?? []).filter(order => (order.origin ?? 'lp-scout') === 'lp-scout'),
+    [bundle?.lpOrders],
+  )
+  const lpPositions = useMemo(
+    () => livePositions.filter(position => orderOriginByAsset.get(polymarketPositionTokenId(position)) === 'lp-scout'),
+    [livePositions, orderOriginByAsset],
+  )
+  const lpPositionPnl = useMemo(() => {
+    const values = lpPositions.map(position => numberOrNull(position.cashPnl))
+    return values.some(value => value === null) ? null : values.reduce<number>((total, value) => total + (value ?? 0), 0)
+  }, [lpPositions])
+  const lpNetResult = lpRewardsLoaded && hasConfirmedTradingPositions
+    ? calculatePolymarketLpNetResult({ rewardsToday: lpRewardsEarnedToday, makerRebatesToday: lpMakerRebatesToday, positionPnl: lpPositionPnl })
+    : null
   const openLpOrders = useMemo(
     () => (bundle?.lpOrders ?? []).filter(order => order.status === 'live' || order.status === 'partial'),
     [bundle?.lpOrders],
   )
 
   async function loadLpRewardEarnings() {
-    if (lpRewardsLoading || openLpOrders.length === 0) return
+    if (lpRewardsLoading || trackedLpOrders.length === 0) return
     if (!savedTradingAddress || !polymarketDepositWallet) {
       setLpRewardsNotice('Activate the Polymarket wallet before loading reward earnings.')
       return
@@ -7285,6 +7310,9 @@ export function PolyPortfolioPanel({
     }
 
     setLpRewardsLoading(true)
+    setLpRewardsLoaded(false)
+    setLpRewardsEarnedToday(null)
+    setLpMakerRebatesToday(null)
     setLpRewardsNotice('')
     try {
       if (typeof ownerWallet.switchChain === 'function') await ownerWallet.switchChain(137)
@@ -7317,26 +7345,43 @@ export function PolyPortfolioPanel({
       })
       const date = new Date().toISOString().slice(0, 10)
       const orderIds = openLpOrders.map(order => order.orderId).filter(Boolean)
+      const rebateRequest = (async () => {
+        const response = await fetch(`/api/polymarket-portfolio?action=rebates&address=${encodeURIComponent(polymarketDepositWallet)}&date=${encodeURIComponent(date)}`)
+        const data = await readPolyDeskJson<{ ok?: boolean; rebates?: Array<{ conditionId: string; amountUsdc: number }>; error?: string }>(response, 'Maker rebates are temporarily unavailable.')
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Maker rebates are temporarily unavailable.')
+        return data.rebates ?? []
+      })()
       const rewardResults = await Promise.allSettled([
         polyDeskTimedRequest(client.getUserEarningsAndMarketsConfig(date), 'Reward earnings'),
         polyDeskTimedRequest(client.getCurrentRewards(), 'Reward markets'),
         polyDeskTimedRequest(client.getRewardPercentages(), 'Reward percentages'),
-        polyDeskTimedRequest(client.areOrdersScoring({ orderIds }), 'Order scoring'),
+        orderIds.length > 0 ? polyDeskTimedRequest(client.areOrdersScoring({ orderIds }), 'Order scoring') : Promise.resolve({}),
+        polyDeskTimedRequest(rebateRequest, 'Maker rebates'),
       ])
       const userMarkets = rewardResults[0].status === 'fulfilled' ? rewardResults[0].value : []
       const currentMarkets = rewardResults[1].status === 'fulfilled' ? rewardResults[1].value : []
       const percentages = rewardResults[2].status === 'fulfilled' ? rewardResults[2].value : {}
       const scoring = rewardResults[3].status === 'fulfilled' ? rewardResults[3].value : {}
+      const rebates = rewardResults[4].status === 'fulfilled' ? rewardResults[4].value : null
       const failedRequests = rewardResults.filter(result => result.status === 'rejected').length
       if (failedRequests === rewardResults.length) throw new Error('Polymarket reward data did not respond. Please retry.')
       const snapshots = buildPolymarketLpRewardSnapshots({
-        orders: openLpOrders,
+        orders: trackedLpOrders,
         userMarkets,
         currentMarkets,
         percentages,
         scoring,
       })
       setLpRewardSnapshots(snapshots)
+      const snapshotsByCondition = new Map(Object.values(snapshots).map(snapshot => [snapshot.conditionId, snapshot] as const))
+      setLpRewardsEarnedToday(rewardResults[0].status === 'fulfilled'
+        ? [...snapshotsByCondition.values()].reduce((total, snapshot) => total + (snapshot.earnedTodayUsdc ?? 0), 0)
+        : null)
+      setLpMakerRebatesToday(rebates === null
+        ? null
+        : rebates.length === 0 || snapshotsByCondition.size > 0
+          ? rebates.reduce((total, rebate) => snapshotsByCondition.has(rebate.conditionId.toLowerCase()) ? total + rebate.amountUsdc : total, 0)
+          : null)
       setLpRewardsLoaded(true)
       if (Object.keys(snapshots).length === 0) setLpRewardsNotice('Polymarket returned no reward record for this open quote yet.')
       else if (failedRequests > 0) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
@@ -9877,6 +9922,43 @@ export function PolyPortfolioPanel({
               <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">{livePositions.length}</p>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
+              {trackedLpOrders.length > 0 && (
+                <div className='col-span-3 mb-1 rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <div>
+                      <p className='text-[10px] font-semibold uppercase tracking-widest text-gray-400'>Net LP result</p>
+                      <p className={cn('mt-1 text-xl font-black tracking-tight', lpNetResult === null ? 'text-gray-400' : lpNetResult >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-300')}>
+                        {formatSignedUsd(lpNetResult)}
+                      </p>
+                      <p className='mt-0.5 text-[10px] text-gray-500 dark:text-gray-400'>Today plus current LP positions</p>
+                    </div>
+                    <button
+                      type='button'
+                      onClick={() => void loadLpRewardEarnings()}
+                      disabled={lpRewardsLoading || Boolean(lpOrderCancelBusy)}
+                      className='inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-[10px] font-semibold text-gray-700 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200'
+                    >
+                      <Loader2 className={cn('h-3.5 w-3.5', lpRewardsLoading && 'animate-spin')} />
+                      {lpRewardsLoading ? 'Loading' : lpRewardsLoaded ? 'Refresh' : 'Show result'}
+                    </button>
+                  </div>
+                  <div className='mt-3 grid grid-cols-3 gap-2 border-t border-gray-200 pt-2 dark:border-white/10'>
+                    <div>
+                      <p className='text-[9px] text-gray-400'>Rewards today</p>
+                      <p className='mt-0.5 text-[11px] font-bold text-gray-900 dark:text-white'>{formatSignedUsd(lpRewardsEarnedToday)}</p>
+                    </div>
+                    <div>
+                      <p className='text-[9px] text-gray-400'>Maker rebates</p>
+                      <p className='mt-0.5 text-[11px] font-bold text-gray-900 dark:text-white'>{formatSignedUsd(lpMakerRebatesToday)}</p>
+                    </div>
+                    <div>
+                      <p className='text-[9px] text-gray-400'>Position P&amp;L</p>
+                      <p className='mt-0.5 text-[11px] font-bold text-gray-900 dark:text-white'>{hasConfirmedTradingPositions ? formatSignedUsd(lpPositionPnl) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <p className='mt-2 text-[9px] leading-relaxed text-gray-400'>Position P&amp;L moves until the position is closed. Rewards and rebates are reported by Polymarket.</p>
+                </div>
+              )}
               {[
                 { key: 'orders', label: 'Open LP orders' },
                 { key: 'live', label: 'Live' },
@@ -9897,7 +9979,7 @@ export function PolyPortfolioPanel({
                 </button>
               ))}
             </div>
-            {positionStatusTab === 'orders' && lpRewardsNotice && (
+            {lpRewardsNotice && (
               <p className={cn('mt-3 rounded-xl px-3 py-2 text-xs font-medium', lpRewardsNotice.startsWith('Quote cancelled') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
                 {lpRewardsNotice}
               </p>
@@ -9907,9 +9989,6 @@ export function PolyPortfolioPanel({
                 <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No open LP orders.</p>
               ) : (
                 <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(156,163,175,0.35)_transparent]">
-                  <button type='button' onClick={() => void loadLpRewardEarnings()} disabled={lpRewardsLoading || Boolean(lpOrderCancelBusy)} className='rounded-lg border px-2 py-1 text-xs font-semibold'>
-                    {lpRewardsLoading ? 'Loading...' : lpRewardsLoaded ? 'Refresh earnings' : 'Show earnings'}
-                  </button>
                   {openLpOrders.slice(0, 8).map(order => (
                     <div key={order.orderId}>
                       <a

@@ -12,6 +12,21 @@ export type PolymarketLpRewardSnapshot = {
   estimatedDailyUsdc: number | null
 }
 
+export function calculatePolymarketLpNetResult({
+  rewardsToday,
+  makerRebatesToday,
+  positionPnl,
+}: {
+  rewardsToday: number | null
+  makerRebatesToday: number | null
+  positionPnl: number | null
+}) {
+  const values = [rewardsToday, makerRebatesToday, positionPnl]
+  return values.every(value => typeof value === 'number' && Number.isFinite(value))
+    ? values.reduce<number>((total, value) => total + Number(value), 0)
+    : null
+}
+
 type UnknownRecord = Record<string, unknown>
 
 function record(value: unknown): UnknownRecord | null {
