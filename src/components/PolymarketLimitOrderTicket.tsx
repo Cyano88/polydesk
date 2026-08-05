@@ -410,7 +410,13 @@ export function PolymarketLimitOrderTicket({
         funderAddress,
       })
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
-      const orderPayload = orderToJsonV2(signedOrder as any, credentials.key, sdkOrderType, false, journey === 'earn-rewards')
+      const orderPayload = orderToJsonV2(
+        signedOrder as any,
+        credentials.key,
+        sdkOrderType,
+        journey === 'earn-rewards',
+        false,
+      )
       const handoffResponse = await fetch('/api/polymarket-builder-handoff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

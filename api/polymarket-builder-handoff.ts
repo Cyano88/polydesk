@@ -83,10 +83,11 @@ function signedOrderValidationError(order: unknown, tokenId: string, signer: str
   return ''
 }
 
-function validOrderPayload(value: unknown, signedOrder: unknown, orderType: string) {
+function validOrderPayload(value: unknown, signedOrder: unknown, orderType: string, postOnly: boolean) {
   if (!isRecord(value) || !isRecord(signedOrder)) return false
   if (value.orderType !== orderType) return false
   if (value.deferExec !== false) return false
+  if (value.postOnly !== postOnly) return false
   if (!isRecord(value.order)) return false
   const order = value.order
   return (
@@ -100,8 +101,8 @@ function validOrderPayload(value: unknown, signedOrder: unknown, orderType: stri
 function isAllowedSourceMarket(source: string, marketUrl: string) {
   if (source === 'world-cup-moneyline') return marketUrl.startsWith('https://polymarket.com/sports/world-cup/')
   if (source === 'portfolio-position-sell') return marketUrl.startsWith('https://polymarket.com/')
-  if (source === 'lp-scout-limit') return marketUrl.startsWith('https://polymarket.com/event/')
-  if (source === 'watch-position-limit') return marketUrl.startsWith('https://polymarket.com/event/')
+  if (source === 'lp-scout-limit' || source === 'lp-scout-buy') return marketUrl.startsWith('https://polymarket.com/event/')
+  if (source === 'watch-position-limit' || source === 'watch-position-buy') return marketUrl.startsWith('https://polymarket.com/event/')
   if (source === 'governed-open') return marketUrl.startsWith('https://polymarket.com/event/')
   return false
 }
@@ -125,6 +126,7 @@ export default async function handler(req: Request, res: Response) {
   const source = cleanText(req.body?.source, 40)
   const signedOrder = req.body?.order
   const orderPayload = req.body?.orderPayload
+  const postOnly = source === 'lp-scout-limit' || source === 'watch-position-limit'
 
   if (!isAllowedSourceMarket(source, marketUrl)) {
     return res.status(400).json({ ok: false, ready: false, error: 'This Polymarket order source is not allowed.' })
@@ -139,7 +141,7 @@ export default async function handler(req: Request, res: Response) {
   if (signedOrderError) {
     return res.status(400).json({ ok: false, ready: false, error: signedOrderError })
   }
-  if (!validOrderPayload(orderPayload, signedOrder, orderType)) {
+  if (!validOrderPayload(orderPayload, signedOrder, orderType, postOnly)) {
     return res.status(400).json({ ok: false, ready: false, error: 'Polymarket order payload is missing or does not match the signed order.' })
   }
   const credentialMode = builderCredentialMode()
