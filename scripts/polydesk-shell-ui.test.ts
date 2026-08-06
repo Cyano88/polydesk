@@ -399,11 +399,15 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /reward share/)
   assert.match(paymentLinks, /Measure the quote/)
   assert.match(paymentLinks, /Hold this quote/)
-  assert.match(paymentLinks, /Test a larger quote/)
+  assert.match(paymentLinks, /Target not met/)
   assert.match(paymentLinks, /Review the filled side/)
-  assert.match(paymentLinks, /Rough capital for \$1\/day/)
+  assert.match(paymentLinks, /Approx\. capital for \$1\/day/)
+  assert.match(paymentLinks, /Shortfall/)
   assert.match(paymentLinks, /One-sided quote: reduced reward scoring may apply/)
   assert.match(paymentLinks, /Find a stronger market/)
+  assert.match(paymentLinks, /authRequest\('GET', '\/auth\/derive-api-key', true\)/)
+  assert.match(paymentLinks, /Polymarket authorization did not respond/)
+  assert.doesNotMatch(paymentLinks, /throw new Error\(`\$\{message\}\$\{suffix\}`\)/)
   assert.match(paymentLinks, /Net LP result/)
   assert.match(paymentLinks, /Today plus current LP positions/)
   assert.match(paymentLinks, /Rewards today/)
@@ -447,9 +451,28 @@ test('LP probe recommendations require stable samples and expose fill risk', () 
   assert.equal(holding.stable, true)
   assert.equal(holding.restingCapitalUsdc, 45)
   assert.equal(Number(holding.efficiencyPer100Usdc?.toFixed(2)), 2.44)
-  const increase = assessLpProbe({ orders, samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true })
+  const increase = assessLpProbe({ orders, samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true, availableCapitalUsdc: 70 })
   assert.equal(increase.recommendation, 'increase')
   assert.equal(Number(increase.roughCapitalForTargetUsdc?.toFixed(2)), 62.5)
+  assert.equal(increase.targetMet, false)
+  assert.equal(increase.capitalSufficientForTarget, true)
+  const insufficient = assessLpProbe({ orders, samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true, availableCapitalUsdc: 45.97 })
+  assert.equal(insufficient.recommendation, 'exit')
+  assert.equal(insufficient.capitalSufficientForTarget, false)
+  assert.equal(Number(insufficient.capitalShortfallUsdc?.toFixed(2)), 16.53)
+  const liveProbe = assessLpProbe({
+    orders: [
+      { outcome: 'YES', price: 0.77, originalSize: 20, matchedSize: 0, status: 'live' },
+      { outcome: 'NO', price: 0.18, originalSize: 20, matchedSize: 0, status: 'live' },
+    ],
+    samples: [sample(0.29, 0), sample(0.28, 60_000)],
+    scoring: true,
+    availableCapitalUsdc: 45.97,
+  })
+  assert.equal(liveProbe.recommendation, 'exit')
+  assert.equal(liveProbe.restingCapitalUsdc, 19)
+  assert.equal(Number(liveProbe.roughCapitalForTargetUsdc?.toFixed(2)), 67.86)
+  assert.equal(Number(liveProbe.capitalShortfallUsdc?.toFixed(2)), 21.89)
   assert.equal(assessLpProbe({ orders, samples: [sample(0.2, 0), sample(0.21, 60_000)], scoring: true }).recommendation, 'exit')
   assert.equal(assessLpProbe({ orders, samples: [], scoring: false }).recommendation, 'exit')
   const missingPrice = assessLpProbe({ orders: [{ ...orders[0], price: null }], samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true })

@@ -6795,12 +6795,13 @@ export async function polyDeskCreateOwnerApiKey(
     return typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : undefined
   }
   const authTimestamp = await serverTime()
-  async function authRequest(method: 'POST' | 'GET', path: '/auth/api-key' | '/auth/derive-api-key') {
-    const l1Headers = await createL1Headers(walletClient, 137, undefined, authTimestamp)
+  async function authRequest(method: 'POST' | 'GET', path: '/auth/api-key' | '/auth/derive-api-key', refreshTimestamp = false) {
+    const requestTimestamp = refreshTimestamp ? await serverTime() ?? authTimestamp : authTimestamp
+    const l1Headers = await createL1Headers(walletClient, 137, undefined, requestTimestamp)
     const response = await polyDeskTimedRequest(
       fetch(`https://clob.polymarket.com${path}`, { method, headers: polyDeskStringRecord(l1Headers) }),
       'Polymarket authorization',
-      10000,
+      15000,
     ).catch(() => null)
     if (!response) return { error: 'Polymarket authorization timed out.', status: 0, path }
     const data = await response.json().catch(() => ({}))
@@ -6819,11 +6820,16 @@ export async function polyDeskCreateOwnerApiKey(
 
   const created = await authRequest('POST', '/auth/api-key')
   if (polyDeskValidClobCreds(created)) return created
-  const derived = await authRequest('GET', '/auth/derive-api-key')
+  let derived = await authRequest('GET', '/auth/derive-api-key')
+  if (!polyDeskValidClobCreds(derived) && Number((derived as Record<string, unknown>).status) === 0) {
+    derived = await authRequest('GET', '/auth/derive-api-key', true)
+  }
   if (polyDeskValidClobCreds(derived)) return derived
   const createdRecord = created as Record<string, unknown>
   const derivedRecord = derived as Record<string, unknown>
-  const message = polyDeskAuthError(derived) || polyDeskAuthError(created) || 'Polymarket API authorization failed. Reconnect the owner wallet, then try again.'
+  const message = Number(derivedRecord.status) === 0
+    ? 'Polymarket authorization did not respond. Reconnect the owner wallet, then try again.'
+    : polyDeskAuthError(derived) || polyDeskAuthError(created) || 'Polymarket API authorization failed. Reconnect the owner wallet, then try again.'
   const suffix = polyDeskSubmitDebugSuffix({
     stage: 'l1-auth',
     chain: debug?.providerChainId ?? '',
@@ -6840,7 +6846,8 @@ export async function polyDeskCreateOwnerApiKey(
     l1Nonce: typeof derivedRecord.l1Nonce === 'string' ? derivedRecord.l1Nonce : typeof createdRecord.l1Nonce === 'string' ? createdRecord.l1Nonce : '',
     l1SignatureLen: typeof derivedRecord.l1SignatureLen === 'number' ? derivedRecord.l1SignatureLen : typeof createdRecord.l1SignatureLen === 'number' ? createdRecord.l1SignatureLen : '',
   })
-  throw new Error(`${message}${suffix}`)
+  console.warn('PolyDesk Polymarket authorization failed', suffix)
+  throw new Error(message)
 }
 
 function polyDeskResponseError(value: unknown, fallbackMessage: string) {
@@ -7313,7 +7320,7 @@ export function PolyPortfolioPanel({
         providerChainId: await polyDeskProviderChainId(provider),
         ownerAddress: activeOwner,
         funderAddress: polymarketDepositWallet,
-      }), 'Polymarket wallet authorization', 25000)
+      }), 'Polymarket wallet authorization', 40000)
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
       const client = new ClobClient({
         host: 'https://clob.polymarket.com',
@@ -7471,7 +7478,7 @@ export function PolyPortfolioPanel({
         providerChainId: await polyDeskProviderChainId(provider),
         ownerAddress: activeOwner,
         funderAddress: polymarketDepositWallet,
-      }), 'Polymarket wallet authorization', 25000)
+      }), 'Polymarket wallet authorization', 40000)
       if (!polyDeskValidClobCreds(credentials)) throw new Error('Polymarket API authorization failed.')
       const client = new ClobClient({
         host: 'https://clob.polymarket.com', chain: 137, signer: walletClient, creds: credentials,
@@ -10050,13 +10057,26 @@ export function PolyPortfolioPanel({
                       samples: snapshot ? lpProbeSamples[snapshot.conditionId] ?? [] : [],
                       scoring: groupScoring,
                       dailyTargetUsdc: POLYDESK_LP_DAILY_TARGET_USDC,
+                      availableCapitalUsdc: hasConfirmedTradingCash ? tradingPusdValue : null,
                     })
                     const recommendation = {
-                      measure: { label: 'Measure the quote', detail: 'Refresh after one minute to confirm that the reward estimate is stable.' },
+                      measure: {
+                        label: assessment.targetMet === false ? 'Target not met yet' : 'Measure the quote',
+                        detail: assessment.targetMet === false
+                          ? 'The current estimate is below target. Refresh after one minute to confirm it before changing the quote.'
+                          : 'Refresh after one minute to confirm that the reward estimate is stable.',
+                      },
                       hold: { label: 'Hold this quote', detail: 'The measured estimate is stable and currently meets the $1/day target.' },
-                      increase: { label: 'Test a larger quote', detail: 'The estimate is stable but below target. Review the rough capital estimate before adding funds.' },
+                      increase: { label: 'Target not met', detail: 'The stable estimate is below target, but the wallet can cover the rough capital requirement.' },
                       rebalance: { label: 'Review the filled side', detail: 'Only one side has filled. Check inventory risk before leaving or replacing the other quote.' },
-                      exit: { label: 'Find a stronger market', detail: groupScoring === false ? 'At least one quote is not scoring for rewards.' : 'The stable estimate is too far below the $1/day target.' },
+                      exit: {
+                        label: 'Target not met',
+                        detail: groupScoring === false
+                          ? 'At least one quote is not scoring for rewards.'
+                          : assessment.capitalSufficientForTarget === false
+                            ? 'The wallet balance is below the rough capital required for the $1/day target.'
+                            : 'The stable estimate is too far below the $1/day target.',
+                      },
                     }[assessment.recommendation]
                     return (
                     <div key={group.key}>
@@ -10093,9 +10113,14 @@ export function PolyPortfolioPanel({
                           <p className='mt-1 text-[10px] font-medium'>
                             Resting {formatUsd(assessment.restingCapitalUsdc)} · Efficiency {assessment.efficiencyPer100Usdc === null ? 'Pending' : `${formatUsd(assessment.efficiencyPer100Usdc)}/day per $100`}
                           </p>
-                          {assessment.recommendation === 'increase' && assessment.roughCapitalForTargetUsdc !== null && (
-                            <p className='mt-0.5 text-[10px]'>Rough capital for $1/day: {formatUsd(assessment.roughCapitalForTargetUsdc)}. Rewards are competitive, so this is not guaranteed.</p>
+                          {assessment.targetMet === false && assessment.roughCapitalForTargetUsdc !== null && (
+                            <p className='mt-0.5 text-[10px]'>
+                              Approx. capital for $1/day: {formatUsd(assessment.roughCapitalForTargetUsdc)}
+                              {assessment.availableCapitalUsdc !== null ? ` · Wallet ${formatUsd(assessment.availableCapitalUsdc)}` : ''}
+                              {assessment.capitalShortfallUsdc !== null && assessment.capitalShortfallUsdc > 0 ? ` · Shortfall ${formatUsd(assessment.capitalShortfallUsdc)}` : ''}.
+                            </p>
                           )}
+                          {assessment.targetMet === false && <p className='mt-0.5 text-[10px]'>Rewards are competitive, so the estimate is not guaranteed.</p>}
                           {!assessment.twoSided && <p className='mt-0.5 text-[10px]'>One-sided quote: reduced reward scoring may apply.</p>}
                         </div>
                         </>

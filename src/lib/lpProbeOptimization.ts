@@ -19,9 +19,15 @@ export type LpProbeAssessment = {
   stable: boolean
   twoSided: boolean
   asymmetricFill: boolean
+  estimatedDailyUsdc: number | null
+  dailyTargetUsdc: number
+  targetMet: boolean | null
   restingCapitalUsdc: number | null
   efficiencyPer100Usdc: number | null
   roughCapitalForTargetUsdc: number | null
+  availableCapitalUsdc: number | null
+  capitalShortfallUsdc: number | null
+  capitalSufficientForTarget: boolean | null
 }
 
 const ACTIVE_ORDER_STATUSES = new Set(['live', 'partial'])
@@ -36,11 +42,13 @@ export function assessLpProbe({
   samples,
   scoring,
   dailyTargetUsdc = 1,
+  availableCapitalUsdc,
 }: {
   orders: LpProbeOrder[]
   samples: LpProbeSample[]
   scoring: boolean | null
   dailyTargetUsdc?: number
+  availableCapitalUsdc?: number | null
 }): LpProbeAssessment {
   const activeOrders = orders.filter(order => ACTIVE_ORDER_STATUSES.has(String(order.status ?? '').toLowerCase()))
   const sides = new Set(activeOrders.map(order => String(order.outcome ?? '').trim().toUpperCase()).filter(Boolean))
@@ -79,12 +87,23 @@ export function assessLpProbe({
   const roughCapitalForTargetUsdc = estimatedDailyUsdc !== null && estimatedDailyUsdc > 0 && restingCapitalUsdc !== null && restingCapitalUsdc > 0
     ? restingCapitalUsdc * target / estimatedDailyUsdc
     : null
+  const availableCapital = availableCapitalUsdc !== null && availableCapitalUsdc !== undefined && Number.isFinite(Number(availableCapitalUsdc))
+    ? finiteNonNegative(availableCapitalUsdc)
+    : null
+  const targetMet = estimatedDailyUsdc === null ? null : estimatedDailyUsdc >= target
+  const capitalShortfallUsdc = roughCapitalForTargetUsdc !== null && availableCapital !== null
+    ? Math.max(0, roughCapitalForTargetUsdc - availableCapital)
+    : null
+  const capitalSufficientForTarget = roughCapitalForTargetUsdc !== null && availableCapital !== null
+    ? availableCapital >= roughCapitalForTargetUsdc
+    : null
 
   let recommendation: LpProbeRecommendation = 'measure'
   if (asymmetricFill) recommendation = 'rebalance'
   else if (scoring === false) recommendation = 'exit'
   else if (stable && estimatedDailyUsdc !== null && estimatedDailyUsdc >= target) recommendation = 'hold'
   else if (stable && restingCapitalUsdc === null) recommendation = 'measure'
+  else if (stable && capitalSufficientForTarget === false) recommendation = 'exit'
   else if (stable && estimatedDailyUsdc !== null && estimatedDailyUsdc >= target * 0.6 && restingCapitalUsdc !== null && roughCapitalForTargetUsdc !== null && roughCapitalForTargetUsdc <= restingCapitalUsdc * 2) recommendation = 'increase'
   else if (stable) recommendation = 'exit'
 
@@ -93,8 +112,14 @@ export function assessLpProbe({
     stable,
     twoSided,
     asymmetricFill,
+    estimatedDailyUsdc,
+    dailyTargetUsdc: target,
+    targetMet,
     restingCapitalUsdc,
     efficiencyPer100Usdc,
     roughCapitalForTargetUsdc,
+    availableCapitalUsdc: availableCapital,
+    capitalShortfallUsdc,
+    capitalSufficientForTarget,
   }
 }
