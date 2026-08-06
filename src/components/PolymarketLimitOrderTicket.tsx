@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { Link } from 'react-router-dom'
 import { CheckCircle2 } from './icons'
+import {
+  ceilUsdcCents,
+  lpCapitalReadiness,
+  readablePolymarketCapitalError,
+  type LpCapitalOrder,
+} from '../lib/lpCapitalReadiness'
 import {
   polyDeskCreateOwnerApiKey,
   polyDeskEnsurePolygonProvider,
@@ -44,6 +51,10 @@ type TradingProfile = {
   tradingAddress?: string
   depositWalletAddress?: string
   depositWalletStatus?: string
+}
+
+type TrackedLpOrder = LpCapitalOrder & {
+  orderId: string
 }
 
 type OpenOrder = {
@@ -137,6 +148,8 @@ export function PolymarketLimitOrderTicket({
   const { authenticated, getAccessToken } = usePrivy()
   const { wallets } = useWallets()
   const [profile, setProfile] = useState<TradingProfile | null>(null)
+  const [trackedLpOrders, setTrackedLpOrders] = useState<TrackedLpOrder[]>([])
+  const [walletBalanceUsdc, setWalletBalanceUsdc] = useState<number | null>(null)
   const [journey, setJourney] = useState<'buy-now' | 'earn-rewards'>('earn-rewards')
   const [outcome, setOutcome] = useState<'YES' | 'NO'>(initialOutcome)
   const [price, setPrice] = useState(initialOutcome === 'NO' ? cleanPrice(noQuote, tickSize) : initialPrice)
@@ -162,6 +175,8 @@ export function PolymarketLimitOrderTicket({
   useEffect(() => {
     if (!authenticated) {
       setProfile(null)
+      setTrackedLpOrders([])
+      setWalletBalanceUsdc(null)
       return
     }
     let cancelled = false
@@ -171,8 +186,31 @@ export function PolymarketLimitOrderTicket({
       const response = await fetch('/api/polymarket-portfolio?action=profile', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const body = await response.json().catch(() => ({})) as { ok?: boolean; profile?: TradingProfile }
-      if (!cancelled && response.ok && body.ok) setProfile(body.profile ?? null)
+      const body = await response.json().catch(() => ({})) as {
+        ok?: boolean
+        profile?: TradingProfile
+        lpOrders?: TrackedLpOrder[]
+      }
+      if (cancelled || !response.ok || !body.ok) return
+      const nextProfile = body.profile ?? null
+      setProfile(nextProfile)
+      setTrackedLpOrders(Array.isArray(body.lpOrders) ? body.lpOrders : [])
+      const polymarketWallet = nextProfile?.depositWalletAddress ?? ''
+      if (!/^0x[a-fA-F0-9]{40}$/.test(polymarketWallet)) {
+        setWalletBalanceUsdc(null)
+        return
+      }
+      const balanceResponse = await fetch('/api/polymarket-bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'balance', polymarketWallet }),
+      }).catch(() => null)
+      const balanceBody = await balanceResponse?.json().catch(() => null) as {
+        ok?: boolean
+        balance?: { formatted?: string }
+      } | null
+      const balance = Number(balanceBody?.balance?.formatted)
+      if (!cancelled) setWalletBalanceUsdc(balanceResponse?.ok && balanceBody?.ok && Number.isFinite(balance) ? balance : null)
     })()
     return () => { cancelled = true }
   }, [authenticated, getAccessToken])
@@ -206,6 +244,21 @@ export function PolymarketLimitOrderTicket({
   const belowRewardMinimum = journey === 'earn-rewards' && requiredRewardSpend > 0 && Number(amount) < requiredRewardSpend
   const rewardShares = Number(rewardMinShares)
   const combinedRewardSetup = Number(estimatedRewardCapitalUsdc)
+  const capitalReadiness = useMemo(() => lpCapitalReadiness({
+    balanceUsdc: walletBalanceUsdc,
+    orders: trackedLpOrders,
+    requestedUsdc: Number(amount),
+    twoSidedSetupUsdc: combinedRewardSetup,
+  }), [amount, combinedRewardSetup, trackedLpOrders, walletBalanceUsdc])
+  const fundingShortfallUsdc = capitalReadiness.orderShortfallUsdc === null
+    ? null
+    : ceilUsdcCents(capitalReadiness.orderShortfallUsdc)
+  const setupFundingShortfallUsdc = capitalReadiness.setupShortfallUsdc === null
+    ? null
+    : ceilUsdcCents(capitalReadiness.setupShortfallUsdc)
+  const insufficientAvailableCapital = authenticated
+    && fundingShortfallUsdc !== null
+    && fundingShortfallUsdc > 0
 
   const projected = useMemo(() => {
     const spend = Number(amount)
@@ -320,6 +373,12 @@ export function PolymarketLimitOrderTicket({
     }
     if (belowRewardMinimum) {
       setNotice(`Enter at least ${amountInput(requiredRewardSpend)} USDC for this ${outcome} quote to meet the market's displayed reward minimum.`)
+      return
+    }
+    if (insufficientAvailableCapital && fundingShortfallUsdc !== null) {
+      setNotice(
+        `${capitalReadiness.availableUsdc?.toFixed(2) ?? '0.00'} USDC is available after open orders. Fund ${fundingShortfallUsdc.toFixed(2)} USDC more or cancel an existing quote.`,
+      )
       return
     }
 
@@ -503,10 +562,22 @@ export function PolymarketLimitOrderTicket({
           // The order is already authoritative. Monitoring registration is
           // best-effort and must never turn a successful trade into an error.
         }
+        setTrackedLpOrders(current => [
+          ...current.filter(order => order.orderId !== submittedOrderId),
+          {
+            orderId: submittedOrderId,
+            status: 'live',
+            side: 'BUY',
+            price: plan.signingPlan.createOrder!.price,
+            originalSize: plan.signingPlan.createOrder!.size,
+            matchedSize: 0,
+          },
+        ])
       }
       setNotice('')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : journey === 'buy-now' ? 'The purchase could not be completed.' : 'The reward quote could not be placed.')
+      const message = error instanceof Error ? error.message : journey === 'buy-now' ? 'The purchase could not be completed.' : 'The reward quote could not be placed.'
+      setNotice(readablePolymarketCapitalError(message))
     } finally {
       setBusy(false)
     }
@@ -546,6 +617,7 @@ export function PolymarketLimitOrderTicket({
       }
       setRewardQuotes(current => current.filter(quote => quote.orderId !== cancelContext.orderId))
       setRewardScoring(current => Object.fromEntries(Object.entries(current).filter(([orderId]) => orderId !== cancelContext.orderId)))
+      setTrackedLpOrders(current => current.filter(order => order.orderId !== cancelContext.orderId))
       setCancelContext(null)
       setPlaced(null)
       setNotice('Reward quote cancelled.')
@@ -744,11 +816,43 @@ export function PolymarketLimitOrderTicket({
           {Number.isFinite(combinedRewardSetup) && combinedRewardSetup > 0 ? ` Estimated two-sided setup: ≈${combinedRewardSetup.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC.` : ''}
         </p>
       )}
+      {authenticated && walletBalanceUsdc !== null && journey === 'earn-rewards' && (
+        <div className={`rounded-xl px-3 py-2.5 ${insufficientAvailableCapital ? 'bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200' : 'bg-blue-50 text-blue-800 dark:bg-blue-400/10 dark:text-blue-200'}`}>
+          <p className="text-[11px] font-bold">
+            {insufficientAvailableCapital && fundingShortfallUsdc !== null
+              ? `Fund ${fundingShortfallUsdc.toFixed(2)} USDC more for this quote`
+              : 'This quote fits your available trading cash'}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] leading-4">
+            <span>Balance {capitalReadiness.balanceUsdc?.toFixed(2)} USDC</span>
+            <span>Reserved {capitalReadiness.reservedUsdc.toFixed(2)} USDC</span>
+            <span>Available {capitalReadiness.availableUsdc?.toFixed(2)} USDC</span>
+          </div>
+          {!insufficientAvailableCapital && setupFundingShortfallUsdc !== null && setupFundingShortfallUsdc > 0 && (
+            <p className="mt-0.5 text-[10px] leading-4">
+              This side fits, but the complete two-sided setup needs {setupFundingShortfallUsdc.toFixed(2)} USDC more.
+            </p>
+          )}
+          {(insufficientAvailableCapital || (setupFundingShortfallUsdc !== null && setupFundingShortfallUsdc > 0)) && (
+            <div className="mt-2 flex flex-wrap gap-3 text-[10px] font-bold">
+              <Link
+                to={`/polydesk?service=portfolio&portfolio=trading&wallet=fund&amount=${(fundingShortfallUsdc ?? setupFundingShortfallUsdc ?? 0).toFixed(2)}`}
+                className="underline underline-offset-2"
+              >
+                Fund shortfall
+              </Link>
+              {capitalReadiness.reservedUsdc > 0 && (
+                <Link to="/polydesk?service=portfolio&portfolio=trading&wallet=positions" className="underline underline-offset-2">Manage open orders</Link>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {journey === 'earn-rewards' ? <>
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10 dark:bg-white/10">
         {[
           ['Max payout', projected.payout, 'text-gray-950 dark:text-white'],
-          ['Profit if YES wins', projected.profit, 'text-emerald-600 dark:text-emerald-400'],
+          [`Profit if ${outcome} wins`, projected.profit, 'text-emerald-600 dark:text-emerald-400'],
           ['Amount at risk', projected.risk, 'text-rose-600 dark:text-rose-400'],
         ].map(([label, value, valueClass]) => (
           <div key={String(label)} className="bg-white px-3 py-3 dark:bg-[#17171b]">
@@ -764,10 +868,11 @@ export function PolymarketLimitOrderTicket({
           PolyDesk checks the live order book before signing. You may receive fewer shares if only part of your purchase is available.
         </p>
       )}
-      <button type="button" onClick={() => void placeOrder()} disabled={busy || belowRewardMinimum} className="polydesk-primary-cta w-full disabled:cursor-not-allowed disabled:opacity-50">
+      <button type="button" onClick={() => void placeOrder()} disabled={busy || belowRewardMinimum || insufficientAvailableCapital} className="polydesk-primary-cta w-full disabled:cursor-not-allowed disabled:opacity-50">
         {busy
           ? journey === 'buy-now' ? 'Checking live price' : 'Checking reward quote'
           : belowRewardMinimum ? `Minimum ${amountInput(requiredRewardSpend)} USDC`
+          : insufficientAvailableCapital && fundingShortfallUsdc !== null ? `Fund ${fundingShortfallUsdc.toFixed(2)} USDC more`
           : authenticated ? journey === 'buy-now' ? 'Review purchase' : 'Review reward quote'
           : 'Sign in to continue'}
       </button>

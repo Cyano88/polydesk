@@ -7192,6 +7192,12 @@ export function PolyPortfolioPanel({
   }, [portfolioSearchParams])
 
   useEffect(() => {
+    const requestedAmount = portfolioSearchParams.get('amount')?.trim() ?? ''
+    if (!/^\d+(?:\.\d{1,2})?$/.test(requestedAmount) || Number(requestedAmount) <= 0) return
+    setFundAmount(requestedAmount)
+  }, [portfolioSearchParams])
+
+  useEffect(() => {
     if (!POLYDESK_NAIRA_FUNDING_ENABLED && fundMethod === 'naira') {
       setFundMethod('usdc')
       setFundError('')

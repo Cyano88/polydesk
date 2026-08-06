@@ -5,7 +5,8 @@ import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polym
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polymarket-lp-recovery'
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
-import { assessLpProbe, measuredLpMarketDecision } from '../src/lib/lpProbeOptimization'
+import { assessLpProbe } from '../src/lib/lpProbeOptimization'
+import { lpCapitalReadiness, readablePolymarketCapitalError } from '../src/lib/lpCapitalReadiness'
 import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polymarket-reward-market'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
@@ -246,7 +247,7 @@ test('Pulse rotates verified liquidity intelligence without inventing provider d
   assert.doesNotMatch(pulsePage, /rounded-3xl bg-gray-950/)
   assert.match(pulseApi, /\.slice\(0, 3\)/)
   assert.match(pulseApi, /budget, dailyTarget, candidateLimit: 80, opportunityLimit: 10/)
-  assert.match(pulseApi, /filter\(fitsTargetCapital\)/)
+  assert.doesNotMatch(pulseApi, /filter\(fitsTargetCapital\)/)
   assert.match(pulseApi, /index === 0 \? 'Strongest opportunity'/)
   assert.match(pulsePage, /ordinal\(lead\.rank\)/)
   assert.match(pulsePage, /rankMedal\(index \+ 1\)/)
@@ -285,8 +286,15 @@ test('market reward ticket separates instant buying, two-sided quotes, scoring, 
   assert.match(limitOrderTicket, /Reward eligible/)
   assert.match(limitOrderTicket, /Not scoring yet/)
   assert.match(limitOrderTicket, /Max payout/)
-  assert.match(limitOrderTicket, /Profit if YES wins/)
+  assert.match(limitOrderTicket, /Profit if \$\{outcome\} wins/)
   assert.match(limitOrderTicket, /Amount at risk/)
+  assert.match(limitOrderTicket, /Reserved \{capitalReadiness\.reservedUsdc/)
+  assert.match(limitOrderTicket, /Fund shortfall/)
+  assert.match(limitOrderTicket, /Manage open orders/)
+  assert.match(limitOrderTicket, /insufficientAvailableCapital/)
+  assert.match(limitOrderTicket, /readablePolymarketCapitalError/)
+  assert.match(limitOrderTicket, /wallet=fund&amount=/)
+  assert.match(paymentLinks, /portfolioSearchParams\.get\('amount'\)/)
   assert.match(limitOrderTicket, /belowRewardMinimum/)
   assert.match(limitOrderTicket, /meet the displayed reward minimum/)
   assert.match(limitOrderTicket, /Estimated two-sided setup/)
@@ -313,6 +321,8 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.equal(feasibleTarget.minimumSetupCovered, true)
   const underfundedTarget = lpRewardTargetMetrics({ dailyPoolUsdc: 129, minimumSetupUsdc: 48.4, capitalUsdc: 45, dailyTargetUsdc: 1 })
   assert.equal(underfundedTarget.minimumSetupCovered, false)
+  const fundedTarget = lpRewardTargetMetrics({ dailyPoolUsdc: 129, minimumSetupUsdc: 48.4, capitalUsdc: 500, dailyTargetUsdc: 1 })
+  assert.equal(underfundedTarget.targetScore, fundedTarget.targetScore)
   const snapshots = buildPolymarketLpRewardSnapshots({
     orders: [{ orderId: 'order-1', assetId: '123' }],
     userMarkets: [{
@@ -486,27 +496,26 @@ test('LP probe recommendations require stable samples and expose fill risk', () 
   assert.equal(asymmetric.asymmetricFill, true)
 })
 
-test('persisted LP measurements suppress an underfunded market only while the evidence is fresh', () => {
-  const now = Date.parse('2026-08-06T12:00:00Z')
-  const samples = [
-    { estimatedDailyUsdc: 0.29, earningPercentage: 0.17, restingCapitalUsdc: 19, dailyTargetUsdc: 1, observedAt: now - 120_000 },
-    { estimatedDailyUsdc: 0.28, earningPercentage: 0.17, restingCapitalUsdc: 19, dailyTargetUsdc: 1, observedAt: now - 60_000 },
-  ]
-  const underfunded = measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 1, now })
-  assert.equal(underfunded.stable, true)
-  assert.equal(underfunded.fresh, true)
-  assert.equal(underfunded.exclude, true)
-  assert.equal(Number(underfunded.roughCapitalForTargetUsdc?.toFixed(2)), 67.86)
-  assert.equal(Number(underfunded.capitalShortfallUsdc?.toFixed(2)), 21.89)
-  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 70, dailyTargetUsdc: 1, now }).exclude, false)
-  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 0.2, now }).exclude, false)
-  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 1, now: now + 7 * 60 * 60_000 }).exclude, false)
+test('capital readiness keeps markets visible and blocks only an underfunded order', () => {
+  const readiness = lpCapitalReadiness({
+    balanceUsdc: 45.967864,
+    orders: [{ status: 'live', side: 'BUY', price: 0.536, originalSize: 50, matchedSize: 0 }],
+    requestedUsdc: 21.55,
+    twoSidedSetupUsdc: 48.35,
+  })
+  assert.equal(Number(readiness.reservedUsdc.toFixed(2)), 26.8)
+  assert.equal(Number(readiness.availableUsdc?.toFixed(6)), 19.167864)
+  assert.equal(Number(readiness.orderShortfallUsdc?.toFixed(6)), 2.382136)
+  assert.equal(readiness.canSubmitOrder, false)
+  assert.equal(
+    readablePolymarketCapitalError('not enough balance / allowance: the balance is not enough -> balance: 45967864, sum of active orders: 26800000, sum of matched orders: 0, order amount (inc. fees): 21550000'),
+    '19.17 USDC is available after open orders. This quote needs 21.55 USDC. Fund 2.39 USDC more or cancel an existing quote.',
+  )
   assert.match(portfolioApi, /action === 'record-lp-probes'/)
   assert.match(portfolioApi, /action === 'lp-probe-summary'/)
   assert.match(portfolioApi, /probe_samples jsonb/)
   assert.match(paymentLinks, /Replace quote/)
-  assert.match(pulsePage, /measuredLpMarketDecision/)
-  assert.match(pulsePage, /after six hours/)
+  assert.doesNotMatch(pulsePage, /measuredLpMarketDecision|after six hours/)
   assert.match(lpScoutApi, /conditionId: opportunity\.conditionId/)
 })
 

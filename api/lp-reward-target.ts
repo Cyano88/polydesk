@@ -27,8 +27,6 @@ export function lpRewardTargetMetrics({ dailyPoolUsdc, minimumSetupUsdc, capital
   const minimumSetupCovered = typeof capitalToMinimumRatio === 'number' ? capitalToMinimumRatio >= 1 : undefined
   const poolPerMinimumSetup = pool && setup ? pool / setup : 0
   const targetScore = Math.min(90, Math.log1p(poolPerMinimumSetup) * 24)
-    + Math.min(24, Math.max(0, capitalToMinimumRatio ?? 0) * 8)
     - Math.min(70, Math.max(0, requiredRewardSharePercentage ?? 10) * 8)
-    - (minimumSetupCovered === false ? 90 : 0)
   return { capitalUsdc, dailyTargetUsdc, requiredRewardSharePercentage, capitalToMinimumRatio, minimumSetupCovered, targetScore }
 }

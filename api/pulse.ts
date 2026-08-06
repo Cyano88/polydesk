@@ -94,10 +94,6 @@ function validOpportunity(opportunity: PulseOpportunity | undefined): opportunit
   return Boolean(opportunity?.title && opportunity?.marketUrl?.startsWith('https://polymarket.com/event/'))
 }
 
-function fitsTargetCapital(opportunity: PulseOpportunity) {
-  return opportunity.minimumSetupCovered !== false
-}
-
 function highlight(kind: PulseHighlight['kind'], rank: PulseHighlight['rank'], opportunity: PulseOpportunity, context: string, image = '', source = ''): PulseHighlight {
   return {
     id: `${kind}:${opportunityKey(opportunity)}`,
@@ -128,7 +124,6 @@ async function buildPulseFeed(budget = '', dailyTarget = ''): Promise<PulseFeed>
   const bestMarkets = bestScout
     ? opportunities(bestScout)
         .filter(validOpportunity)
-        .filter(fitsTargetCapital)
         .sort((a, b) => combinedScore(b) - combinedScore(a))
         .slice(0, 3)
     : []
@@ -153,7 +148,6 @@ async function buildPulseFeed(budget = '', dailyTarget = ''): Promise<PulseFeed>
     ...(bestScout ? opportunities(bestScout) : []),
   ]
     .filter(validOpportunity)
-    .filter(fitsTargetCapital)
     .sort((a, b) => combinedScore(b) - combinedScore(a))
     .filter(opportunity => {
       const key = opportunityKey(opportunity)
