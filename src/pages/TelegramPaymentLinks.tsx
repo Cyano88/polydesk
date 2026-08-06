@@ -33,6 +33,7 @@ import {
   Wallet,
 } from '../components/icons'
 import { cn } from '../lib/utils'
+import { recoverFromChunkLoadFailure } from '../lib/chunkRecovery'
 import { EVM_TREASURY } from '../lib/chains'
 import { trustedHashPayLinkUrl } from '../lib/hashPayLinkUrl'
 import AgentWorkspace from './AgentWorkspace'
@@ -8412,6 +8413,10 @@ export function PolyPortfolioPanel({
       })
       void fetchLiveData(tradingPortfolioAddress)
     } catch (err) {
+      if (recoverFromChunkLoadFailure(err)) {
+        setWithdrawError('PolyDesk was updated. Reloading the latest version…')
+        return
+      }
       setWithdrawError(err instanceof Error ? err.message : 'Could not withdraw from Polymarket.')
     } finally {
       setWithdrawBusy(false)

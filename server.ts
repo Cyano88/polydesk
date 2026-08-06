@@ -215,6 +215,10 @@ app.get('/runtime-config.js', (_req, res) => {
 
 app.use(express.static(join(__dirname, 'dist'), { index: false }))
 
+app.get('/assets/*', (_req, res) => {
+  res.status(404).type('text').send('Asset not found')
+})
+
 app.get('/opportunity/:slug', async (req, res) => {
   const opportunity = await getPulseOpportunity(req.params.slug).catch(() => null)
   const origin = publicEnv('PUBLIC_APP_URL', 'VITE_PUBLIC_APP_URL') || `${req.protocol}://${req.get('host')}`

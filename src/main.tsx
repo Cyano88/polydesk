@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { PolyDeskLoadingState } from './components/PolyDeskLoadState'
+import { clearChunkRecoveryMarker, recoverFromChunkLoadFailure } from './lib/chunkRecovery'
 import '@fontsource/inter/latin-400.css'
 import '@fontsource/inter/latin-500.css'
 import '@fontsource/inter/latin-600.css'
@@ -8,11 +9,6 @@ import '@fontsource/inter/latin-700.css'
 import './styles.css'
 
 const ProductApp = lazy(() => import('./ProductApp'))
-const CHUNK_RECOVERY_KEY = 'polydesk:chunk-recovery:v1'
-
-function isChunkLoadFailure(error: Error) {
-  return /Failed to fetch dynamically imported module|Importing a module script failed|ChunkLoadError/i.test(error.message)
-}
 
 class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
@@ -23,14 +19,7 @@ class AppErrorBoundary extends React.Component<{ children: ReactNode }, { error:
 
   componentDidCatch(error: Error) {
     console.error('[polydesk:error-boundary]', error)
-    if (!isChunkLoadFailure(error)) return
-    try {
-      if (window.sessionStorage.getItem(CHUNK_RECOVERY_KEY) === error.message) return
-      window.sessionStorage.setItem(CHUNK_RECOVERY_KEY, error.message)
-      window.location.reload()
-    } catch {
-      // The visible error state remains available when storage or reload is blocked.
-    }
+    recoverFromChunkLoadFailure(error)
   }
 
   render() {
@@ -65,10 +54,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-window.setTimeout(() => {
-  try {
-    window.sessionStorage.removeItem(CHUNK_RECOVERY_KEY)
-  } catch {
-    // Session storage is optional.
-  }
-}, 10_000)
+window.setTimeout(clearChunkRecoveryMarker, 10_000)
