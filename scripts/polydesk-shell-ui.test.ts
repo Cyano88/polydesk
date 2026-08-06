@@ -6,6 +6,7 @@ import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polym
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
 import { assessLpProbe } from '../src/lib/lpProbeOptimization'
+import { rankLpOpportunitiesByMeasurements } from '../src/lib/lpMeasuredRanking'
 import { lpCapitalReadiness, readablePolymarketCapitalError } from '../src/lib/lpCapitalReadiness'
 import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polymarket-reward-market'
 
@@ -209,9 +210,12 @@ test('Portfolio consolidates balance, owned actions and watched-market trading',
     paymentLinks.indexOf('{pendingSellPosition'),
   )
   assert.match(paymentLinks, /Portfolio balance/)
-  assert.match(paymentLinks, /\['pUSD cash', tradingPusdDisplay\]/)
-  assert.match(paymentLinks, /\['Positions', formatUsd\(activePositionValue\)\]/)
-  assert.match(paymentLinks, /\['Claimable', formatUsd\(claimableValue\)\]/)
+  assert.match(paymentLinks, /\{ label: 'Total pUSD', value: tradingPusdDisplay \}/)
+  assert.match(paymentLinks, /\{ label: 'Reserved', value: reservedTradingPusdDisplay \}/)
+  assert.match(paymentLinks, /\{ label: 'Available', value: availableTradingPusdDisplay \}/)
+  assert.match(paymentLinks, /Reserved funds remain yours but cannot fund another quote until cancelled/)
+  assert.match(paymentLinks, /\{ label: 'Positions', value: formatUsd\(activePositionValue\) \}/)
+  assert.match(paymentLinks, /Claimable \{formatUsd\(claimableValue\)\}/)
   assert.match(paymentLinks, /hasConfirmedTradingCash && hasConfirmedTradingPositions/)
   assert.match(paymentLinks, /Balance temporarily unavailable\./)
   assert.match(paymentLinks, /tradingPusdFailureCount >= 2/)
@@ -413,6 +417,7 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /Review the filled side/)
   assert.match(paymentLinks, /Approx\. capital for \$1\/day/)
   assert.match(paymentLinks, /Shortfall/)
+  assert.match(paymentLinks, /Available after replacing/)
   assert.match(paymentLinks, /One-sided quote: reduced reward scoring may apply/)
   assert.match(paymentLinks, /Replace quote/)
   assert.match(paymentLinks, /<Link\s+to=\{replacementUrl\}/)
@@ -430,6 +435,35 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(portfolioApi, /\/rebates\/current\?date=/)
   assert.doesNotMatch(limitOrderTicket, /submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
+})
+
+test('Pulse demotes fresh stable measurements that cannot approach the daily target', () => {
+  const now = Date.now()
+  const markets = [
+    { conditionId: 'weak', title: 'Measured weak market' },
+    { conditionId: 'unknown', title: 'Unmeasured market' },
+    { conditionId: 'strong', title: 'Measured strong market' },
+  ]
+  const summaries = [
+    {
+      marketId: 'weak',
+      samples: [
+        { estimatedDailyUsdc: 0.03, earningPercentage: 0.02, restingCapitalUsdc: 72.6, observedAt: now - 120_000 },
+        { estimatedDailyUsdc: 0.03, earningPercentage: 0.02, restingCapitalUsdc: 72.6, observedAt: now - 60_000 },
+      ],
+    },
+    {
+      marketId: 'strong',
+      samples: [
+        { estimatedDailyUsdc: 1.05, earningPercentage: 0.5, restingCapitalUsdc: 75, observedAt: now - 120_000 },
+        { estimatedDailyUsdc: 1.1, earningPercentage: 0.52, restingCapitalUsdc: 75, observedAt: now - 60_000 },
+      ],
+    },
+  ]
+  const ranked = rankLpOpportunitiesByMeasurements(markets, summaries, 80, 1, now)
+  assert.deepEqual(ranked.map(market => market.conditionId), ['strong', 'unknown', 'weak'])
+  assert.ok(Number(ranked[0].measuredDailyAtCapitalUsdc) > 1)
+  assert.ok(Number(ranked[2].measuredDailyAtCapitalUsdc) < 0.1)
 })
 
 test('Pulse replaces stale bulk reward pools with the exact market configuration', () => {

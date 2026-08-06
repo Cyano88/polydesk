@@ -46,6 +46,7 @@ import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
 import { assessLpProbe, type LpProbeSample } from '../lib/lpProbeOptimization'
+import { reservedLpCapitalUsdc } from '../lib/lpCapitalReadiness'
 import { isActivePolymarketPosition as isActiveOpenPosition, isClaimablePolymarketPosition as isClaimablePosition, polymarketPositionStatus, type PolymarketPositionStatus } from '../lib/polymarketPositionStatus'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
@@ -7302,6 +7303,12 @@ export function PolyPortfolioPanel({
     () => (bundle?.lpOrders ?? []).filter(order => order.status === 'live' || order.status === 'partial'),
     [bundle?.lpOrders],
   )
+  const reservedTradingPusdValue = useMemo(() => reservedLpCapitalUsdc(openLpOrders), [openLpOrders])
+  const availableTradingPusdValue = hasConfirmedTradingCash
+    ? Math.max(0, Number(tradingPusdValue) - reservedTradingPusdValue)
+    : null
+  const reservedTradingPusdDisplay = hasConfirmedTradingCash ? formatUsd(reservedTradingPusdValue) : 'N/A'
+  const availableTradingPusdDisplay = availableTradingPusdValue === null ? 'N/A' : formatUsd(availableTradingPusdValue)
   const openLpOrderGroups = useMemo(() => {
     const groups = new Map<string, typeof openLpOrders>()
     for (const order of openLpOrders) {
@@ -9802,18 +9809,22 @@ export function PolyPortfolioPanel({
               {liveLoading || tradingPusdLoading ? <Loader2 className="inline h-7 w-7 animate-spin" /> : formatUsd(ownedPortfolioValue)}
             </p>
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/10 pt-4 dark:border-black/10">
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:grid-cols-4 dark:border-black/10">
             {[
-              ['pUSD cash', tradingPusdDisplay],
-              ['Positions', formatUsd(activePositionValue)],
-              ['Claimable', formatUsd(claimableValue)],
-            ].map(([label, value]) => (
+              { label: 'Total pUSD', value: tradingPusdDisplay },
+              { label: 'Reserved', value: reservedTradingPusdDisplay },
+              { label: 'Available', value: availableTradingPusdDisplay },
+              { label: 'Positions', value: formatUsd(activePositionValue) },
+            ].map(({ label, value }) => (
               <div key={label}>
                 <p className="text-[10px] text-white/50 dark:text-gray-500">{label}</p>
                 <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
               </div>
             ))}
           </div>
+          <p className="mt-3 text-[10px] text-white/45 dark:text-gray-500">
+            Claimable {formatUsd(claimableValue)}. Reserved funds remain yours but cannot fund another quote until cancelled.
+          </p>
           {tradingPusdFailureCount >= 2 && tradingPusdError && (
             <p className="mt-3 text-xs text-white/60 dark:text-gray-500">
               {tradingPusdError} Retrying automatically.
@@ -10112,7 +10123,9 @@ export function PolyPortfolioPanel({
                       samples: snapshot ? lpProbeSamples[snapshot.conditionId] ?? [] : [],
                       scoring: groupScoring,
                       dailyTargetUsdc: POLYDESK_LP_DAILY_TARGET_USDC,
-                      availableCapitalUsdc: hasConfirmedTradingCash ? tradingPusdValue : null,
+                      availableCapitalUsdc: availableTradingPusdValue === null
+                        ? null
+                        : availableTradingPusdValue + reservedLpCapitalUsdc(group.orders),
                     })
                     const recommendation = {
                       measure: {
@@ -10173,7 +10186,7 @@ export function PolyPortfolioPanel({
                           {assessment.targetMet === false && assessment.roughCapitalForTargetUsdc !== null && (
                             <p className='mt-0.5 text-[10px]'>
                               Approx. capital for $1/day: {formatUsd(assessment.roughCapitalForTargetUsdc)}
-                              {assessment.availableCapitalUsdc !== null ? ` · Wallet ${formatUsd(assessment.availableCapitalUsdc)}` : ''}
+                              {assessment.availableCapitalUsdc !== null ? ` · Available after replacing ${formatUsd(assessment.availableCapitalUsdc)}` : ''}
                               {assessment.capitalShortfallUsdc !== null && assessment.capitalShortfallUsdc > 0 ? ` · Shortfall ${formatUsd(assessment.capitalShortfallUsdc)}` : ''}.
                             </p>
                           )}

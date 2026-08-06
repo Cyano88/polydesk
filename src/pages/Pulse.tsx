@@ -1,7 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Radio, Share2 } from '../components/icons'
 import { Link, useSearchParams } from 'react-router-dom'
+import { usePrivy } from '@privy-io/react-auth'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+import { rankLpOpportunitiesByMeasurements, type LpMeasuredSummary } from '../lib/lpMeasuredRanking'
 
 const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketLimitOrderTicket })))
 
@@ -30,6 +32,8 @@ type PulseOpportunity = {
   daysToResolve?: number
   lpExecutionRisk?: string
   score?: number
+  measuredDailyAtCapitalUsdc?: number
+  measurementObservedAt?: number
   scoutReason?: string
   executionPlan?: string[]
   contextSignals?: Array<{
@@ -163,6 +167,15 @@ function RewardTargetStatus({ opportunity, inverse = false }: { opportunity: Pul
   const target = Number(opportunity.dailyTargetUsdc)
   const share = Number(opportunity.requiredRewardSharePercentage)
   if (!Number.isFinite(target) || !Number.isFinite(share)) return null
+  const measuredDaily = Number(opportunity.measuredDailyAtCapitalUsdc)
+  if (Number.isFinite(measuredDaily)) {
+    const meetsTarget = measuredDaily >= target
+    return (
+      <p className={`text-[11px] font-semibold ${inverse ? 'text-white/80' : meetsTarget ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+        Live measurement: about ${compactNumber(measuredDaily, 2)}/day with this capital · {meetsTarget ? 'target met' : 'below target'}
+      </p>
+    )
+  }
   const covered = opportunity.minimumSetupCovered !== false
   return (
     <p className={`text-[11px] font-semibold ${inverse ? 'text-white/80' : covered ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
@@ -269,6 +282,7 @@ function PulseHeroCard({
 }
 
 export default function Pulse() {
+  const { authenticated, getAccessToken } = usePrivy()
   const [searchParams] = useSearchParams()
   const initialSnapshot = useMemo(initialPulseSnapshot, [])
   const [feed, setFeed] = useState<PulseFeed | null>(initialSnapshot)
@@ -285,14 +299,43 @@ export default function Pulse() {
   const requestRef = useRef<{ key: string; promise: Promise<void> } | null>(null)
 
   const load = useCallback(() => {
-    const requestKey = `${targetProfile.capital}:${targetProfile.daily}`
+    const requestKey = `${targetProfile.capital}:${targetProfile.daily}:${authenticated ? 'measured' : 'public'}`
     if (requestRef.current?.key === requestKey) return requestRef.current.promise
     const request = (async () => {
       try {
         const query = new URLSearchParams({ budget: targetProfile.capital, target: targetProfile.daily })
-        const response = await fetch(`/api/pulse?${query.toString()}`)
+        const token = authenticated ? await getAccessToken().catch(() => null) : null
+        const [response, measurementResponse] = await Promise.all([
+          fetch(`/api/pulse?${query.toString()}`),
+          token
+            ? fetch('/api/polymarket-portfolio?action=lp-probe-summary', { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+            : Promise.resolve(null),
+        ])
         const data = await response.json().catch(() => null) as PulseFeed | null
         if (!response.ok || !data?.ok) throw new Error('Pulse is unavailable.')
+        const measurementData = measurementResponse?.ok
+          ? await measurementResponse.json().catch(() => null) as { summaries?: LpMeasuredSummary[] } | null
+          : null
+        const capital = Number(targetProfile.capital)
+        const dailyTarget = Number(targetProfile.daily)
+        if (Array.isArray(data.markets) && measurementData?.summaries?.length && Number.isFinite(capital) && Number.isFinite(dailyTarget)) {
+          const rankedMarkets = rankLpOpportunitiesByMeasurements(data.markets, measurementData.summaries, capital, dailyTarget)
+          const existingHighlights = new Map((data.highlights ?? []).map(item => [String(item.opportunity.conditionId ?? '').toLowerCase(), item]))
+          data.markets = rankedMarkets
+          data.highlights = rankedMarkets.slice(0, 3).map((opportunity, index) => {
+            const existing = existingHighlights.get(String(opportunity.conditionId ?? '').toLowerCase())
+            return {
+              id: existing?.id ?? `lp:${opportunityKey(opportunity)}`,
+              kind: 'lp',
+              rank: (index + 1) as 1 | 2 | 3,
+              eyebrow: index === 0 ? 'Strongest opportunity' : 'Ranked opportunity',
+              context: existing?.context ?? opportunity.scoutReason ?? 'Strong live liquidity opportunity',
+              source: existing?.source ?? 'Polymarket CLOB',
+              image: existing?.image ?? opportunity.image,
+              opportunity,
+            }
+          })
+        }
         if (requestRef.current?.key !== requestKey) return
         rememberPulseSnapshot(data)
         setFeed(data)
@@ -308,7 +351,7 @@ export default function Pulse() {
     })()
     requestRef.current = { key: requestKey, promise: request }
     return request
-  }, [targetProfile.capital, targetProfile.daily])
+  }, [authenticated, getAccessToken, targetProfile.capital, targetProfile.daily])
 
   useEffect(() => {
     void load()
