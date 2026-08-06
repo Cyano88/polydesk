@@ -16,9 +16,11 @@ import { registerPolymarketAlertAsset } from './polymarket-alert-events.js'
 import { fetchHashPayLinkPolymarketFundingStatus } from './hashpaylink-polymarket-funding.js'
 import { latestHashPayLinkCheckoutEvent, type StoredHashPayLinkWebhookEvent } from './hashpaylink-webhook-store.js'
 import { ensurePolymarketDepositWallet } from './polymarket-deposit-wallet.js'
+import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from './polymarket-lp-recovery.js'
 
 const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 const CLOB_API_ORIGIN = 'https://clob.polymarket.com'
+const GAMMA_API_ORIGIN = 'https://gamma-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
 const ALERT_FROM_NAME = process.env.POLYMARKET_ALERT_FROM_NAME ?? 'PolyDesk'
 const POLYMARKET_BUILDER_API_KEY = (process.env.POLYMARKET_BUILDER_API_KEY ?? process.env.BUILDER_API_KEY ?? '').trim()
@@ -643,6 +645,21 @@ async function fetchBuilderAttributedOrder(orderId: string) {
       throw new Error(`Polymarket order check returned HTTP ${response.status}.`)
     }
     return await response.json() as BuilderAttributedOrder
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function fetchLpMarketJson(url: string) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`Polymarket market lookup returned HTTP ${response.status}.`)
+    return await response.json() as unknown
   } finally {
     clearTimeout(timer)
   }
@@ -1723,6 +1740,58 @@ export default async function handler(req: Request, res: Response) {
       }
       void reconcilePolymarketLpOrders()
       return res.status(201).json({ ok: true, order: serializeLpOrder(result.rows[0]) })
+    }
+
+    if (action === 'resolve-lp-order-market') {
+      const orderId = cleanString(body.orderId, 96).toLowerCase()
+      if (!/^0x[a-f0-9]{64}$/.test(orderId)) {
+        return res.status(400).json({ ok: false, error: 'A valid Polymarket order ID is required.' })
+      }
+      const row = (await requirePool().query(
+        `select * from polymarket_lp_order_watch
+          where lower(order_id) = lower($1)
+            and owner_privy_user_id = $2
+          limit 1`,
+        [orderId, privyUserId],
+      )).rows[0]
+      if (!row) return res.status(404).json({ ok: false, error: 'LP order was not found.' })
+
+      let marketId = cleanString(row.market_id, 96).toLowerCase()
+      let assetId = cleanString(row.asset_id, 128)
+      if (!marketId && /^\d+$/.test(assetId)) {
+        const tokenMarket = await fetchLpMarketJson(`${CLOB_API_ORIGIN}/markets-by-token/${encodeURIComponent(assetId)}`).catch(() => null)
+        marketId = cleanString((tokenMarket as { condition_id?: unknown } | null)?.condition_id, 96).toLowerCase()
+      }
+      if (!marketId || !/^\d+$/.test(assetId)) {
+        const slug = polymarketLpSlugFromUrl(row.market_url)
+        if (!slug) return res.status(422).json({ ok: false, error: 'This legacy order has no recoverable Polymarket URL.' })
+        const gammaResults = await Promise.allSettled([
+          fetchLpMarketJson(`${GAMMA_API_ORIGIN}/markets?slug=${encodeURIComponent(slug)}`),
+          fetchLpMarketJson(`${GAMMA_API_ORIGIN}/events?slug=${encodeURIComponent(slug)}`),
+        ])
+        const gammaData = gammaResults.flatMap(result => result.status === 'fulfilled' && Array.isArray(result.value) ? result.value : [])
+        const identity = polymarketLpGammaIdentity(gammaData, String(row.market_title), row.outcome ? String(row.outcome) : null)
+        marketId = identity?.marketId ?? marketId
+        assetId = identity?.assetId ?? assetId
+      }
+      if (!/^0x[a-f0-9]{64}$/.test(marketId) || !/^\d+$/.test(assetId)) {
+        return res.status(422).json({ ok: false, error: 'Polymarket could not match this legacy order to its market.' })
+      }
+      const verified = await fetchLpMarketJson(`${CLOB_API_ORIGIN}/markets-by-token/${encodeURIComponent(assetId)}`) as { condition_id?: unknown }
+      if (cleanString(verified.condition_id, 96).toLowerCase() !== marketId) {
+        return res.status(409).json({ ok: false, error: 'The recovered token does not belong to this Polymarket market.' })
+      }
+      const updated = (await requirePool().query(
+        `update polymarket_lp_order_watch
+            set market_id = $3,
+                asset_id = $4,
+                updated_at = now()
+          where lower(order_id) = lower($1)
+            and owner_privy_user_id = $2
+          returning *`,
+        [orderId, privyUserId, marketId, assetId],
+      )).rows[0]
+      return res.json({ ok: true, order: serializeLpOrder(updated) })
     }
 
     if (action === 'mark-lp-order-cancelled') {

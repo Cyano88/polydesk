@@ -7345,6 +7345,7 @@ export function PolyPortfolioPanel({
       })
       const date = new Date().toISOString().slice(0, 10)
       const orderIds = openLpOrders.map(order => order.orderId).filter(Boolean)
+      const portfolioAccessToken = await getAccessToken().catch(() => null)
       const rebateRequest = (async () => {
         const response = await fetch(`/api/polymarket-portfolio?action=rebates&address=${encodeURIComponent(polymarketDepositWallet)}&date=${encodeURIComponent(date)}`)
         const data = await readPolyDeskJson<{ ok?: boolean; rebates?: Array<{ conditionId: string; amountUsdc: number }>; error?: string }>(response, 'Maker rebates are temporarily unavailable.')
@@ -7352,10 +7353,10 @@ export function PolyPortfolioPanel({
         return data.rebates ?? []
       })()
       const orderMarketRequest = Promise.all(trackedLpOrders.map(async order => {
-        if (order.marketId) return { orderId: order.orderId, marketId: order.marketId, assetId: order.assetId }
+        if (order.marketId && order.assetId) return { orderId: order.orderId, marketId: order.marketId, assetId: order.assetId }
         const remote = await polyDeskTimedRequest(client.getOrder(order.orderId), 'LP order market', 8000).catch(() => null)
-        const assetId = remote?.asset_id ?? order.assetId
-        let marketId = remote?.market ?? null
+        let assetId = remote?.asset_id ?? order.assetId
+        let marketId = remote?.market ?? order.marketId ?? null
         if (!marketId && assetId) {
           const tokenMarket = await polyDeskTimedRequest(
             fetch(`https://clob.polymarket.com/markets-by-token/${encodeURIComponent(assetId)}`)
@@ -7364,6 +7365,18 @@ export function PolyPortfolioPanel({
             8000,
           ).catch(() => null)
           marketId = polymarketConditionIdFromTokenMarket(tokenMarket)
+        }
+        if ((!marketId || !assetId) && portfolioAccessToken) {
+          const response = await polyDeskTimedRequest(fetch('/api/polymarket-portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${portfolioAccessToken}` },
+            body: JSON.stringify({ action: 'resolve-lp-order-market', orderId: order.orderId }),
+          }), 'LP market recovery', 25000).catch(() => null)
+          const recovered = response?.ok
+            ? await readPolyDeskJson<{ order?: { marketId?: string | null; assetId?: string | null } }>(response, 'LP market recovery failed.').catch(() => null)
+            : null
+          marketId = recovered?.order?.marketId ?? marketId
+          assetId = recovered?.order?.assetId ?? assetId
         }
         return {
           orderId: order.orderId,
@@ -7389,6 +7402,12 @@ export function PolyPortfolioPanel({
       if (failedRequests === 5) throw new Error('Polymarket reward data did not respond. Please retry.')
       const orderMarketById = new Map(orderMarkets.map(order => [order.orderId, order] as const))
       const resolvedTrackedLpOrders = trackedLpOrders.map(order => ({ ...order, ...orderMarketById.get(order.orderId) }))
+      if (resolvedTrackedLpOrders.some(order => order.marketId && order.assetId && trackedLpOrders.some(saved => saved.orderId === order.orderId && (!saved.marketId || !saved.assetId)))) {
+        setBundle(current => current ? {
+          ...current,
+          lpOrders: (current.lpOrders ?? []).map(order => orderMarketById.has(order.orderId) ? { ...order, ...orderMarketById.get(order.orderId) } : order),
+        } : current)
+      }
       const snapshots = buildPolymarketLpRewardSnapshots({
         orders: resolvedTrackedLpOrders,
         userMarkets,
