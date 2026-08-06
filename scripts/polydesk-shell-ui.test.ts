@@ -275,7 +275,7 @@ test('market reward ticket separates instant buying, two-sided quotes, scoring, 
   assert.match(limitOrderTicket, /Reward eligible/)
   assert.match(limitOrderTicket, /Not scoring yet/)
   assert.match(limitOrderTicket, /Max payout/)
-  assert.match(limitOrderTicket, /Potential profit/)
+  assert.match(limitOrderTicket, /Profit if YES wins/)
   assert.match(limitOrderTicket, /Amount at risk/)
   assert.match(limitOrderTicket, /belowRewardMinimum/)
   assert.match(limitOrderTicket, /meet the displayed reward minimum/)
@@ -287,6 +287,7 @@ test('market reward ticket separates instant buying, two-sided quotes, scoring, 
   assert.match(limitOrderTicket, /border-red-600 bg-red-600/)
   assert.doesNotMatch(limitOrderTicket, /bg-gradient-to-br|shadow-\[0_8px_20px/)
   assert.match(limitOrderTicket, /action: 'register-lp-order'/)
+  assert.match(limitOrderTicket, /marketId: plan\.market\.conditionId/)
   assert.match(limitOrderTicket, /action: 'mark-lp-order-cancelled'/)
   assert.match(limitOrderTicket, /sdkOrderType,\s*journey === 'earn-rewards',\s*false,/)
   assert.doesNotMatch(limitOrderTicket, /sdkOrderType, false, journey === 'earn-rewards'/)
@@ -331,6 +332,19 @@ test('portfolio LP rewards use official share and daily pool data', () => {
     earningsAvailable: true,
   })
   assert.equal(confirmedEmpty['order-1'].earnedTodayUsdc, 0)
+  const scoringOnlyCondition = '0x2222222222222222222222222222222222222222222222222222222222222222'
+  const scoringOnly = buildPolymarketLpRewardSnapshots({
+    orders: [{ orderId: 'order-2', marketId: scoringOnlyCondition, assetId: '456' }],
+    userMarkets: [],
+    currentMarkets: [],
+    percentages: {},
+    scoring: { 'order-2': true },
+    earningsAvailable: true,
+  })
+  assert.equal(scoringOnly['order-2'].conditionId, scoringOnlyCondition)
+  assert.equal(scoringOnly['order-2'].scoring, true)
+  assert.equal(scoringOnly['order-2'].earnedTodayUsdc, 0)
+  assert.equal(scoringOnly['order-2'].estimatedDailyUsdc, null)
   assert.equal(polymarketConditionIdFromTokenMarket({ condition_id: '0xMARKET' }), '0xmarket')
   assert.equal(polymarketConditionIdFromTokenMarket({}), null)
   const gammaConditionId = '0x1111111111111111111111111111111111111111111111111111111111111111'
@@ -353,8 +367,9 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /action: 'resolve-lp-order-market'/)
   assert.match(portfolioApi, /action === 'resolve-lp-order-market'/)
   assert.match(portfolioApi, /GAMMA_API_ORIGIN/)
-  assert.match(paymentLinks, /could not match this older quote to its Polymarket reward market/)
+  assert.match(paymentLinks, /could not match this quote to its Polymarket reward market/)
   assert.match(paymentLinks, /resolvedTrackedLpOrders/)
+  assert.match(paymentLinks, /\{activeOpenPositions\.length\}<\/p>/)
   assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
   assert.match(paymentLinks, /value === null \|\| value === undefined \|\| value === ''/)
   assert.match(paymentLinks, /Cancel quote/)
@@ -370,7 +385,7 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /Position P&amp;L/)
   assert.match(portfolioApi, /action === 'rebates'/)
   assert.match(portfolioApi, /\/rebates\/current\?date=/)
-  assert.match(limitOrderTicket, /marketId: submittedMarketId/)
+  assert.doesNotMatch(limitOrderTicket, /submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
 })
 

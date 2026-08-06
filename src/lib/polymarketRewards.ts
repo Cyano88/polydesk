@@ -115,6 +115,7 @@ export function buildPolymarketLpRewardSnapshots({
       || (requestedAsset && tokenIds(item).includes(requestedAsset))
     ))
     const matchedCondition = conditionId(matched)
+      || (/^0x[a-f0-9]{64}$/.test(requestedCondition) ? requestedCondition : '')
     if (!matchedCondition) continue
 
     const userMarket = userByCondition.get(matchedCondition)

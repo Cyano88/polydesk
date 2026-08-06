@@ -15,6 +15,7 @@ type PreparedLimit = {
   readyForLocalSigning: boolean
   issues: string[]
   market: {
+    conditionId: string
     title: string
     outcome: string
     tokenId: string
@@ -463,7 +464,6 @@ export function PolymarketLimitOrderTicket({
         }),
       }) as Record<string, unknown>
       const submittedOrderId = typeof result.orderID === 'string' ? result.orderID : typeof result.orderId === 'string' ? result.orderId : ''
-      const submittedMarketId = typeof result.market === 'string' && /^0x[a-fA-F0-9]{64}$/.test(result.market) ? result.market : ''
       if (submittedOrderId && journey === 'earn-rewards') {
         setRewardQuotes(current => [
           ...current.filter(quote => quote.outcome !== outcome),
@@ -488,7 +488,7 @@ export function PolymarketLimitOrderTicket({
               action: 'register-lp-order',
               orderId: submittedOrderId,
               positionAddress: funderAddress,
-              marketId: submittedMarketId,
+              marketId: plan.market.conditionId,
               assetId: plan.market.tokenId,
               marketTitle,
               marketUrl,
@@ -748,7 +748,7 @@ export function PolymarketLimitOrderTicket({
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10 dark:bg-white/10">
         {[
           ['Max payout', projected.payout, 'text-gray-950 dark:text-white'],
-          ['Potential profit', projected.profit, 'text-emerald-600 dark:text-emerald-400'],
+          ['Profit if YES wins', projected.profit, 'text-emerald-600 dark:text-emerald-400'],
           ['Amount at risk', projected.risk, 'text-rose-600 dark:text-rose-400'],
         ].map(([label, value, valueClass]) => (
           <div key={String(label)} className="bg-white px-3 py-3 dark:bg-[#17171b]">

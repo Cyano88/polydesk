@@ -7391,7 +7391,7 @@ export function PolyPortfolioPanel({
           ? rebates.reduce((total, rebate) => snapshotsByCondition.has(rebate.conditionId.toLowerCase()) ? total + rebate.amountUsdc : total, 0)
           : null)
       setLpRewardsLoaded(true)
-      if (Object.keys(snapshots).length === 0) setLpRewardsNotice('PolyDesk could not match this older quote to its Polymarket reward market. Refresh to try again.')
+      if (Object.keys(snapshots).length === 0) setLpRewardsNotice('PolyDesk could not match this quote to its Polymarket reward market. Refresh to try again.')
       else if (failedRequests > 0) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
     } catch (error) {
       setLpRewardsNotice(error instanceof Error ? error.message : 'Reward earnings are temporarily unavailable.')
@@ -9927,7 +9927,7 @@ export function PolyPortfolioPanel({
           <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Positions</p>
-              <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">{livePositions.length}</p>
+              <p className="mt-1 text-2xl font-black tracking-tight text-gray-950 dark:text-white">{activeOpenPositions.length}</p>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
               {trackedLpOrders.length > 0 && (
