@@ -7348,9 +7348,17 @@ export function PolyPortfolioPanel({
           assetId,
         }
       }))
+      const rewardMarketsRequest = orderMarketRequest.then(async orders => {
+        const conditionIds = Array.from(new Set(orders
+          .map(order => String(order.marketId ?? '').toLowerCase())
+          .filter(conditionId => /^0x[a-f0-9]{64}$/.test(conditionId))))
+        if (conditionIds.length === 0) return []
+        const markets = await Promise.all(conditionIds.map(conditionId => client.getRawRewardsForMarket(conditionId)))
+        return markets.flat()
+      })
       const rewardResults = await Promise.allSettled([
         polyDeskTimedRequest(client.getUserEarningsAndMarketsConfig(date), 'Reward earnings'),
-        polyDeskTimedRequest(client.getCurrentRewards(), 'Reward markets'),
+        polyDeskTimedRequest(rewardMarketsRequest, 'Reward markets'),
         polyDeskTimedRequest(client.getRewardPercentages(), 'Reward percentages'),
         orderIds.length > 0 ? polyDeskTimedRequest(client.areOrdersScoring({ orderIds }), 'Order scoring') : Promise.resolve({}),
         polyDeskTimedRequest(rebateRequest, 'Maker rebates'),
@@ -7391,8 +7399,9 @@ export function PolyPortfolioPanel({
           ? rebates.reduce((total, rebate) => snapshotsByCondition.has(rebate.conditionId.toLowerCase()) ? total + rebate.amountUsdc : total, 0)
           : null)
       setLpRewardsLoaded(true)
+      const hasConfirmedRewardDetails = Object.values(snapshots).some(snapshot => snapshot.scoring !== null || snapshot.earningPercentage !== null)
       if (Object.keys(snapshots).length === 0) setLpRewardsNotice('PolyDesk could not match this quote to its Polymarket reward market. Refresh to try again.')
-      else if (failedRequests > 0) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
+      else if (failedRequests > 0 && !hasConfirmedRewardDetails) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
     } catch (error) {
       setLpRewardsNotice(error instanceof Error ? error.message : 'Reward earnings are temporarily unavailable.')
     } finally {
@@ -9953,7 +9962,7 @@ export function PolyPortfolioPanel({
                   <div className='mt-3 grid grid-cols-3 gap-2 border-t border-gray-200 pt-2 dark:border-white/10'>
                     <div>
                       <p className='text-[9px] text-gray-400'>Rewards today</p>
-                      <p className='mt-0.5 text-[11px] font-bold text-gray-900 dark:text-white'>{formatSignedUsd(lpRewardsEarnedToday)}</p>
+                      <p className='mt-0.5 text-[11px] font-bold text-gray-900 dark:text-white'>{lpRewardsEarnedToday === null && Object.values(lpRewardSnapshots).some(snapshot => snapshot.scoring === true) ? 'Pending' : formatSignedUsd(lpRewardsEarnedToday)}</p>
                     </div>
                     <div>
                       <p className='text-[9px] text-gray-400'>Maker rebates</p>
@@ -10019,7 +10028,7 @@ export function PolyPortfolioPanel({
                       {lpRewardSnapshots[order.orderId] && (
                         <>
                         <p className='mt-1 text-xs text-emerald-700'>
-                          Earned today {formatUsd(lpRewardSnapshots[order.orderId].earnedTodayUsdc)} · Est. {formatUsd(lpRewardSnapshots[order.orderId].estimatedDailyUsdc)}/day
+                          Earned today {lpRewardSnapshots[order.orderId].earnedTodayUsdc === null && lpRewardSnapshots[order.orderId].scoring === true ? 'Pending' : formatUsd(lpRewardSnapshots[order.orderId].earnedTodayUsdc)} · Est. {lpRewardSnapshots[order.orderId].estimatedDailyUsdc === null ? 'Pending' : `${formatUsd(lpRewardSnapshots[order.orderId].estimatedDailyUsdc)}/day`}
                         </p>
                         <p className='mt-0.5 text-[10px] font-medium text-gray-500'>
                           {lpRewardSnapshots[order.orderId].scoring === true ? 'Scoring now' : lpRewardSnapshots[order.orderId].scoring === false ? 'Not scoring' : 'Scoring unavailable'} · {lpRewardSnapshots[order.orderId].earningPercentage === null ? 'Reward share unavailable' : `${lpRewardSnapshots[order.orderId].earningPercentage.toFixed(2)}% reward share`}
