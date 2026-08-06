@@ -7166,7 +7166,6 @@ export function PolyPortfolioPanel({
   const [lpRewardsEarnedToday, setLpRewardsEarnedToday] = useState<number | null>(null)
   const [lpMakerRebatesToday, setLpMakerRebatesToday] = useState<number | null>(null)
   const [lpOrderCancelBusy, setLpOrderCancelBusy] = useState('')
-  const [pendingLpOrderCancel, setPendingLpOrderCancel] = useState<NonNullable<PolymarketPortfolioBundle['lpOrders']>[number] | null>(null)
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
 
   function selectTradingTab(tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') {
@@ -10065,7 +10064,7 @@ export function PolyPortfolioPanel({
                       </a>
                       <button
                       type='button'
-                      onClick={() => setPendingLpOrderCancel(order)}
+                      onClick={() => void cancelPortfolioLpOrder(order)}
                       disabled={Boolean(lpOrderCancelBusy)}
                       className='polydesk-primary-cta polydesk-primary-cta--compact mt-1'
                     >
@@ -10425,35 +10424,6 @@ export function PolyPortfolioPanel({
           </ul>
         )}
       </div>
-      )}
-      {pendingLpOrderCancel && (
-        <div role='dialog' aria-modal='true' aria-labelledby='cancel-lp-order-title' className='fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center'>
-          <div className='w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#111216]'>
-            <p className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>Cancel LP quote</p>
-            <h3 id='cancel-lp-order-title' className='mt-2 text-base font-semibold tracking-tight text-gray-950 dark:text-white'>Remove the unmatched quote?</h3>
-            <div className='mt-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-white/[0.04]'>
-              <p className='line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white'>{pendingLpOrderCancel.marketTitle}</p>
-              <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-                {pendingLpOrderCancel.outcome || 'LP order'} · {Math.max(0, Number(pendingLpOrderCancel.originalSize || 0) - Number(pendingLpOrderCancel.matchedSize || 0)).toLocaleString()} unmatched shares
-              </p>
-            </div>
-            <p className='mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400'>Cancelling removes only the unmatched remainder. Shares already matched stay under Live positions until you close them.</p>
-            <div className='mt-4 grid grid-cols-2 gap-2'>
-              <button type='button' onClick={() => setPendingLpOrderCancel(null)} className='min-h-[42px] rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:text-gray-200'>Keep quote</button>
-              <button
-                type='button'
-                onClick={() => {
-                  const order = pendingLpOrderCancel
-                  setPendingLpOrderCancel(null)
-                  void cancelPortfolioLpOrder(order)
-                }}
-                className='polydesk-primary-cta w-full'
-              >
-                Cancel quote
-              </button>
-            </div>
-          </div>
-        </div>
       )}
       {pendingSellPosition && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 py-5 backdrop-blur-sm sm:items-center">
