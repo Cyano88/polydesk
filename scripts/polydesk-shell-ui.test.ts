@@ -5,6 +5,7 @@ import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polym
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polymarket-lp-recovery'
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
+import { assessLpProbe } from '../src/lib/lpProbeOptimization'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -378,7 +379,7 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /client\.getOrder\(order\.orderId\)/)
   assert.match(paymentLinks, /client\.getRawRewardsForMarket\(conditionId\)/)
   assert.doesNotMatch(paymentLinks, /client\.getCurrentRewards\(\)/)
-  assert.match(paymentLinks, /Earned today \{lpRewardSnapshots\[order\.orderId\]\.earnedTodayUsdc === null/)
+  assert.match(paymentLinks, /Earned today \{snapshot\.earnedTodayUsdc === null/)
   assert.match(paymentLinks, /\? 'Pending' : formatSignedUsd\(lpRewardsEarnedToday\)/)
   assert.match(paymentLinks, /markets-by-token/)
   assert.match(paymentLinks, /action: 'resolve-lp-order-market'/)
@@ -389,13 +390,18 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /\{activeOpenPositions\.length\}<\/p>/)
   assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
   assert.match(paymentLinks, /value === null \|\| value === undefined \|\| value === ''/)
-  assert.match(paymentLinks, /Cancel quote/)
+  assert.match(paymentLinks, /`Cancel \$\{order\.outcome \|\| 'quote'\}`/)
   assert.match(paymentLinks, /Close position/)
   assert.doesNotMatch(paymentLinks, /Remove the unmatched quote\?|Keep quote|pendingLpOrderCancel/)
   assert.match(paymentLinks, /onClick=\{\(\) => void cancelPortfolioLpOrder\(order\)\}/)
   assert.match(paymentLinks, /Scoring now/)
   assert.match(paymentLinks, /reward share/)
-  assert.match(paymentLinks, /Below \$1\/day target/)
+  assert.match(paymentLinks, /Measure the quote/)
+  assert.match(paymentLinks, /Hold this quote/)
+  assert.match(paymentLinks, /Test a larger quote/)
+  assert.match(paymentLinks, /Review the filled side/)
+  assert.match(paymentLinks, /Rough capital for \$1\/day/)
+  assert.match(paymentLinks, /One-sided quote: reduced reward scoring may apply/)
   assert.match(paymentLinks, /Find a stronger market/)
   assert.match(paymentLinks, /Net LP result/)
   assert.match(paymentLinks, /Today plus current LP positions/)
@@ -406,6 +412,31 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(portfolioApi, /\/rebates\/current\?date=/)
   assert.doesNotMatch(limitOrderTicket, /submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
+})
+
+test('LP probe recommendations require stable samples and expose fill risk', () => {
+  const orders = [
+    { outcome: 'YES', price: 0.4, originalSize: 50, matchedSize: 0, status: 'live' },
+    { outcome: 'NO', price: 0.5, originalSize: 50, matchedSize: 0, status: 'live' },
+  ]
+  const sample = (estimatedDailyUsdc: number, observedAt: number) => ({ estimatedDailyUsdc, earningPercentage: 0.4, observedAt })
+  assert.equal(assessLpProbe({ orders, samples: [sample(1.1, 0)], scoring: true }).recommendation, 'measure')
+  const holding = assessLpProbe({ orders, samples: [sample(1.05, 0), sample(1.1, 60_000)], scoring: true })
+  assert.equal(holding.recommendation, 'hold')
+  assert.equal(holding.stable, true)
+  assert.equal(holding.restingCapitalUsdc, 45)
+  assert.equal(Number(holding.efficiencyPer100Usdc?.toFixed(2)), 2.44)
+  const increase = assessLpProbe({ orders, samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true })
+  assert.equal(increase.recommendation, 'increase')
+  assert.equal(Number(increase.roughCapitalForTargetUsdc?.toFixed(2)), 62.5)
+  assert.equal(assessLpProbe({ orders, samples: [sample(0.2, 0), sample(0.21, 60_000)], scoring: true }).recommendation, 'exit')
+  assert.equal(assessLpProbe({ orders, samples: [], scoring: false }).recommendation, 'exit')
+  const missingPrice = assessLpProbe({ orders: [{ ...orders[0], price: null }], samples: [sample(0.7, 0), sample(0.72, 60_000)], scoring: true })
+  assert.equal(missingPrice.recommendation, 'measure')
+  assert.equal(missingPrice.restingCapitalUsdc, null)
+  const asymmetric = assessLpProbe({ orders: [{ ...orders[0], matchedSize: 5 }, orders[1]], samples: [], scoring: true })
+  assert.equal(asymmetric.recommendation, 'rebalance')
+  assert.equal(asymmetric.asymmetricFill, true)
 })
 
 test('resolved losing positions are ended and excluded from the open count', () => {

@@ -45,6 +45,7 @@ import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
+import { assessLpProbe, type LpProbeSample } from '../lib/lpProbeOptimization'
 import { isActivePolymarketPosition as isActiveOpenPosition, isClaimablePolymarketPosition as isClaimablePosition, polymarketPositionStatus, type PolymarketPositionStatus } from '../lib/polymarketPositionStatus'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
@@ -6563,10 +6564,14 @@ type PolymarketPortfolioBundle = {
     marketTitle: string
     marketUrl: string
     outcome: string | null
+    side?: string | null
+    price?: number | null
     origin?: 'lp-scout' | 'watch-position' | 'direct'
     matchedSize: number
     originalSize: number | null
     status: string
+    lastCheckedAt?: string | null
+    createdAt?: string | null
   }>
 }
 
@@ -7127,6 +7132,7 @@ export function PolyPortfolioPanel({
   const [watchAccountTab, setWatchAccountTab] = useState<'balance' | 'positions' | 'alerts'>('balance')
   const [positionStatusTab, setPositionStatusTab] = useState<'orders' | PolymarketPositionStatus>('orders')
   const [lpRewardSnapshots, setLpRewardSnapshots] = useState<Record<string, PolymarketLpRewardSnapshot>>({})
+  const [lpProbeSamples, setLpProbeSamples] = useState<Record<string, LpProbeSample[]>>({})
   const [lpRewardsLoading, setLpRewardsLoading] = useState(false)
   const [lpRewardsLoaded, setLpRewardsLoaded] = useState(false)
   const [lpRewardsNotice, setLpRewardsNotice] = useState('')
@@ -7261,6 +7267,14 @@ export function PolyPortfolioPanel({
     () => (bundle?.lpOrders ?? []).filter(order => order.status === 'live' || order.status === 'partial'),
     [bundle?.lpOrders],
   )
+  const openLpOrderGroups = useMemo(() => {
+    const groups = new Map<string, typeof openLpOrders>()
+    for (const order of openLpOrders) {
+      const key = order.marketId || order.marketUrl || order.orderId
+      groups.set(key, [...(groups.get(key) ?? []), order])
+    }
+    return [...groups.entries()].map(([key, orders]) => ({ key, orders }))
+  }, [openLpOrders])
 
   async function loadLpRewardEarnings() {
     if (lpRewardsLoading || trackedLpOrders.length === 0) return
@@ -7391,6 +7405,22 @@ export function PolyPortfolioPanel({
         earningsAvailable: rewardResults[0].status === 'fulfilled',
       })
       setLpRewardSnapshots(snapshots)
+      const observedAt = Date.now()
+      setLpProbeSamples(current => {
+        const next = { ...current }
+        for (const snapshot of Object.values(snapshots)) {
+          if (snapshot.scoring !== true || snapshot.estimatedDailyUsdc === null || snapshot.earningPercentage === null) continue
+          const samples = next[snapshot.conditionId] ?? []
+          const previous = samples.at(-1)
+          if (previous && observedAt - previous.observedAt < 55_000) continue
+          next[snapshot.conditionId] = [...samples, {
+            estimatedDailyUsdc: snapshot.estimatedDailyUsdc,
+            earningPercentage: snapshot.earningPercentage,
+            observedAt,
+          }].slice(-5)
+        }
+        return next
+      })
       const snapshotsByCondition = new Map(Object.values(snapshots).map(snapshot => [snapshot.conditionId, snapshot] as const))
       setLpRewardsEarnedToday(rewardResults[0].status === 'fulfilled'
         ? [...snapshotsByCondition.values()].reduce((total, snapshot) => total + (snapshot.earnedTodayUsdc ?? 0), 0)
@@ -10008,54 +10038,87 @@ export function PolyPortfolioPanel({
                 <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">No open LP orders.</p>
               ) : (
                 <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(156,163,175,0.35)_transparent]">
-                  {openLpOrders.slice(0, 8).map(order => (
-                    <div key={order.orderId}>
+                  {openLpOrderGroups.slice(0, 8).map(group => {
+                    const primaryOrder = group.orders[0]
+                    const snapshots = group.orders.map(order => lpRewardSnapshots[order.orderId]).filter(Boolean)
+                    const snapshot = snapshots[0]
+                    const groupScoring = snapshots.some(item => item.scoring === false)
+                      ? false
+                      : snapshots.some(item => item.scoring === true) ? true : null
+                    const assessment = assessLpProbe({
+                      orders: group.orders,
+                      samples: snapshot ? lpProbeSamples[snapshot.conditionId] ?? [] : [],
+                      scoring: groupScoring,
+                      dailyTargetUsdc: POLYDESK_LP_DAILY_TARGET_USDC,
+                    })
+                    const recommendation = {
+                      measure: { label: 'Measure the quote', detail: 'Refresh after one minute to confirm that the reward estimate is stable.' },
+                      hold: { label: 'Hold this quote', detail: 'The measured estimate is stable and currently meets the $1/day target.' },
+                      increase: { label: 'Test a larger quote', detail: 'The estimate is stable but below target. Review the rough capital estimate before adding funds.' },
+                      rebalance: { label: 'Review the filled side', detail: 'Only one side has filled. Check inventory risk before leaving or replacing the other quote.' },
+                      exit: { label: 'Find a stronger market', detail: groupScoring === false ? 'At least one quote is not scoring for rewards.' : 'The stable estimate is too far below the $1/day target.' },
+                    }[assessment.recommendation]
+                    return (
+                    <div key={group.key}>
                       <a
-                      href={order.marketUrl}
+                      href={primaryOrder.marketUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="block rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 transition hover:border-gray-200 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-white/20"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{order.marketTitle}</p>
-                          <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{primaryOrder.marketTitle}</p>
+                          {group.orders.map(order => (
+                          <p key={order.orderId} className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
                             {order.outcome || 'LP order'} · {Math.max(0, Number(order.originalSize || 0) - Number(order.matchedSize || 0)).toLocaleString()} shares open
                           </p>
+                          ))}
                         </div>
                         <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
-                          {order.status === 'partial' ? 'Partial' : 'Open'}
+                          {group.orders.some(order => order.status === 'partial') ? 'Partial' : 'Open'}
                         </span>
                       </div>
-                      {lpRewardSnapshots[order.orderId] && (
+                      {snapshot && (
                         <>
                         <p className='mt-1 text-xs text-emerald-700'>
-                          Earned today {lpRewardSnapshots[order.orderId].earnedTodayUsdc === null && lpRewardSnapshots[order.orderId].scoring === true ? 'Pending' : formatUsd(lpRewardSnapshots[order.orderId].earnedTodayUsdc)} · Est. {lpRewardSnapshots[order.orderId].estimatedDailyUsdc === null ? 'Pending' : `${formatUsd(lpRewardSnapshots[order.orderId].estimatedDailyUsdc)}/day`}
+                          Earned today {snapshot.earnedTodayUsdc === null && snapshot.scoring === true ? 'Pending' : formatUsd(snapshot.earnedTodayUsdc)} · Est. {snapshot.estimatedDailyUsdc === null ? 'Pending' : `${formatUsd(snapshot.estimatedDailyUsdc)}/day`}
                         </p>
-                        {lpRewardSnapshots[order.orderId].estimatedDailyUsdc !== null && (
-                          <p className={cn('mt-0.5 text-[10px] font-semibold', lpRewardSnapshots[order.orderId].estimatedDailyUsdc >= POLYDESK_LP_DAILY_TARGET_USDC ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')}>
-                            {lpRewardSnapshots[order.orderId].estimatedDailyUsdc >= POLYDESK_LP_DAILY_TARGET_USDC ? '$1/day target reached' : 'Below $1/day target'}
-                          </p>
-                        )}
                         <p className='mt-0.5 text-[10px] font-medium text-gray-500'>
-                          {lpRewardSnapshots[order.orderId].scoring === true ? 'Scoring now' : lpRewardSnapshots[order.orderId].scoring === false ? 'Not scoring' : 'Scoring unavailable'} · {lpRewardSnapshots[order.orderId].earningPercentage === null ? 'Reward share unavailable' : `${lpRewardSnapshots[order.orderId].earningPercentage.toFixed(2)}% reward share`}
+                          {snapshot.scoring === true ? 'Scoring now' : snapshot.scoring === false ? 'Not scoring' : 'Scoring unavailable'} · {snapshot.earningPercentage === null ? 'Reward share unavailable' : `${snapshot.earningPercentage.toFixed(2)}% reward share`}
                         </p>
+                        <div className={cn('mt-2 rounded-lg px-2.5 py-2', assessment.recommendation === 'hold' ? 'bg-emerald-100/70 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200' : 'bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200')}>
+                          <p className='text-[11px] font-bold'>{recommendation.label}</p>
+                          <p className='mt-0.5 text-[10px] leading-relaxed'>{recommendation.detail}</p>
+                          <p className='mt-1 text-[10px] font-medium'>
+                            Resting {formatUsd(assessment.restingCapitalUsdc)} · Efficiency {assessment.efficiencyPer100Usdc === null ? 'Pending' : `${formatUsd(assessment.efficiencyPer100Usdc)}/day per $100`}
+                          </p>
+                          {assessment.recommendation === 'increase' && assessment.roughCapitalForTargetUsdc !== null && (
+                            <p className='mt-0.5 text-[10px]'>Rough capital for $1/day: {formatUsd(assessment.roughCapitalForTargetUsdc)}. Rewards are competitive, so this is not guaranteed.</p>
+                          )}
+                          {!assessment.twoSided && <p className='mt-0.5 text-[10px]'>One-sided quote: reduced reward scoring may apply.</p>}
+                        </div>
                         </>
                       )}
                       </a>
-                      <button
-                      type='button'
-                      onClick={() => void cancelPortfolioLpOrder(order)}
-                      disabled={Boolean(lpOrderCancelBusy)}
-                      className='polydesk-primary-cta polydesk-primary-cta--compact mt-1'
-                    >
-                      {lpOrderCancelBusy === order.orderId ? 'Cancelling...' : 'Cancel quote'}
-                      </button>
-                      {lpRewardSnapshots[order.orderId]?.estimatedDailyUsdc !== null && lpRewardSnapshots[order.orderId]?.estimatedDailyUsdc !== undefined && Number(lpRewardSnapshots[order.orderId].estimatedDailyUsdc) < POLYDESK_LP_DAILY_TARGET_USDC && (
+                      <div className='mt-1 flex flex-wrap items-center gap-2'>
+                      {group.orders.map(order => (
+                        <button
+                          key={order.orderId}
+                          type='button'
+                          onClick={() => void cancelPortfolioLpOrder(order)}
+                          disabled={Boolean(lpOrderCancelBusy)}
+                          className='polydesk-primary-cta polydesk-primary-cta--compact'
+                        >
+                          {lpOrderCancelBusy === order.orderId ? 'Cancelling...' : `Cancel ${order.outcome || 'quote'}`}
+                        </button>
+                      ))}
+                      {assessment.recommendation === 'exit' && (
                         <button type='button' onClick={onOpenLpScout} className='ml-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400'>Find a stronger market</button>
                       )}
+                      </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )
             ) : liveLoading && livePositions.length === 0 ? (
