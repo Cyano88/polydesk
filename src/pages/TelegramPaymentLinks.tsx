@@ -44,7 +44,7 @@ import { PrivyConnectButton } from '../lib/PrivyConnectButton'
 import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
-import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
+import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import {
@@ -7354,10 +7354,21 @@ export function PolyPortfolioPanel({
       const orderMarketRequest = Promise.all(trackedLpOrders.map(async order => {
         if (order.marketId) return { orderId: order.orderId, marketId: order.marketId, assetId: order.assetId }
         const remote = await polyDeskTimedRequest(client.getOrder(order.orderId), 'LP order market', 8000).catch(() => null)
+        const assetId = remote?.asset_id ?? order.assetId
+        let marketId = remote?.market ?? null
+        if (!marketId && assetId) {
+          const tokenMarket = await polyDeskTimedRequest(
+            fetch(`https://clob.polymarket.com/markets-by-token/${encodeURIComponent(assetId)}`)
+              .then(async response => response.ok ? response.json() : null),
+            'LP token market',
+            8000,
+          ).catch(() => null)
+          marketId = polymarketConditionIdFromTokenMarket(tokenMarket)
+        }
         return {
           orderId: order.orderId,
-          marketId: remote?.market ?? null,
-          assetId: remote?.asset_id ?? order.assetId,
+          marketId,
+          assetId,
         }
       }))
       const rewardResults = await Promise.allSettled([
@@ -7384,6 +7395,7 @@ export function PolyPortfolioPanel({
         currentMarkets,
         percentages,
         scoring,
+        earningsAvailable: rewardResults[0].status === 'fulfilled',
       })
       setLpRewardSnapshots(snapshots)
       const snapshotsByCondition = new Map(Object.values(snapshots).map(snapshot => [snapshot.conditionId, snapshot] as const))
@@ -7396,7 +7408,7 @@ export function PolyPortfolioPanel({
           ? rebates.reduce((total, rebate) => snapshotsByCondition.has(rebate.conditionId.toLowerCase()) ? total + rebate.amountUsdc : total, 0)
           : null)
       setLpRewardsLoaded(true)
-      if (Object.keys(snapshots).length === 0) setLpRewardsNotice('Polymarket returned no reward record for this open quote yet.')
+      if (Object.keys(snapshots).length === 0) setLpRewardsNotice('PolyDesk could not match this older quote to its Polymarket reward market. Refresh to try again.')
       else if (failedRequests > 0) setLpRewardsNotice('Some reward details are temporarily unavailable. Refresh to try again.')
     } catch (error) {
       setLpRewardsNotice(error instanceof Error ? error.message : 'Reward earnings are temporarily unavailable.')

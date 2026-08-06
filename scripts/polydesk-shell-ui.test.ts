@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult } from '../src/lib/polymarketRewards'
+import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket } from '../src/lib/polymarketRewards'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -320,12 +320,25 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   })
   assert.equal(partial['order-1'].earnedTodayUsdc, null)
   assert.equal(partial['order-1'].estimatedDailyUsdc, 2.6)
+  const confirmedEmpty = buildPolymarketLpRewardSnapshots({
+    orders: [{ orderId: 'order-1', marketId: '0xmarket', assetId: '123' }],
+    userMarkets: [],
+    currentMarkets: [{ condition_id: '0xmarket', rewards_config: [{ rate_per_day: 130 }] }],
+    percentages: { '0xmarket': 2 },
+    scoring: { 'order-1': true },
+    earningsAvailable: true,
+  })
+  assert.equal(confirmedEmpty['order-1'].earnedTodayUsdc, 0)
+  assert.equal(polymarketConditionIdFromTokenMarket({ condition_id: '0xMARKET' }), '0xmarket')
+  assert.equal(polymarketConditionIdFromTokenMarket({}), null)
   assert.equal(calculatePolymarketLpNetResult({ rewardsToday: 0.25, makerRebatesToday: 0.1, positionPnl: 2.4 }), 2.75)
   assert.equal(calculatePolymarketLpNetResult({ rewardsToday: 0.25, makerRebatesToday: 0.1, positionPnl: -1 }), -0.65)
   assert.equal(calculatePolymarketLpNetResult({ rewardsToday: null, makerRebatesToday: 0.1, positionPnl: 0 }), null)
   assert.match(paymentLinks, /timeoutMs = 12000/)
   assert.match(paymentLinks, /Promise\.allSettled/)
   assert.match(paymentLinks, /client\.getOrder\(order\.orderId\)/)
+  assert.match(paymentLinks, /markets-by-token/)
+  assert.match(paymentLinks, /could not match this older quote to its Polymarket reward market/)
   assert.match(paymentLinks, /resolvedTrackedLpOrders/)
   assert.match(paymentLinks, /Polymarket reward data did not respond\. Please retry\./)
   assert.match(paymentLinks, /value === null \|\| value === undefined \|\| value === ''/)

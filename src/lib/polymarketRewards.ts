@@ -12,6 +12,12 @@ export type PolymarketLpRewardSnapshot = {
   estimatedDailyUsdc: number | null
 }
 
+export function polymarketConditionIdFromTokenMarket(value: unknown) {
+  const market = record(value)
+  const valueConditionId = String(market?.condition_id ?? market?.conditionId ?? '').trim().toLowerCase()
+  return valueConditionId || null
+}
+
 export function calculatePolymarketLpNetResult({
   rewardsToday,
   makerRebatesToday,
@@ -87,12 +93,14 @@ export function buildPolymarketLpRewardSnapshots({
   currentMarkets,
   percentages,
   scoring,
+  earningsAvailable = false,
 }: {
   orders: PolymarketLpRewardOrder[]
   userMarkets: unknown[]
   currentMarkets: unknown[]
   percentages: Record<string, unknown>
   scoring: Record<string, unknown>
+  earningsAvailable?: boolean
 }) {
   const userByCondition = new Map<string, unknown>(userMarkets.flatMap(item => conditionId(item) ? [[conditionId(item), item] as const] : []))
   const currentByCondition = new Map<string, unknown>(currentMarkets.flatMap(item => conditionId(item) ? [[conditionId(item), item] as const] : []))
@@ -119,7 +127,7 @@ export function buildPolymarketLpRewardSnapshots({
       conditionId: matchedCondition,
       scoring: typeof scoring[order.orderId] === 'boolean' ? scoring[order.orderId] as boolean : null,
       earningPercentage: percentageValue,
-      earnedTodayUsdc: earnedTodayUsdc(userMarket),
+      earnedTodayUsdc: userMarket ? earnedTodayUsdc(userMarket) : earningsAvailable ? 0 : null,
       estimatedDailyUsdc: percentageValue !== null && pool > 0 ? pool * Math.max(0, percentageValue) / 100 : null,
     }
   }
