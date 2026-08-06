@@ -8,6 +8,7 @@ import { getPolyStreamFeed } from './poly-stream.js'
 import { enrichLpOpportunitiesWithContext } from './lp-context-intelligence.js'
 import { estimateTwoSidedRewardCapitalUsdc } from './lp-reward-estimate.js'
 import { lpRewardTargetMetrics, normalizeLpCapitalUsdc, normalizeLpDailyTargetUsdc } from './lp-reward-target.js'
+import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from './polymarket-reward-market.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -100,6 +101,7 @@ type PolymarketLpOpportunity = {
   daysToResolve?: number
   oneDayPriceChange?: number
   dailyReward?: number
+  rewardPoolVerified?: boolean
   maxSpread?: number
   minSize?: number
   liquidity?: number
@@ -509,6 +511,14 @@ async function fetchPolymarketRewardMarkets(query?: string) {
   return []
 }
 
+async function fetchVerifiedRewardMarket(conditionId: string) {
+  if (!/^0x[a-f0-9]{64}$/i.test(conditionId)) return undefined
+  const data = await fetchPolymarketJson(`https://clob.polymarket.com/rewards/markets/${encodeURIComponent(conditionId)}`)
+  return extractRewardMarkets(data).find(market => (
+    readString(market, ['condition_id', 'conditionId'])?.toLowerCase() === conditionId.toLowerCase()
+  ))
+}
+
 async function fetchGammaMarkets(query?: string) {
   const params = new URLSearchParams({
     active: 'true',
@@ -623,15 +633,8 @@ async function fetchPolymarketBook(tokenId: string): Promise<PolymarketBookSumma
 
 function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportunity {
   const title = readString(market, ['question', 'title', 'market_slug', 'slug', 'condition_id']) ?? 'Untitled reward market'
-  const rewardsConfig = Array.isArray(market.rewards_config) ? market.rewards_config : []
-  const configDailyReward = rewardsConfig.reduce((sum, item) => {
-    const record = asRecord(item)
-    return sum + (record ? readNumber(record, ['rate_per_day', 'ratePerDay']) ?? 0 : 0)
-  }, 0)
-  const dailyReward =
-    readNumber(market, ['total_daily_rate', 'native_daily_rate', 'daily_reward', 'dailyRewards', 'rewards_daily_rate', 'rate_per_day', 'reward']) ??
-    (configDailyReward > 0 ? configDailyReward : undefined) ??
-    readNestedNumber(market, [['reward_config', 'daily_reward'], ['rewardConfig', 'dailyReward']])
+  const dailyReward = verifiedDailyRewardPool(market)
+    ?? readNestedNumber(market, [['reward_config', 'daily_reward'], ['rewardConfig', 'dailyReward']])
   const maxSpread = normalizeSpread(
     readNumber(market, ['max_spread', 'maxSpread', 'rewards_max_spread', 'rewardsMaxSpread']) ??
     readNestedNumber(market, [['reward_config', 'max_spread'], ['rewardConfig', 'maxSpread']]),
@@ -708,9 +711,18 @@ function buildExecutionPlan(opportunity: PolymarketLpOpportunity, budget?: strin
 }
 
 async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promise<PolymarketLpOpportunity> {
-  const opportunity = baseLpOpportunity(market)
-  const book: PolymarketBookSummary = opportunity.tokenId ? await fetchPolymarketBook(opportunity.tokenId).catch(() => ({})) : {}
-  const midpoint = book.midpoint ?? normalizeProbability(readNumber(market, ['last_trade_price', 'lastPrice', 'price', 'midpoint']))
+  const conditionId = readString(market, ['condition_id', 'conditionId']) ?? ''
+  const provisionalOpportunity = baseLpOpportunity(market)
+  const [verifiedMarket, provisionalBook] = await Promise.all([
+    fetchVerifiedRewardMarket(conditionId).catch(() => undefined),
+    provisionalOpportunity.tokenId ? fetchPolymarketBook(provisionalOpportunity.tokenId).catch(() => ({})) : Promise.resolve({}),
+  ])
+  const currentMarket = verifiedMarket ? mergeVerifiedRewardMarket(market, verifiedMarket) : market
+  const opportunity = baseLpOpportunity(currentMarket)
+  const book: PolymarketBookSummary = opportunity.tokenId && opportunity.tokenId !== provisionalOpportunity.tokenId
+    ? await fetchPolymarketBook(opportunity.tokenId).catch(() => ({}))
+    : provisionalBook
+  const midpoint = book.midpoint ?? normalizeProbability(readNumber(currentMarket, ['last_trade_price', 'lastPrice', 'price', 'midpoint']))
   const spread = book.spread
   const offset = Math.min(0.02, Math.max(0.005, (opportunity.maxSpread ?? 0.03) * 0.35))
   const tickSize = book.tickSize ?? '0.01'
@@ -746,6 +758,7 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
 
   return {
     ...opportunity,
+    rewardPoolVerified: Boolean(verifiedMarket),
     ...book,
     midpoint,
     tickSize,
@@ -855,6 +868,7 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     description: opportunity.description,
     daysToResolve: opportunity.daysToResolve,
     dailyReward: rounded(opportunity.dailyReward, 2),
+    rewardPoolVerified: opportunity.rewardPoolVerified,
     maxSpread: rounded(opportunity.maxSpread),
     minSize: rounded(opportunity.minSize, 2),
     estimatedRewardCapitalUsdc,
@@ -885,6 +899,7 @@ function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
     marketUrl: opportunity.marketUrl,
     daysToResolve: opportunity.daysToResolve,
     dailyReward: rounded(opportunity.dailyReward, 2),
+    rewardPoolVerified: opportunity.rewardPoolVerified,
     liquidity: rounded(opportunity.liquidity, 2),
     liveSpread: rounded(opportunity.spread),
     depthAtTwoCents: rounded(opportunity.depthAtTwoCents, 2),
@@ -901,6 +916,7 @@ function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
 }
 
 function passesScoutSafety(mode: ScoutMode, opportunity: PolymarketLpOpportunity) {
+  if (!opportunity.rewardPoolVerified || !opportunity.dailyReward || opportunity.dailyReward <= 0) return false
   if (mode !== 'football') return isConservativeCandidate(opportunity)
   const confirmedSpread = typeof opportunity.spread === 'number' && opportunity.spread <= Math.min(opportunity.maxSpread ?? 0.03, 0.025)
   const confirmedDepth = typeof opportunity.depthAtTwoCents === 'number' && opportunity.depthAtTwoCents >= 5_000

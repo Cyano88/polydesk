@@ -6,6 +6,7 @@ import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polym
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
 import { assessLpProbe } from '../src/lib/lpProbeOptimization'
+import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polymarket-reward-market'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -235,9 +236,8 @@ test('Pulse rotates verified liquidity intelligence without inventing provider d
   assert.match(pulsePage, /requestRef\.current\?\.key === requestKey/)
   assert.match(pulsePage, /response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(pulsePage, /document\.visibilityState === 'visible'/)
-  assert.match(pulseApi, /STALE_CACHE_MS = 10 \* 60_000/)
-  assert.match(pulseApi, /void refreshPulseFeed\(budget, dailyTarget\)\.catch/)
-  assert.match(pulseApi, /stale-while-revalidate=120/)
+  assert.doesNotMatch(pulseApi, /STALE_CACHE_MS|stale-while-revalidate/)
+  assert.match(pulseApi, /Cache-Control', 'public, max-age=15'/)
   assert.match(pulseApi, /Server-Timing/)
   assert.match(pulseApi, /X-PolyDesk-Pulse-Cache/)
   assert.match(pulsePage, /PolymarketLimitOrderTicket/)
@@ -246,6 +246,7 @@ test('Pulse rotates verified liquidity intelligence without inventing provider d
   assert.doesNotMatch(pulsePage, /rounded-3xl bg-gray-950/)
   assert.match(pulseApi, /\.slice\(0, 3\)/)
   assert.match(pulseApi, /budget, dailyTarget, candidateLimit: 80, opportunityLimit: 10/)
+  assert.match(pulseApi, /filter\(fitsTargetCapital\)/)
   assert.match(pulseApi, /index === 0 \? 'Strongest opportunity'/)
   assert.match(pulsePage, /ordinal\(lead\.rank\)/)
   assert.match(pulsePage, /rankMedal\(index \+ 1\)/)
@@ -412,6 +413,26 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(portfolioApi, /\/rebates\/current\?date=/)
   assert.doesNotMatch(limitOrderTicket, /submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
+})
+
+test('Pulse replaces stale bulk reward pools with the exact market configuration', () => {
+  const stale = {
+    condition_id: '0xmarket',
+    total_daily_rate: 286,
+    rewards_config: [{ rate_per_day: 286 }],
+  }
+  const exact = {
+    condition_id: '0xmarket',
+    rewards_min_size: 50,
+    rewards_config: [{ rate_per_day: 57 }],
+  }
+  const merged = mergeVerifiedRewardMarket(stale, exact)
+  assert.equal(verifiedDailyRewardPool(merged), 57)
+  assert.equal(merged.rewards_min_size, 50)
+  assert.equal('total_daily_rate' in merged, false)
+  assert.equal(verifiedDailyRewardPool({ total_daily_rate: 1.99972, rewards_config: [{ rate_per_day: 0.001 }] }), 1.99972)
+  assert.match(lpScoutApi, /rewards\/markets\/\$\{encodeURIComponent\(conditionId\)\}/)
+  assert.match(lpScoutApi, /rewardPoolVerified/)
 })
 
 test('LP probe recommendations require stable samples and expose fill risk', () => {

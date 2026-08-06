@@ -79,7 +79,6 @@ type PulseFeed = {
 const cache = new Map<string, { expiresAt: number; feed: PulseFeed }>()
 const pending = new Map<string, Promise<PulseFeed>>()
 const CACHE_MS = 60_000
-const STALE_CACHE_MS = 10 * 60_000
 const MAX_TARGET_PROFILES = 25
 
 function opportunities(result: Awaited<ReturnType<typeof buildLiveScout>>) {
@@ -92,6 +91,10 @@ function opportunityKey(opportunity: PulseOpportunity) {
 
 function validOpportunity(opportunity: PulseOpportunity | undefined): opportunity is PulseOpportunity {
   return Boolean(opportunity?.title && opportunity?.marketUrl?.startsWith('https://polymarket.com/event/'))
+}
+
+function fitsTargetCapital(opportunity: PulseOpportunity) {
+  return opportunity.minimumSetupCovered !== false
 }
 
 function highlight(kind: PulseHighlight['kind'], rank: PulseHighlight['rank'], opportunity: PulseOpportunity, context: string, image = '', source = ''): PulseHighlight {
@@ -124,6 +127,7 @@ async function buildPulseFeed(budget = '', dailyTarget = ''): Promise<PulseFeed>
   const bestMarkets = bestScout
     ? opportunities(bestScout)
         .filter(validOpportunity)
+        .filter(fitsTargetCapital)
         .sort((a, b) => combinedScore(b) - combinedScore(a))
         .slice(0, 3)
     : []
@@ -148,6 +152,7 @@ async function buildPulseFeed(budget = '', dailyTarget = ''): Promise<PulseFeed>
     ...(bestScout ? opportunities(bestScout) : []),
   ]
     .filter(validOpportunity)
+    .filter(fitsTargetCapital)
     .sort((a, b) => combinedScore(b) - combinedScore(a))
     .filter(opportunity => {
       const key = opportunityKey(opportunity)
@@ -206,10 +211,6 @@ export async function getPulseFeed(force = false, budget = '', dailyTarget = '')
   const current = cache.get(targetKey(budget, dailyTarget))
   if (!force && current) {
     if (current.expiresAt > now) return current.feed
-    if (current.expiresAt + STALE_CACHE_MS > now) {
-      void refreshPulseFeed(budget, dailyTarget).catch(() => undefined)
-      return current.feed
-    }
   }
   return refreshPulseFeed(budget, dailyTarget)
 }
@@ -225,7 +226,7 @@ export default async function pulseHandler(req: Request, res: Response) {
   const cacheStatus = getPulseCacheStatus(budget, dailyTarget)
   const feed = await getPulseFeed(false, budget, dailyTarget)
   const durationMs = Date.now() - startedAt
-  res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
+  res.setHeader('Cache-Control', 'public, max-age=15')
   res.setHeader('Server-Timing', `pulse;dur=${durationMs}`)
   res.setHeader('X-PolyDesk-Pulse-Cache', cacheStatus)
   if (durationMs >= 1_000) {
