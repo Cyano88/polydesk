@@ -255,9 +255,9 @@ export default function Opportunity() {
 
             <div className="mt-6 flex items-end justify-between gap-4 border-t border-gray-200 pt-5">
               <div>
-                <p className="text-sm font-semibold text-gray-700">Daily market rewards</p>
+                <p className="text-sm font-semibold text-gray-700">Daily market reward pool</p>
                 <p className="mt-1 text-4xl font-semibold tracking-[-0.05em] text-blue-600">
-                  {number(opportunity.dailyReward)} <span className="text-lg tracking-tight">USDC/day</span>
+                  {number(opportunity.dailyReward)} <span className="text-lg tracking-tight">USDC/day pool</span>
                 </p>
               </div>
             </div>

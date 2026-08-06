@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { buildLiveScout } from './x402-polymarket-scout.js'
+import { normalizeLpCapitalUsdc, normalizeLpDailyTargetUsdc } from './lp-reward-target.js'
 
 type PulseOpportunity = {
   title?: string
@@ -16,6 +17,12 @@ type PulseOpportunity = {
   maxSpread?: number
   minSize?: number
   estimatedRewardCapitalUsdc?: number
+  capitalUsdc?: number
+  dailyTargetUsdc?: number
+  requiredRewardSharePercentage?: number
+  capitalToMinimumRatio?: number
+  minimumSetupCovered?: boolean
+  targetScore?: number
   liquidity?: number
   daysToResolve?: number
   lpExecutionRisk?: string
@@ -58,6 +65,10 @@ type PulseFeed = {
   refreshAfterSeconds: number
   highlights: PulseHighlight[]
   markets: PulseOpportunity[]
+  target: {
+    capitalUsdc: number
+    dailyTargetUsdc: number
+  }
   providers: {
     news: 'live' | 'unavailable'
     football: 'live' | 'unavailable'
@@ -65,10 +76,11 @@ type PulseFeed = {
   }
 }
 
-let cache: { expiresAt: number; feed: PulseFeed } | null = null
-let pending: Promise<PulseFeed> | null = null
+const cache = new Map<string, { expiresAt: number; feed: PulseFeed }>()
+const pending = new Map<string, Promise<PulseFeed>>()
 const CACHE_MS = 60_000
 const STALE_CACHE_MS = 10 * 60_000
+const MAX_TARGET_PROFILES = 25
 
 function opportunities(result: Awaited<ReturnType<typeof buildLiveScout>>) {
   return Array.isArray(result.opportunities) ? result.opportunities as PulseOpportunity[] : []
@@ -95,16 +107,24 @@ function highlight(kind: PulseHighlight['kind'], rank: PulseHighlight['rank'], o
   }
 }
 
-async function buildPulseFeed(): Promise<PulseFeed> {
+function targetKey(budget = '', dailyTarget = '') {
+  return `${normalizeLpCapitalUsdc(budget)}:${normalizeLpDailyTargetUsdc(dailyTarget)}`
+}
+
+function combinedScore(opportunity: PulseOpportunity) {
+  return Number(opportunity.score ?? 0) + Number(opportunity.targetScore ?? 0)
+}
+
+async function buildPulseFeed(budget = '', dailyTarget = ''): Promise<PulseFeed> {
   const [bestResult] = await Promise.allSettled([
-    buildLiveScout({ mode: 'best', candidateLimit: 80, opportunityLimit: 10 }),
+    buildLiveScout({ mode: 'best', budget, dailyTarget, candidateLimit: 80, opportunityLimit: 10 }),
   ])
 
   const bestScout = bestResult.status === 'fulfilled' ? bestResult.value : null
   const bestMarkets = bestScout
     ? opportunities(bestScout)
         .filter(validOpportunity)
-        .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
+        .sort((a, b) => combinedScore(b) - combinedScore(a))
         .slice(0, 3)
     : []
   const bestLp = bestMarkets[0]
@@ -128,7 +148,7 @@ async function buildPulseFeed(): Promise<PulseFeed> {
     ...(bestScout ? opportunities(bestScout) : []),
   ]
     .filter(validOpportunity)
-    .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
+    .sort((a, b) => combinedScore(b) - combinedScore(a))
     .filter(opportunity => {
       const key = opportunityKey(opportunity)
       if (seen.has(key)) return false
@@ -143,6 +163,10 @@ async function buildPulseFeed(): Promise<PulseFeed> {
     refreshAfterSeconds: CACHE_MS / 1000,
     highlights,
     markets,
+    target: {
+      capitalUsdc: normalizeLpCapitalUsdc(budget),
+      dailyTargetUsdc: normalizeLpDailyTargetUsdc(dailyTarget),
+    },
     providers: {
       news: matchedContext.some(signal => signal.kind === 'news') ? 'live' : 'unavailable',
       football: matchedContext.some(signal => signal.kind === 'football') ? 'live' : 'unavailable',
@@ -151,34 +175,43 @@ async function buildPulseFeed(): Promise<PulseFeed> {
   }
 }
 
-function refreshPulseFeed() {
-  if (pending) return pending
-  pending = buildPulseFeed()
+function refreshPulseFeed(budget = '', dailyTarget = '') {
+  const key = targetKey(budget, dailyTarget)
+  const active = pending.get(key)
+  if (active) return active
+  const request = buildPulseFeed(budget, dailyTarget)
     .then(feed => {
-      cache = { expiresAt: Date.now() + CACHE_MS, feed }
+      if (!cache.has(key) && cache.size >= MAX_TARGET_PROFILES) {
+        const oldestKey = cache.keys().next().value
+        if (oldestKey) cache.delete(oldestKey)
+      }
+      cache.set(key, { expiresAt: Date.now() + CACHE_MS, feed })
       return feed
     })
     .finally(() => {
-      pending = null
+      pending.delete(key)
     })
-  return pending
+  pending.set(key, request)
+  return request
 }
 
-export function getPulseCacheStatus() {
-  if (!cache) return pending ? 'warming' : 'cold'
-  return cache.expiresAt > Date.now() ? 'fresh' : 'stale'
+export function getPulseCacheStatus(budget = '', dailyTarget = '') {
+  const current = cache.get(targetKey(budget, dailyTarget))
+  if (!current) return pending.size ? 'warming' : 'cold'
+  return current.expiresAt > Date.now() ? 'fresh' : 'stale'
 }
 
-export async function getPulseFeed(force = false) {
+export async function getPulseFeed(force = false, budget = '', dailyTarget = '') {
   const now = Date.now()
-  if (!force && cache) {
-    if (cache.expiresAt > now) return cache.feed
-    if (cache.expiresAt + STALE_CACHE_MS > now) {
-      void refreshPulseFeed().catch(() => undefined)
-      return cache.feed
+  const current = cache.get(targetKey(budget, dailyTarget))
+  if (!force && current) {
+    if (current.expiresAt > now) return current.feed
+    if (current.expiresAt + STALE_CACHE_MS > now) {
+      void refreshPulseFeed(budget, dailyTarget).catch(() => undefined)
+      return current.feed
     }
   }
-  return refreshPulseFeed()
+  return refreshPulseFeed(budget, dailyTarget)
 }
 
 export default async function pulseHandler(req: Request, res: Response) {
@@ -187,8 +220,10 @@ export default async function pulseHandler(req: Request, res: Response) {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
   const startedAt = Date.now()
-  const cacheStatus = getPulseCacheStatus()
-  const feed = await getPulseFeed()
+  const budget = String(req.query.budget ?? '').trim()
+  const dailyTarget = String(req.query.target ?? '').trim()
+  const cacheStatus = getPulseCacheStatus(budget, dailyTarget)
+  const feed = await getPulseFeed(false, budget, dailyTarget)
   const durationMs = Date.now() - startedAt
   res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
   res.setHeader('Server-Timing', `pulse;dur=${durationMs}`)

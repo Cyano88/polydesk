@@ -4,6 +4,7 @@ import test from 'node:test'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket } from '../src/lib/polymarketRewards'
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polymarket-lp-recovery'
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
+import { lpRewardTargetMetrics } from '../api/lp-reward-target'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -230,11 +231,11 @@ test('Pulse rotates verified liquidity intelligence without inventing provider d
   assert.match(pulsePage, /10_000/)
   assert.match(pulsePage, /PULSE_SESSION_MAX_AGE_MS = 10 \* 60_000/)
   assert.match(pulsePage, /sessionStorage\.setItem\(PULSE_SESSION_KEY/)
-  assert.match(pulsePage, /if \(requestRef\.current\) return requestRef\.current/)
+  assert.match(pulsePage, /requestRef\.current\?\.key === requestKey/)
   assert.match(pulsePage, /response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(pulsePage, /document\.visibilityState === 'visible'/)
   assert.match(pulseApi, /STALE_CACHE_MS = 10 \* 60_000/)
-  assert.match(pulseApi, /void refreshPulseFeed\(\)\.catch/)
+  assert.match(pulseApi, /void refreshPulseFeed\(budget, dailyTarget\)\.catch/)
   assert.match(pulseApi, /stale-while-revalidate=120/)
   assert.match(pulseApi, /Server-Timing/)
   assert.match(pulseApi, /X-PolyDesk-Pulse-Cache/)
@@ -243,13 +244,20 @@ test('Pulse rotates verified liquidity intelligence without inventing provider d
   assert.doesNotMatch(pulsePage, /ShieldCheck|Human quote guide/)
   assert.doesNotMatch(pulsePage, /rounded-3xl bg-gray-950/)
   assert.match(pulseApi, /\.slice\(0, 3\)/)
-  assert.match(pulseApi, /candidateLimit: 80, opportunityLimit: 10/)
+  assert.match(pulseApi, /budget, dailyTarget, candidateLimit: 80, opportunityLimit: 10/)
   assert.match(pulseApi, /index === 0 \? 'Strongest opportunity'/)
   assert.match(pulsePage, /ordinal\(lead\.rank\)/)
   assert.match(pulsePage, /rankMedal\(index \+ 1\)/)
   assert.match(pulsePage, /markets\.slice\(0, 5\)/)
   assert.match(pulsePage, /🥇/)
-  assert.match(pulsePage, /USDC minimum setup/)
+  assert.match(pulsePage, /USDC two-sided setup/)
+  assert.match(pulsePage, /USDC\/day market pool/)
+  assert.match(pulsePage, /Daily LP reward target in USDC/)
+  assert.match(pulsePage, /Two-sided setup estimates the minimum across both suggested quotes/)
+  assert.match(pulsePage, /target needs/)
+  assert.match(pulseApi, /combinedScore/)
+  assert.match(lpScoutApi, /targetRankScore/)
+  assert.match(lpScoutApi, /iran\(\?:ian\)\?/)
   assert.doesNotMatch(pulseApi, /news:coming-soon|football:coming-soon/)
   assert.match(pulsePage, /A stronger qualifying market replaces the weakest/)
   assert.match(pulsePage, /ContextLabels/)
@@ -298,6 +306,11 @@ test('market reward ticket separates instant buying, two-sided quotes, scoring, 
 })
 
 test('portfolio LP rewards use official share and daily pool data', () => {
+  const feasibleTarget = lpRewardTargetMetrics({ dailyPoolUsdc: 300, minimumSetupUsdc: 19, capitalUsdc: 45, dailyTargetUsdc: 1 })
+  assert.equal(Number(feasibleTarget.requiredRewardSharePercentage?.toFixed(3)), 0.333)
+  assert.equal(feasibleTarget.minimumSetupCovered, true)
+  const underfundedTarget = lpRewardTargetMetrics({ dailyPoolUsdc: 129, minimumSetupUsdc: 48.4, capitalUsdc: 45, dailyTargetUsdc: 1 })
+  assert.equal(underfundedTarget.minimumSetupCovered, false)
   const snapshots = buildPolymarketLpRewardSnapshots({
     orders: [{ orderId: 'order-1', assetId: '123' }],
     userMarkets: [{
@@ -382,6 +395,8 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /onClick=\{\(\) => void cancelPortfolioLpOrder\(order\)\}/)
   assert.match(paymentLinks, /Scoring now/)
   assert.match(paymentLinks, /reward share/)
+  assert.match(paymentLinks, /Below \$1\/day target/)
+  assert.match(paymentLinks, /Find a stronger market/)
   assert.match(paymentLinks, /Net LP result/)
   assert.match(paymentLinks, /Today plus current LP positions/)
   assert.match(paymentLinks, /Rewards today/)
@@ -423,7 +438,7 @@ test('public LP opportunities use a stable share route and truthful Polymarket-s
   assert.match(server, /app\.get\('\/opportunity\/:slug'/)
   assert.match(opportunityApi, /mode: 'market'/)
   assert.match(opportunityPage, /bg-\[#2f5bff\]/)
-  assert.match(opportunityPage, /Daily market rewards/)
+  assert.match(opportunityPage, /Daily market reward pool/)
   assert.match(opportunityPage, /Suggested prices/)
   assert.match(opportunityPage, /Open trading choices/)
   assert.match(pulsePage, /\/opportunity\/\$\{encodeURIComponent\(marketSlug\(selected\)\)\}/)
@@ -432,7 +447,7 @@ test('public LP opportunities use a stable share route and truthful Polymarket-s
   assert.match(opportunityImage, /const WIDTH = 1080/)
   assert.match(opportunityImage, /const HEIGHT = 1350/)
   assert.match(opportunityImage, /image\/png/)
-  assert.match(opportunityImage, /Daily rewards/)
+  assert.match(opportunityImage, /Daily market pool/)
   assert.match(opportunityImage, /Min setup/)
   assert.match(opportunityImage, /Choose a side, enter an amount, and wait for a match/)
   assert.match(opportunityImage, /View opportunity on PolyDesk/)

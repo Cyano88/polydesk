@@ -20,6 +20,12 @@ type PulseOpportunity = {
   maxSpread?: number
   minSize?: number
   estimatedRewardCapitalUsdc?: number
+  capitalUsdc?: number
+  dailyTargetUsdc?: number
+  requiredRewardSharePercentage?: number
+  capitalToMinimumRatio?: number
+  minimumSetupCovered?: boolean
+  targetScore?: number
   daysToResolve?: number
   lpExecutionRisk?: string
   score?: number
@@ -61,6 +67,10 @@ type PulseFeed = {
   refreshAfterSeconds?: number
   highlights?: PulseHighlight[]
   markets?: PulseOpportunity[]
+  target?: {
+    capitalUsdc: number
+    dailyTargetUsdc: number
+  }
   providers?: Record<string, 'live' | 'unavailable'>
 }
 
@@ -133,10 +143,10 @@ function riskText(value: string | undefined) {
 
 function MarketMetrics({ opportunity, inverse = false, compact = false }: { opportunity: PulseOpportunity; inverse?: boolean; compact?: boolean }) {
   const items = [
-    opportunity.dailyReward == null ? '' : `${compactNumber(opportunity.dailyReward)} USDC/day`,
+    opportunity.dailyReward == null ? '' : `${compactNumber(opportunity.dailyReward)} USDC/day market pool`,
     opportunity.estimatedRewardCapitalUsdc == null
       ? ''
-      : `≈${compactNumber(opportunity.estimatedRewardCapitalUsdc, 2)} USDC minimum setup`,
+      : `≈${compactNumber(opportunity.estimatedRewardCapitalUsdc, 2)} USDC two-sided setup`,
     metric(Number(opportunity.liveSpread) * 100, 'c spread', 1),
     metric(opportunity.depthAtTwoCents, ' depth', 0),
     typeof opportunity.daysToResolve === 'number' ? `${opportunity.daysToResolve}d left` : '',
@@ -145,6 +155,20 @@ function MarketMetrics({ opportunity, inverse = false, compact = false }: { oppo
     <div className={`flex flex-wrap gap-x-2.5 gap-y-0.5 font-semibold ${compact ? 'text-[10px]' : 'text-[11px]'} ${inverse ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
       {items.map(item => <span key={item}>{item}</span>)}
     </div>
+  )
+}
+
+function RewardTargetStatus({ opportunity, inverse = false }: { opportunity: PulseOpportunity; inverse?: boolean }) {
+  const target = Number(opportunity.dailyTargetUsdc)
+  const share = Number(opportunity.requiredRewardSharePercentage)
+  if (!Number.isFinite(target) || !Number.isFinite(share)) return null
+  const covered = opportunity.minimumSetupCovered !== false
+  return (
+    <p className={`text-[11px] font-semibold ${inverse ? 'text-white/80' : covered ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+      {covered
+        ? `$${compactNumber(target, 2)}/day target needs ${compactNumber(share, 2)}% of this pool`
+        : `Budget is below this market's two-sided setup`}
+    </p>
   )
 }
 
@@ -229,6 +253,7 @@ function PulseHeroCard({
         {available ? (
           <>
             <div className="mt-3"><MarketMetrics opportunity={lead.opportunity} inverse /></div>
+            <div className="mt-1"><RewardTargetStatus opportunity={lead.opportunity} inverse /></div>
             <div className="mt-2"><ContextLabels opportunity={lead.opportunity} inverse /></div>
             <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white">
               View reward opportunity <ArrowRight className="h-3.5 w-3.5" />
@@ -251,28 +276,36 @@ export default function Pulse() {
   const [active, setActive] = useState(0)
   const [selected, setSelected] = useState<PulseOpportunity | null>(null)
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
-  const requestRef = useRef<Promise<void> | null>(null)
+  const [capitalInput, setCapitalInput] = useState('50')
+  const [targetInput, setTargetInput] = useState('1')
+  const [targetProfile, setTargetProfile] = useState({ capital: '50', daily: '1' })
+  const requestRef = useRef<{ key: string; promise: Promise<void> } | null>(null)
 
   const load = useCallback(() => {
-    if (requestRef.current) return requestRef.current
+    const requestKey = `${targetProfile.capital}:${targetProfile.daily}`
+    if (requestRef.current?.key === requestKey) return requestRef.current.promise
     const request = (async () => {
       try {
-        const response = await fetch('/api/pulse')
+        const query = new URLSearchParams({ budget: targetProfile.capital, target: targetProfile.daily })
+        const response = await fetch(`/api/pulse?${query.toString()}`)
         const data = await response.json().catch(() => null) as PulseFeed | null
         if (!response.ok || !data?.ok) throw new Error('Pulse is unavailable.')
+        if (requestRef.current?.key !== requestKey) return
         rememberPulseSnapshot(data)
         setFeed(data)
         setError('')
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Pulse is unavailable.')
       } finally {
-        setLoading(false)
-        requestRef.current = null
+        if (requestRef.current?.key === requestKey) {
+          setLoading(false)
+          requestRef.current = null
+        }
       }
     })()
-    requestRef.current = request
+    requestRef.current = { key: requestKey, promise: request }
     return request
-  }, [])
+  }, [targetProfile.capital, targetProfile.daily])
 
   useEffect(() => {
     void load()
@@ -354,10 +387,11 @@ export default function Pulse() {
               )}
             </div>
             <div className="mt-3"><MarketMetrics opportunity={selected} /></div>
+            <div className="mt-2"><RewardTargetStatus opportunity={selected} /></div>
             <div className="mt-2"><ContextLabels opportunity={selected} /></div>
             {selected.estimatedRewardCapitalUsdc != null && (
               <p className="mt-3 text-[11px] leading-5 text-gray-500 dark:text-gray-400">
-                Estimated from the market’s minimum reward size across both suggested quotes. Qualifying does not guarantee a payout; Polymarket does not pay earned rewards below 1 USDC.
+                Two-sided setup estimates the minimum across both suggested quotes and can improve scoring. Your exact estimate appears only after Polymarket scores the live quote against competing makers; rewards below 1 USDC are not paid.
               </p>
             )}
             {selected.description && <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-300">{selected.description}</p>}
@@ -404,8 +438,35 @@ export default function Pulse() {
       <div>
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Live intelligence</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Pulse</h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Three market-reward opportunities, continuously re-ranked. A stronger qualifying market replaces the weakest.</p>
+        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Lower-risk reward markets ranked for your capital and daily target. A stronger qualifying market replaces the weakest.</p>
       </div>
+
+      <form
+        className="polydesk-card grid grid-cols-[1fr_1fr_auto] items-end gap-2 p-3"
+        onSubmit={event => {
+          event.preventDefault()
+          const capital = Math.max(1, Number(capitalInput) || 50).toString()
+          const daily = Math.max(0.01, Number(targetInput) || 1).toString()
+          setCapitalInput(capital)
+          setTargetInput(daily)
+          setLoading(true)
+          setTargetProfile({ capital, daily })
+        }}
+      >
+        <label className="min-w-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          Capital
+          <span className="mt-1 flex h-9 items-center rounded-lg border border-gray-200 px-2 text-xs font-semibold text-gray-950 dark:border-white/10 dark:text-white">
+            $<input value={capitalInput} onChange={event => setCapitalInput(event.target.value)} inputMode="decimal" aria-label="LP capital in USDC" className="min-w-0 flex-1 bg-transparent pl-1 outline-none" />
+          </span>
+        </label>
+        <label className="min-w-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          Daily target
+          <span className="mt-1 flex h-9 items-center rounded-lg border border-gray-200 px-2 text-xs font-semibold text-gray-950 dark:border-white/10 dark:text-white">
+            $<input value={targetInput} onChange={event => setTargetInput(event.target.value)} inputMode="decimal" aria-label="Daily LP reward target in USDC" className="min-w-0 flex-1 bg-transparent pl-1 outline-none" />
+          </span>
+        </label>
+        <button type="submit" className="h-9 rounded-lg bg-gray-950 px-3 text-xs font-semibold text-white dark:bg-white dark:text-gray-950">Find</button>
+      </form>
 
       {loading ? (
         <div className="min-h-[260px]"><PolyDeskLoadingState label="Loading Pulse" /></div>

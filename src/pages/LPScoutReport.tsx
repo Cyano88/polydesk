@@ -258,7 +258,7 @@ export default function LPScoutReport() {
                   <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Markets</p>
                   <div className="space-y-2">
                     {report.marketLinks.slice(0, showAllMarkets ? 10 : 3).map((market, index) => {
-                      const reward = metricLabel(market.rewardDaily, 'USDC/day')
+                      const reward = metricLabel(market.rewardDaily, 'USDC/day market pool')
                       const rewardCapital = numericMetric(market.estimatedRewardCapitalUsdc)
                       const rewardShares = numericMetric(market.rewardMinShares)
                       const spread = metricLabel(market.spread, 'spread')

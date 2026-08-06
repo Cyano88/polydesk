@@ -7,6 +7,7 @@ import { protectLpScoutWithHashPayLink } from './hashpaylink-agentic-checkout.js
 import { getPolyStreamFeed } from './poly-stream.js'
 import { enrichLpOpportunitiesWithContext } from './lp-context-intelligence.js'
 import { estimateTwoSidedRewardCapitalUsdc } from './lp-reward-estimate.js'
+import { lpRewardTargetMetrics, normalizeLpCapitalUsdc, normalizeLpDailyTargetUsdc } from './lp-reward-target.js'
 
 type PaidRequest = Request & {
   payment?: {
@@ -86,6 +87,7 @@ type ScoutOptions = {
   mode: ScoutMode
   context?: string
   budget?: string
+  dailyTarget?: string
   candidateLimit?: number
   opportunityLimit?: number
 }
@@ -468,7 +470,7 @@ function conservativePriceScore(midpoint: number | undefined) {
 }
 
 function isHeadlineSensitiveMarket(title: string) {
-  return /\b(war|ceasefire|peace deal|nuclear|iran|russia|ukraine|israel|gaza|tariff|fed|rate cut|election|president|trump|biden|supreme court|hurricane|earthquake|oil|crude|wti|brent|hormuz|opec|middle east)\b/i.test(title)
+  return /\b(war|ceasefire|peace deal|nuclear|iran(?:ian)?|russia(?:n)?|ukraine|ukrainian|israel(?:i)?|gaza|tariff|fed|rate cut|election|president|trump|biden|supreme court|hurricane|earthquake|oil|crude|wti|brent|hormuz|opec|middle east)\b/i.test(title)
 }
 
 function isConservativeCandidate(opportunity: PolymarketLpOpportunity) {
@@ -739,7 +741,7 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
     typeof opportunity.daysToResolve === 'number' ? `${opportunity.daysToResolve} days left` : 'duration unknown',
     typeof spread === 'number' ? `${(spread * 100).toFixed(1)}c spread` : 'spread unknown',
     typeof book.depthAtTwoCents === 'number' ? `${book.depthAtTwoCents.toFixed(0)} depth within 2c` : 'depth unknown',
-    typeof opportunity.dailyReward === 'number' ? `${opportunity.dailyReward.toFixed(0)} USDC/day rewards` : 'reward rate unknown',
+    typeof opportunity.dailyReward === 'number' ? `${opportunity.dailyReward.toFixed(0)} USDC/day market pool` : 'reward pool unknown',
   ].join(' | ')
 
   return {
@@ -834,10 +836,17 @@ function formatOpportunitySignal(opportunity: ReturnType<typeof serializeOpportu
         ? 'Best verified football-market match'
         : 'Best current LP candidate'
   const days = typeof opportunity.daysToResolve === 'number' ? ` | ${opportunity.daysToResolve}d left` : ''
-  return `${prefix}: ${opportunity.title.slice(0, 82)} | reward/day ${reward} USDC | spread ${spread}${depth}${days} | risk ${opportunity.lpExecutionRisk}`
+  return `${prefix}: ${opportunity.title.slice(0, 82)} | market pool/day ${reward} USDC | spread ${spread}${depth}${days} | risk ${opportunity.lpExecutionRisk}`
 }
 
-function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: string) {
+function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: string, dailyTarget?: string) {
+  const estimatedRewardCapitalUsdc = estimateTwoSidedRewardCapitalUsdc(opportunity.minSize, opportunity.suggestedYesBid, opportunity.suggestedNoBid)
+  const targetMetrics = lpRewardTargetMetrics({
+    dailyPoolUsdc: opportunity.dailyReward,
+    minimumSetupUsdc: estimatedRewardCapitalUsdc,
+    capitalUsdc: normalizeLpCapitalUsdc(budget),
+    dailyTargetUsdc: normalizeLpDailyTargetUsdc(dailyTarget),
+  })
   return {
     title: opportunity.title,
     marketSlug: opportunity.slug,
@@ -848,11 +857,8 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     dailyReward: rounded(opportunity.dailyReward, 2),
     maxSpread: rounded(opportunity.maxSpread),
     minSize: rounded(opportunity.minSize, 2),
-    estimatedRewardCapitalUsdc: estimateTwoSidedRewardCapitalUsdc(
-      opportunity.minSize,
-      opportunity.suggestedYesBid,
-      opportunity.suggestedNoBid,
-    ),
+    estimatedRewardCapitalUsdc,
+    ...targetMetrics,
     liquidity: rounded(opportunity.liquidity, 2),
     bestBid: rounded(opportunity.bestBid),
     bestAsk: rounded(opportunity.bestAsk),
@@ -906,6 +912,7 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const mode = normalizeScoutMode(options.mode)
   const context = cleanContext(options.context)
   const budget = cleanContext(options.budget)
+  const dailyTarget = cleanContext(options.dailyTarget)
   const markets = await loadScoutMarkets({ mode, context, budget })
   if (!markets.length) {
     const requestText = mode === 'news' && context ? ` for "${context}"` : mode === 'market' && context ? ` for "${context}"` : ''
@@ -947,8 +954,14 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
       request: { mode, context, budget },
     }
   }
+  const targetRankScore = (opportunity: PolymarketLpOpportunity) => lpRewardTargetMetrics({
+    dailyPoolUsdc: opportunity.dailyReward,
+    minimumSetupUsdc: estimateTwoSidedRewardCapitalUsdc(opportunity.minSize, opportunity.suggestedYesBid, opportunity.suggestedNoBid),
+    capitalUsdc: normalizeLpCapitalUsdc(budget),
+    dailyTargetUsdc: normalizeLpDailyTargetUsdc(dailyTarget),
+  }).targetScore
   const ranked = (conservative.length ? conservative : analyzed)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => (b.score + targetRankScore(b)) - (a.score + targetRankScore(a)))
   const rejected = analyzed
     .filter(opportunity => !passesScoutSafety(mode, opportunity))
     .sort((a, b) => b.score - a.score)
@@ -961,7 +974,7 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const opportunities = await enrichLpOpportunitiesWithContext(
     ranked
       .slice(0, opportunityLimit)
-      .map(opportunity => serializeOpportunity(opportunity, budget)),
+      .map(opportunity => serializeOpportunity(opportunity, budget, dailyTarget)),
   )
 
   const themeText = mode === 'news' && context ? ` for "${context}"` : ''

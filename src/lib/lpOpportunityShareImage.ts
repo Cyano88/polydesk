@@ -149,7 +149,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
     roundedRect(context, 88, 410, 420, 132, 18)
     context.fillStyle = '#eff6ff'
     context.fill()
-    drawLabel(context, 'Daily rewards', 120, 450, BLUE)
+    drawLabel(context, 'Daily market pool', 120, 450, BLUE)
     context.fillStyle = BLUE
     context.font = '700 48px Inter, Arial, sans-serif'
     context.fillText(format(data.dailyReward), 120, 510)
@@ -175,7 +175,7 @@ export async function renderLpOpportunityPng(data: LpOpportunityShareData) {
   roundedRect(context, 88, 410, 420, 132, 18)
   context.fillStyle = '#eff6ff'
   context.fill()
-  drawLabel(context, 'Daily rewards', 124, 450, BLUE)
+  drawLabel(context, 'Daily market pool', 124, 450, BLUE)
   context.fillStyle = BLUE
   context.font = '700 54px Inter, Arial, sans-serif'
   context.fillText(format(data.dailyReward), 124, 514)

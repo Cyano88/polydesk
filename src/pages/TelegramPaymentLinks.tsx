@@ -3102,7 +3102,7 @@ export function TelegramHelperPanel({
       const minimum = Number(opportunity.estimatedRewardCapitalUsdc)
       const spread = Number(opportunity.liveSpread)
       const details = [
-        Number.isFinite(reward) && reward > 0 ? `${reward.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC/day` : '',
+        Number.isFinite(reward) && reward > 0 ? `${reward.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC/day market pool` : '',
         Number.isFinite(spread) && spread > 0 ? `${spread.toFixed(1)}c spread` : '',
         Number.isFinite(minimum) && minimum > 0 ? `about ${minimum.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDC minimum setup` : '',
       ].filter(Boolean)
@@ -6612,6 +6612,8 @@ function formatSignedUsd(value: unknown, fallback = 'N/A') {
   return n > 0 ? `+${amount}` : n < 0 ? `-${amount}` : amount
 }
 
+const POLYDESK_LP_DAILY_TARGET_USDC = 1
+
 function normalizePortfolioValue(value: unknown) {
   if (typeof value === 'number') return { value }
   if (Array.isArray(value)) {
@@ -10030,6 +10032,11 @@ export function PolyPortfolioPanel({
                         <p className='mt-1 text-xs text-emerald-700'>
                           Earned today {lpRewardSnapshots[order.orderId].earnedTodayUsdc === null && lpRewardSnapshots[order.orderId].scoring === true ? 'Pending' : formatUsd(lpRewardSnapshots[order.orderId].earnedTodayUsdc)} · Est. {lpRewardSnapshots[order.orderId].estimatedDailyUsdc === null ? 'Pending' : `${formatUsd(lpRewardSnapshots[order.orderId].estimatedDailyUsdc)}/day`}
                         </p>
+                        {lpRewardSnapshots[order.orderId].estimatedDailyUsdc !== null && (
+                          <p className={cn('mt-0.5 text-[10px] font-semibold', lpRewardSnapshots[order.orderId].estimatedDailyUsdc >= POLYDESK_LP_DAILY_TARGET_USDC ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')}>
+                            {lpRewardSnapshots[order.orderId].estimatedDailyUsdc >= POLYDESK_LP_DAILY_TARGET_USDC ? '$1/day target reached' : 'Below $1/day target'}
+                          </p>
+                        )}
                         <p className='mt-0.5 text-[10px] font-medium text-gray-500'>
                           {lpRewardSnapshots[order.orderId].scoring === true ? 'Scoring now' : lpRewardSnapshots[order.orderId].scoring === false ? 'Not scoring' : 'Scoring unavailable'} · {lpRewardSnapshots[order.orderId].earningPercentage === null ? 'Reward share unavailable' : `${lpRewardSnapshots[order.orderId].earningPercentage.toFixed(2)}% reward share`}
                         </p>
@@ -10044,6 +10051,9 @@ export function PolyPortfolioPanel({
                     >
                       {lpOrderCancelBusy === order.orderId ? 'Cancelling...' : 'Cancel quote'}
                       </button>
+                      {lpRewardSnapshots[order.orderId]?.estimatedDailyUsdc !== null && lpRewardSnapshots[order.orderId]?.estimatedDailyUsdc !== undefined && Number(lpRewardSnapshots[order.orderId].estimatedDailyUsdc) < POLYDESK_LP_DAILY_TARGET_USDC && (
+                        <button type='button' onClick={onOpenLpScout} className='ml-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400'>Find a stronger market</button>
+                      )}
                     </div>
                   ))}
                 </div>
