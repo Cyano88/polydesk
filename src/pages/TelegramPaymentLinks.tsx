@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
 import {
   ArrowLeft,
@@ -7028,7 +7028,6 @@ export function PolyPortfolioPanel({
   }) => void
 }) {
   const showLegacyBack = surface !== 'standalone'
-  const navigate = useNavigate()
   const [portfolioSearchParams] = useSearchParams()
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
@@ -10128,14 +10127,16 @@ export function PolyPortfolioPanel({
                             : 'The stable estimate is too far below the $1/day target.',
                       },
                     }[assessment.recommendation]
+                    const replacementQuery = new URLSearchParams({
+                      service: 'pulse',
+                      capital: String(assessment.availableCapitalUsdc ?? 50),
+                      target: String(assessment.dailyTargetUsdc),
+                      replace: '1',
+                    })
+                    const replacementUrl = '/polydesk?' + replacementQuery.toString()
                     return (
                     <div key={group.key}>
-                      <a
-                      href={primaryOrder.marketUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 transition hover:border-gray-200 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-white/20"
-                    >
+                      <div className="block rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{primaryOrder.marketTitle}</p>
@@ -10175,7 +10176,7 @@ export function PolyPortfolioPanel({
                         </div>
                         </>
                       )}
-                      </a>
+                      </div>
                       <div className='mt-1 flex flex-wrap items-center gap-2'>
                       {group.orders.map(order => (
                         <button
@@ -10189,22 +10190,21 @@ export function PolyPortfolioPanel({
                         </button>
                       ))}
                       {assessment.recommendation === 'exit' && (
-                        <button
-                          type='button'
-                          onClick={() => {
-                            const query = new URLSearchParams({
-                              service: 'pulse',
-                              capital: String(assessment.availableCapitalUsdc ?? 50),
-                              target: String(assessment.dailyTargetUsdc),
-                              replace: '1',
-                            })
-                            navigate(`/polydesk?${query.toString()}`)
-                          }}
+                        <Link
+                          to={replacementUrl}
                           className='ml-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400'
                         >
                           Replace quote
-                        </button>
+                        </Link>
                       )}
+                      <a
+                        href={primaryOrder.marketUrl}
+                        target='_blank'
+                        rel='noreferrer'
+                        className='ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                      >
+                        Open market <ExternalLink className='h-3 w-3' />
+                      </a>
                       </div>
                     </div>
                   )})}
