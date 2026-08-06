@@ -1,12 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Radio, Share2 } from '../components/icons'
 import { Link, useSearchParams } from 'react-router-dom'
+import { usePrivy } from '@privy-io/react-auth'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
+import { measuredLpMarketDecision, type LpProbeSample } from '../lib/lpProbeOptimization'
 
 const PolymarketLimitOrderTicket = lazy(() => import('../components/PolymarketLimitOrderTicket').then(module => ({ default: module.PolymarketLimitOrderTicket })))
 
 type PulseOpportunity = {
   title?: string
+  conditionId?: string
   marketSlug?: string
   marketUrl?: string
   image?: string
@@ -72,6 +75,13 @@ type PulseFeed = {
     dailyTargetUsdc: number
   }
   providers?: Record<string, 'live' | 'unavailable'>
+}
+
+type LpProbeSummary = {
+  marketId: string
+  marketTitle: string
+  marketUrl: string
+  samples: LpProbeSample[]
 }
 
 let pulseSnapshot: PulseFeed | null = null
@@ -269,6 +279,7 @@ function PulseHeroCard({
 
 export default function Pulse() {
   const [searchParams] = useSearchParams()
+  const { authenticated, getAccessToken } = usePrivy()
   const initialSnapshot = useMemo(initialPulseSnapshot, [])
   const [feed, setFeed] = useState<PulseFeed | null>(initialSnapshot)
   const [loading, setLoading] = useState(!initialSnapshot)
@@ -276,10 +287,34 @@ export default function Pulse() {
   const [active, setActive] = useState(0)
   const [selected, setSelected] = useState<PulseOpportunity | null>(null)
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
-  const [capitalInput, setCapitalInput] = useState('50')
-  const [targetInput, setTargetInput] = useState('1')
-  const [targetProfile, setTargetProfile] = useState({ capital: '50', daily: '1' })
+  const requestedCapital = searchParams.get('capital')?.trim() || '50'
+  const requestedTarget = searchParams.get('target')?.trim() || '1'
+  const [capitalInput, setCapitalInput] = useState(requestedCapital)
+  const [targetInput, setTargetInput] = useState(requestedTarget)
+  const [targetProfile, setTargetProfile] = useState({ capital: requestedCapital, daily: requestedTarget })
+  const [probeSummaries, setProbeSummaries] = useState<LpProbeSummary[]>([])
   const requestRef = useRef<{ key: string; promise: Promise<void> } | null>(null)
+
+  useEffect(() => {
+    if (!authenticated) {
+      setProbeSummaries([])
+      return
+    }
+    let active = true
+    void (async () => {
+      const token = await getAccessToken().catch(() => null)
+      if (!token) return
+      const response = await fetch('/api/polymarket-portfolio?action=lp-probe-summary', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null)
+      if (!response?.ok) return
+      const data = await response.json().catch(() => null) as { summaries?: LpProbeSummary[] } | null
+      if (active && Array.isArray(data?.summaries)) setProbeSummaries(data.summaries)
+    })()
+    return () => {
+      active = false
+    }
+  }, [authenticated, getAccessToken])
 
   const load = useCallback(() => {
     const requestKey = `${targetProfile.capital}:${targetProfile.daily}`
@@ -323,8 +358,23 @@ export default function Pulse() {
     }
   }, [feed?.refreshAfterSeconds, load])
 
-  const highlights = feed?.highlights ?? []
-  const markets = feed?.markets ?? []
+  const measuredExclusions = useMemo(() => {
+    const excluded = new Set<string>()
+    const capitalUsdc = Math.max(0, Number(targetProfile.capital) || 0)
+    const dailyTargetUsdc = Math.max(0.01, Number(targetProfile.daily) || 1)
+    for (const summary of probeSummaries) {
+      const decision = measuredLpMarketDecision({ samples: summary.samples, capitalUsdc, dailyTargetUsdc })
+      if (decision.exclude) excluded.add(summary.marketId.toLowerCase())
+    }
+    return excluded
+  }, [probeSummaries, targetProfile.capital, targetProfile.daily])
+  const opportunityAllowed = useCallback((opportunity: PulseOpportunity) => {
+    const conditionId = String(opportunity.conditionId ?? '').toLowerCase()
+    return !conditionId || !measuredExclusions.has(conditionId)
+  }, [measuredExclusions])
+  const highlights = (feed?.highlights ?? []).filter(item => opportunityAllowed(item.opportunity))
+  const markets = (feed?.markets ?? []).filter(opportunityAllowed)
+  const excludedCount = (feed?.markets ?? []).filter(item => !opportunityAllowed(item)).length
   const lead = highlights.length ? highlights[active % highlights.length] : undefined
   useEffect(() => {
     const requested = searchParams.get('opportunity')?.trim().toLowerCase()
@@ -467,6 +517,12 @@ export default function Pulse() {
         </label>
         <button type="submit" className="h-9 rounded-lg bg-gray-950 px-3 text-xs font-semibold text-white dark:bg-white dark:text-gray-950">Find</button>
       </form>
+
+      {excludedCount > 0 && (
+        <p className="rounded-lg bg-blue-50 px-3 py-2 text-[11px] font-medium text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">
+          {excludedCount} recently measured {excludedCount === 1 ? 'market was' : 'markets were'} removed because this capital could not meet the selected daily target. PolyDesk will reconsider {excludedCount === 1 ? 'it' : 'them'} after six hours.
+        </p>
+      )}
 
       {loading ? (
         <div className="min-h-[260px]"><PolyDeskLoadingState label="Loading Pulse" /></div>

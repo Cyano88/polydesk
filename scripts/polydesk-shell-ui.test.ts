@@ -5,7 +5,7 @@ import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polym
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polymarket-lp-recovery'
 import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
-import { assessLpProbe } from '../src/lib/lpProbeOptimization'
+import { assessLpProbe, measuredLpMarketDecision } from '../src/lib/lpProbeOptimization'
 import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polymarket-reward-market'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
@@ -404,7 +404,7 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(paymentLinks, /Approx\. capital for \$1\/day/)
   assert.match(paymentLinks, /Shortfall/)
   assert.match(paymentLinks, /One-sided quote: reduced reward scoring may apply/)
-  assert.match(paymentLinks, /Find a stronger market/)
+  assert.match(paymentLinks, /Replace quote/)
   assert.match(paymentLinks, /authRequest\('GET', '\/auth\/derive-api-key', true\)/)
   assert.match(paymentLinks, /Polymarket authorization did not respond/)
   assert.doesNotMatch(paymentLinks, /throw new Error\(`\$\{message\}\$\{suffix\}`\)/)
@@ -481,6 +481,30 @@ test('LP probe recommendations require stable samples and expose fill risk', () 
   const asymmetric = assessLpProbe({ orders: [{ ...orders[0], matchedSize: 5 }, orders[1]], samples: [], scoring: true })
   assert.equal(asymmetric.recommendation, 'rebalance')
   assert.equal(asymmetric.asymmetricFill, true)
+})
+
+test('persisted LP measurements suppress an underfunded market only while the evidence is fresh', () => {
+  const now = Date.parse('2026-08-06T12:00:00Z')
+  const samples = [
+    { estimatedDailyUsdc: 0.29, earningPercentage: 0.17, restingCapitalUsdc: 19, dailyTargetUsdc: 1, observedAt: now - 120_000 },
+    { estimatedDailyUsdc: 0.28, earningPercentage: 0.17, restingCapitalUsdc: 19, dailyTargetUsdc: 1, observedAt: now - 60_000 },
+  ]
+  const underfunded = measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 1, now })
+  assert.equal(underfunded.stable, true)
+  assert.equal(underfunded.fresh, true)
+  assert.equal(underfunded.exclude, true)
+  assert.equal(Number(underfunded.roughCapitalForTargetUsdc?.toFixed(2)), 67.86)
+  assert.equal(Number(underfunded.capitalShortfallUsdc?.toFixed(2)), 21.89)
+  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 70, dailyTargetUsdc: 1, now }).exclude, false)
+  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 0.2, now }).exclude, false)
+  assert.equal(measuredLpMarketDecision({ samples, capitalUsdc: 45.97, dailyTargetUsdc: 1, now: now + 7 * 60 * 60_000 }).exclude, false)
+  assert.match(portfolioApi, /action === 'record-lp-probes'/)
+  assert.match(portfolioApi, /action === 'lp-probe-summary'/)
+  assert.match(portfolioApi, /probe_samples jsonb/)
+  assert.match(paymentLinks, /Replace quote/)
+  assert.match(pulsePage, /measuredLpMarketDecision/)
+  assert.match(pulsePage, /after six hours/)
+  assert.match(lpScoutApi, /conditionId: opportunity\.conditionId/)
 })
 
 test('resolved losing positions are ended and excluded from the open count', () => {

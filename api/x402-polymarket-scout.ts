@@ -95,6 +95,7 @@ type ScoutOptions = {
 
 type PolymarketLpOpportunity = {
   title: string
+  conditionId?: string
   slug?: string
   tokenId?: string
   endDate?: string
@@ -669,6 +670,7 @@ function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportun
 
   return {
     title,
+    conditionId: readString(market, ['condition_id', 'conditionId'])?.toLowerCase(),
     slug,
     tokenId: extractPolymarketTokenIds(market)[0],
     endDate,
@@ -862,6 +864,7 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
   })
   return {
     title: opportunity.title,
+    conditionId: opportunity.conditionId,
     marketSlug: opportunity.slug,
     marketUrl: opportunity.marketUrl,
     image: opportunity.image,

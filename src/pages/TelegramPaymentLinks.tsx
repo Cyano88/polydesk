@@ -6570,6 +6570,7 @@ type PolymarketPortfolioBundle = {
     matchedSize: number
     originalSize: number | null
     status: string
+    probeSamples?: LpProbeSample[]
     lastCheckedAt?: string | null
     createdAt?: string | null
   }>
@@ -7027,6 +7028,7 @@ export function PolyPortfolioPanel({
   }) => void
 }) {
   const showLegacyBack = surface !== 'standalone'
+  const navigate = useNavigate()
   const [portfolioSearchParams] = useSearchParams()
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
@@ -7147,6 +7149,27 @@ export function PolyPortfolioPanel({
   const [lpMakerRebatesToday, setLpMakerRebatesToday] = useState<number | null>(null)
   const [lpOrderCancelBusy, setLpOrderCancelBusy] = useState('')
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
+
+  useEffect(() => {
+    const persisted: Record<string, LpProbeSample[]> = {}
+    for (const order of bundle?.lpOrders ?? []) {
+      const marketId = String(order.marketId ?? '').toLowerCase()
+      if (!marketId || !order.probeSamples?.length) continue
+      persisted[marketId] = order.probeSamples
+    }
+    if (!Object.keys(persisted).length) return
+    setLpProbeSamples(current => {
+      const next = { ...current }
+      for (const [marketId, samples] of Object.entries(persisted)) {
+        const merged = [...(next[marketId] ?? []), ...samples]
+          .filter((sample, index, all) => all.findIndex(candidate => candidate.observedAt === sample.observedAt) === index)
+          .sort((a, b) => a.observedAt - b.observedAt)
+          .slice(-5)
+        next[marketId] = merged
+      }
+      return next
+    })
+  }, [bundle?.lpOrders])
 
   function selectTradingTab(tab: 'balance' | 'fund' | 'withdraw' | 'positions' | 'monitor') {
     setTradingWalletTab(tab)
@@ -7413,21 +7436,48 @@ export function PolyPortfolioPanel({
       })
       setLpRewardSnapshots(snapshots)
       const observedAt = Date.now()
-      setLpProbeSamples(current => {
-        const next = { ...current }
-        for (const snapshot of Object.values(snapshots)) {
-          if (snapshot.scoring !== true || snapshot.estimatedDailyUsdc === null || snapshot.earningPercentage === null) continue
-          const samples = next[snapshot.conditionId] ?? []
-          const previous = samples.at(-1)
-          if (previous && observedAt - previous.observedAt < 55_000) continue
-          next[snapshot.conditionId] = [...samples, {
-            estimatedDailyUsdc: snapshot.estimatedDailyUsdc,
-            earningPercentage: snapshot.earningPercentage,
-            observedAt,
-          }].slice(-5)
+      const nextProbeSamples = { ...lpProbeSamples }
+      const probesToPersist: Array<Record<string, unknown>> = []
+      for (const snapshot of Object.values(snapshots)) {
+        if (snapshot.scoring !== true || snapshot.estimatedDailyUsdc === null || snapshot.earningPercentage === null) continue
+        const marketId = snapshot.conditionId.toLowerCase()
+        const samples = nextProbeSamples[marketId] ?? []
+        const previous = samples.at(-1)
+        if (previous && observedAt - previous.observedAt < 55_000) continue
+        const marketOrders = resolvedTrackedLpOrders.filter(order => String(order.marketId ?? '').toLowerCase() === marketId)
+        const capitalAssessment = assessLpProbe({ orders: marketOrders, samples: [], scoring: snapshot.scoring })
+        if (capitalAssessment.restingCapitalUsdc === null || capitalAssessment.restingCapitalUsdc <= 0) continue
+        const sample: LpProbeSample = {
+          estimatedDailyUsdc: snapshot.estimatedDailyUsdc,
+          earningPercentage: snapshot.earningPercentage,
+          restingCapitalUsdc: capitalAssessment.restingCapitalUsdc,
+          dailyTargetUsdc: POLYDESK_LP_DAILY_TARGET_USDC,
+          availableCapitalUsdc: hasConfirmedTradingCash ? tradingPusdValue : null,
+          observedAt,
         }
-        return next
-      })
+        nextProbeSamples[marketId] = [...samples, sample].slice(-5)
+        probesToPersist.push({ marketId, ...sample })
+      }
+      setLpProbeSamples(nextProbeSamples)
+      if (portfolioAccessToken && probesToPersist.length) {
+        void fetch('/api/polymarket-portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${portfolioAccessToken}` },
+          body: JSON.stringify({ action: 'record-lp-probes', probes: probesToPersist }),
+        }).then(async response => {
+          if (!response.ok) return
+          const data = await readPolyDeskJson<{ samples?: Record<string, LpProbeSample[]> }>(response, 'LP measurements could not be saved.')
+          if (!data.samples) return
+          setLpProbeSamples(current => ({ ...current, ...data.samples }))
+          setBundle(current => current ? {
+            ...current,
+            lpOrders: (current.lpOrders ?? []).map(order => {
+              const samples = data.samples?.[String(order.marketId ?? '').toLowerCase()]
+              return samples ? { ...order, probeSamples: samples } : order
+            }),
+          } : current)
+        }).catch(() => undefined)
+      }
       const snapshotsByCondition = new Map(Object.values(snapshots).map(snapshot => [snapshot.conditionId, snapshot] as const))
       setLpRewardsEarnedToday(rewardResults[0].status === 'fulfilled'
         ? [...snapshotsByCondition.values()].reduce((total, snapshot) => total + (snapshot.earnedTodayUsdc ?? 0), 0)
@@ -10139,7 +10189,21 @@ export function PolyPortfolioPanel({
                         </button>
                       ))}
                       {assessment.recommendation === 'exit' && (
-                        <button type='button' onClick={onOpenLpScout} className='ml-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400'>Find a stronger market</button>
+                        <button
+                          type='button'
+                          onClick={() => {
+                            const query = new URLSearchParams({
+                              service: 'pulse',
+                              capital: String(assessment.availableCapitalUsdc ?? 50),
+                              target: String(assessment.dailyTargetUsdc),
+                              replace: '1',
+                            })
+                            navigate(`/polydesk?${query.toString()}`)
+                          }}
+                          className='ml-2 text-[10px] font-semibold text-blue-600 dark:text-blue-400'
+                        >
+                          Replace quote
+                        </button>
                       )}
                       </div>
                     </div>

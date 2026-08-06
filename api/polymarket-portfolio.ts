@@ -207,7 +207,8 @@ function ensureSchema() {
       );
 
       alter table polymarket_lp_order_watch
-        add column if not exists origin text not null default 'lp-scout';
+        add column if not exists origin text not null default 'lp-scout',
+        add column if not exists probe_samples jsonb not null default '[]'::jsonb;
 
       create index if not exists polymarket_funding_attempts_user_idx
         on polymarket_funding_attempts (privy_user_id, created_at desc);
@@ -680,9 +681,50 @@ function serializeLpOrder(row: Record<string, unknown>) {
     matchedSize: Number(row.matched_size || 0),
     origin: row.origin ? String(row.origin) : 'lp-scout',
     status: String(row.status),
+    probeSamples: normalizeStoredLpProbeSamples(row.probe_samples),
     lastCheckedAt: row.last_checked_at instanceof Date ? row.last_checked_at.toISOString() : null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : null,
   }
+}
+
+type StoredLpProbeSample = {
+  estimatedDailyUsdc: number
+  earningPercentage: number
+  restingCapitalUsdc: number
+  dailyTargetUsdc: number
+  availableCapitalUsdc: number | null
+  observedAt: number
+}
+
+function normalizeStoredLpProbeSamples(value: unknown): StoredLpProbeSample[] {
+  let source = value
+  if (typeof source === 'string') {
+    try {
+      source = JSON.parse(source)
+    } catch {
+      source = []
+    }
+  }
+  if (!Array.isArray(source)) return []
+  return source.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const record = item as Record<string, unknown>
+    const estimatedDailyUsdc = Number(record.estimatedDailyUsdc)
+    const earningPercentage = Number(record.earningPercentage)
+    const restingCapitalUsdc = Number(record.restingCapitalUsdc)
+    const dailyTargetUsdc = Number(record.dailyTargetUsdc)
+    const available = record.availableCapitalUsdc == null ? null : Number(record.availableCapitalUsdc)
+    const observedAt = Number(record.observedAt)
+    if (
+      !Number.isFinite(estimatedDailyUsdc) || estimatedDailyUsdc < 0
+      || !Number.isFinite(earningPercentage) || earningPercentage < 0
+      || !Number.isFinite(restingCapitalUsdc) || restingCapitalUsdc <= 0
+      || !Number.isFinite(dailyTargetUsdc) || dailyTargetUsdc <= 0
+      || (available !== null && (!Number.isFinite(available) || available < 0))
+      || !Number.isFinite(observedAt) || observedAt <= 0
+    ) return []
+    return [{ estimatedDailyUsdc, earningPercentage, restingCapitalUsdc, dailyTargetUsdc, availableCapitalUsdc: available, observedAt }]
+  }).sort((a, b) => a.observedAt - b.observedAt).slice(-5)
 }
 
 async function insertLpLifecycleAlerts(input: {
@@ -1653,11 +1695,97 @@ export default async function handler(req: Request, res: Response) {
       return res.json({ ok: true, alerts: rows.map(serializeAlertRecord) })
     }
 
+    if (req.method === 'GET' && action === 'lp-probe-summary') {
+      const rows = (await requirePool().query(
+        `select distinct on (lower(market_id))
+                market_id, market_title, market_url, probe_samples, updated_at
+           from polymarket_lp_order_watch
+          where owner_privy_user_id = $1
+            and market_id is not null
+            and jsonb_array_length(probe_samples) > 0
+          order by lower(market_id), updated_at desc
+          limit 50`,
+        [privyUserId],
+      )).rows
+      return res.json({
+        ok: true,
+        summaries: rows.map(row => ({
+          marketId: String(row.market_id).toLowerCase(),
+          marketTitle: String(row.market_title),
+          marketUrl: String(row.market_url),
+          samples: normalizeStoredLpProbeSamples(row.probe_samples),
+        })),
+      })
+    }
+
     if (req.method !== 'POST') {
       return res.status(405).json({ ok: false, error: 'Method not allowed' })
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>
+
+    if (action === 'record-lp-probes') {
+      const requested = Array.isArray(body.probes) ? body.probes.slice(0, 8) : []
+      if (!requested.length) return res.status(400).json({ ok: false, error: 'At least one LP probe is required.' })
+      const saved: Record<string, StoredLpProbeSample[]> = {}
+      for (const item of requested) {
+        if (!item || typeof item !== 'object') continue
+        const probe = item as Record<string, unknown>
+        const marketId = cleanString(probe.marketId, 96).toLowerCase()
+        const estimatedDailyUsdc = Number(probe.estimatedDailyUsdc)
+        const earningPercentage = Number(probe.earningPercentage)
+        const restingCapitalUsdc = Number(probe.restingCapitalUsdc)
+        const dailyTargetUsdc = Number(probe.dailyTargetUsdc)
+        const availableCapitalUsdc = probe.availableCapitalUsdc == null ? null : Number(probe.availableCapitalUsdc)
+        if (
+          !/^0x[a-f0-9]{64}$/.test(marketId)
+          || !Number.isFinite(estimatedDailyUsdc) || estimatedDailyUsdc < 0 || estimatedDailyUsdc > 100_000
+          || !Number.isFinite(earningPercentage) || earningPercentage < 0 || earningPercentage > 100
+          || !Number.isFinite(restingCapitalUsdc) || restingCapitalUsdc <= 0 || restingCapitalUsdc > 10_000_000
+          || !Number.isFinite(dailyTargetUsdc) || dailyTargetUsdc <= 0 || dailyTargetUsdc > 1_000_000
+          || (availableCapitalUsdc !== null && (!Number.isFinite(availableCapitalUsdc) || availableCapitalUsdc < 0 || availableCapitalUsdc > 10_000_000))
+        ) continue
+        const row = (await requirePool().query(
+          `select probe_samples
+             from polymarket_lp_order_watch
+            where owner_privy_user_id = $1
+              and lower(market_id) = $2
+              and status in ('live', 'partial')
+            order by updated_at desc
+            limit 1`,
+          [privyUserId, marketId],
+        )).rows[0]
+        if (!row) continue
+        const observedAt = Date.now()
+        const sample: StoredLpProbeSample = {
+          estimatedDailyUsdc,
+          earningPercentage,
+          restingCapitalUsdc,
+          dailyTargetUsdc,
+          availableCapitalUsdc,
+          observedAt,
+        }
+        const current = normalizeStoredLpProbeSamples(row.probe_samples)
+        const previous = current.at(-1)
+        const next = previous && observedAt - previous.observedAt < 55_000
+          ? [...current.slice(0, -1), { ...sample, observedAt: previous.observedAt }]
+          : [...current, sample]
+        const bounded = next.slice(-5)
+        await requirePool().query(
+          `update polymarket_lp_order_watch
+              set probe_samples = $3::jsonb,
+                  updated_at = now()
+            where owner_privy_user_id = $1
+              and lower(market_id) = $2`,
+          [privyUserId, marketId, JSON.stringify(bounded)],
+        )
+        saved[marketId] = bounded
+      }
+      if (!Object.keys(saved).length) {
+        return res.status(422).json({ ok: false, error: 'No active LP order matched these probe measurements.' })
+      }
+      return res.json({ ok: true, samples: saved })
+    }
 
     if (action === 'register-lp-order') {
       const orderId = cleanString(body.orderId, 96)

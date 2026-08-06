@@ -4,6 +4,7 @@ import { normalizeLpCapitalUsdc, normalizeLpDailyTargetUsdc } from './lp-reward-
 
 type PulseOpportunity = {
   title?: string
+  conditionId?: string
   marketSlug?: string
   marketUrl?: string
   image?: string

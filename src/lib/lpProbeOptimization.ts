@@ -2,6 +2,18 @@ export type LpProbeSample = {
   estimatedDailyUsdc: number
   earningPercentage: number
   observedAt: number
+  restingCapitalUsdc?: number
+  dailyTargetUsdc?: number
+  availableCapitalUsdc?: number | null
+}
+
+export type MeasuredLpMarketDecision = {
+  stable: boolean
+  fresh: boolean
+  exclude: boolean
+  estimatedDailyUsdc: number | null
+  roughCapitalForTargetUsdc: number | null
+  capitalShortfallUsdc: number | null
 }
 
 export type LpProbeOrder = {
@@ -35,6 +47,56 @@ const ACTIVE_ORDER_STATUSES = new Set(['live', 'partial'])
 function finiteNonNegative(value: unknown) {
   const number = Number(value)
   return Number.isFinite(number) ? Math.max(0, number) : 0
+}
+
+export function measuredLpMarketDecision({
+  samples,
+  capitalUsdc,
+  dailyTargetUsdc = 1,
+  now = Date.now(),
+  maxAgeMs = 6 * 60 * 60_000,
+}: {
+  samples: LpProbeSample[]
+  capitalUsdc: number
+  dailyTargetUsdc?: number
+  now?: number
+  maxAgeMs?: number
+}): MeasuredLpMarketDecision {
+  const valid = samples
+    .filter(sample => (
+      Number.isFinite(sample.estimatedDailyUsdc)
+      && sample.estimatedDailyUsdc >= 0
+      && Number.isFinite(sample.observedAt)
+    ))
+    .sort((a, b) => a.observedAt - b.observedAt)
+  const latest = valid.at(-1) ?? null
+  const previous = valid.length > 1 ? valid.at(-2) ?? null : null
+  const gap = latest && previous ? latest.observedAt - previous.observedAt : 0
+  const variation = latest && previous
+    ? Math.abs(latest.estimatedDailyUsdc - previous.estimatedDailyUsdc) / Math.max(latest.estimatedDailyUsdc, previous.estimatedDailyUsdc, 0.01)
+    : Number.POSITIVE_INFINITY
+  const stable = Boolean(latest && previous && gap >= 55_000 && variation <= 0.15)
+  const fresh = Boolean(latest && now - latest.observedAt <= Math.max(60_000, maxAgeMs))
+  const restingCapital = latest && Number.isFinite(Number(latest.restingCapitalUsdc))
+    ? finiteNonNegative(latest.restingCapitalUsdc)
+    : 0
+  const target = Math.max(0.01, finiteNonNegative(dailyTargetUsdc))
+  const estimatedDailyUsdc = latest?.estimatedDailyUsdc ?? null
+  const roughCapitalForTargetUsdc = estimatedDailyUsdc !== null && estimatedDailyUsdc > 0 && restingCapital > 0
+    ? restingCapital * target / estimatedDailyUsdc
+    : null
+  const capital = finiteNonNegative(capitalUsdc)
+  const capitalShortfallUsdc = roughCapitalForTargetUsdc === null
+    ? null
+    : Math.max(0, roughCapitalForTargetUsdc - capital)
+  return {
+    stable,
+    fresh,
+    exclude: stable && fresh && capitalShortfallUsdc !== null && capitalShortfallUsdc > 0,
+    estimatedDailyUsdc,
+    roughCapitalForTargetUsdc,
+    capitalShortfallUsdc,
+  }
 }
 
 export function assessLpProbe({
