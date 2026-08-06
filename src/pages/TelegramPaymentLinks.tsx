@@ -45,6 +45,7 @@ import { PrivyDisconnectButton } from '../lib/PrivyDisconnectButton'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
+import { isActivePolymarketPosition as isActiveOpenPosition, isClaimablePolymarketPosition as isClaimablePosition, polymarketPositionStatus, type PolymarketPositionStatus } from '../lib/polymarketPositionStatus'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import {
@@ -6656,27 +6657,6 @@ function numberOrNull(value: unknown) {
   return Number.isFinite(n) ? n : null
 }
 
-function isClaimablePosition(position: PolymarketPosition) {
-  if (position.redeemable !== true) return false
-  const value = numberOrNull(position.currentValue)
-  if (value !== null) return value > 0
-  const size = numberOrNull(position.size)
-  return size === null ? true : size > 0
-}
-
-function isActiveOpenPosition(position: PolymarketPosition) {
-  if (isClaimablePosition(position)) return false
-  if (position.redeemable === true) return false
-  if (position.closed === true || position.archived === true) return false
-  const status = `${position.status ?? ''} ${position.marketStatus ?? ''}`.toLowerCase()
-  if (/(resolved|closed|settled|final|ended|archived)/.test(status)) return false
-  const value = numberOrNull(position.currentValue)
-  const size = numberOrNull(position.size)
-  if ((value ?? 0) > 0 || (size ?? 0) > 0) return true
-  if (value !== null || size !== null) return (value ?? 0) > 0 || (size ?? 0) > 0
-  return true
-}
-
 function positionValueSum(positions: PolymarketPosition[]) {
   return positions.reduce((sum, position) => {
     const value = numberOrNull(position.currentValue)
@@ -6687,21 +6667,6 @@ function positionValueSum(positions: PolymarketPosition[]) {
 function polymarketPositionTokenId(position: PolymarketPosition) {
   const tokenId = String(position.tokenId ?? position.asset ?? '').trim()
   return /^\d+$/.test(tokenId) ? tokenId : ''
-}
-
-type PolymarketPositionStatus = 'not-started' | 'live' | 'ended'
-
-function polymarketPositionStatus(position: PolymarketPosition): PolymarketPositionStatus {
-  if (isClaimablePosition(position)) return 'ended'
-  if (position.closed === true || position.archived === true) return 'ended'
-  const status = `${position.status ?? ''} ${position.marketStatus ?? ''}`.toLowerCase()
-  if (/(resolved|closed|settled|final|ended|archived)/.test(status)) return 'ended'
-  if (/(not started|upcoming|scheduled|pre.?market)/.test(status)) return 'not-started'
-  if (position.startDate) {
-    const startedAt = new Date(position.startDate).getTime()
-    if (Number.isFinite(startedAt) && startedAt > Date.now()) return 'not-started'
-  }
-  return 'live'
 }
 
 function shortHex(value: string) {

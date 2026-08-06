@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket } from '../src/lib/polymarketRewards'
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from '../api/polymarket-lp-recovery'
+import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib/polymarketPositionStatus'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -371,6 +372,30 @@ test('portfolio LP rewards use official share and daily pool data', () => {
   assert.match(portfolioApi, /\/rebates\/current\?date=/)
   assert.match(limitOrderTicket, /marketId: submittedMarketId/)
   assert.doesNotMatch(paymentLinks, /window\.confirm/)
+})
+
+test('resolved losing positions are ended and excluded from the open count', () => {
+  const now = Date.parse('2026-08-06T12:00:00Z')
+  const resolvedLoss = {
+    size: 50,
+    currentValue: 0,
+    curPrice: 0,
+    redeemable: false,
+    endDate: '2026-08-05T12:00:00Z',
+  }
+  assert.equal(isActivePolymarketPosition(resolvedLoss, now), false)
+  assert.equal(polymarketPositionStatus(resolvedLoss, now), 'ended')
+  const livePosition = {
+    size: 50,
+    currentValue: 24,
+    curPrice: 0.48,
+    redeemable: false,
+    endDate: '2026-10-31T00:00:00Z',
+  }
+  assert.equal(isActivePolymarketPosition(livePosition, now), true)
+  assert.equal(polymarketPositionStatus(livePosition, now), 'live')
+  assert.equal(isActivePolymarketPosition({ size: 0, currentValue: 0 }, now), false)
+  assert.equal(polymarketPositionStatus({ size: 0, currentValue: 0 }, now), 'ended')
 })
 
 test('public LP opportunities use a stable share route and truthful Polymarket-style ticket', () => {
