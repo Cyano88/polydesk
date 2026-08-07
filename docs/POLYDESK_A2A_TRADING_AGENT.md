@@ -1,12 +1,12 @@
 # PolyDesk A2A Trading Agent
 
-This is the overarching A2A service for PolyDesk Agent `#5427`. It combines public wallet watching, deterministic selection, account readiness, verified funding guidance, bounded trade preparation, OKX-native buyer execution, and public PnL evidence in one task.
+This is the overarching A2A service for PolyDesk Agent `#5427`. It combines public wallet watching, deterministic selection, account readiness, verified funding guidance, bounded trade preparation, buyer-controlled execution, and public PnL evidence in one task.
 
 It is not a custodial trading bot. PolyDesk never asks for a private key, seed phrase, wallet authorization key, or reusable Polymarket CLOB secret.
 
 ## One-sentence flow
 
-Give PolyDesk a public signal and a written spend/price cap; it prepares one bounded Polymarket BUY, OKX executes it through the buyer's Agentic Wallet, and PolyDesk returns a recomputable public PnL receipt.
+Give PolyDesk a public signal and a written spend/price cap; it prepares one bounded Polymarket BUY, the buyer places it with a compatible EVM signer controlling the verified Deposit Wallet, and PolyDesk returns a recomputable public PnL receipt. Paying for the service through OKX Agentic Wallet does not by itself prove Polymarket approval or order-signing support.
 
 ## Why A2A
 
@@ -35,7 +35,7 @@ The original single-purchase PolyDesk Trading Agent `#38484` remains available a
 
 **Description:**
 
-> Give PolyDesk a watched Polymarket wallet or an exact public BUY, your buyer owner EOA, and a written spend, price, and expiry cap. PolyDesk checks the owner-derived Deposit Wallet, returns a verified funding or approval action when required, then delivers one OKX-native BUY signal for execution by the buyer's own Agentic Wallet. The task finishes with a public, recomputable open or realized PnL receipt. No private keys or reusable CLOB credentials are shared. AUTO_BEST_FIT ranks execution quality under explicit rules; it does not predict profit.
+> Give PolyDesk a watched Polymarket wallet or an exact public BUY, your buyer owner EOA, and a written spend, price, and expiry cap. PolyDesk checks the owner-derived Deposit Wallet, returns a verified funding or approval action when required, then delivers one bounded BUY signal. Place it with a compatible EVM signer controlling that Deposit Wallet. The task finishes with a public, recomputable open or realized PnL receipt. No private keys or reusable CLOB credentials are shared. AUTO_BEST_FIT ranks execution quality under explicit rules; it does not predict profit.
 
 ## Task parameters
 

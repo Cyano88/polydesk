@@ -61,7 +61,7 @@ const missionSteps = [
   ['Choose a signal', 'Provide a watched Polymarket wallet or one exact public BUY.'],
   ['Set the limits', 'Write the maximum spend, maximum price, and expiry.'],
   ['Resolve readiness', 'PolyDesk verifies the account and returns funding or collateral approval only when required.'],
-  ['Execute and prove', 'The buyer’s Agentic Wallet executes the bounded order and PolyDesk returns public PnL evidence.'],
+  ['Execute and prove', 'A compatible EVM signer places the bounded order and PolyDesk returns public PnL evidence.'],
 ] as const
 
 function dateLabel(value: string | null) {

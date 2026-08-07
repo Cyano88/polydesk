@@ -218,14 +218,14 @@ export function a2aTradingDescriptor(req: Request) {
     version: '2026-08-02',
     type: 'A2A',
     promise: 'Watch or select a public Polymarket position, verify the buyer account, prepare one bounded BUY signal, and return a recomputable public PnL receipt.',
-    execution: 'The OKX buyer executes the signal through its own Agentic Wallet under the task autotrade grant. PolyDesk never receives wallet keys or reusable CLOB credentials.',
+    execution: 'PolyDesk prepares a bounded signal. Service payment through OKX Agentic Wallet does not by itself prove Polymarket order-signing or approval support; execution requires a compatible EVM signer controlling the verified Deposit Wallet. PolyDesk never receives wallet keys or reusable CLOB credentials.',
     lifecycle: [
       'Publish an A2A task with a written Polymarket BUY cap.',
       'PolyDesk applies and waits for job_accepted before doing paid work.',
       'Validate the written cap with autotrade-grant-check.',
       'Watch or select a public signal and verify the owner-derived Deposit Wallet.',
-      'Return FUND or APPROVE_COLLATERAL when the buyer is not ready; otherwise return one OKX-native autotrade signal.',
-      'Deliver the signal with task deliver --autotrade; OKX stamps signalTime and executes within the buyer grant.',
+      'Return FUND or APPROVE_COLLATERAL when the buyer is not ready; otherwise return one bounded execution signal.',
+      'Deliver the signal with task deliver --autotrade; the buyer must use a compatible EVM signer and the verified Deposit Wallet to place the order.',
       'Return a public, recomputable open or realized PnL receipt.',
     ],
     operatorEndpoint: `${origin}/api/a2a/polydesk-trading-agent`,
@@ -236,6 +236,7 @@ export function a2aTradingDescriptor(req: Request) {
       'AUTO_BEST_FIT ranks execution quality under an explicit policy; it does not predict profit.',
       'The first release emits one immediate BUY signal per task.',
       'A sell or automatic exit requires a separate explicit buyer authorization.',
+      'An OKX marketplace mandate governs service spending but does not replace Polymarket token approvals or order-signing compatibility.',
     ],
   }
 }

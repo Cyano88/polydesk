@@ -7,7 +7,7 @@ import { isActivePolymarketPosition, polymarketPositionStatus } from '../src/lib
 import { lpRewardTargetMetrics } from '../api/lp-reward-target'
 import { assessLpProbe } from '../src/lib/lpProbeOptimization'
 import { rankLpOpportunitiesByMeasurements } from '../src/lib/lpMeasuredRanking'
-import { lpCapitalReadiness, readablePolymarketCapitalError } from '../src/lib/lpCapitalReadiness'
+import { lpCapitalReadiness, lpWithdrawalReadiness, readablePolymarketCapitalError } from '../src/lib/lpCapitalReadiness'
 import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polymarket-reward-market'
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
@@ -557,6 +557,22 @@ test('capital readiness keeps markets visible and blocks only an underfunded ord
   assert.match(lpScoutApi, /conditionId: opportunity\.conditionId/)
 })
 
+test('withdrawals preserve capital reserved by live buy orders', () => {
+  const orders = [
+    { status: 'live', side: 'BUY', price: 0.5, originalSize: 60, matchedSize: 0 },
+    { status: 'live', side: 'SELL', price: 0.7, originalSize: 20, matchedSize: 0 },
+  ]
+  const allowed = lpWithdrawalReadiness({ balanceUsdc: 63.97, orders, requestedUsdc: 33.97 })
+  assert.equal(allowed.reservedUsdc, 30)
+  assert.equal(allowed.availableUsdc, 33.97)
+  assert.equal(allowed.canWithdraw, true)
+  const blocked = lpWithdrawalReadiness({ balanceUsdc: 63.97, orders, requestedUsdc: 34 })
+  assert.equal(Number(blocked.withdrawalShortfallUsdc?.toFixed(2)), 0.03)
+  assert.equal(blocked.canWithdraw, false)
+  assert.match(paymentLinks, /requestPath: '\/data\/orders'/)
+  assert.match(paymentLinks, /Could not verify your live Polymarket orders\. No withdrawal was submitted\./)
+})
+
 test('resolved losing positions are ended and excluded from the open count', () => {
   const now = Date.parse('2026-08-06T12:00:00Z')
   const resolvedLoss = {
@@ -671,6 +687,9 @@ test('public portfolio watches verify email ownership and use authoritative mark
   assert.match(alertMonitor, /reconcilePolymarketWatchedPortfolios/)
   assert.match(alertMonitor, /reconcilePolymarketLpOrders/)
   assert.match(portfolioApi, /polymarket_lp_order_watch/)
+  assert.match(portfolioApi, /missingChecks = Number\(row\.missing_checks/)
+  assert.match(portfolioApi, /action === 'mark-lp-order-closed'/)
+  assert.match(paymentLinks, /Reserved capital was released/)
   assert.match(portfolioApi, /lp-order-\$\{input\.lifecycle\}/)
   assert.match(paymentLinks, /label: 'Monitor'/)
   assert.match(portfolioApi, /coalesce\(p\.deposit_wallet_address, p\.trading_address\)/)

@@ -47,7 +47,7 @@ import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
 import { POLYDESK_LOGIN_OPTIONS } from '../lib/privyLoginOptions'
 import { buildPolymarketLpRewardSnapshots, calculatePolymarketLpNetResult, polymarketConditionIdFromTokenMarket, type PolymarketLpRewardSnapshot } from '../lib/polymarketRewards'
 import { assessLpProbe, type LpProbeSample } from '../lib/lpProbeOptimization'
-import { reservedLpCapitalUsdc } from '../lib/lpCapitalReadiness'
+import { lpWithdrawalReadiness, reservedLpCapitalUsdc } from '../lib/lpCapitalReadiness'
 import { isActivePolymarketPosition as isActiveOpenPosition, isClaimablePolymarketPosition as isClaimablePosition, polymarketPositionStatus, type PolymarketPositionStatus } from '../lib/polymarketPositionStatus'
 import { LpScoutPanel, lpScoutOptions, type LpScoutPrefill } from './LpScoutPanel'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
@@ -7549,7 +7549,28 @@ export function PolyPortfolioPanel({
       })
       const result = await client.cancelOrder({ orderID: order.orderId }) as { canceled?: string[]; not_canceled?: Record<string, string>; error?: string }
       if (!result.canceled?.includes(order.orderId)) {
-        throw new Error(result.error || Object.values(result.not_canceled ?? {})[0] || 'Polymarket did not confirm cancellation.')
+        const reason = result.error || Object.values(result.not_canceled ?? {})[0] || 'Polymarket did not confirm cancellation.'
+        const noLongerOpen = /(?:order[^\n]*(?:not found|can.t be found|cannot be found)|already (?:cancelled|canceled|matched))/i.test(reason)
+        if (!noLongerOpen) throw new Error(reason)
+
+        const token = await getAccessToken()
+        let portfolioSynced = false
+        if (token) {
+          const syncResponse = await fetch('/api/polymarket-portfolio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ action: 'mark-lp-order-closed', orderId: order.orderId }),
+          }).catch(() => null)
+          portfolioSynced = Boolean(syncResponse?.ok)
+        }
+        setLpRewardSnapshots(current => Object.fromEntries(Object.entries(current).filter(([orderId]) => orderId !== order.orderId)))
+        setBundle(current => current ? { ...current, lpOrders: (current.lpOrders ?? []).filter(item => item.orderId !== order.orderId) } : current)
+        setLpRewardsNotice(portfolioSynced
+          ? 'This quote is no longer open on Polymarket. Reserved capital was released; check Positions or Activity for any fill.'
+          : 'This quote is no longer open on Polymarket. Refresh to update its final status.')
+        if (portfolioSynced) await fetchBundle()
+        if (tradingPortfolioAddress) await fetchLiveData(tradingPortfolioAddress)
+        return
       }
       const token = await getAccessToken()
       let portfolioSynced = false
@@ -8305,6 +8326,15 @@ export function PolyPortfolioPanel({
       setWithdrawError('Enter the pUSD amount to withdraw as USDC.')
       return
     }
+    const displayedReadiness = lpWithdrawalReadiness({
+      balanceUsdc: hasConfirmedTradingCash ? Number(tradingPusdValue) : null,
+      orders: openLpOrders,
+      requestedUsdc: Number(amount),
+    })
+    if (displayedReadiness.availableUsdc !== null && !displayedReadiness.canWithdraw) {
+      setWithdrawError(displayedReadiness.availableUsdc.toFixed(2) + ' pUSD is available after open orders. Cancel an open order or enter a smaller amount.')
+      return
+    }
     const signingWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
       ?? privyWallets.find(wallet => wallet.address?.toLowerCase() === signingWalletAddress.toLowerCase())
     if (!signingWallet || typeof signingWallet.getEthereumProvider !== 'function') {
@@ -8349,11 +8379,12 @@ export function PolyPortfolioPanel({
       }
       const sourceToken = data.sourceTokenAddress || '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB'
       const decimals = data.sourceTokenDecimals ?? 6
-      const [{ RelayClient }, { encodeFunctionData, parseUnits, createWalletClient, custom }, { polygon }, { BuilderConfig }] = await Promise.all([
+      const [{ RelayClient }, { encodeFunctionData, parseUnits, createWalletClient, custom }, { polygon }, { BuilderConfig }, { createL1Headers, createL2Headers }] = await Promise.all([
         import('@polymarket/builder-relayer-client'),
         import('viem'),
         import('viem/chains'),
         import('@polymarket/builder-signing-sdk'),
+        import('@polymarket/clob-client-v2'),
       ])
       const amountUnits = parseUnits(amount, decimals)
       const balanceRaw = data.balance?.raw ? BigInt(data.balance.raw) : null
@@ -8364,11 +8395,60 @@ export function PolyPortfolioPanel({
         await signingWallet.switchChain(137)
       }
       const provider = await signingWallet.getEthereumProvider()
+      await polyDeskEnsurePolygonProvider(provider)
+      const activeOwner = await polyDeskProviderAccount(provider)
+      if (activeOwner.toLowerCase() !== savedTradingAddress.toLowerCase()) {
+        throw new Error('Connected owner wallet does not control this Polymarket wallet.')
+      }
       const walletClient = createWalletClient({
         account: savedTradingAddress as `0x${string}`,
         chain: polygon,
         transport: custom(provider),
       })
+      const credentials = await polyDeskCreateOwnerApiKey(createL1Headers, walletClient, {
+        providerChainId: await polyDeskProviderChainId(provider),
+        ownerAddress: savedTradingAddress,
+        funderAddress: polymarketDepositWallet,
+      })
+      if (!polyDeskValidClobCreds(credentials)) {
+        throw new Error('Polymarket API authorization failed. No withdrawal was submitted.')
+      }
+      const openOrderHeaders = await createL2Headers(walletClient, credentials, {
+        method: 'GET',
+        requestPath: '/data/orders',
+      })
+      const openOrderResponse = await fetch('https://clob.polymarket.com/data/orders', {
+        cache: 'no-store',
+        headers: Object.fromEntries(Object.entries(openOrderHeaders).map(([key, value]) => [key, String(value)])),
+      })
+      const openOrderBody = await openOrderResponse.json().catch(() => []) as unknown
+      if (!openOrderResponse.ok) {
+        throw new Error('Could not verify your live Polymarket orders. No withdrawal was submitted.')
+      }
+      const liveOpenOrders = (Array.isArray(openOrderBody)
+        ? openOrderBody
+        : openOrderBody && typeof openOrderBody === 'object' && Array.isArray((openOrderBody as { data?: unknown[] }).data)
+          ? (openOrderBody as { data: unknown[] }).data
+          : [])
+        .filter((order): order is Record<string, unknown> => Boolean(order && typeof order === 'object'))
+        .map(order => ({
+          status: String(order.status ?? 'live'),
+          side: String(order.side ?? ''),
+          price: Number(order.price ?? 0),
+          originalSize: Number(order.original_size ?? 0),
+          matchedSize: Number(order.size_matched ?? 0),
+        }))
+      const liveReadiness = lpWithdrawalReadiness({
+        balanceUsdc: data.balance?.formatted ? Number(data.balance.formatted) : null,
+        orders: liveOpenOrders,
+        requestedUsdc: Number(amount),
+      })
+      if (!liveReadiness.canWithdraw) {
+        if (liveReadiness.availableUsdc === null) {
+          throw new Error('Could not verify available pUSD. No withdrawal was submitted.')
+        }
+        throw new Error(liveReadiness.availableUsdc.toFixed(2) + ' pUSD is available after live open orders. Cancel an open order or enter a smaller amount.')
+      }
       const relayerClient = new RelayClient(data.relayerUrl, 137, walletClient, polyDeskRelayerBuilderConfig(BuilderConfig), undefined, { chain: polygon })
       const derivedWallet = await relayerClient.deriveDepositWalletAddress()
       if (derivedWallet.toLowerCase() !== polymarketDepositWallet.toLowerCase()) {

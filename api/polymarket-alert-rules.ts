@@ -35,7 +35,7 @@ export type PositionAlertTransition =
       winningOutcome: string
     }
 
-export type PolymarketLpOrderLifecycle = 'live' | 'partial' | 'filled' | 'cancelled' | 'expired'
+export type PolymarketLpOrderLifecycle = 'live' | 'partial' | 'filled' | 'cancelled' | 'expired' | 'closed'
 
 export function normalizeLpOrderLifecycle(input: {
   status?: unknown
@@ -48,6 +48,7 @@ export function normalizeLpOrderLifecycle(input: {
 
   if (/(cancelled|canceled)/.test(status)) return 'cancelled'
   if (/(expired)/.test(status)) return 'expired'
+  if (/(closed|unavailable|not[_ -]?found)/.test(status)) return 'closed'
   if (
     (Number.isFinite(originalSize) && originalSize > 0 && Number.isFinite(matchedSize) && matchedSize >= originalSize)
     || /^(matched|filled|complete|completed)$/.test(status)
@@ -56,6 +57,32 @@ export function normalizeLpOrderLifecycle(input: {
   }
   if (Number.isFinite(matchedSize) && matchedSize > 0) return 'partial'
   return 'live'
+}
+
+export function isMissingPolymarketOrderError(input: { status?: unknown; message?: unknown }) {
+  const status = Number(input.status)
+  const message = String(input.message ?? '').trim().toLowerCase()
+  return status === 404 && /(?:order[^\n]*(?:not found|can't be found|cannot be found)|already (?:cancelled|canceled|matched))/.test(message)
+}
+
+export function shouldCloseMissingLpOrder(input: {
+  missingChecks: unknown
+  createdAt: unknown
+  now?: number
+  minimumChecks?: number
+  minimumAgeMs?: number
+}) {
+  const missingChecks = Number(input.missingChecks)
+  const createdAt = input.createdAt instanceof Date
+    ? input.createdAt.getTime()
+    : new Date(String(input.createdAt ?? '')).getTime()
+  const now = input.now ?? Date.now()
+  const minimumChecks = input.minimumChecks ?? 2
+  const minimumAgeMs = input.minimumAgeMs ?? 60_000
+  return Number.isFinite(missingChecks)
+    && missingChecks >= minimumChecks
+    && Number.isFinite(createdAt)
+    && now - createdAt >= minimumAgeMs
 }
 
 export function normalizedPercentPnl(value: unknown) {

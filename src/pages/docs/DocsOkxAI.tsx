@@ -52,13 +52,13 @@ export default function DocsOkxAI() {
 
       <Section title="A2A governed trading">
         <p><strong>PolyDesk Trading Task #38484</strong> provides one bounded mission for 0.1 USDT. <strong>PolyDesk Trading Membership #38496</strong> provides recurring access for 5 USDT per month with a 3-day trial. Both take a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits.</p>
-        <p>PolyDesk verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one OKX-native Polymarket BUY signal for execution through the buyer&apos;s own Agentic Wallet.</p>
+        <p>PolyDesk verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one bounded Polymarket BUY signal. Paying for the service through OKX Agentic Wallet does not by itself prove that wallet can grant Polymarket approvals or sign the order; placement requires a compatible EVM signer controlling the verified Deposit Wallet.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Publish a task with an explicit Polymarket BUY cap.</li>
           <li>PolyDesk waits for <Code>job_accepted</Code>.</li>
           <li>Select <Code>TRADE</Code>, <Code>POSITION</Code>, or <Code>AUTO_BEST_FIT</Code>.</li>
           <li>Complete the single returned readiness action, if any.</li>
-          <li>OKX validates and executes the short-lived signal under the buyer grant.</li>
+          <li>The buyer validates the short-lived signal and places it with a compatible EVM signer under the written limits.</li>
           <li>Read the public open or realized PnL receipt.</li>
         </ol>
         <Note>AUTO_BEST_FIT ranks execution quality under explicit spread, depth, price and time rules. It is not a profit forecast. PolyDesk never receives wallet keys or reusable CLOB credentials.</Note>

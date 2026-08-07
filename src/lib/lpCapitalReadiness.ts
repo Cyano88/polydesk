@@ -51,6 +51,29 @@ export function lpCapitalReadiness({
   }
 }
 
+export function lpWithdrawalReadiness({
+  balanceUsdc,
+  orders,
+  requestedUsdc,
+}: {
+  balanceUsdc: number | null
+  orders: LpCapitalOrder[]
+  requestedUsdc: number
+}) {
+  const capital = lpCapitalReadiness({ balanceUsdc, orders, requestedUsdc })
+  const requested = finiteNonNegative(requestedUsdc)
+  const withdrawalShortfallUsdc = capital.availableUsdc === null
+    ? null
+    : Math.max(0, requested - capital.availableUsdc)
+  return {
+    balanceUsdc: capital.balanceUsdc,
+    reservedUsdc: capital.reservedUsdc,
+    availableUsdc: capital.availableUsdc,
+    withdrawalShortfallUsdc,
+    canWithdraw: requested > 0 && withdrawalShortfallUsdc !== null && withdrawalShortfallUsdc <= 0,
+  }
+}
+
 export function ceilUsdcCents(value: number) {
   return Math.ceil(Math.max(0, finiteNonNegative(value)) * 100) / 100
 }

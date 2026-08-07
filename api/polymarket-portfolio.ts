@@ -7,8 +7,10 @@ import { BuilderConfig } from '@polymarket/builder-signing-sdk'
 import { sendTransactionalEmail } from './email-provider.js'
 import {
   crossedLossThreshold,
+  isMissingPolymarketOrderError,
   normalizeLpOrderLifecycle,
   polymarketPositionUrl,
+  shouldCloseMissingLpOrder,
   shouldAlertNewPosition,
   type PolymarketResolutionEvent,
 } from './polymarket-alert-rules.js'
@@ -208,7 +210,8 @@ function ensureSchema() {
 
       alter table polymarket_lp_order_watch
         add column if not exists origin text not null default 'lp-scout',
-        add column if not exists probe_samples jsonb not null default '[]'::jsonb;
+        add column if not exists probe_samples jsonb not null default '[]'::jsonb,
+        add column if not exists missing_checks integer not null default 0;
 
       create index if not exists polymarket_funding_attempts_user_idx
         on polymarket_funding_attempts (privy_user_id, created_at desc);
@@ -643,7 +646,11 @@ async function fetchBuilderAttributedOrder(orderId: string) {
       },
     })
     if (!response.ok) {
-      throw new Error(`Polymarket order check returned HTTP ${response.status}.`)
+      const errorBody = await response.json().catch(() => null) as { error?: unknown } | null
+      const remoteMessage = cleanString(errorBody?.error, 240)
+      const error = new Error(remoteMessage || `Polymarket order check returned HTTP ${response.status}.`) as Error & { status?: number }
+      error.status = response.status
+      throw error
     }
     return await response.json() as BuilderAttributedOrder
   } finally {
@@ -735,7 +742,7 @@ async function insertLpLifecycleAlerts(input: {
   marketTitle: string
   marketUrl: string
   outcome: string
-  lifecycle: 'partial' | 'filled' | 'cancelled' | 'expired'
+  lifecycle: 'partial' | 'filled' | 'cancelled' | 'expired' | 'closed'
   matchedSize: number
   originalSize: number
 }) {
@@ -773,13 +780,21 @@ async function insertLpLifecycleAlerts(input: {
               : 'The resting order was cancelled before it matched.',
             severity: 'info',
           }
-        : {
-            title: `${label} expired`,
-            body: input.matchedSize > 0
-              ? `${input.matchedSize.toLocaleString()} shares matched before the remaining order expired.`
-              : 'The resting order expired before it matched.',
-            severity: 'info',
-          }
+        : input.lifecycle === 'expired'
+          ? {
+              title: `${label} expired`,
+              body: input.matchedSize > 0
+                ? `${input.matchedSize.toLocaleString()} shares matched before the remaining order expired.`
+                : 'The resting order expired before it matched.',
+              severity: 'info',
+            }
+          : {
+              title: `${label} is no longer open`,
+              body: input.matchedSize > 0
+                ? `Polymarket no longer reports this order as open. ${input.matchedSize.toLocaleString()} shares were previously matched; check Positions or Activity for the final result.`
+                : 'Polymarket no longer reports this order as open. PolyDesk released its reserved-capital estimate; check Activity for the final result.',
+              severity: 'info',
+            }
 
   for (const recipient of recipients) {
     const isOwnerProfile = String(recipient.privy_user_id) === input.ownerPrivyUserId
@@ -852,6 +867,7 @@ export async function reconcilePolymarketLpOrders() {
                   original_size = case when $4 > 0 then $4 else original_size end,
                   matched_size = greatest(0, $5),
                   status = $6,
+                  missing_checks = 0,
                   last_checked_at = now(),
                   updated_at = now()
             where order_id = $1`,
@@ -879,6 +895,39 @@ export async function reconcilePolymarketLpOrders() {
           })
         }
       } catch (error) {
+        const orderError = error as Error & { status?: number }
+        if (isMissingPolymarketOrderError({ status: orderError.status, message: orderError.message })) {
+          const missingChecks = Number(row.missing_checks || 0) + 1
+          const closeOrder = shouldCloseMissingLpOrder({
+            missingChecks,
+            createdAt: row.created_at,
+          })
+          const updated = (await requirePool().query(
+            `update polymarket_lp_order_watch
+                set status = case when $3 then 'closed' else status end,
+                    missing_checks = $2,
+                    last_checked_at = now(),
+                    updated_at = now()
+              where order_id = $1
+              returning *`,
+            [orderId, missingChecks, closeOrder],
+          )).rows[0]
+          if (closeOrder && updated) {
+            await insertLpLifecycleAlerts({
+              ownerPrivyUserId: String(updated.owner_privy_user_id),
+              positionAddress: String(updated.position_address),
+              orderId,
+              marketId: cleanString(updated.market_id, 96),
+              marketTitle: String(updated.market_title),
+              marketUrl: String(updated.market_url),
+              outcome: String(updated.outcome ?? ''),
+              lifecycle: 'closed',
+              matchedSize: Number(updated.matched_size || 0),
+              originalSize: Number(updated.original_size || 0),
+            })
+          }
+          return
+        }
         console.warn('[polymarket-alert] LP order reconciliation failed', {
           orderId,
           message: error instanceof Error ? error.message : 'unknown_error',
@@ -1946,6 +1995,36 @@ export default async function handler(req: Request, res: Response) {
         marketUrl: String(row.market_url),
         outcome: String(row.outcome ?? ''),
         lifecycle: 'cancelled',
+        matchedSize: Number(row.matched_size || 0),
+        originalSize: Number(row.original_size || 0),
+      })
+      return res.json({ ok: true, monitored: true })
+    }
+
+    if (action === 'mark-lp-order-closed') {
+      const orderId = cleanString(body.orderId, 96)
+      if (!/^0x[a-fA-F0-9]{64}$/.test(orderId)) {
+        return res.status(400).json({ ok: false, error: 'A valid Polymarket order ID is required.' })
+      }
+      const row = (await requirePool().query(
+        `update polymarket_lp_order_watch
+            set status = 'closed', missing_checks = greatest(missing_checks, 2), last_checked_at = now(), updated_at = now()
+          where order_id = $1
+            and owner_privy_user_id = $2
+            and status in ('live', 'partial')
+          returning *`,
+        [orderId, privyUserId],
+      )).rows[0]
+      if (!row) return res.json({ ok: true, monitored: false })
+      await insertLpLifecycleAlerts({
+        ownerPrivyUserId: privyUserId,
+        positionAddress: String(row.position_address),
+        orderId,
+        marketId: cleanString(row.market_id, 96),
+        marketTitle: String(row.market_title),
+        marketUrl: String(row.market_url),
+        outcome: String(row.outcome ?? ''),
+        lifecycle: 'closed',
         matchedSize: Number(row.matched_size || 0),
         originalSize: Number(row.original_size || 0),
       })
