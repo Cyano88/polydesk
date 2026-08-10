@@ -36,7 +36,9 @@ import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import polydeskA2aTradingAgentHandler, { polydeskA2aTradingReceiptHandler } from './api/polydesk-a2a-trading-agent.js'
-import polydeskMarketContextHandler from './api/polydesk-market-context.js'
+import polydeskMarketContextHandler, {
+  createPolydeskMarketContextHealthHandler,
+} from './api/polydesk-market-context.js'
 import paylinkBankSendHandler from './api/paylink-bank-send.js'
 import hashPayLinkPolymarketFundingHandler from './api/hashpaylink-polymarket-funding.js'
 import hashPayLinkWebhookHandler from './api/hashpaylink-webhook.js'
@@ -163,6 +165,11 @@ app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHan
 app.all('/api/a2a/polydesk-trading-agent', strictLimiter, polydeskA2aTradingAgentHandler)
 app.get('/api/a2a/polydesk-trading-agent/receipt/:missionId', readLimiter, polydeskA2aTradingReceiptHandler)
 if (process.env.POLYDESK_MARKET_CONTEXT_ENABLED === 'true') {
+  app.get(
+    '/api/agent/polymarket-context/health',
+    strictLimiter,
+    createPolydeskMarketContextHealthHandler(),
+  )
   app.post('/api/agent/polymarket-context', strictLimiter, polydeskMarketContextHandler)
 }
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)

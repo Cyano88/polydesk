@@ -25,6 +25,8 @@ The response carries a polydesk-market-context-v1 result with one of three termi
 - ambiguous: similarly relevant markets exist, so automated trading is blocked
 - no_relevant_market: no market passed entity, event, horizon, tradability, and confidence checks
 
+GET /api/agent/polymarket-context/health uses the same bearer gate but makes no Polymarket provider request. Lolah uses it to verify the private bridge before starting enrichment; notice ingestion can continue durably while that check is unavailable.
+
 The endpoint is intentionally pull-only. It has no notification, subscription, payment, marketplace-registration, or trade-execution side effect. The private pilot must not be described as the public paid service.
 
 ## Loopback staging

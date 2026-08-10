@@ -4,6 +4,7 @@ import test from 'node:test'
 import { validateLolahNewsEvent } from '../api/lolah-news-event.js'
 import {
   buildPolydeskMarketContext,
+  createPolydeskMarketContextHealthHandler,
   createPolydeskMarketContextHandler,
   type PolydeskMarketCandidate,
   type PolydeskMarketContextDependencies,
@@ -210,4 +211,27 @@ test('rejects a wrong bearer token before provider access and accepts the dedica
   assert.equal(accepted.state.status, 200)
   assert.equal(providerCalls, 1)
   assert.equal((accepted.state.body as { ok?: boolean }).ok, true)
+})
+
+test('health uses the same bearer gate without touching a market provider', () => {
+  const token = 'polydesk-context-test-token-32-characters'
+  const handler = createPolydeskMarketContextHealthHandler({ serviceToken: () => token })
+
+  const rejected = response()
+  handler({ ...request('Bearer wrong-token'), method: 'GET' } as Request, rejected.res)
+  assert.equal(rejected.state.status, 401)
+
+  const accepted = response()
+  handler({ ...request(`Bearer ${token}`), method: 'GET' } as Request, accepted.res)
+  assert.equal(accepted.state.status, 200)
+  assert.equal(accepted.state.headers['cache-control'], 'no-store')
+  assert.deepEqual(accepted.state.body, {
+    ok: true,
+    data: {
+      schema: 'polydesk-market-context-health-v1',
+      service: 'polydesk',
+      readOnly: true,
+      executionAllowed: false,
+    },
+  })
 })

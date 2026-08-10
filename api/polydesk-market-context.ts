@@ -418,6 +418,49 @@ function sameToken(supplied: string, expected: string) {
     && timingSafeEqual(suppliedBytes, expectedBytes)
 }
 
+function authorizePolydeskMarketContext(
+  req: Request,
+  res: Response,
+  options: PolydeskMarketContextHandlerOptions,
+) {
+  if (options.authorization === 'disabled_loopback_staging') return true
+  const expected = String(
+    options.serviceToken?.() ?? process.env.POLYDESK_MARKET_CONTEXT_TOKEN ?? '',
+  ).trim()
+  if (expected.length < 32) {
+    res.status(503).json({ ok: false, error: 'Prediction Market Context is not configured.' })
+    return false
+  }
+  if (!sameToken(bearerToken(req), expected)) {
+    res.setHeader('WWW-Authenticate', 'Bearer realm=polydesk-market-context')
+    res.status(401).json({ ok: false, error: 'Prediction Market Context authorization failed.' })
+    return false
+  }
+  return true
+}
+
+export function createPolydeskMarketContextHealthHandler(
+  options: PolydeskMarketContextHandlerOptions = {},
+) {
+  return function polydeskMarketContextHealthHandler(req: Request, res: Response) {
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET')
+      return res.status(405).json({ ok: false, error: 'Use GET for Prediction Market Context health.' })
+    }
+    if (!authorizePolydeskMarketContext(req, res, options)) return
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({
+      ok: true,
+      data: {
+        schema: 'polydesk-market-context-health-v1',
+        service: 'polydesk',
+        readOnly: true,
+        executionAllowed: false,
+      },
+    })
+  }
+}
+
 export function createPolydeskMarketContextHandler(
   dependencies = livePolydeskMarketContextDependencies,
   options: PolydeskMarketContextHandlerOptions = {},
@@ -427,18 +470,7 @@ export function createPolydeskMarketContextHandler(
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ ok: false, error: 'Use POST for Prediction Market Context.' })
     }
-    if (options.authorization !== 'disabled_loopback_staging') {
-      const expected = String(
-        options.serviceToken?.() ?? process.env.POLYDESK_MARKET_CONTEXT_TOKEN ?? '',
-      ).trim()
-      if (expected.length < 32) {
-        return res.status(503).json({ ok: false, error: 'Prediction Market Context is not configured.' })
-      }
-      if (!sameToken(bearerToken(req), expected)) {
-        res.setHeader('WWW-Authenticate', 'Bearer realm=polydesk-market-context')
-        return res.status(401).json({ ok: false, error: 'Prediction Market Context authorization failed.' })
-      }
-    }
+    if (!authorizePolydeskMarketContext(req, res, options)) return
     try {
       if (!isRecord(req.body)) throw new Error('Request body must be a JSON object.')
       requireOnlyFields(req.body, ['event', 'minimumMatchConfidence'], 'request')
