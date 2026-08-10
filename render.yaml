@@ -54,6 +54,11 @@ services:
       - key: POLYMARKET_EMAIL_ALERTS_ENABLED
         value: "true"
 
+      - key: POLYDESK_MARKET_CONTEXT_ENABLED
+        value: 'false'
+      - key: POLYDESK_MARKET_CONTEXT_TOKEN
+        sync: false
+
       - key: POLYMARKET_CHAIN_ID
         value: "137"
       - key: POLYMARKET_RELAYER_URL
