@@ -23,6 +23,7 @@ import {
   polymarketGovernedOpenValidationHandler,
 } from './api/a2mcp-polymarket-governed-open.js'
 import { polymarketSignedOpenValidationHandler } from './api/a2mcp-polymarket-signed-open.js'
+import { tradeSignalOutboxHandler } from './api/trade-signal-outbox.js'
 import polymarketBridgeHandler from './api/polymarket-bridge.js'
 import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js'
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
@@ -185,6 +186,7 @@ app.post('/api/polymarket-governed-open/authorize', strictLimiter, polymarketGov
 app.post('/api/polymarket-governed-open/validate', strictLimiter, polymarketGovernedOpenValidationHandler)
 app.post('/api/polymarket-agent-flow/complete', strictLimiter, polymarketGovernedTradeCompleteHandler)
 app.get('/api/polymarket-agent-flow/receipt/:executionId', readLimiter, polymarketGovernedTradeReceiptHandler)
+app.get('/api/trade-signals', readLimiter, tradeSignalOutboxHandler)
 app.get('/api/poly-worldcup-news', readLimiter, polyWorldcupNewsHandler)
 app.get('/api/poly-stream', readLimiter, polyStreamHandler)
 app.get('/api/pulse', readLimiter, pulseHandler)

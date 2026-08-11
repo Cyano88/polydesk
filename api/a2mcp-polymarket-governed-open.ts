@@ -8,6 +8,11 @@ import {
   writeDurableJson,
 } from './render-durable-store.js'
 import { validateSignedOpenInput } from './a2mcp-polymarket-signed-open.js'
+import {
+  appendTradeSignalEvent,
+  buildGovernedTradeSignal,
+  buildVerifiedExecutionSignal,
+} from './trade-signal-outbox.js'
 
 type RecordValue = Record<string, unknown>
 type Decision = 'APPROVE' | 'ESCALATE' | 'BLOCK'
@@ -576,6 +581,33 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     throw error
   }
   await writeDurableJson(`polymarket-governed-execution:${record.executionId}`, record)
+  if (evaluation.decision === 'APPROVE') {
+    await appendTradeSignalEvent(buildGovernedTradeSignal({
+      executionId: record.executionId,
+      externalOrderId: record.externalOrderId,
+      occurredAt: record.decidedAt,
+      market: {
+        venue: 'Polymarket',
+        assetClass: 'prediction-market',
+        marketTitle: record.market.title,
+        marketUrl: record.market.url,
+        outcome: record.market.outcome,
+        tokenId: record.market.tokenId,
+      },
+      action: {
+        side: 'BUY',
+        orderType: record.order.type,
+        maximumAmountUsdc: record.order.maximumAmountUsdc,
+        maximumPrice: record.order.maximumPrice,
+      },
+      policy: {
+        decisionHash: record.decisionHash,
+        orderHash: record.orderHash,
+        mandateHash: record.mandateHash,
+        reasons: evaluation.reasons,
+      },
+    }))
+  }
 
   return res.status(200).json({
     ok: true,
@@ -837,6 +869,39 @@ export async function polymarketGovernedTradeCompleteHandler(req: Request, res: 
     await writeDurableJson(key, record)
     await writeDurableJson(`polymarket-governed-receipt:${executionId}`, result.receipt)
   }
+  await appendTradeSignalEvent(buildVerifiedExecutionSignal({
+    executionId: record.executionId,
+    externalOrderId: record.externalOrderId,
+    occurredAt: result.receipt.verifiedAt,
+    market: {
+      venue: 'Polymarket',
+      assetClass: 'prediction-market',
+      marketTitle: record.market.title,
+      marketUrl: record.market.url,
+      outcome: record.market.outcome,
+      tokenId: record.market.tokenId,
+    },
+    action: {
+      side: 'BUY',
+      orderType: record.order.type,
+      maximumAmountUsdc: record.order.maximumAmountUsdc,
+      maximumPrice: record.order.maximumPrice,
+    },
+    policy: {
+      decisionHash: record.decisionHash,
+      orderHash: record.orderHash,
+      mandateHash: record.mandateHash,
+      reasons: [],
+    },
+    execution: {
+      status: result.receipt.status,
+      orderId: result.receipt.execution.orderId,
+      transactionHash: result.receipt.execution.transactionHash,
+      fillSize: result.receipt.execution.fillSize,
+      fillPrice: result.receipt.execution.fillPrice,
+      fillAmountUsdc: result.receipt.execution.fillAmountUsdc,
+    },
+  }))
   return res.status(200).json({ ok: true, duplicate: result.duplicate, receipt: result.receipt })
 }
 
