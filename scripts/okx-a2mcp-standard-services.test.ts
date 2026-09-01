@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { Request } from 'express'
-import {
+import type { Request, Response } from 'express'
+import okxA2mcpStandardServiceHandler, {
   addFundingReplaySchema,
   addGovernedTraderReplaySchema,
   addPortfolioWatchReplaySchema,
+  addSmartTraderReplaySchema,
   buildStandardServiceRouteConfig,
+  preflightSmartTraderBeforeSettlement,
 } from '../api/okx-a2mcp-standard-services.js'
 import { polyDeskAgentServices } from '../api/a2mcp-services.js'
 
@@ -68,6 +70,85 @@ test('Agent #5427 registered compatibility routes all advertise non-zero exact p
     const accepts = route.accepts as { price: { amount: string } }
     assert.equal(accepts.price.amount, '100000')
   }
+})
+
+test('smart-trader challenge declares its OKX AI action contract', async () => {
+  const req = { headers: { host: 'polydesk.trade' }, protocol: 'https' } as Request
+  const route = buildStandardServiceRouteConfig(
+    req,
+    '/api/a2mcp/polymarket-smart-trader',
+    '0.1',
+    '0x631c96fba389f65da7093e559e8120b587ec7df4',
+  )
+  const unpaid = await route.unpaidResponseBody?.({} as never) as {
+    body?: { inputSchema?: { properties?: Record<string, unknown>; required?: string[] } }
+  }
+  assert.ok(unpaid.body?.inputSchema?.properties?.action)
+  assert.ok(unpaid.body?.inputSchema?.properties?.marketId)
+  assert.ok(unpaid.body?.inputSchema?.properties?.mandate)
+  assert.deepEqual(unpaid.body?.inputSchema?.required, ['action'])
+  const accepts = route.accepts as { price: { amount: string } }
+  assert.equal(accepts.price.amount, '100000')
+})
+
+test('smart-trader 402 header exposes its paid replay contract', () => {
+  const challenge = {
+    x402Version: 2,
+    resource: { url: 'https://polydesk.trade/api/a2mcp/polymarket-smart-trader' },
+    accepts: [{ scheme: 'exact', network: 'eip155:196', amount: '100000' }],
+  }
+  const response = addSmartTraderReplaySchema({
+    status: 402,
+    headers: { 'PAYMENT-REQUIRED': Buffer.from(JSON.stringify(challenge)).toString('base64url') },
+  }, '/api/a2mcp/polymarket-smart-trader')
+  const decoded = JSON.parse(Buffer.from(response.headers['PAYMENT-REQUIRED'], 'base64url').toString('utf8')) as {
+    outputSchema?: { input?: Record<string, { required?: boolean }>; output?: { description?: string } }
+  }
+  assert.equal(decoded.outputSchema?.input?.action?.required, true)
+  assert.equal(decoded.outputSchema?.input?.marketId?.required, false)
+  assert.equal(decoded.outputSchema?.input?.outcome?.required, false)
+  assert.equal(decoded.outputSchema?.input?.side?.required, false)
+  assert.equal(decoded.outputSchema?.input?.mandate?.required, false)
+  assert.match(String(decoded.outputSchema?.output?.description), /never signs or submits/i)
+})
+
+test('a signed empty smart-trader replay is rejected before settlement setup', async () => {
+  let statusCode = 0
+  let responseBody: Record<string, unknown> = {}
+  const req = {
+    method: 'POST',
+    protocol: 'https',
+    headers: { host: 'polydesk.trade', 'payment-signature': 'signed-test-payload' },
+    originalUrl: '/api/a2mcp/polymarket-smart-trader',
+    url: '/api/a2mcp/polymarket-smart-trader',
+    body: {},
+    query: {},
+  } as unknown as Request
+  const res = {
+    status(code: number) { statusCode = code; return this },
+    json(body: Record<string, unknown>) { responseBody = body; return this },
+    setHeader() { return this },
+  } as unknown as Response
+  await okxA2mcpStandardServiceHandler(req, res)
+  assert.equal(statusCode, 400)
+  assert.match(String(responseBody.error), /No payment challenge was issued/i)
+})
+
+test('PREPARE provider failures remain non-billable before settlement', async () => {
+  let prepareCalls = 0
+  const result = await preflightSmartTraderBeforeSettlement({ action: 'PREPARE' }, {
+    validate: async () => ({ ok: true as const }),
+    operational: async () => true,
+    prepare: async () => {
+      prepareCalls += 1
+      return { ok: false as const, status: 502, error: 'Polymarket lookup failed: provider unavailable' }
+    },
+  })
+  assert.equal(prepareCalls, 1)
+  assert.equal(result.ok, false)
+  if (result.ok) assert.fail('expected the provider failure to stop payment processing')
+  assert.equal(result.status, 502)
+  assert.match(String(result.body.error), /No payment was settled/i)
 })
 
 test('football live challenge documents team and date without requiring either filter', async () => {

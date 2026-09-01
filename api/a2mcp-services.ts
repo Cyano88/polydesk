@@ -84,6 +84,21 @@ const services: Service[] = [
     ],
     boundary: 'PolyDesk never receives the buyer private key or reusable CLOB credentials. AUTO_BEST_FIT ranks execution quality, not expected profit.',
   },
+  {
+    id: 'polymarket-smart-trader',
+    name: 'PolyDesk Smart Market Trader',
+    oneLine: 'Use the PolyDesk OKX AI service to discover, research, and prepare any supported Polymarket trade through OnchainOS.',
+    endpoint: '/api/a2mcp/polymarket-smart-trader',
+    method: 'POST',
+    price: { amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    useWhen: 'An agent needs a current evidence brief and bounded APPROVE or ESCALATE decision before preparing a direct Polymarket trade.',
+    input: ['action: DISCOVER, ANALYZE, or PREPARE', 'marketId and exact outcome for analysis or preparation', 'side: BUY or SELL', 'optional category, public signal wallets, order parameters, and mandate bounds'],
+    returns: ['ranked market discovery', 'current market and order-book analysis', 'transparent smart-money provenance', 'ZeroScout and category-relevant news evidence', 'durable decision receipt or preview-only OnchainOS handoff'],
+    freeSteps: [
+      { endpoint: '/api/a2mcp/polymarket-smart-trader/decision/:decisionId', purpose: 'Verify a persisted OKX AI service decision receipt and expiry.' },
+    ],
+    boundary: 'PolyDesk ranks and researches; the official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
+  },
 ]
 
 export function polyDeskAgentServices() {
@@ -97,7 +112,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     agentId: 5427,
     protocol: 'OKX Agent Payments Protocol',
     baseUrl: String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, ''),
-    summary: 'Five focused services: football data, football news, LP research, verified funding, and governed buyer-controlled trading.',
+    summary: 'Six focused services: football data, football news, LP research, smart-market analysis, verified funding, and governed buyer-controlled trading.',
     rule: 'Every service returns machine-readable JSON. Each registered marketplace route issues a non-zero x402 challenge and returns its result only on the paid replay.',
     services,
     docs: '/docs/okx-ai',

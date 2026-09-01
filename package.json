@@ -27,6 +27,7 @@
     "test:signed-open": "node --import tsx --test scripts/polymarket-signed-open.test.ts",
     "test:governed-open": "node --import tsx --test scripts/polymarket-governed-open.test.ts",
     "test:open-prepare": "node --import tsx --test scripts/polymarket-open-prepare.test.ts",
+    "test:smart-trader": "node --import tsx --test scripts/polymarket-smart-trader.test.ts",
     "test:copy-prepare": "node --import tsx --test scripts/polymarket-copy-prepare.test.ts",
     "test:football-provider": "node --import tsx --test scripts/football-provider-routing.test.ts",
     "test:football-news": "node --import tsx --test scripts/football-news-provider.test.ts",
@@ -37,6 +38,9 @@
     "test:okx-rewards": "node --import tsx --test scripts/okx-rewards.test.ts",
     "test:a2a-trading": "node --import tsx --test scripts/polydesk-a2a-trading-agent.test.ts",
     "test:a2a-worker": "node --import tsx --test scripts/polydesk-a2a-worker.test.ts",
+    "test:hyperliquid-subscription": "node --import tsx --test scripts/polydesk-hyperliquid-subscription.test.ts",
+    "test:context-staging": "node --import tsx --test scripts/polydesk-context-staging.test.ts",
+    "context:staging": "node --import tsx scripts/polydesk-context-staging.ts",
     "a2a:worker": "tsx scripts/polydesk-a2a-worker.ts",
     "rewards:payout:dry-run": "tsx scripts/okx-rewards-payout-worker.ts",
     "rewards:proofs:dry-run": "tsx scripts/okx-rewards-proof-audit.ts",
@@ -80,7 +84,7 @@
     "tsx": "^4.23.0",
     "viem": "^2.51.2",
     "vite-plugin-node-polyfills": "^0.26.0",
-    "ws": "^8.21.1"
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
@@ -91,6 +95,12 @@
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.5.3",
-    "vite": "^5.4.21"
+    "vite": "^6.4.3"
+  },
+  "overrides": {
+    "axios": "1.18.1",
+    "nanoid": "3.3.18",
+    "socket.io-parser": "4.2.7",
+    "ws": "8.21.3"
   }
 }

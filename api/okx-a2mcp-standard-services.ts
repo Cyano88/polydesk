@@ -18,6 +18,12 @@ import a2mcpPolymarketGovernedOpenHandler, {
 } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
+import polymarketSmartTraderHandler, {
+  checkPolymarketSmartTraderOperational,
+  polymarketSmartTraderReady,
+  preflightPolymarketSmartTraderRequest,
+  runPolymarketSmartTrader,
+} from './polymarket-smart-trader.js'
 import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed, requestFootballNewsQuery } from './poly-worldcup-news.js'
 import polyStreamHandler, { getPolyStreamFeed, requestTeam } from './poly-stream.js'
 
@@ -162,6 +168,44 @@ const portfolioWatchBodyProperties = {
   },
 } as const
 
+const smartTraderBodyProperties = {
+  action: {
+    type: 'string',
+    enum: ['DISCOVER', 'ANALYZE', 'PREPARE'],
+    description: 'DISCOVER ranks markets, ANALYZE issues a durable decision, and PREPARE returns the OnchainOS preview handoff.',
+  },
+  query: { type: 'string', maxLength: 180 },
+  marketId: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 320,
+    description: 'Canonical Polymarket URL, event slug, or 0x-prefixed condition ID.',
+  },
+  outcome: { type: 'string', minLength: 1, maxLength: 100 },
+  side: { type: 'string', enum: ['BUY', 'SELL'] },
+  decisionId: { type: 'string', pattern: '^pstd_[a-f0-9]{24,64}$' },
+  amountUsdc: { type: 'number', exclusiveMinimum: 0 },
+  shares: { type: 'number', exclusiveMinimum: 0 },
+  orderType: { type: 'string', enum: ['FOK', 'FAK', 'GTC', 'GTD'] },
+  limitPrice: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 1 },
+  expiresAt: { type: 'integer', exclusiveMinimum: 0 },
+  postOnly: { type: 'boolean' },
+  limit: { type: 'integer', minimum: 1, maximum: 10 },
+  category: { type: 'string', maxLength: 50 },
+  mandate: {
+    type: 'object',
+    description: 'Execution-quality, price-drift, and maximum-size bounds persisted into the decision receipt.',
+  },
+  smartMoneyWallets: {
+    type: 'array',
+    maxItems: 10,
+    items: { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$' },
+    description: 'Optional public wallets used as caller-supplied signals; they never receive the curated smart-money tag.',
+  },
+} as const
+
+const smartTraderRequiredFields = ['action'] as const
+
 function fundingLinkReplaySchema() {
   return {
     input: {
@@ -209,6 +253,19 @@ function portfolioWatchReplaySchema() {
     output: {
       type: 'json',
       description: 'A machine-readable governed-trading flow, public-wallet watch result, or bounded preparation result. An empty replay returns the complete flow descriptor.',
+    },
+  }
+}
+
+function smartTraderReplaySchema() {
+  return {
+    input: Object.fromEntries(Object.entries(smartTraderBodyProperties).map(([name, schema]) => [
+      name,
+      { ...schema, required: smartTraderRequiredFields.includes(name as typeof smartTraderRequiredFields[number]) },
+    ])),
+    output: {
+      type: 'json',
+      description: 'Ranked discovery, evidence-backed durable decisions, or a preview-only OnchainOS trade handoff. It never signs or submits a trade.',
     },
   }
 }
@@ -367,6 +424,59 @@ async function deliverMarketplacePortfolioService(req: Request, res: Response) {
   return a2mcpPolymarketPortfolioWatchHandler(req, res)
 }
 
+async function deliverSmartTraderAnalysis(req: Request, res: Response) {
+  const prepared = (req as Request & {
+    smartTraderPreparedResult?: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+  }).smartTraderPreparedResult
+  if (prepared?.ok) return res.status(prepared.status).json(prepared.data)
+  return polymarketSmartTraderHandler(req, res)
+}
+
+type SmartTraderPreparedResult = Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+
+type SmartTraderPaymentPreflightDependencies = {
+  validate: typeof preflightPolymarketSmartTraderRequest
+  operational: typeof checkPolymarketSmartTraderOperational
+  prepare: typeof runPolymarketSmartTrader
+}
+
+const smartTraderPaymentPreflightDependencies: SmartTraderPaymentPreflightDependencies = {
+  validate: preflightPolymarketSmartTraderRequest,
+  operational: checkPolymarketSmartTraderOperational,
+  prepare: runPolymarketSmartTrader,
+}
+
+export async function preflightSmartTraderBeforeSettlement(
+  body: Record<string, unknown>,
+  dependencies: SmartTraderPaymentPreflightDependencies = smartTraderPaymentPreflightDependencies,
+): Promise<
+  | { ok: true; prepared?: SmartTraderPreparedResult }
+  | { ok: false; status: number; body: Record<string, unknown> }
+> {
+  const preflight = await dependencies.validate(body)
+  if (!preflight.ok) {
+    return { ok: false, status: preflight.status, body: { ok: false, error: `${preflight.error} No payment challenge was issued.` } }
+  }
+  if (!await dependencies.operational()) {
+    return {
+      ok: false,
+      status: 503,
+      body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.' },
+    }
+  }
+  if (clean(body.action).toUpperCase() !== 'PREPARE') return { ok: true }
+  const prepared = await dependencies.prepare(body)
+  if (!prepared.ok) {
+    const { status, ...errorBody } = prepared
+    return {
+      ok: false,
+      status,
+      body: { ...errorBody, error: `${prepared.error} No payment was settled.` },
+    }
+  }
+  return { ok: true, prepared }
+}
+
 const serviceDefinitions = {
   // Agent #5427 compatibility routes. Keep these live until the marketplace
   // listing has migrated to the newer football and governed-flow names.
@@ -412,6 +522,13 @@ const serviceDefinitions = {
     tags: ['polymarket', 'copy-trading', 'governed-execution', 'buyer-signed'],
     ready: governedOpenReady,
     deliver: a2mcpPolymarketGovernedOpenHandler,
+  },
+  '/api/a2mcp/polymarket-smart-trader': {
+    name: 'PolyDesk Smart Market Trader',
+    description: 'Research an exact Polymarket outcome using current market and order-book state, transparent wallet-flow evidence, ZeroScout research, and category-relevant news; return an expiring durable decision receipt for the free preview-only OnchainOS handoff.',
+    tags: ['polymarket', 'research', 'smart-money', 'zeroscout', 'onchainos', 'decision-receipt'],
+    ready: polymarketSmartTraderReady,
+    deliver: deliverSmartTraderAnalysis,
   },
 } as const
 
@@ -519,6 +636,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
   const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
   const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
   const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
+  const isSmartTrader = path === '/api/a2mcp/polymarket-smart-trader'
   const isFootballLive = path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores'
   const isFootballNews = path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news'
   const discoveryExtensions = isFundingLink
@@ -578,6 +696,13 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
             type: 'object',
             properties: governedTraderBodyProperties,
             required: governedTraderRequiredFields,
+            additionalProperties: false,
+          },
+        } : isSmartTrader ? {
+          inputSchema: {
+            type: 'object',
+            properties: smartTraderBodyProperties,
+            required: smartTraderRequiredFields,
             additionalProperties: false,
           },
         } : isPortfolioWatch ? {
@@ -724,15 +849,34 @@ export function addPortfolioWatchReplaySchema(
   }
 }
 
+export function addSmartTraderReplaySchema(
+  response: { status: number; headers: Record<string, string>; body?: unknown },
+  path: StandardServicePath,
+) {
+  if (path !== '/api/a2mcp/polymarket-smart-trader' || response.status !== 402) return response
+  const paymentHeaderKey = Object.keys(response.headers).find(key => key.toLowerCase() === 'payment-required')
+  if (!paymentHeaderKey) return response
+  try {
+    const challenge = JSON.parse(Buffer.from(response.headers[paymentHeaderKey], 'base64url').toString('utf8')) as Record<string, unknown>
+    challenge.outputSchema = smartTraderReplaySchema()
+    return {
+      ...response,
+      headers: { ...response.headers, [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64url') },
+    }
+  } catch {
+    return response
+  }
+}
+
 function sendInstructions(
   res: Response,
   response: { status: number; headers: Record<string, string>; body?: unknown },
   path: StandardServicePath,
 ) {
-  const prepared = addPortfolioWatchReplaySchema(
+  const prepared = addSmartTraderReplaySchema(addPortfolioWatchReplaySchema(
     addGovernedTraderReplaySchema(addFundingReplaySchema(response, path), path),
     path,
-  )
+  ), path)
   for (const [key, value] of Object.entries(prepared.headers)) res.setHeader(key, value)
   return res.status(prepared.status).send(prepared.body)
 }
@@ -807,6 +951,25 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
           checks: evaluation.checks,
           error: 'Only an APPROVE decision can proceed to the paid governed handoff. No payment challenge was issued.',
         })
+      }
+    }
+  }
+  if (path === '/api/a2mcp/polymarket-smart-trader') {
+    const body = isRecord(req.body) ? req.body : {}
+    const hasPaymentProof = Boolean(req.headers['payment-signature'] || req.headers['x-payment'])
+    // Preserve empty marketplace discovery probes so buyer tooling can receive
+    // the declared 402 schema. Any request carrying business input or a signed
+    // paid replay must pass the complete free validator before settlement.
+    if (Object.keys(body).length > 0 || hasPaymentProof) {
+      // PREPARE is a deterministic handoff, not paid research. Re-resolve the
+      // market and order book before settlement, then reuse that exact result
+      // after settlement so a stale or unavailable market cannot be billed.
+      const result = await preflightSmartTraderBeforeSettlement(body)
+      if (!result.ok) return res.status(result.status).json(result.body)
+      if (result.prepared) {
+        ;(req as Request & {
+          smartTraderPreparedResult?: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+        }).smartTraderPreparedResult = result.prepared
       }
     }
   }

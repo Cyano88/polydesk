@@ -352,7 +352,7 @@ async function fetchSportmonksArticles(query: FootballNewsQuery): Promise<PolyWo
   })))
 }
 
-async function fetchProviderArticles(query: FootballNewsQuery = {}): Promise<PolyWorldCupArticle[]> {
+async function fetchProviderArticles(query: FootballNewsQuery = {}, requireExactTerms = true): Promise<PolyWorldCupArticle[]> {
   const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
   const configuredUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
   const apiUrl = configuredUrl || (apiKey ? DEFAULT_NEWS_API_URL : '')
@@ -383,6 +383,7 @@ async function fetchProviderArticles(query: FootballNewsQuery = {}): Promise<Pol
     const payload = await response.json()
     const normalized = (extractArticles(payload).map(normalizeArticle).filter(Boolean) as PolyWorldCupArticle[])
       .filter(article => {
+        if (!requireExactTerms) return true
         const text = normalizeSearchText(`${article.title} ${article.description}`)
         const team = normalizeSearchText(query.team || '')
         const league = normalizeSearchText(query.league || '')
@@ -397,6 +398,12 @@ async function fetchProviderArticles(query: FootballNewsQuery = {}): Promise<Pol
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export async function getGeneralResearchNews(query: string): Promise<PolyWorldCupArticle[]> {
+  const requested = asString(query).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)
+  if (!requested) return []
+  return fetchProviderArticles({ team: requested }, false)
 }
 
 export async function getPolyWorldcupNewsFeed(requestedQuery: FootballNewsQuery = {}) {

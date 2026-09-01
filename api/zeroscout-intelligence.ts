@@ -21,6 +21,14 @@ export type ZeroScoutIntelligenceResult = {
   intent?: string
   missingFields?: string[]
   safetyBoundaries?: string[]
+  tradeAssessment?: {
+    stance: 'SUPPORT' | 'OPPOSE' | 'INSUFFICIENT'
+    side: 'BUY' | 'SELL'
+    thesis: string
+    counterThesis: string
+    resolutionRisk: string
+    evidenceQuality: 'HIGH' | 'MEDIUM' | 'LOW'
+  }
   proofMetadata?: Record<string, unknown>
   signals?: string[]
   riskFlags?: string[]
@@ -84,7 +92,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
-function hasZeroScoutProof(result: ZeroScoutIntelligenceResult) {
+export function hasZeroScoutProof(result: ZeroScoutIntelligenceResult) {
   return Boolean(
     result.proof
     && (
