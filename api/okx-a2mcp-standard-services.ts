@@ -224,7 +224,7 @@ function fundingLinkReplaySchema() {
     },
     output: {
       type: 'json',
-      description: 'Verified Deposit Wallet readiness and, when funding is required, a machine-readable USDC transfer instruction, status URL, and optional hosted checkout fallback.',
+      description: 'Verified Deposit Wallet readiness and, when funding is required, a hosted checkout URL plus status URL.',
     },
   }
 }
@@ -538,8 +538,8 @@ const serviceDefinitions = {
   },
   '/api/a2mcp/polymarket-funding-link': {
     name: 'Verified Polymarket Funding',
-    description: 'Derive and verify the owner EOA’s deployed Polymarket Deposit Wallet, check pUSD readiness, and return a headless USDC transfer instruction only for the verified account.',
-    tags: ['polymarket', 'deposit-wallet', 'funding', 'headless', 'checkout', 'readiness'],
+    description: 'Derive and verify the owner EOA’s deployed Polymarket Deposit Wallet, check pUSD readiness, and prepare a hosted checkout only for the verified account.',
+    tags: ['polymarket', 'deposit-wallet', 'funding', 'checkout', 'readiness'],
     deliver: a2mcpPolymarketFundingLinkHandler,
   },
   '/api/a2mcp/polymarket-agent-flow': {

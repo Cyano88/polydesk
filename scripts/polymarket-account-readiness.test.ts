@@ -121,13 +121,6 @@ test('funding handoff targets only the derived deployed wallet', async () => {
           ok: true,
           fundingRequestId: 'pmf_11111111111111111111',
           checkoutUrl: 'https://app.hashpaylink.com/pay/c/chk_verified',
-          funding: {
-            provider: 'polymarket',
-            targetWallet: depositWallet,
-            depositAddress: '0x4444444444444444444444444444444444444444',
-            amount: '4',
-            availableNetworks: ['base'],
-          },
         },
       }
     },
@@ -149,15 +142,7 @@ test('funding handoff targets only the derived deployed wallet', async () => {
   assert.equal(checkoutInput.polymarketWallet, depositWallet)
   assert.equal(checkoutInput.amount, '4')
   assert.equal(res.body.polymarket.derivedFromOwner, true)
-  assert.equal(res.body.nextAction, 'SEND_USDC_THEN_POLL_STATUS')
-  assert.equal(res.body.fundingInstruction.type, 'ERC20_TRANSFER')
-  assert.equal(res.body.fundingInstruction.network, 'Base')
-  assert.equal(res.body.fundingInstruction.chainId, 8453)
-  assert.equal(res.body.fundingInstruction.tokenAddress, getAddress('0x3333333333333333333333333333333333333333'))
-  assert.equal(res.body.fundingInstruction.amount, '4')
-  assert.equal(res.body.fundingInstruction.recipient, getAddress('0x4444444444444444444444444444444444444444'))
-  assert.equal(res.body.fundingInstruction.confirmationRequired, true)
-  assert.equal(res.body.checkout.role, 'optional_human_fallback')
+  assert.equal(res.body.nextAction, 'PAY_CHECKOUT_THEN_POLL_STATUS')
 })
 
 test('does not create a checkout when the verified pUSD balance is sufficient', async () => {
