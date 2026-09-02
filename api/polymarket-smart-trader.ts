@@ -481,6 +481,23 @@ export async function preflightPolymarketSmartTraderProviders(
       }
     }
     await dependencies.researchReady()
+    const normalizedOutcome = input.outcome?.toLowerCase().trim()
+    const evidenceMarket = normalizedOutcome
+      ? activeMarkets.find(market => market.outcomes.some(outcome => outcome.toLowerCase().trim() === normalizedOutcome)) || activeMarkets[0]
+      : activeMarkets[0]
+    const evidenceQuery = input.query || evidenceMarket.question
+    const likelySports = input.category === 'sports'
+      || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${evidenceMarket.question} ${input.query}`)
+    const newsEvidence = likelySports
+      ? await dependencies.sportsNews(evidenceQuery)
+      : await dependencies.generalNews(evidenceQuery)
+    if (!newsEvidence.length) {
+      return {
+        ok: false as const,
+        status: 503,
+        error: `No current ${likelySports ? 'sports' : 'general'} news evidence is available for this market. Configure or repair the evidence provider before charging for ANALYZE.`,
+      }
+    }
     return { ok: true as const }
   } catch (error) {
     return {

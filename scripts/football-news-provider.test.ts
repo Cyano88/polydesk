@@ -2,10 +2,49 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Request } from 'express'
 import {
+  getGeneralResearchNews,
   getPolyWorldcupNewsFeed,
   requestFootballNewsQuery,
   sportmonksNewsUrls,
 } from '../api/poly-worldcup-news.js'
+
+test('general research news retains non-football provider articles', async () => {
+  const previous = {
+    key: process.env.NEWS_API_KEY,
+    url: process.env.NEWS_API_URL,
+  }
+  const originalFetch = globalThis.fetch
+  process.env.NEWS_API_KEY = 'test-key'
+  process.env.NEWS_API_URL = 'https://gnews.io/api/v4/search'
+  globalThis.fetch = async input => {
+    const url = String(input)
+    if (url.startsWith('https://gamma-api.polymarket.com/')) {
+      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    return new Response(JSON.stringify({
+      articles: [{
+        title: 'Federal Reserve officials weigh September interest-rate decision',
+        description: 'Policy makers are reviewing inflation and employment data.',
+        url: 'https://example.com/fed-september',
+        publishedAt: '2026-09-02T12:00:00.000Z',
+        source: { name: 'Example News' },
+      }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  try {
+    const articles = await getGeneralResearchNews('Federal Reserve September decision')
+    assert.equal(articles.length, 1)
+    assert.match(articles[0].title, /Federal Reserve/)
+    assert.equal(articles[0].tag, 'News')
+  } finally {
+    globalThis.fetch = originalFetch
+    if (previous.key === undefined) delete process.env.NEWS_API_KEY
+    else process.env.NEWS_API_KEY = previous.key
+    if (previous.url === undefined) delete process.env.NEWS_API_URL
+    else process.env.NEWS_API_URL = previous.url
+  }
+})
 
 test('Sportmonks news uses official preview and recap endpoints', () => {
   const urls = sportmonksNewsUrls({ league: 'La Liga', type: 'all' }).map(value => new URL(value))

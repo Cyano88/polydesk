@@ -254,6 +254,32 @@ test('ANALYZE provider preflight rejects unavailable ZeroScout authorization bef
   assert.match(result.error, /Unauthorized integration request/i)
 })
 
+test('ANALYZE provider preflight rejects missing category evidence before payment', async () => {
+  let researchReadyCalls = 0
+  const result = await preflightPolymarketSmartTraderProviders({
+    action: 'ANALYZE',
+    marketId: 'fed-september-decision',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, dependencies({
+    resolveMarket: async () => [market({
+      eventSlug: 'fed-september-decision',
+      marketSlug: 'fed-september-decision',
+      question: 'Will the Fed increase interest rates after the September meeting?',
+      category: 'economics',
+    })],
+    researchReady: async () => { researchReadyCalls += 1 },
+    sportsNews: async () => { throw new Error('sports lane must not run') },
+    generalNews: async () => [],
+  }))
+  assert.equal(researchReadyCalls, 1)
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.status, 503)
+  assert.match(result.error, /No current general news evidence/i)
+  assert.match(result.error, /before charging/i)
+})
+
 test('ANALYZE cannot approve without the settled 0.3 USDT workflow payment', async () => {
   const result = await runPolymarketSmartTrader({
     action: 'ANALYZE',

@@ -167,16 +167,16 @@ function strictFootballArticle(title: string, description: string) {
   return football && !otherSport
 }
 
-function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null {
+function normalizeArticle(article: ProviderArticle, requireFootball = true): PolyWorldCupArticle | null {
   const title = asString(article.title) || asString(article.headline)
   if (!title) return null
   const description =
     asString(article.description)
     || asString(article.summary)
     || asString(article.content)
-    || 'Football update for market context.'
+    || (requireFootball ? 'Football update for market context.' : 'News update for market context.')
   const url = articleUrl(article)
-  if (!url || !/^https?:\/\//i.test(url) || !strictFootballArticle(title, description)) return null
+  if (!url || !/^https?:\/\//i.test(url) || (requireFootball && !strictFootballArticle(title, description))) return null
   return {
     title,
     description,
@@ -190,7 +190,7 @@ function normalizeArticle(article: ProviderArticle): PolyWorldCupArticle | null 
       || asString(article.created_at)
       || asString(article.date)
       || new Date().toISOString(),
-    tag: tagFor(title, description),
+    tag: requireFootball ? tagFor(title, description) : 'News',
     polymarketMarkets: [],
   }
 }
@@ -352,7 +352,11 @@ async function fetchSportmonksArticles(query: FootballNewsQuery): Promise<PolyWo
   })))
 }
 
-async function fetchProviderArticles(query: FootballNewsQuery = {}, requireExactTerms = true): Promise<PolyWorldCupArticle[]> {
+async function fetchProviderArticles(
+  query: FootballNewsQuery = {},
+  requireExactTerms = true,
+  requireFootball = true,
+): Promise<PolyWorldCupArticle[]> {
   const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
   const configuredUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
   const apiUrl = configuredUrl || (apiKey ? DEFAULT_NEWS_API_URL : '')
@@ -381,7 +385,7 @@ async function fetchProviderArticles(query: FootballNewsQuery = {}, requireExact
     const response = await fetch(url, { headers, signal: controller.signal })
     if (!response.ok) throw new Error(`News provider returned ${response.status}`)
     const payload = await response.json()
-    const normalized = (extractArticles(payload).map(normalizeArticle).filter(Boolean) as PolyWorldCupArticle[])
+    const normalized = (extractArticles(payload).map(article => normalizeArticle(article, requireFootball)).filter(Boolean) as PolyWorldCupArticle[])
       .filter(article => {
         if (!requireExactTerms) return true
         const text = normalizeSearchText(`${article.title} ${article.description}`)
@@ -403,7 +407,7 @@ async function fetchProviderArticles(query: FootballNewsQuery = {}, requireExact
 export async function getGeneralResearchNews(query: string): Promise<PolyWorldCupArticle[]> {
   const requested = asString(query).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)
   if (!requested) return []
-  return fetchProviderArticles({ team: requested }, false)
+  return fetchProviderArticles({ team: requested }, false, false)
 }
 
 export async function getPolyWorldcupNewsFeed(requestedQuery: FootballNewsQuery = {}) {
