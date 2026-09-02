@@ -221,6 +221,31 @@ test('ANALYZE exact-market lookup failures remain non-billable before settlement
   assert.match(String(result.body.error), /No payment challenge was issued/i)
 })
 
+test('ANALYZE ambiguous discovery outcomes remain non-billable before settlement', async () => {
+  let prepareCalls = 0
+  const result = await preflightSmartTraderBeforeSettlement({
+    action: 'ANALYZE',
+    category: 'sports',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, {
+    validate: async () => ({ ok: true as const }),
+    operational: async () => true,
+    providers: async () => ({
+      ok: false as const,
+      status: 409,
+      error: 'The requested outcome maps to 6 active markets. Supply one exact marketId before payment.',
+    }),
+    prepare: async () => { prepareCalls += 1; throw new Error('must not run') },
+  })
+  assert.equal(prepareCalls, 0)
+  assert.equal(result.ok, false)
+  if (result.ok) assert.fail('expected ambiguous discovery to stop payment')
+  assert.equal(result.status, 409)
+  assert.match(String(result.body.error), /exact marketId before payment/i)
+  assert.match(String(result.body.error), /No payment challenge was issued/i)
+})
+
 test('football live challenge documents team and date without requiring either filter', async () => {
   const req = {
     headers: { host: 'polydesk.trade' },

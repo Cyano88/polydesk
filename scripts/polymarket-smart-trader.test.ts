@@ -212,6 +212,31 @@ test('ANALYZE provider preflight rejects an empty exact lookup before payment', 
   assert.match(result.error, /No active Polymarket market matched/i)
 })
 
+test('ANALYZE provider preflight rejects an outcome shared by multiple discovered markets before payment', async () => {
+  const result = await preflightPolymarketSmartTraderProviders({
+    action: 'ANALYZE',
+    category: 'sports',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, dependencies({
+    searchMarkets: async () => [
+      market(),
+      market({
+        conditionId: `0x${'34'.repeat(32)}`,
+        eventSlug: 'will-team-b-win-the-final',
+        marketSlug: 'team-b-winner',
+        question: 'Will Team B win the final?',
+        tokenIds: ['333', '444'],
+      }),
+    ],
+  }))
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.status, 409)
+  assert.match(result.error, /maps to 2 active markets/i)
+  assert.match(result.error, /exact marketId before payment/i)
+})
+
 test('ANALYZE provider preflight rejects unavailable ZeroScout authorization before payment', async () => {
   const result = await preflightPolymarketSmartTraderProviders({
     action: 'ANALYZE',

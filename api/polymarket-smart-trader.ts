@@ -461,8 +461,24 @@ export async function preflightPolymarketSmartTraderProviders(
     const markets = input.marketId
       ? await dependencies.resolveMarket(input.marketId)
       : await dependencies.searchMarkets(input.query, input.category)
-    if (!markets.length) {
+    const activeMarkets = markets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
+    if (!activeMarkets.length) {
       return { ok: false as const, status: 404, error: 'No active Polymarket market matched this ANALYZE request.' }
+    }
+    if (input.outcome) {
+      const normalizedOutcome = input.outcome.toLowerCase().trim()
+      const outcomeMatches = activeMarkets.flatMap(market => market.outcomes
+        .map((outcome, index) => ({ outcome, tokenId: market.tokenIds[index] }))
+        .filter(candidate => candidate.outcome.toLowerCase().trim() === normalizedOutcome && candidate.tokenId))
+      if (outcomeMatches.length !== 1) {
+        return {
+          ok: false as const,
+          status: 409,
+          error: outcomeMatches.length
+            ? `The requested outcome maps to ${outcomeMatches.length} active markets. Supply one exact marketId before payment.`
+            : 'The requested outcome did not map to an active market. Supply one exact marketId and outcome before payment.',
+        }
+      }
     }
     await dependencies.researchReady()
     return { ok: true as const }
