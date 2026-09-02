@@ -3,7 +3,7 @@ import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { getGeneralResearchNews, getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import { hasRenderDurableStore, readDurableJson, writeDurableJson } from './render-durable-store.js'
-import { callZeroScoutIntelligence, hasZeroScoutProof, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
+import { callZeroScoutIntelligence, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
 const CLOB_ORIGIN = 'https://clob.polymarket.com'
@@ -97,6 +97,7 @@ export type SmartTraderDependencies = {
   fetchBook: (tokenId: string) => Promise<SmartTraderBook | null>
   fetchSmartMoney: (wallets: string[]) => Promise<SmartMoneySignal[]>
   trustedSmartMoneyWallets: () => string[]
+  researchReady: () => Promise<void>
   research: (context: Record<string, unknown>) => Promise<ZeroScoutIntelligenceResult | null>
   sportsNews: (query: string) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
   generalNews: (query: string) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
@@ -391,6 +392,10 @@ const liveDependencies: SmartTraderDependencies = {
   },
   fetchSmartMoney: liveSmartMoney,
   trustedSmartMoneyWallets: configuredSmartMoneyWallets,
+  researchReady: () => preflightZeroScoutIntelligenceAccess({
+    analysisType: 'polydesk-smart-market-research',
+    proofClass: 'polydesk_smart_market_research',
+  }),
   research: async context => {
     try {
       return await callZeroScoutIntelligence({
@@ -404,7 +409,13 @@ const liveDependencies: SmartTraderDependencies = {
         includeClaudeReview: true,
         includeOpenAiReview: true,
       }, { requireProof: true })
-    } catch { return null }
+    } catch (error) {
+      console.warn('[smart-trader] ZeroScout research unavailable', {
+        status: typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : undefined,
+        error: clean(error instanceof Error ? error.message : 'unknown ZeroScout error'),
+      })
+      return null
+    }
   },
   sportsNews: async query => {
     const feed = await getPolyWorldcupNewsFeed({ team: query })
@@ -453,12 +464,13 @@ export async function preflightPolymarketSmartTraderProviders(
     if (!markets.length) {
       return { ok: false as const, status: 404, error: 'No active Polymarket market matched this ANALYZE request.' }
     }
+    await dependencies.researchReady()
     return { ok: true as const }
   } catch (error) {
     return {
       ok: false as const,
       status: 502,
-      error: `Polymarket lookup failed: ${error instanceof Error ? error.message : 'unknown provider error'}`,
+      error: `Smart Market Trader provider preflight failed: ${error instanceof Error ? error.message : 'unknown provider error'}`,
     }
   }
 }

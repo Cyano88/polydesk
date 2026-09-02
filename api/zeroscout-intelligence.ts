@@ -73,6 +73,8 @@ type ZeroScoutCallOptions = {
   timeoutMs?: number
 }
 
+type ZeroScoutReadinessRequest = Pick<ZeroScoutPayload, 'analysisType' | 'proofClass'>
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -147,6 +149,49 @@ function shouldRetry(error: unknown) {
     ? (error as { status: number }).status
     : 0
   return !status || status === 408 || status === 429 || status >= 500
+}
+
+export async function preflightZeroScoutIntelligenceAccess(payload: ZeroScoutReadinessRequest): Promise<void> {
+  const endpoint = configuredEndpoint('/api/integrations/intelligence/readiness')
+  const secret = (process.env.ZEROSCOUT_INTEGRATION_SECRET ?? '').trim()
+  if (!secret) {
+    const error = new Error('ZeroScout integration is not configured. Set ZEROSCOUT_INTEGRATION_SECRET on the server.') as Error & { status?: number }
+    error.status = 503
+    throw error
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Math.min(10_000, REQUEST_TIMEOUT_MS))
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${secret}`,
+        'x-hashpaylink-request-id': cryptoRandomId(),
+        'x-hashpaylink-analysis-type': payload.analysisType,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    let json: Record<string, unknown>
+    try {
+      json = text ? JSON.parse(text) as Record<string, unknown> : {}
+    } catch {
+      const error = new Error(`ZeroScout readiness returned a non-JSON response: ${text.slice(0, 180)}`) as Error & { status?: number }
+      error.status = 502
+      throw error
+    }
+    if (!response.ok || json.ok !== true) {
+      const message = typeof json.error === 'string' ? json.error : `ZeroScout readiness failed with HTTP ${response.status}`
+      const error = new Error(message) as Error & { status?: number }
+      error.status = response.status || 502
+      throw error
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function callZeroScoutIntelligence(payload: ZeroScoutPayload, options: ZeroScoutCallOptions = {}): Promise<ZeroScoutIntelligenceResult> {
