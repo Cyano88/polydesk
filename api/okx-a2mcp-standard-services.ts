@@ -21,6 +21,7 @@ import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-f
 import polymarketSmartTraderHandler, {
   checkPolymarketSmartTraderOperational,
   polymarketSmartTraderReady,
+  preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
   runPolymarketSmartTrader,
 } from './polymarket-smart-trader.js'
@@ -434,12 +435,14 @@ type SmartTraderPreparedResult = Extract<Awaited<ReturnType<typeof runPolymarket
 type SmartTraderPaymentPreflightDependencies = {
   validate: typeof preflightPolymarketSmartTraderRequest
   operational: typeof checkPolymarketSmartTraderOperational
+  providers: typeof preflightPolymarketSmartTraderProviders
   prepare: typeof runPolymarketSmartTrader
 }
 
 const smartTraderPaymentPreflightDependencies: SmartTraderPaymentPreflightDependencies = {
   validate: preflightPolymarketSmartTraderRequest,
   operational: checkPolymarketSmartTraderOperational,
+  providers: preflightPolymarketSmartTraderProviders,
   prepare: runPolymarketSmartTrader,
 }
 
@@ -466,6 +469,16 @@ export async function preflightSmartTraderBeforeSettlement(
       ok: false,
       status: 503,
       body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.' },
+    }
+  }
+  if (clean(body.action).toUpperCase() === 'ANALYZE') {
+    const providers = await dependencies.providers(body)
+    if (!providers.ok) {
+      return {
+        ok: false,
+        status: providers.status,
+        body: { ok: false, error: `${providers.error} No payment challenge was issued.` },
+      }
     }
   }
   if (clean(body.action).toUpperCase() !== 'PREPARE') return { ok: true }

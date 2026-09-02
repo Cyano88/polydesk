@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
   runPolymarketSmartTrader,
   type SmartTraderDependencies,
@@ -197,6 +198,17 @@ test('ANALYZE can discover by query inside the single paid workflow', async () =
   if (!result.ok) return
   assert.equal(searchCalls, 1)
   assert.equal(result.data.decision.decision, 'APPROVE')
+})
+
+test('ANALYZE provider preflight rejects an empty exact lookup before payment', async () => {
+  const result = await preflightPolymarketSmartTraderProviders({
+    action: 'ANALYZE',
+    marketId: 'missing-market',
+  }, dependencies({ resolveMarket: async () => [] }))
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.status, 404)
+  assert.match(result.error, /No active Polymarket market matched/i)
 })
 
 test('ANALYZE cannot approve without the settled 0.3 USDT workflow payment', async () => {

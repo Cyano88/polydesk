@@ -141,6 +141,7 @@ test('public DISCOVER is rejected before any smart-trader payment challenge', as
   const result = await preflightSmartTraderBeforeSettlement({ action: 'DISCOVER', query: 'election' }, {
     validate: async () => { dependencyCalls += 1; return { ok: true as const } },
     operational: async () => { dependencyCalls += 1; return true },
+    providers: async () => { dependencyCalls += 1; return { ok: true as const } },
     prepare: async () => { dependencyCalls += 1; throw new Error('must not run') },
   })
   assert.equal(dependencyCalls, 0)
@@ -172,6 +173,7 @@ test('PREPARE provider failures remain non-billable before settlement', async ()
   const result = await preflightSmartTraderBeforeSettlement({ action: 'PREPARE' }, {
     validate: async () => ({ ok: true as const }),
     operational: async () => true,
+    providers: async () => ({ ok: true as const }),
     prepare: async () => {
       prepareCalls += 1
       return { ok: false as const, status: 502, error: 'Polymarket lookup failed: provider unavailable' }
@@ -189,11 +191,30 @@ test('successful PREPARE preflight returns the included preview before settlemen
   const result = await preflightSmartTraderBeforeSettlement({ action: 'PREPARE' }, {
     validate: async () => ({ ok: true as const }),
     operational: async () => true,
+    providers: async () => ({ ok: true as const }),
     prepare: async () => prepared as never,
   })
   assert.equal(result.ok, true)
   if (!result.ok) assert.fail('expected included PREPARE result')
   assert.equal(result.prepared, prepared)
+})
+
+test('ANALYZE exact-market lookup failures remain non-billable before settlement', async () => {
+  let prepareCalls = 0
+  const result = await preflightSmartTraderBeforeSettlement({
+    action: 'ANALYZE',
+    marketId: 'missing-market',
+  }, {
+    validate: async () => ({ ok: true as const }),
+    operational: async () => true,
+    providers: async () => ({ ok: false as const, status: 502, error: 'Polymarket lookup failed: upstream 404' }),
+    prepare: async () => { prepareCalls += 1; throw new Error('must not run') },
+  })
+  assert.equal(prepareCalls, 0)
+  assert.equal(result.ok, false)
+  if (result.ok) assert.fail('expected exact-market lookup failure')
+  assert.equal(result.status, 502)
+  assert.match(String(result.body.error), /No payment challenge was issued/i)
 })
 
 test('football live challenge documents team and date without requiring either filter', async () => {

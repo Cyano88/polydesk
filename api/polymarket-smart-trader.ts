@@ -350,7 +350,14 @@ async function liveResolveMarket(id: string) {
   if (/^0x[a-fA-F0-9]{64}$/.test(marketId)) {
     return marketsFromPayload(await fetchJson(`${GAMMA_ORIGIN}/markets?condition_ids=${encodeURIComponent(marketId)}`))
   }
-  return marketsFromPayload(await fetchJson(`${GAMMA_ORIGIN}/events/slug/${encodeURIComponent(marketId)}`))
+  try {
+    return marketsFromPayload(await fetchJson(`${GAMMA_ORIGIN}/events/slug/${encodeURIComponent(marketId)}`))
+  } catch (error) {
+    if (!/HTTP 404/i.test(error instanceof Error ? error.message : String(error))) throw error
+    // A Polymarket URL may contain either an event slug or a child market
+    // slug. Gamma's event endpoint returns 404 for the latter.
+    return marketsFromPayload(await fetchJson(`${GAMMA_ORIGIN}/markets?slug=${encodeURIComponent(marketId)}`))
+  }
 }
 
 function configuredSmartMoneyWallets() {
@@ -429,6 +436,31 @@ export function polymarketSmartTraderReady() {
   return hasRenderDurableStore()
     && Boolean(clean(process.env.ZEROSCOUT_API_URL, 500))
     && Boolean(clean(process.env.ZEROSCOUT_INTEGRATION_SECRET, 500))
+}
+
+export async function preflightPolymarketSmartTraderProviders(
+  raw: unknown,
+  dependencies: SmartTraderDependencies = liveDependencies,
+) {
+  const parsed = parseRequest(raw)
+  if (!parsed.ok) return parsed
+  const input = parsed.value
+  if (input.action !== 'ANALYZE') return { ok: true as const }
+  try {
+    const markets = input.marketId
+      ? await dependencies.resolveMarket(input.marketId)
+      : await dependencies.searchMarkets(input.query, input.category)
+    if (!markets.length) {
+      return { ok: false as const, status: 404, error: 'No active Polymarket market matched this ANALYZE request.' }
+    }
+    return { ok: true as const }
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 502,
+      error: `Polymarket lookup failed: ${error instanceof Error ? error.message : 'unknown provider error'}`,
+    }
+  }
 }
 
 let operationalReadinessCache: { checkedAt: number; ok: boolean } | null = null
