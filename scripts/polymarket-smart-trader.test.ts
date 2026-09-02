@@ -6,11 +6,20 @@ import {
   type SmartTraderDependencies,
   type SmartTraderDecisionReceipt,
   type SmartTraderMarket,
+  type SmartTraderServicePayment,
 } from '../api/polymarket-smart-trader.js'
 
 const now = Date.parse('2026-09-01T10:00:00.000Z')
 const conditionId = `0x${'12'.repeat(32)}`
 const smartWallet = '0x1111111111111111111111111111111111111111'
+const servicePayment: SmartTraderServicePayment = {
+  provider: 'OKX Agent Payments Protocol',
+  transaction: `0x${'cd'.repeat(32)}`,
+  payer: smartWallet,
+  amountAtomic: '300000',
+  network: 'X Layer',
+  serviceUrl: '/api/a2mcp/polymarket-smart-trader',
+}
 
 function market(overrides: Partial<SmartTraderMarket> = {}): SmartTraderMarket {
   return {
@@ -101,7 +110,7 @@ async function analyzeForBuy(deps: SmartTraderDependencies, extra: Record<string
     outcome: 'Yes',
     side: 'BUY',
     ...extra,
-  }, deps)
+  }, deps, servicePayment)
   assert.equal(result.ok, true)
   if (!result.ok) throw new Error(result.error)
   return result.data.decision
@@ -155,7 +164,7 @@ test('ANALYZE joins exact market data, sports news, and ZeroScout evidence witho
     side: 'BUY',
     category: 'sports',
     smartMoneyWallets: [smartWallet],
-  }, dependencies())
+  }, dependencies(), servicePayment)
   assert.equal(result.ok, true)
   if (!result.ok) return
   assert.equal(result.data.selected.outcome.tokenId, '111')
@@ -165,6 +174,56 @@ test('ANALYZE joins exact market data, sports news, and ZeroScout evidence witho
   assert.match(result.data.boundary, /not a guarantee/i)
   assert.equal(result.data.decision.decision, 'APPROVE')
   assert.match(result.data.decision.decisionId, /^pstd_/)
+  assert.deepEqual(result.data.decision.servicePayment, servicePayment)
+})
+
+test('ANALYZE can discover by query inside the single paid workflow', async () => {
+  let searchCalls = 0
+  const deps = dependencies({
+    searchMarkets: async query => {
+      searchCalls += 1
+      assert.equal(query, 'Team A final')
+      return [market()]
+    },
+    resolveMarket: async () => { throw new Error('exact resolver must not run') },
+  })
+  const result = await runPolymarketSmartTrader({
+    action: 'ANALYZE',
+    query: 'Team A final',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, deps, servicePayment)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(searchCalls, 1)
+  assert.equal(result.data.decision.decision, 'APPROVE')
+})
+
+test('ANALYZE cannot approve without the settled 0.3 USDT workflow payment', async () => {
+  const result = await runPolymarketSmartTrader({
+    action: 'ANALYZE',
+    marketId: 'will-team-a-win-the-final',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, dependencies())
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.decision.decision, 'ESCALATE')
+  assert.equal(result.data.decision.servicePayment, null)
+  assert.match(result.data.decision.blockers.join(' '), /settled 0.3 USDT ANALYZE payment/i)
+})
+
+test('ANALYZE rejects an old 0.1 USDT payment as authorization for PREPARE', async () => {
+  const result = await runPolymarketSmartTrader({
+    action: 'ANALYZE',
+    marketId: 'will-team-a-win-the-final',
+    outcome: 'Yes',
+    side: 'BUY',
+  }, dependencies(), { ...servicePayment, amountAtomic: '100000' })
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.decision.decision, 'ESCALATE')
+  assert.equal(result.data.decision.servicePayment, null)
 })
 
 test('ANALYZE withholds a directional opinion when ZeroScout is unavailable', async () => {

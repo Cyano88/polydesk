@@ -77,25 +77,26 @@ test('smart-trader challenge declares its OKX AI action contract', async () => {
   const route = buildStandardServiceRouteConfig(
     req,
     '/api/a2mcp/polymarket-smart-trader',
-    '0.1',
+    '0.3',
     '0x631c96fba389f65da7093e559e8120b587ec7df4',
   )
   const unpaid = await route.unpaidResponseBody?.({} as never) as {
-    body?: { inputSchema?: { properties?: Record<string, unknown>; required?: string[] } }
+    body?: { inputSchema?: { properties?: Record<string, { enum?: string[] }>; required?: string[] } }
   }
   assert.ok(unpaid.body?.inputSchema?.properties?.action)
+  assert.deepEqual(unpaid.body?.inputSchema?.properties?.action?.enum, ['ANALYZE', 'PREPARE'])
   assert.ok(unpaid.body?.inputSchema?.properties?.marketId)
   assert.ok(unpaid.body?.inputSchema?.properties?.mandate)
   assert.deepEqual(unpaid.body?.inputSchema?.required, ['action'])
   const accepts = route.accepts as { price: { amount: string } }
-  assert.equal(accepts.price.amount, '100000')
+  assert.equal(accepts.price.amount, '300000')
 })
 
 test('smart-trader 402 header exposes its paid replay contract', () => {
   const challenge = {
     x402Version: 2,
     resource: { url: 'https://polydesk.trade/api/a2mcp/polymarket-smart-trader' },
-    accepts: [{ scheme: 'exact', network: 'eip155:196', amount: '100000' }],
+    accepts: [{ scheme: 'exact', network: 'eip155:196', amount: '300000' }],
   }
   const response = addSmartTraderReplaySchema({
     status: 402,
@@ -134,6 +135,21 @@ test('a signed empty smart-trader replay is rejected before settlement setup', a
   assert.match(String(responseBody.error), /No payment challenge was issued/i)
 })
 
+test('public DISCOVER is rejected before any smart-trader payment challenge', async () => {
+  let dependencyCalls = 0
+  const result = await preflightSmartTraderBeforeSettlement({ action: 'DISCOVER', query: 'election' }, {
+    validate: async () => { dependencyCalls += 1; return { ok: true as const } },
+    operational: async () => { dependencyCalls += 1; return true },
+    prepare: async () => { dependencyCalls += 1; throw new Error('must not run') },
+  })
+  assert.equal(dependencyCalls, 0)
+  assert.equal(result.ok, false)
+  if (result.ok) assert.fail('expected DISCOVER to remain inside ANALYZE')
+  assert.equal(result.status, 400)
+  assert.match(String(result.body.error), /included inside the paid ANALYZE workflow/i)
+  assert.match(String(result.body.error), /No payment challenge was issued/i)
+})
+
 test('PREPARE provider failures remain non-billable before settlement', async () => {
   let prepareCalls = 0
   const result = await preflightSmartTraderBeforeSettlement({ action: 'PREPARE' }, {
@@ -149,6 +165,18 @@ test('PREPARE provider failures remain non-billable before settlement', async ()
   if (result.ok) assert.fail('expected the provider failure to stop payment processing')
   assert.equal(result.status, 502)
   assert.match(String(result.body.error), /No payment was settled/i)
+})
+
+test('successful PREPARE preflight returns the included preview before settlement', async () => {
+  const prepared = { ok: true as const, status: 200, data: { ok: true, action: 'PREPARE' } }
+  const result = await preflightSmartTraderBeforeSettlement({ action: 'PREPARE' }, {
+    validate: async () => ({ ok: true as const }),
+    operational: async () => true,
+    prepare: async () => prepared as never,
+  })
+  assert.equal(result.ok, true)
+  if (!result.ok) assert.fail('expected included PREPARE result')
+  assert.equal(result.prepared, prepared)
 })
 
 test('football live challenge documents team and date without requiring either filter', async () => {

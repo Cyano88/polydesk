@@ -59,7 +59,7 @@ export type SmartMoneySignal = {
 type SmartTraderAction = 'DISCOVER' | 'ANALYZE' | 'PREPARE'
 
 export type SmartTraderDecisionReceipt = {
-  schema: 'polydesk-smart-trader-decision-v1'
+  schema: 'polydesk-smart-trader-decision-v2'
   decisionId: string
   decision: 'APPROVE' | 'ESCALATE'
   createdAt: string
@@ -77,8 +77,18 @@ export type SmartTraderDecisionReceipt = {
     tradeStance: 'SUPPORT' | 'OPPOSE' | 'INSUFFICIENT' | null
     evidenceQuality: 'HIGH' | 'MEDIUM' | 'LOW' | null
   }
+  servicePayment: SmartTraderServicePayment | null
   blockers: string[]
   riskFlags: string[]
+}
+
+export type SmartTraderServicePayment = {
+  provider: 'OKX Agent Payments Protocol'
+  transaction: string
+  payer: string
+  amountAtomic: string
+  network: 'X Layer'
+  serviceUrl: '/api/a2mcp/polymarket-smart-trader'
 }
 
 export type SmartTraderDependencies = {
@@ -174,8 +184,11 @@ function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: 
   if (action === 'DISCOVER' && !query && !category) {
     return { ok: false, status: 400, error: 'DISCOVER requires a query or category.' }
   }
-  if ((action === 'ANALYZE' || action === 'PREPARE') && !marketId) {
-    return { ok: false, status: 400, error: `${action} requires marketId or marketUrl.` }
+  if (action === 'ANALYZE' && !marketId && !query && !category) {
+    return { ok: false, status: 400, error: 'ANALYZE requires marketId, marketUrl, query, or category.' }
+  }
+  if (action === 'PREPARE' && !marketId) {
+    return { ok: false, status: 400, error: 'PREPARE requires marketId or marketUrl.' }
   }
   if (action === 'PREPARE' && (!decisionId || !/^pstd_[a-f0-9]{24,64}$/.test(decisionId))) {
     return { ok: false, status: 400, error: 'PREPARE requires a valid decisionId from ANALYZE.' }
@@ -468,6 +481,18 @@ function validReceiptProof(value: unknown) {
   return ['contentHash', 'storageRoot', 'storageTxHash', 'storageUri'].some(key => Boolean(clean(value[key], 500)))
 }
 
+function validServicePayment(value: unknown): value is SmartTraderServicePayment {
+  if (!isRecord(value)) return false
+  let amountAtomic = 0n
+  try { amountAtomic = BigInt(clean(value.amountAtomic, 80)) } catch { return false }
+  return value.provider === 'OKX Agent Payments Protocol'
+    && /^0x[a-fA-F0-9]{64}$/.test(clean(value.transaction, 200))
+    && /^0x[a-fA-F0-9]{40}$/.test(clean(value.payer, 200))
+    && amountAtomic === 300_000n
+    && value.network === 'X Layer'
+    && value.serviceUrl === '/api/a2mcp/polymarket-smart-trader'
+}
+
 export function validateSmartTraderDecisionReceipt(
   value: unknown,
   expectedDecisionId?: string,
@@ -478,6 +503,7 @@ export function validateSmartTraderDecisionReceipt(
   const mandate = isRecord(value.mandate) ? value.mandate : null
   const executionSnapshot = isRecord(value.executionSnapshot) ? value.executionSnapshot : null
   const evidence = isRecord(value.evidence) ? value.evidence : null
+  const servicePayment = value.servicePayment
   const decisionId = clean(value.decisionId, 80)
   const createdAtMs = Date.parse(clean(value.createdAt, 80))
   const expiresAtMs = Date.parse(clean(value.expiresAt, 80))
@@ -486,7 +512,7 @@ export function validateSmartTraderDecisionReceipt(
     'maximumBookAgeSeconds', 'maximumPriceDrift', 'maximumSpendUsdc', 'maximumShares',
   ]
   const numericSnapshotFields = ['bestBid', 'bestAsk', 'bookAgeSeconds']
-  const structurallyValid = value.schema === 'polydesk-smart-trader-decision-v1'
+  const structurallyValid = value.schema === 'polydesk-smart-trader-decision-v2'
     && /^pstd_[a-f0-9]{24,64}$/.test(decisionId)
     && (!expectedDecisionId || decisionId === expectedDecisionId)
     && (value.decision === 'APPROVE' || value.decision === 'ESCALATE')
@@ -504,6 +530,7 @@ export function validateSmartTraderDecisionReceipt(
     && Boolean(executionSnapshot)
     && numericSnapshotFields.every(field => executionSnapshot?.[field] === null || Number.isFinite(Number(executionSnapshot?.[field])))
     && Boolean(evidence)
+    && (servicePayment === null || validServicePayment(servicePayment))
     && Array.isArray(value.blockers) && value.blockers.every(item => typeof item === 'string')
     && Array.isArray(value.riskFlags) && value.riskFlags.every(item => typeof item === 'string')
   if (!structurallyValid) return { ok: false, status: 409, error: 'The stored analysis decision failed schema validation. Run ANALYZE again.' }
@@ -511,6 +538,9 @@ export function validateSmartTraderDecisionReceipt(
   if (expectedHash !== value.analysisHash) return { ok: false, status: 409, error: 'The stored analysis decision failed its integrity check. Run ANALYZE again.' }
   if (value.decision === 'APPROVE' && (!evidence || !validReceiptProof(evidence.zeroScoutProof))) {
     return { ok: false, status: 409, error: 'The stored approval is missing ZeroScout proof. Run ANALYZE again.' }
+  }
+  if (value.decision === 'APPROVE' && !validServicePayment(servicePayment)) {
+    return { ok: false, status: 409, error: 'The stored approval is missing its settled 0.3 USDT analysis payment. Run ANALYZE again.' }
   }
   if (expiresAtMs <= now) return { ok: false, status: 410, error: 'The analysis decision has expired. Run ANALYZE again.' }
   return { ok: true, value: value as SmartTraderDecisionReceipt }
@@ -742,7 +772,11 @@ function executionHandoff(input: ParsedRequest, selected: Awaited<ReturnType<typ
   }
 }
 
-export async function runPolymarketSmartTrader(raw: unknown, dependencies: SmartTraderDependencies = liveDependencies) {
+export async function runPolymarketSmartTrader(
+  raw: unknown,
+  dependencies: SmartTraderDependencies = liveDependencies,
+  servicePayment: SmartTraderServicePayment | null = null,
+) {
   const parsed = parseRequest(raw)
   if (!parsed.ok) return parsed
   const input = parsed.value
@@ -768,7 +802,7 @@ export async function runPolymarketSmartTrader(raw: unknown, dependencies: Smart
   }
   let markets: SmartTraderMarket[]
   try {
-    markets = input.action === 'DISCOVER'
+    markets = input.action === 'DISCOVER' || (input.action === 'ANALYZE' && !input.marketId)
       ? await dependencies.searchMarkets(input.query, input.category)
       : await dependencies.resolveMarket(input.marketId || '')
   } catch (error) {
@@ -892,6 +926,7 @@ export async function runPolymarketSmartTrader(raw: unknown, dependencies: Smart
   const riskFlags = [...selected.riskFlags, ...(research?.riskFlags || []), ...(research ? [] : ['ZeroScout research was unavailable; directional opinion is withheld.'])]
   const decisionBlockers = [
     ...selected.blockers,
+    ...(!validServicePayment(servicePayment) ? ['A settled 0.3 USDT ANALYZE payment is required before this receipt can authorize PREPARE.'] : []),
     ...(!input.side ? ['ANALYZE requires side BUY or SELL before it can approve a trade preparation.'] : []),
     ...(!research ? ['ZeroScout research evidence is required for an approved decision.'] : []),
     ...(research && !researchHasProof ? ['ZeroScout did not return the required stored proof metadata.'] : []),
@@ -905,9 +940,9 @@ export async function runPolymarketSmartTrader(raw: unknown, dependencies: Smart
   ]
   const decisionId = decisionIdFor(dependencies.decisionNonce(), now, selected.market.conditionId, selected.outcome.tokenId)
   const decision: SmartTraderDecisionReceipt = {
-    schema: 'polydesk-smart-trader-decision-v1',
+    schema: 'polydesk-smart-trader-decision-v2',
     decisionId,
-    decision: selected.eligible && Boolean(input.side) && supportedTradeAssessment ? 'APPROVE' : 'ESCALATE',
+    decision: selected.eligible && Boolean(input.side) && supportedTradeAssessment && validServicePayment(servicePayment) ? 'APPROVE' : 'ESCALATE',
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + DECISION_TTL_MS).toISOString(),
     analysisHash: '',
@@ -932,6 +967,7 @@ export async function runPolymarketSmartTrader(raw: unknown, dependencies: Smart
       tradeStance,
       evidenceQuality,
     },
+    servicePayment: validServicePayment(servicePayment) ? servicePayment : null,
     blockers: decisionBlockers,
     riskFlags,
   }
@@ -989,10 +1025,10 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
       endpoint: '/api/a2mcp/polymarket-smart-trader',
       method: 'POST',
       actions: {
-        DISCOVER: 'Rank active markets and outcomes by transparent market-quality and public-wallet evidence.',
-        ANALYZE: 'Resolve one market and combine current execution state with ZeroScout and sports-news evidence; side is required for an APPROVE receipt.',
-        PREPARE: 'Require a live, approved decisionId and return a preview-first invocation for the official OnchainOS Polymarket plugin. No server-side signing or submission.',
+        ANALYZE: 'The single paid gate: discover by query/category or resolve one market, then combine execution state with ZeroScout and category-relevant news evidence. Exact outcome and side are required for an APPROVE receipt.',
+        PREPARE: 'Included with an unexpired paid APPROVE decisionId. Returns a preview-first invocation for the official OnchainOS Polymarket plugin with no second charge, server-side signing, or submission.',
       },
+      price: { amount: '0.3', asset: 'USDT', network: 'X Layer', chargedAt: 'ANALYZE' },
       scoreLabel: SCORE_LABEL,
       executionBoundary: 'The official Polymarket plugin owns wallet access, signing, live-mode confirmation, authorization checks, and submission.',
     })
@@ -1001,7 +1037,16 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
     res.setHeader('Allow', 'GET, POST')
     return res.status(405).json({ ok: false, error: 'Use POST for PolyDesk Smart Market Trader.' })
   }
-  const result = await runPolymarketSmartTrader(req.body)
+  const payment = (req as Request & { payment?: Record<string, unknown> }).payment
+  const servicePayment: SmartTraderServicePayment | null = isRecord(payment) ? {
+    provider: 'OKX Agent Payments Protocol',
+    transaction: clean(payment.transaction, 200),
+    payer: clean(payment.payer, 200),
+    amountAtomic: clean(payment.amount, 80),
+    network: 'X Layer',
+    serviceUrl: '/api/a2mcp/polymarket-smart-trader',
+  } : null
+  const result = await runPolymarketSmartTrader(req.body, liveDependencies, servicePayment)
   if (!result.ok) {
     const { status, ...body } = result
     return res.status(status).json(body)

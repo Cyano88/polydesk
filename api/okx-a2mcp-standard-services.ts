@@ -30,6 +30,7 @@ import polyStreamHandler, { getPolyStreamFeed, requestTeam } from './poly-stream
 const OKX_XLAYER_NETWORK = 'eip155:196'
 const OKX_XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const DEFAULT_STANDARD_PRICE = '0.1'
+const DEFAULT_SMART_TRADER_PRICE = '0.3'
 
 const footballLiveBodyProperties = {
   team: {
@@ -171,8 +172,8 @@ const portfolioWatchBodyProperties = {
 const smartTraderBodyProperties = {
   action: {
     type: 'string',
-    enum: ['DISCOVER', 'ANALYZE', 'PREPARE'],
-    description: 'DISCOVER ranks markets, ANALYZE issues a durable decision, and PREPARE returns the OnchainOS preview handoff.',
+    enum: ['ANALYZE', 'PREPARE'],
+    description: 'ANALYZE is the single paid workflow gate and may discover by query before issuing a durable decision. PREPARE is included when authorized by that receipt.',
   },
   query: { type: 'string', maxLength: 180 },
   marketId: {
@@ -425,14 +426,10 @@ async function deliverMarketplacePortfolioService(req: Request, res: Response) {
 }
 
 async function deliverSmartTraderAnalysis(req: Request, res: Response) {
-  const prepared = (req as Request & {
-    smartTraderPreparedResult?: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
-  }).smartTraderPreparedResult
-  if (prepared?.ok) return res.status(prepared.status).json(prepared.data)
   return polymarketSmartTraderHandler(req, res)
 }
 
-type SmartTraderPreparedResult = Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+type SmartTraderPreparedResult = Extract<Awaited<ReturnType<typeof runPolymarketSmartTrader>>, { ok: true }>
 
 type SmartTraderPaymentPreflightDependencies = {
   validate: typeof preflightPolymarketSmartTraderRequest
@@ -453,6 +450,13 @@ export async function preflightSmartTraderBeforeSettlement(
   | { ok: true; prepared?: SmartTraderPreparedResult }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
+  if (clean(body.action).toUpperCase() === 'DISCOVER') {
+    return {
+      ok: false,
+      status: 400,
+      body: { ok: false, error: 'DISCOVER is included inside the paid ANALYZE workflow. Submit ANALYZE with query, category, marketId, or marketUrl. No payment challenge was issued.' },
+    }
+  }
   const preflight = await dependencies.validate(body)
   if (!preflight.ok) {
     return { ok: false, status: preflight.status, body: { ok: false, error: `${preflight.error} No payment challenge was issued.` } }
@@ -760,9 +764,11 @@ async function getStandardServicesServer(req: Request) {
 
       const payTo = env('OKX_X402_PAY_TO', 'OKX_X402_SELLER_ADDRESS', 'X402_SELLER_ADDRESS', 'TREASURY_ADDRESS')
       if (!payTo) throw new Error('OKX_X402_PAY_TO is required for OKX A2MCP x402 settlement')
-      const price = env('OKX_X402_STANDARD_SERVICE_PRICE') || DEFAULT_STANDARD_PRICE
+      const standardPrice = env('OKX_X402_STANDARD_SERVICE_PRICE') || DEFAULT_STANDARD_PRICE
+      const smartTraderPrice = env('OKX_X402_SMART_TRADER_PRICE') || DEFAULT_SMART_TRADER_PRICE
       const routes: RoutesConfig = {}
       for (const path of Object.keys(serviceDefinitions) as StandardServicePath[]) {
+        const price = path === '/api/a2mcp/polymarket-smart-trader' ? smartTraderPrice : standardPrice
         const config = buildStandardServiceRouteConfig(req, path, price, payTo)
         routes[`GET ${path}`] = config
         routes[`POST ${path}`] = config
@@ -967,9 +973,11 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       const result = await preflightSmartTraderBeforeSettlement(body)
       if (!result.ok) return res.status(result.status).json(result.body)
       if (result.prepared) {
-        ;(req as Request & {
-          smartTraderPreparedResult?: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
-        }).smartTraderPreparedResult = result.prepared
+        // A valid paid ANALYZE receipt is the capability for this continuation.
+        // Return the freshly revalidated preview without issuing or settling a
+        // second payment challenge.
+        res.setHeader('X-PolyDesk-Workflow-Included', 'PREPARE')
+        return res.status(result.prepared.status).json(result.prepared.data)
       }
     }
   }

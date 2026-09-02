@@ -87,17 +87,17 @@ const services: Service[] = [
   {
     id: 'polymarket-smart-trader',
     name: 'PolyDesk Smart Market Trader',
-    oneLine: 'Use the PolyDesk OKX AI service to discover, research, and prepare any supported Polymarket trade through OnchainOS.',
+    oneLine: 'Purchase one PolyDesk analysis workflow to discover when needed, research an exact Polymarket outcome, and prepare its included OnchainOS preview.',
     endpoint: '/api/a2mcp/polymarket-smart-trader',
     method: 'POST',
-    price: { amount: '0.1', asset: 'USDT', network: 'X Layer' },
+    price: { amount: '0.3', asset: 'USDT', network: 'X Layer' },
     useWhen: 'An agent needs a current evidence brief and bounded APPROVE or ESCALATE decision before preparing a direct Polymarket trade.',
-    input: ['action: DISCOVER, ANALYZE, or PREPARE', 'marketId and exact outcome for analysis or preparation', 'side: BUY or SELL', 'optional category, public signal wallets, order parameters, and mandate bounds'],
+    input: ['action: ANALYZE or PREPARE', 'ANALYZE accepts either query/category discovery or a specific marketId', 'exact outcome and side: BUY or SELL are required for approval', 'optional public signal wallets, order parameters, and mandate bounds'],
     returns: ['ranked market discovery', 'current market and order-book analysis', 'transparent smart-money provenance', 'ZeroScout and category-relevant news evidence', 'durable decision receipt or preview-only OnchainOS handoff'],
     freeSteps: [
       { endpoint: '/api/a2mcp/polymarket-smart-trader/decision/:decisionId', purpose: 'Verify a persisted OKX AI service decision receipt and expiry.' },
     ],
-    boundary: 'PolyDesk ranks and researches; the official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
+    boundary: 'ANALYZE is the single 0.3 USDT payment gate. Its unexpired paid receipt includes PREPARE; the official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
   },
 ]
 

@@ -10,15 +10,14 @@ The ranking label is `risk-adjusted-opportunity-screening-not-profit-forecast`. 
 
 ## Endpoint
 
-`POST /api/a2mcp/polymarket-smart-trader` is the OKX Agent Payments Protocol service and accepts three actions:
+`POST /api/a2mcp/polymarket-smart-trader` is the OKX Agent Payments Protocol service and accepts two actions:
 
-- `DISCOVER`: search by query or category and return ranked market outcomes.
-- `ANALYZE`: resolve an exact market URL or ID, bind a BUY or SELL side, add research evidence, and persist a 15-minute `APPROVE` or `ESCALATE` decision receipt.
-- `PREPARE`: require that decision ID, re-resolve current market state, enforce the stored market/outcome/side/mandate/size/price-drift bounds, and return a preview-only OnchainOS plugin invocation.
+- `ANALYZE`: the single 0.3 USDT payment gate. Search by query/category or resolve an exact market URL/ID, rank the candidates, bind a BUY or SELL side, add research evidence, and persist a 15-minute `APPROVE` or `ESCALATE` decision receipt containing the settled payment proof.
+- `PREPARE`: require that paid decision ID, re-resolve current market state, enforce the stored market/outcome/side/mandate/size/price-drift bounds, and return a preview-only OnchainOS plugin invocation. It is included in the workflow and does not settle a second payment.
 
 `GET /api/a2mcp/polymarket-smart-trader/decision/:decisionId` verifies a persisted service decision receipt and current expiry state.
 
-The x402 replay contract declares the selected action and its inputs. `ANALYZE` requires `marketId`; exact `outcome` and `side` are required for an `APPROVE` receipt. `PREPARE` additionally requires the prior `decisionId` and bounded order parameters. The service advertises readiness only when durable storage and ZeroScout are configured, and checks ZeroScout, Polymarket Gamma, and CLOB availability before payment processing.
+The x402 replay contract declares the selected action and its inputs. `ANALYZE` requires at least one of `query`, `category`, or `marketId`; exact `outcome` and `side` are required for an `APPROVE` receipt. `PREPARE` additionally requires the prior paid `decisionId` and bounded order parameters. Public `DISCOVER` requests are rejected before payment because discovery is part of ANALYZE. The service advertises readiness only when durable storage and ZeroScout are configured, and checks ZeroScout, Polymarket Gamma, and CLOB availability before payment processing.
 
 The `smart-money-observed` tag is emitted only when recent public activity from the PolyDesk-curated wallet registry matches the exact condition and outcome token. A request-supplied wallet can emit only `public-wallet-signal-observed`; callers cannot self-assign the trusted label. No wallet set or no matching evidence means no signal tag.
 
