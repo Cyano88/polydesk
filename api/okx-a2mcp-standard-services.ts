@@ -268,7 +268,7 @@ function smartTraderReplaySchema() {
     input,
     output: {
       type: 'json',
-      description: 'Ranked discovery, evidence-backed durable decisions, or a preview-only OnchainOS trade handoff. It never signs or submits a trade.',
+      description: 'Ranked discovery, evidence-backed durable decisions, or a preview-only OnchainOS trade handoff with verified-shortfall funding routing for BUY. It never signs or submits a trade.',
     },
   }
 }

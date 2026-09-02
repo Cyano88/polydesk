@@ -381,6 +381,12 @@ test('PREPARE returns a preview-only official plugin handoff and performs no sig
   ])
   assert.equal(result.data.signalId, `polydesk:${decision.decisionId}`)
   assert.equal(result.data.handoff.attribution.strategyId, decision.decisionId)
+  assert.equal(result.data.handoff.fundingFlow?.requiredBalanceUsdc, 5)
+  assert.equal(result.data.handoff.fundingFlow?.readiness.endpoint, '/api/polymarket-account/readiness')
+  assert.equal(result.data.handoff.fundingFlow?.onShortfall.type, 'FUND')
+  assert.equal(result.data.handoff.fundingFlow?.onShortfall.endpoint, '/api/a2mcp/polymarket-funding-link')
+  assert.match(result.data.handoff.fundingFlow?.resumeOnlyWhen || '', /PREPARE_BUY/i)
+  assert.match(result.data.handoff.boundary, /never overrides an ESCALATE decision/i)
   assert.match(result.data.next, /No trade has been signed or submitted/i)
 })
 

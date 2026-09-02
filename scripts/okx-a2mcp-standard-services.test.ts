@@ -114,6 +114,7 @@ test('smart-trader 402 header exposes its paid replay contract', () => {
   assert.equal(decoded.outputSchema?.input?.outcome?.required, false)
   assert.equal(decoded.outputSchema?.input?.side?.required, false)
   assert.equal(decoded.outputSchema?.input?.mandate?.required, false)
+  assert.match(String(decoded.outputSchema?.output?.description), /verified-shortfall funding routing/i)
   assert.match(String(decoded.outputSchema?.output?.description), /never signs or submits/i)
 })
 

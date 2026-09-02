@@ -87,17 +87,18 @@ const services: Service[] = [
   {
     id: 'polymarket-smart-trader',
     name: 'PolyDesk Smart Market Trader',
-    oneLine: 'Purchase one PolyDesk analysis workflow to discover when needed, research an exact Polymarket outcome, and prepare its included OnchainOS preview.',
+    oneLine: 'Purchase one PolyDesk analysis workflow to discover when needed, research an exact Polymarket outcome, verify funding readiness, and prepare its included OnchainOS preview.',
     endpoint: '/api/a2mcp/polymarket-smart-trader',
     method: 'POST',
     price: { amount: '0.3', asset: 'USDT', network: 'X Layer' },
     useWhen: 'An agent needs a current evidence brief and bounded APPROVE or ESCALATE decision before preparing a direct Polymarket trade.',
     input: ['action: ANALYZE or PREPARE', 'ANALYZE accepts either query/category discovery or a specific marketId', 'exact outcome and side: BUY or SELL are required for approval', 'optional public signal wallets, order parameters, and mandate bounds'],
-    returns: ['ranked market discovery', 'current market and order-book analysis', 'transparent smart-money provenance', 'ZeroScout and category-relevant news evidence', 'durable decision receipt or preview-only OnchainOS handoff'],
+    returns: ['ranked market discovery', 'current market and order-book analysis', 'transparent smart-money provenance', 'ZeroScout and category-relevant news evidence', 'durable decision receipt or preview-only OnchainOS handoff', 'verified-shortfall FUND route before a BUY preview when pUSD is low'],
     freeSteps: [
       { endpoint: '/api/a2mcp/polymarket-smart-trader/decision/:decisionId', purpose: 'Verify a persisted OKX AI service decision receipt and expiry.' },
+      { endpoint: '/api/polymarket-account/readiness', purpose: 'Verify the owner-derived Deposit Wallet and pUSD balance before a BUY preview.' },
     ],
-    boundary: 'ANALYZE is the single 0.3 USDT payment gate. Its unexpired paid receipt includes PREPARE; the official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
+    boundary: 'ANALYZE is the single 0.3 USDT analysis payment gate. Its unexpired paid receipt includes PREPARE. A verified pUSD shortfall routes to the separate funding service and must settle before preview; it never overrides ESCALATE. The official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
   },
 ]
 

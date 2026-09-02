@@ -13,7 +13,7 @@ The ranking label is `risk-adjusted-opportunity-screening-not-profit-forecast`. 
 `POST /api/a2mcp/polymarket-smart-trader` is the OKX Agent Payments Protocol service and accepts two actions:
 
 - `ANALYZE`: the single 0.3 USDT payment gate. Search by query/category or resolve an exact market URL/ID, rank the candidates, bind a BUY or SELL side, add research evidence, and persist a 15-minute `APPROVE` or `ESCALATE` decision receipt containing the settled payment proof.
-- `PREPARE`: require that paid decision ID, re-resolve current market state, enforce the stored market/outcome/side/mandate/size/price-drift bounds, and return a preview-only OnchainOS plugin invocation. It is included in the workflow and does not settle a second payment.
+- `PREPARE`: require that paid decision ID, re-resolve current market state, enforce the stored market/outcome/side/mandate/size/price-drift bounds, and return a preview-only OnchainOS plugin invocation. For BUY, the handoff first runs the free owner/deposit-wallet readiness check and routes a verified pUSD shortfall to `/api/a2mcp/polymarket-funding-link`; it resumes only after funding is terminal and a refreshed readiness check returns `PREPARE_BUY`. PREPARE is included in the workflow and does not settle a second analysis payment.
 
 `GET /api/a2mcp/polymarket-smart-trader/decision/:decisionId` verifies a persisted service decision receipt and current expiry state.
 
@@ -23,7 +23,7 @@ The `smart-money-observed` tag is emitted only when recent public activity from 
 
 Sports analysis may include Sportmonks-backed news from the existing PolyDesk provider layer. Politics, economics, crypto, and other categories use the configured general-news provider. ZeroScout receives a sanitized, timestamped evidence packet and is asked for a thesis, counter-thesis, risk flags, confidence, and data gaps. If research or stored ZeroScout proof is unavailable, PolyDesk withholds a directional opinion instead of inventing one.
 
-`PREPARE` does not trade. It returns structured `previewInvocation` and `invocation` arrays for `polymarket-plugin`, plus the mandatory OnchainOS gates. The caller must run the preview and satisfy the plugin typed live-mode confirmation or exact autotrade execution-card rules before a live write.
+`PREPARE` does not trade. It returns structured `previewInvocation` and `invocation` arrays for `polymarket-plugin`, a `fundingFlow` for BUY shortfalls, and the mandatory OnchainOS gates. The funding branch uses the same owner-derived Deposit Wallet contract as Governed Polymarket Trader: it never trusts an arbitrary destination, never treats checkout creation as settlement, and refreshes pUSD before continuing. Funding readiness cannot convert an `ESCALATE` analysis into an approval. The caller must run the preview and satisfy the plugin typed live-mode confirmation or exact autotrade execution-card rules before a live write.
 
 ## Remaining production work
 

@@ -798,6 +798,32 @@ function executionHandoff(
   if (input.postOnly) args.push('--post-only')
   args.push('--strategy-id', decisionId)
   const previewArgs = [...args, '--dry-run']
+  const fundingFlow = input.side === 'BUY'
+    ? {
+        trigger: 'When the active owner-derived Polymarket Deposit Wallet pUSD balance is below requiredBalanceUsdc.',
+        requiredBalanceUsdc: input.amountUsdc,
+        readiness: {
+          endpoint: '/api/polymarket-account/readiness',
+          method: 'POST',
+          input: {
+            ownerAddress: 'Resolve from the active OnchainOS Polygon wallet context.',
+            requiredBalanceUsdc: input.amountUsdc,
+          },
+        },
+        onShortfall: {
+          type: 'FUND',
+          endpoint: '/api/a2mcp/polymarket-funding-link',
+          method: 'POST',
+          input: {
+            ownerAddress: 'Use the same active owner EOA verified by readiness.',
+            requiredBalanceUsdc: input.amountUsdc,
+            network: 'Select base or arbitrum from the buyer funding source.',
+          },
+          instruction: 'Request funding only for the deterministic owner-derived Deposit Wallet, wait until the checkout status is funded, refresh readiness, then continue to preview.',
+        },
+        resumeOnlyWhen: 'Readiness returns PREPARE_BUY with a refreshed pUSD balance at or above requiredBalanceUsdc.',
+      }
+    : null
   return {
     provider: 'OKX OnchainOS',
     plugin: 'polymarket-plugin',
@@ -812,9 +838,13 @@ function executionHandoff(
     previewInvocation: { command: 'polymarket-plugin', args: previewArgs },
     previewCommand: `polymarket-plugin ${previewArgs.map(shellArg).join(' ')}`,
     liveCommand: `polymarket-plugin ${args.map(shellArg).join(' ')}`,
+    fundingFlow,
     requiredGates: [
       'Run polymarket-plugin check-access.',
-      'Resolve the active OnchainOS Polygon wallet and balances.',
+      'Resolve the active OnchainOS Polygon owner wallet and its owner-derived Polymarket Deposit Wallet.',
+      ...(input.side === 'BUY'
+        ? ['Run the free PolyDesk account-readiness check; if it reports a pUSD shortfall, complete fundingFlow and refresh readiness before preview.']
+        : ['Resolve the active OnchainOS Polygon wallet balances.']),
       ...(input.side === 'SELL' && input.limitPrice === undefined
         ? ['Run polymarket-plugin get-market and complete the mandatory pre-sell liquidity check.']
         : []),
@@ -822,7 +852,7 @@ function executionHandoff(
       'Obtain the mandatory typed live-mode confirmation in the current session.',
       'Execute only within the user-authored OnchainOS mandate or a verbatim authorized autotrade execution card.',
     ],
-    boundary: 'PolyDesk supplies intelligence and a structured handoff. The official plugin owns wallet access, signing, authorization checks, and order submission.',
+    boundary: 'PolyDesk supplies intelligence, verified-shortfall funding routing, and a structured handoff. Funding never overrides an ESCALATE decision; the official plugin owns wallet access, signing, authorization checks, and order submission.',
   }
 }
 
