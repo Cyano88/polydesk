@@ -7,12 +7,16 @@ const marketId = String(process.argv[3] ?? '').trim()
 const outcome = String(process.argv[4] ?? '').trim()
 const side = String(process.argv[5] ?? '').trim().toUpperCase()
 const payer = String(process.argv[6] ?? '').trim()
+const query = String(process.argv[7] ?? '').trim()
+const category = String(process.argv[8] ?? '').trim().toLowerCase()
 
 if (!/^0x[a-fA-F0-9]{64}$/.test(transaction)) throw new Error('A valid settlement transaction is required.')
 if (!marketId) throw new Error('marketId is required.')
 if (!outcome) throw new Error('outcome is required.')
 if (side !== 'BUY' && side !== 'SELL') throw new Error('side must be BUY or SELL.')
 if (!/^0x[a-fA-F0-9]{40}$/.test(payer)) throw new Error('A valid payer is required.')
+if (query.length > 180) throw new Error('query must be 180 characters or fewer.')
+if (category.length > 50) throw new Error('category must be 50 characters or fewer.')
 
 const tokenAddress = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
 const payTo = String(process.env.OKX_X402_PAY_TO ?? process.env.OKX_X402_SELLER_ADDRESS ?? '').trim().toLowerCase()
@@ -53,6 +57,8 @@ const request = {
   outcome,
   side,
   limit: 5,
+  ...(query ? { query } : {}),
+  ...(category ? { category } : {}),
 } as const
 const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex')
 const recoveryKey = `polydesk:smart-trader:payment-recovery:${transaction.toLowerCase()}`
