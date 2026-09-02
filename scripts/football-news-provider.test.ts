@@ -21,6 +21,7 @@ test('general research news retains non-football provider articles', async () =>
     if (url.startsWith('https://gamma-api.polymarket.com/')) {
       return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
+    assert.equal(new URL(url).searchParams.get('q'), 'Federal Reserve September decision')
     return new Response(JSON.stringify({
       articles: [{
         title: 'Federal Reserve officials weigh September interest-rate decision',
@@ -33,7 +34,7 @@ test('general research news retains non-football provider articles', async () =>
   }
 
   try {
-    const articles = await getGeneralResearchNews('Federal Reserve September decision')
+    const articles = await getGeneralResearchNews('Federal Reserve: September decision?')
     assert.equal(articles.length, 1)
     assert.match(articles[0].title, /Federal Reserve/)
     assert.equal(articles[0].tag, 'News')

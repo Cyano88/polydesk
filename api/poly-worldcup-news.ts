@@ -405,7 +405,15 @@ async function fetchProviderArticles(
 }
 
 export async function getGeneralResearchNews(query: string): Promise<PolyWorldCupArticle[]> {
-  const requested = asString(query).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180)
+  // GNews rejects unquoted special characters (including the question mark
+  // commonly present in Polymarket titles). General research uses plain
+  // keyword search, so remove punctuation before constructing the provider URL.
+  const requested = asString(query)
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180)
   if (!requested) return []
   return fetchProviderArticles({ team: requested }, false, false)
 }
