@@ -784,7 +784,11 @@ function shellArg(value: string) {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-function executionHandoff(input: ParsedRequest, selected: Awaited<ReturnType<typeof rankMarketOutcomes>>['ranked'][number]) {
+function executionHandoff(
+  input: ParsedRequest,
+  selected: Awaited<ReturnType<typeof rankMarketOutcomes>>['ranked'][number],
+  decisionId: string,
+) {
   const args = [input.side === 'BUY' ? 'buy' : 'sell', '--market-id', selected.market.conditionId, '--outcome', selected.outcome.label]
   if (input.side === 'BUY') args.push('--amount', String(input.amountUsdc))
   else args.push('--shares', String(input.shares))
@@ -792,12 +796,18 @@ function executionHandoff(input: ParsedRequest, selected: Awaited<ReturnType<typ
   if (input.orderType === 'FAK') args.push('--order-type', 'FAK')
   if (input.orderType === 'GTD' && input.expiresAt) args.push('--expires', String(input.expiresAt))
   if (input.postOnly) args.push('--post-only')
+  args.push('--strategy-id', decisionId)
   const previewArgs = [...args, '--dry-run']
   return {
     provider: 'OKX OnchainOS',
     plugin: 'polymarket-plugin',
     chainId: 137,
     mode: 'preview-only-until-user-confirms-live-mode',
+    attribution: {
+      signalId: `polydesk:${decisionId}`,
+      strategyId: decisionId,
+      note: 'The official plugin reports this strategy ID after a successful order so the execution can be reconciled to the PolyDesk decision.',
+    },
     invocation: { command: 'polymarket-plugin', args },
     previewInvocation: { command: 'polymarket-plugin', args: previewArgs },
     previewCommand: `polymarket-plugin ${previewArgs.map(shellArg).join(' ')}`,
@@ -922,10 +932,11 @@ export async function runPolymarketSmartTrader(
         action: input.action,
         generatedAt: new Date(dependencies.now()).toISOString(),
         decisionId: boundDecision.decisionId,
+        signalId: `polydesk:${boundDecision.decisionId}`,
         analysisHash: boundDecision.analysisHash,
         selected,
         mandate: input.mandate,
-        handoff: executionHandoff(input, selected),
+        handoff: executionHandoff(input, selected, boundDecision.decisionId),
         next: 'Run the preview through the official OnchainOS Polymarket plugin. No trade has been signed or submitted.',
       },
     }

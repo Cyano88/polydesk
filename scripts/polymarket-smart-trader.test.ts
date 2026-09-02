@@ -377,7 +377,10 @@ test('PREPARE returns a preview-only official plugin handoff and performs no sig
   assert.equal(result.data.handoff.previewInvocation.args.at(-1), '--dry-run')
   assert.deepEqual(result.data.handoff.invocation.args, [
     'buy', '--market-id', conditionId, '--outcome', 'Yes', '--amount', '5', '--price', '0.5', '--post-only',
+    '--strategy-id', decision.decisionId,
   ])
+  assert.equal(result.data.signalId, `polydesk:${decision.decisionId}`)
+  assert.equal(result.data.handoff.attribution.strategyId, decision.decisionId)
   assert.match(result.data.next, /No trade has been signed or submitted/i)
 })
 
