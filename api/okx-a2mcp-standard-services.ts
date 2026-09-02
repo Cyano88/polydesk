@@ -481,6 +481,14 @@ export async function preflightSmartTraderBeforeSettlement(
   return { ok: true, prepared }
 }
 
+export function smartTraderRequestInput(req: Pick<Request, 'body' | 'query'>): Record<string, unknown> {
+  const query = isRecord(req.query) ? req.query : {}
+  const body = isRecord(req.body) ? req.body : {}
+  // Some OKX buyer clients replay declared parameters in the URL even for a
+  // POST. Normalize both carriers, while letting an explicit JSON body win.
+  return { ...query, ...body }
+}
+
 const serviceDefinitions = {
   // Agent #5427 compatibility routes. Keep these live until the marketplace
   // listing has migrated to the newer football and governed-flow names.
@@ -961,7 +969,8 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
     }
   }
   if (path === '/api/a2mcp/polymarket-smart-trader') {
-    const body = isRecord(req.body) ? req.body : {}
+    const body = smartTraderRequestInput(req)
+    req.body = body
     const hasPaymentProof = Boolean(req.headers['payment-signature'] || req.headers['x-payment'])
     // Preserve empty marketplace discovery probes so buyer tooling can receive
     // the declared 402 schema. Any request carrying business input or a signed

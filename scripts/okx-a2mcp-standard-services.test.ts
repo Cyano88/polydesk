@@ -8,6 +8,7 @@ import okxA2mcpStandardServiceHandler, {
   addSmartTraderReplaySchema,
   buildStandardServiceRouteConfig,
   preflightSmartTraderBeforeSettlement,
+  smartTraderRequestInput,
 } from '../api/okx-a2mcp-standard-services.js'
 import { polyDeskAgentServices } from '../api/a2mcp-services.js'
 
@@ -148,6 +149,22 @@ test('public DISCOVER is rejected before any smart-trader payment challenge', as
   assert.equal(result.status, 400)
   assert.match(String(result.body.error), /included inside the paid ANALYZE workflow/i)
   assert.match(String(result.body.error), /No payment challenge was issued/i)
+})
+
+test('smart-trader replay accepts OKX buyer parameters from query while JSON body wins', () => {
+  const queryReplay = smartTraderRequestInput({
+    query: { action: 'ANALYZE', marketId: 'query-market', outcome: 'Yes', side: 'BUY' },
+    body: {},
+  })
+  assert.equal(queryReplay.action, 'ANALYZE')
+  assert.equal(queryReplay.marketId, 'query-market')
+
+  const bodyReplay = smartTraderRequestInput({
+    query: { action: 'DISCOVER', marketId: 'query-market' },
+    body: { action: 'ANALYZE', marketId: 'body-market' },
+  })
+  assert.equal(bodyReplay.action, 'ANALYZE')
+  assert.equal(bodyReplay.marketId, 'body-market')
 })
 
 test('PREPARE provider failures remain non-billable before settlement', async () => {
