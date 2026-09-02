@@ -747,6 +747,7 @@ async function rankMarketOutcomes(markets: SmartTraderMarket[], input: ParsedReq
           : [],
       market: {
         title: market.question,
+        description: market.description || null,
         url: market.eventSlug ? `https://polymarket.com/event/${market.eventSlug}` : null,
         eventSlug: market.eventSlug,
         marketSlug: market.marketSlug,

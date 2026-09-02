@@ -380,6 +380,7 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
   assert.equal(received.proofClass, 'polydesk_smart_market_research')
   assert.equal(received.side, 'BUY')
   assert.equal(typeof received.mandate, 'object')
+  assert.equal((received.market as Record<string, unknown>).description, 'Resolves Yes if Team A wins the final.')
 })
 
 test('ANALYZE uses the configured general-news provider outside sports', async () => {
