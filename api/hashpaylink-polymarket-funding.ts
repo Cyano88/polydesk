@@ -16,6 +16,13 @@ export type HashPayLinkFundingStatus = {
   network?: string
   paymentTransaction?: string
   bridgeTransaction?: string
+  funding?: {
+    provider?: string
+    targetWallet?: string
+    depositAddress?: string
+    amount?: string
+    availableNetworks?: string[]
+  }
   receiptUrl?: string
   returnUrl?: string
   error?: string

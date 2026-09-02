@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { randomUUID } from 'node:crypto'
-import { isAddress } from 'viem'
+import { getAddress, isAddress } from 'viem'
 import { cleanNetwork, type BridgeNetwork } from './polymarket-bridge.js'
 import { createHashPayLinkPolymarketFundingCheckout } from './hashpaylink-polymarket-funding.js'
 import { checkPolymarketAccountReadiness } from './polymarket-account-readiness.js'
@@ -189,16 +189,40 @@ export function createA2mcpPolymarketFundingLinkHandler(dependencies: FundingDep
         requestId,
         returnUrl,
       })
-      const checkoutData = checkout.data as { ok?: boolean; checkoutUrl?: string; fundingRequestId?: string; error?: string }
+      const checkoutData = checkout.data as {
+        ok?: boolean
+        checkoutUrl?: string
+        fundingRequestId?: string
+        error?: string
+        funding?: {
+          provider?: string
+          targetWallet?: string
+          depositAddress?: string
+          amount?: string
+          availableNetworks?: string[]
+        }
+      }
+      const providerFunding = checkoutData.funding
+      const verifiedInstruction = Boolean(
+        providerFunding?.provider === 'polymarket'
+        && isAddress(providerFunding.targetWallet ?? '')
+        && getAddress(providerFunding!.targetWallet!) === getAddress(account.wallet)
+        && isAddress(providerFunding.depositAddress ?? '')
+        && providerFunding.amount === checkoutAmount
+        && providerFunding.availableNetworks?.includes(network)
+        && isAddress(funding.sourceTokenAddress ?? ''),
+      )
       if (
         checkout.statusCode < 200
         || checkout.statusCode >= 300
         || !checkoutData.ok
         || !checkoutData.checkoutUrl
         || !/^pmf_[a-zA-Z0-9_-]+$/.test(checkoutData.fundingRequestId ?? '')
+        || !verifiedInstruction
       ) {
-        return res.status(checkout.statusCode).json({ ok: false, error: checkoutData.error || 'Could not prepare Hash PayLink funding checkout.' })
+        return res.status(checkout.statusCode).json({ ok: false, error: checkoutData.error || 'Hash PayLink did not return a verified machine funding instruction.' })
       }
+      const statusUrl = `/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(checkoutData.fundingRequestId ?? '')}`
 
       return res.json({
         ok: true,
@@ -225,14 +249,27 @@ export function createA2mcpPolymarketFundingLinkHandler(dependencies: FundingDep
         checkout: {
           url: checkoutData.checkoutUrl,
           requestId: checkoutData.fundingRequestId,
-          statusUrl: `/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(checkoutData.fundingRequestId ?? '')}`,
+          statusUrl,
+          role: 'optional_human_fallback',
           expires: 'Use promptly; delivery is final only when funding status is funded.',
         },
-        nextAction: 'PAY_CHECKOUT_THEN_POLL_STATUS',
+        fundingInstruction: {
+          type: 'ERC20_TRANSFER',
+          network: networkLabel(network),
+          chainId: network === 'arbitrum' ? 42161 : 8453,
+          asset: 'USDC',
+          tokenAddress: getAddress(funding.sourceTokenAddress!),
+          amount: checkoutAmount,
+          recipient: getAddress(providerFunding!.depositAddress!),
+          statusUrl,
+          confirmationRequired: true,
+        },
+        nextAction: 'SEND_USDC_THEN_POLL_STATUS',
         safety: [
-          'The checkout target was derived from the owner EOA and verified as a deployed Polymarket Deposit Wallet.',
+          'The transfer target was created by Hash PayLink for the owner-derived, deployed Polymarket Deposit Wallet.',
+          'Confirm the exact network, USDC contract, amount, and recipient before the agent wallet sends funds.',
           'Funding is not complete until bridge status is funded and the pUSD balance is refreshed.',
-          'This endpoint creates a funding handoff only; PolyDesk does not custody funds for buyer agents.',
+          'PolyDesk and Hash PayLink do not custody buyer-agent funds.',
         ],
       })
     } catch (err) {

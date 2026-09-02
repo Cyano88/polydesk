@@ -30,7 +30,7 @@ The response returns exactly one next action:
 - `RETRY_READINESS`: the live bridge asset check was unavailable, so no money
   should move yet.
 
-## 2. Create a verified funding checkout
+## 2. Create a verified funding instruction
 
 Call this only after readiness returns `CREATE_FUNDING_CHECKOUT`.
 
@@ -50,12 +50,16 @@ Agentic Wallet and replay the exact request.
 
 The paid replay either:
 
-- returns a Hash PayLink checkout targeting the derived, deployed Deposit
-  Wallet; or
+- returns a machine-readable USDC transfer instruction targeting a deposit
+  address created by Hash PayLink for the derived, deployed Deposit Wallet,
+  plus an optional hosted checkout fallback; or
 - returns `PREPARE_BUY` with no checkout when the refreshed pUSD balance is
   already sufficient.
 
-Poll the returned `checkout.statusUrl`. Funding is terminal only when status is
+For headless execution, confirm the returned network, token contract, amount,
+and recipient, then have the agent wallet execute the exact ERC-20 transfer.
+The browser checkout is optional. Poll the returned
+`fundingInstruction.statusUrl`. Funding is terminal only when status is
 `funded`; then call readiness again and confirm the pUSD balance.
 
 ## 3. Prepare and execute the buy
@@ -85,6 +89,6 @@ signed order payload to PolyDesk's governed or signed OPEN validation flow.
 2. Never fund the owner EOA for Deposit Wallet orders.
 3. Never trust an arbitrary caller-supplied funding wallet.
 4. Check Polymarket supported assets and minimums live before every checkout.
-5. A paid checkout is not a completed bridge.
+5. A created instruction or paid checkout is not a completed bridge.
 6. A completed bridge must be followed by a refreshed pUSD balance check.
 7. Default to immediate `FAK`; use `FOK` for all-or-nothing execution.

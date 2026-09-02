@@ -60,11 +60,11 @@ const services: Service[] = [
     price: { amount: '0.1', asset: 'USDT', network: 'X Layer' },
     useWhen: 'A buyer agent has a verified pUSD shortfall before a Polymarket action.',
     input: ['ownerAddress', 'requiredBalanceUsdc', 'optional claimed wallet', 'source network: base or arbitrum'],
-    returns: ['derived Deposit Wallet and match proof', 'deployment and pUSD readiness', 'verified shortfall', 'Hash PayLink checkout and status URL only when funding is required'],
+    returns: ['derived Deposit Wallet and match proof', 'deployment and pUSD readiness', 'verified shortfall', 'machine-readable USDC transfer instruction and status URL', 'optional hosted checkout fallback'],
     freeSteps: [
       { endpoint: '/api/polymarket-account/readiness', purpose: 'Derive and inspect the buyer account before payment.' },
     ],
-    boundary: 'A mismatched wallet is rejected before checkout creation. Checkout settlement must complete before trading.',
+    boundary: 'A mismatched wallet is rejected before instruction creation. Funding must reach terminal bridge status and refreshed pUSD readiness before trading.',
   },
   {
     id: 'governed-polymarket-trader',
