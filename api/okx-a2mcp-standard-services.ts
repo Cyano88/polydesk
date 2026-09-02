@@ -260,11 +260,22 @@ function portfolioWatchReplaySchema() {
 }
 
 function smartTraderReplaySchema() {
+  const properties = Object.fromEntries(Object.entries(smartTraderBodyProperties).map(([name, schema]) => [
+    name,
+    { ...schema, required: smartTraderRequiredFields.includes(name as typeof smartTraderRequiredFields[number]) },
+  ]))
   return {
-    input: Object.fromEntries(Object.entries(smartTraderBodyProperties).map(([name, schema]) => [
-      name,
-      { ...schema, required: smartTraderRequiredFields.includes(name as typeof smartTraderRequiredFields[number]) },
-    ])),
+    input: {
+      type: 'http',
+      method: 'POST',
+      bodyType: 'json',
+      body: {
+        type: 'object',
+        properties,
+        required: smartTraderRequiredFields,
+        additionalProperties: false,
+      },
+    },
     output: {
       type: 'json',
       description: 'Ranked discovery, evidence-backed durable decisions, or a preview-only OnchainOS trade handoff. It never signs or submits a trade.',

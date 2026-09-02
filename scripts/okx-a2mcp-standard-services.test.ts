@@ -104,13 +104,25 @@ test('smart-trader 402 header exposes its paid replay contract', () => {
     headers: { 'PAYMENT-REQUIRED': Buffer.from(JSON.stringify(challenge)).toString('base64url') },
   }, '/api/a2mcp/polymarket-smart-trader')
   const decoded = JSON.parse(Buffer.from(response.headers['PAYMENT-REQUIRED'], 'base64url').toString('utf8')) as {
-    outputSchema?: { input?: Record<string, { required?: boolean }>; output?: { description?: string } }
+    outputSchema?: {
+      input?: {
+        type?: string
+        method?: string
+        bodyType?: string
+        body?: { properties?: Record<string, { required?: boolean }>; required?: readonly string[] }
+      }
+      output?: { description?: string }
+    }
   }
-  assert.equal(decoded.outputSchema?.input?.action?.required, true)
-  assert.equal(decoded.outputSchema?.input?.marketId?.required, false)
-  assert.equal(decoded.outputSchema?.input?.outcome?.required, false)
-  assert.equal(decoded.outputSchema?.input?.side?.required, false)
-  assert.equal(decoded.outputSchema?.input?.mandate?.required, false)
+  assert.equal(decoded.outputSchema?.input?.type, 'http')
+  assert.equal(decoded.outputSchema?.input?.method, 'POST')
+  assert.equal(decoded.outputSchema?.input?.bodyType, 'json')
+  assert.deepEqual(decoded.outputSchema?.input?.body?.required, ['action'])
+  assert.equal(decoded.outputSchema?.input?.body?.properties?.action?.required, true)
+  assert.equal(decoded.outputSchema?.input?.body?.properties?.marketId?.required, false)
+  assert.equal(decoded.outputSchema?.input?.body?.properties?.outcome?.required, false)
+  assert.equal(decoded.outputSchema?.input?.body?.properties?.side?.required, false)
+  assert.equal(decoded.outputSchema?.input?.body?.properties?.mandate?.required, false)
   assert.match(String(decoded.outputSchema?.output?.description), /never signs or submits/i)
 })
 
