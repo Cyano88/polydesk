@@ -79,6 +79,8 @@ export type ZeroScoutGeneralResearchArticle = {
   source: string
   url: string
   publishedAt: string
+  retrievedAt?: string
+  evidenceRole?: 'RESOLUTION_AUTHORITY' | 'EXTERNAL_SOURCE'
 }
 
 export type ZeroScoutGeneralResearchMarket = {
@@ -340,6 +342,8 @@ export async function getZeroScoutGeneralResearch(
         source: typeof value.source === 'string' ? value.source.trim() : '',
         url: typeof value.url === 'string' ? value.url.trim() : '',
         publishedAt: typeof value.publishedAt === 'string' ? value.publishedAt.trim() : '',
+        retrievedAt: typeof value.retrievedAt === 'string' ? value.retrievedAt.trim() : '',
+        evidenceRole: value.evidenceRole === 'RESOLUTION_AUTHORITY' ? 'RESOLUTION_AUTHORITY' as const : 'EXTERNAL_SOURCE' as const,
       }))
       .filter(article => Boolean(article.title && article.description && article.source && /^https?:\/\//i.test(article.url)))
       .slice(0, 8)

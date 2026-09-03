@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  deriveResolutionSource,
+  normalizeMarket,
   preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
   runPolymarketSmartTrader,
@@ -21,6 +23,26 @@ const servicePayment: SmartTraderServicePayment = {
   network: 'X Layer',
   serviceUrl: '/api/a2mcp/polymarket-smart-trader',
 }
+
+test('Gamma market normalization preserves complete rules and derives the named resolution authority', () => {
+  const rules = `${'Rule context. '.repeat(110)}The resolution source for this market is the FOMC statement at https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm. Final fallback rules remain authoritative.`
+  const normalized = normalizeMarket({
+    question: 'Will rates remain unchanged?',
+    conditionId,
+    slug: 'fed-decision',
+    description: rules,
+    outcomes: ['Yes', 'No'],
+    clobTokenIds: ['111', '222'],
+    active: true,
+    closed: false,
+    acceptingOrders: true,
+    enableOrderBook: true,
+  }, { slug: 'fed-decision-event' })
+  assert.ok(normalized)
+  assert.equal(normalized.description, rules)
+  assert.equal(normalized.resolutionSource, 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm')
+  assert.equal(deriveResolutionSource('No authority URL is named.'), '')
+})
 
 function market(overrides: Partial<SmartTraderMarket> = {}): SmartTraderMarket {
   return {
@@ -381,6 +403,7 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
   assert.equal(received.side, 'BUY')
   assert.equal(typeof received.mandate, 'object')
   assert.equal((received.market as Record<string, unknown>).description, 'Resolves Yes if Team A wins the final.')
+  assert.match(String(received.analysisScope), /not a research evidence gap/i)
 })
 
 test('ANALYZE routes non-sports evidence through ZeroScout general research', async () => {
