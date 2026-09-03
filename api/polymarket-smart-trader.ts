@@ -9,6 +9,7 @@ const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
 const CLOB_ORIGIN = 'https://clob.polymarket.com'
 const DATA_ORIGIN = 'https://data-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
+const PAYMENT_PREFLIGHT_TIMEOUT_MS = 4_000
 const DECISION_TTL_MS = 15 * 60_000
 const DELIVERY_RUNNING_STALE_MS = 10 * 60_000
 const DELIVERY_ALERT_AGE_MS = 5 * 60_000
@@ -256,6 +257,20 @@ function numberArray(value: unknown) {
 function boundedNumber(value: unknown, fallback: number, minimum: number, maximum: number) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback
+}
+
+async function withinPaymentPreflight<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out.`)), PAYMENT_PREFLIGHT_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: false; status: number; error: string } {
@@ -559,9 +574,13 @@ export async function preflightPolymarketSmartTraderProviders(
   const input = parsed.value
   if (input.action !== 'ANALYZE') return { ok: true as const }
   try {
-    const markets = input.marketId
-      ? await dependencies.resolveMarket(input.marketId)
-      : await dependencies.searchMarkets(input.query, input.category)
+    const marketLookup = input.marketId
+      ? dependencies.resolveMarket(input.marketId)
+      : dependencies.searchMarkets(input.query, input.category)
+    const [markets] = await Promise.all([
+      withinPaymentPreflight(Promise.resolve(marketLookup), 'Polymarket market preflight'),
+      withinPaymentPreflight(dependencies.researchReady(), 'ZeroScout readiness preflight'),
+    ])
     const activeMarkets = markets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
     if (!activeMarkets.length) {
       return { ok: false as const, status: 404, error: 'No active Polymarket market matched this ANALYZE request.' }
@@ -581,24 +600,8 @@ export async function preflightPolymarketSmartTraderProviders(
         }
       }
     }
-    await dependencies.researchReady()
-    const normalizedOutcome = input.outcome?.toLowerCase().trim()
-    const evidenceMarket = normalizedOutcome
-      ? activeMarkets.find(market => market.outcomes.some(outcome => outcome.toLowerCase().trim() === normalizedOutcome)) || activeMarkets[0]
-      : activeMarkets[0]
-    const evidenceQuery = input.query || evidenceMarket.question
-    const likelySports = input.category === 'sports'
-      || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${evidenceMarket.question} ${input.query}`)
-    const newsEvidence = likelySports
-      ? await dependencies.sportsNews(evidenceQuery)
-      : await dependencies.generalNews(evidenceQuery, evidenceMarket)
-    if (!newsEvidence.length) {
-      return {
-        ok: false as const,
-        status: 503,
-        error: `No current ${likelySports ? 'sports' : 'general'} news evidence is available for this market. Configure or repair the evidence provider before charging for ANALYZE.`,
-      }
-    }
+    // Keep this free gate inside buyer-tool quote deadlines. Full evidence
+    // retrieval belongs to the durable post-settlement delivery worker.
     return { ok: true as const }
   } catch (error) {
     return {
