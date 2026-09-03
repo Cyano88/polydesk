@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  confirmedFundingDelivery,
   crossedLossThreshold,
+  crossedProfitThreshold,
   isMissingPolymarketOrderError,
   normalizeLpOrderLifecycle,
   polymarketPositionUrl,
@@ -10,6 +12,7 @@ import {
   shouldCloseMissingLpOrder,
   shouldAlertNewPosition,
 } from '../api/polymarket-alert-rules.js'
+import { nextPolymarketDigestAt, validDigestTimezone } from '../api/polymarket-digest-schedule.js'
 
 test('LP order lifecycle prefers terminal state and detects partial fills', () => {
   assert.equal(normalizeLpOrderLifecycle({ status: 'LIVE', originalSize: '10', matchedSize: '0' }), 'live')
@@ -48,6 +51,69 @@ test('loss alerts fire only when a position crosses below the configured thresho
     crossedLossThreshold({ percentPnl: -80, thresholdPercent: 0, wasBelowThreshold: false }).shouldAlert,
     false,
   )
+})
+
+test('profit alerts fire only when a position crosses above the configured threshold', () => {
+  assert.deepEqual(
+    crossedProfitThreshold({ percentPnl: 50, thresholdPercent: 50, wasAboveThreshold: false }),
+    { aboveThreshold: true, shouldAlert: true, percentPnl: 50 },
+  )
+  assert.equal(
+    crossedProfitThreshold({ percentPnl: 72, thresholdPercent: 50, wasAboveThreshold: true }).shouldAlert,
+    false,
+  )
+  assert.equal(
+    crossedProfitThreshold({ percentPnl: 41, thresholdPercent: 50, wasAboveThreshold: true }).aboveThreshold,
+    false,
+  )
+  assert.equal(
+    crossedProfitThreshold({ percentPnl: 80, thresholdPercent: 0, wasAboveThreshold: false }).shouldAlert,
+    false,
+  )
+})
+
+test('funding delivery requires both provider finality and refreshed pUSD', () => {
+  assert.equal(confirmedFundingDelivery({
+    providerStatus: 'funded',
+    readinessState: 'ready_to_buy',
+    pusdBalance: '4.98',
+  }), true)
+  assert.equal(confirmedFundingDelivery({
+    providerStatus: 'funded',
+    readinessState: 'funding_required',
+    pusdBalance: '0',
+  }), false)
+  assert.equal(confirmedFundingDelivery({
+    providerStatus: 'bridging',
+    readinessState: 'ready_to_buy',
+    pusdBalance: '4.98',
+  }), false)
+})
+
+test('digest scheduling respects local timezone and weekly weekday', () => {
+  assert.equal(validDigestTimezone('Africa/Lagos'), 'Africa/Lagos')
+  assert.equal(validDigestTimezone('not/a-zone'), '')
+  assert.equal(nextPolymarketDigestAt({
+    after: new Date('2026-09-03T06:30:00.000Z'),
+    frequency: 'daily',
+    timezone: 'Africa/Lagos',
+    hourLocal: 8,
+    weekday: 1,
+  })?.toISOString(), '2026-09-03T07:00:00.000Z')
+  assert.equal(nextPolymarketDigestAt({
+    after: new Date('2026-09-03T08:30:00.000Z'),
+    frequency: 'weekly',
+    timezone: 'UTC',
+    hourLocal: 9,
+    weekday: 1,
+  })?.toISOString(), '2026-09-07T09:00:00.000Z')
+  assert.equal(nextPolymarketDigestAt({
+    after: new Date('2026-11-01T05:00:00.000Z'),
+    frequency: 'daily',
+    timezone: 'America/New_York',
+    hourLocal: 1,
+    weekday: 1,
+  })?.toISOString(), '2026-11-02T06:00:00.000Z')
 })
 
 test('new-position alerts baseline existing positions before notifying', () => {

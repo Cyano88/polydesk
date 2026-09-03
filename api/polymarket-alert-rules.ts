@@ -108,6 +108,36 @@ export function crossedLossThreshold(input: {
   }
 }
 
+export function crossedProfitThreshold(input: {
+  percentPnl: unknown
+  thresholdPercent: number
+  wasAboveThreshold: boolean
+}) {
+  const percentPnl = normalizedPercentPnl(input.percentPnl)
+  const thresholdPercent = Math.abs(input.thresholdPercent)
+  if (percentPnl === null || !Number.isFinite(thresholdPercent) || thresholdPercent <= 0) {
+    return { aboveThreshold: false, shouldAlert: false, percentPnl }
+  }
+  const aboveThreshold = percentPnl >= thresholdPercent
+  return {
+    aboveThreshold,
+    shouldAlert: aboveThreshold && !input.wasAboveThreshold,
+    percentPnl,
+  }
+}
+
+export function confirmedFundingDelivery(input: {
+  providerStatus: unknown
+  readinessState: unknown
+  pusdBalance: unknown
+}) {
+  const balance = Number(input.pusdBalance)
+  return String(input.providerStatus) === 'funded'
+    && String(input.readinessState) === 'ready_to_buy'
+    && Number.isFinite(balance)
+    && balance > 0
+}
+
 export function shouldAlertNewPosition(input: {
   enabled: boolean
   positionsInitialized: boolean

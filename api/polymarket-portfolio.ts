@@ -6,7 +6,9 @@ import { PrivyClient, type User } from '@privy-io/server-auth'
 import { BuilderConfig } from '@polymarket/builder-signing-sdk'
 import { sendTransactionalEmail } from './email-provider.js'
 import {
+  confirmedFundingDelivery,
   crossedLossThreshold,
+  crossedProfitThreshold,
   isMissingPolymarketOrderError,
   normalizeLpOrderLifecycle,
   polymarketPositionUrl,
@@ -17,6 +19,8 @@ import {
 import { registerPolymarketAlertAsset } from './polymarket-alert-events.js'
 import { fetchHashPayLinkPolymarketFundingStatus } from './hashpaylink-polymarket-funding.js'
 import { latestHashPayLinkCheckoutEvent, type StoredHashPayLinkWebhookEvent } from './hashpaylink-webhook-store.js'
+import { checkPolymarketAccountReadiness } from './polymarket-account-readiness.js'
+import { nextPolymarketDigestAt, type PolymarketDigestFrequency, validDigestTimezone } from './polymarket-digest-schedule.js'
 import { ensurePolymarketDepositWallet } from './polymarket-deposit-wallet.js'
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from './polymarket-lp-recovery.js'
 
@@ -88,9 +92,18 @@ function ensureSchema() {
       create table if not exists polymarket_alert_settings (
         privy_user_id text primary key references polymarket_profiles(privy_user_id) on delete cascade,
         loss_threshold_percent integer not null default 20,
+        profit_threshold_percent integer not null default 50,
         resolved_alerts_enabled boolean not null default true,
         claimable_alerts_enabled boolean not null default true,
         movement_alerts_enabled boolean not null default false,
+        digest_frequency text not null default 'off',
+        digest_timezone text not null default 'UTC',
+        digest_hour_local integer not null default 8,
+        digest_weekday integer not null default 1,
+        next_digest_at timestamptz,
+        last_digest_at timestamptz,
+        digest_lease_id text,
+        digest_lease_until timestamptz,
         alert_email text,
         updated_at timestamptz not null default now()
       );
@@ -109,7 +122,16 @@ function ensureSchema() {
         add column if not exists alert_email text,
         add column if not exists alert_email_verified boolean not null default false,
         add column if not exists new_position_alerts_enabled boolean not null default false,
-        add column if not exists positions_initialized boolean not null default false;
+        add column if not exists positions_initialized boolean not null default false,
+        add column if not exists profit_threshold_percent integer not null default 50,
+        add column if not exists digest_frequency text not null default 'off',
+        add column if not exists digest_timezone text not null default 'UTC',
+        add column if not exists digest_hour_local integer not null default 8,
+        add column if not exists digest_weekday integer not null default 1,
+        add column if not exists next_digest_at timestamptz,
+        add column if not exists last_digest_at timestamptz,
+        add column if not exists digest_lease_id text,
+        add column if not exists digest_lease_until timestamptz;
 
       create table if not exists polymarket_watchlist (
         id serial primary key,
@@ -169,6 +191,8 @@ function ensureSchema() {
         position_address text,
         below_loss_threshold boolean not null default false,
         loss_threshold_percent integer,
+        above_profit_threshold boolean not null default false,
+        profit_threshold_percent integer,
         resolution_status text not null default 'open',
         last_percent_pnl double precision,
         updated_at timestamptz not null default now(),
@@ -176,7 +200,9 @@ function ensureSchema() {
       );
 
       alter table polymarket_position_alert_state
-        add column if not exists position_address text;
+        add column if not exists position_address text,
+        add column if not exists above_profit_threshold boolean not null default false,
+        add column if not exists profit_threshold_percent integer;
 
       create table if not exists polymarket_public_watch_tokens (
         watch_id uuid primary key,
@@ -232,6 +258,15 @@ function ensureSchema() {
       create unique index if not exists polymarket_lp_lifecycle_alert_unique_idx
         on polymarket_alert_history (privy_user_id, alert_type, ((source_snapshot ->> 'orderId')))
         where alert_type like 'lp-order-%';
+      create unique index if not exists polymarket_funding_ready_alert_unique_idx
+        on polymarket_alert_history (privy_user_id, alert_type, ((source_snapshot ->> 'fundingAttemptId')))
+        where alert_type = 'funding-ready';
+      create unique index if not exists polymarket_portfolio_digest_alert_unique_idx
+        on polymarket_alert_history (privy_user_id, alert_type, ((source_snapshot ->> 'digestKey')))
+        where alert_type = 'portfolio-digest';
+      create index if not exists polymarket_digest_due_idx
+        on polymarket_alert_settings (next_digest_at)
+        where digest_frequency in ('daily', 'weekly') and alert_email_verified = true;
     `).then(() => undefined)
   }
   return schemaReady
@@ -313,6 +348,26 @@ function cleanEmail(value: unknown) {
   return raw
 }
 
+function digestPreferences(body: Record<string, unknown>, after = new Date()) {
+  const requested = cleanString(body.digestFrequency, 12)
+  const frequency: PolymarketDigestFrequency = requested === 'daily' || requested === 'weekly'
+    ? requested
+    : 'off'
+  const requestedTimezone = cleanString(body.digestTimezone, 80) || 'UTC'
+  const validTimezone = validDigestTimezone(requestedTimezone)
+  const timezone = validTimezone || 'UTC'
+  const hourLocal = Math.max(0, Math.min(23, Math.trunc(Number(body.digestHourLocal ?? 8))))
+  const weekday = Math.max(0, Math.min(6, Math.trunc(Number(body.digestWeekday ?? 1))))
+  return {
+    frequency,
+    invalidTimezone: frequency !== 'off' && !validTimezone,
+    timezone,
+    hourLocal,
+    weekday,
+    nextAt: nextPolymarketDigestAt({ after, frequency, timezone, hourLocal, weekday }),
+  }
+}
+
 function watchTokenHash(value: string) {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -343,6 +398,7 @@ async function sendPublicWatchConfirmation(input: {
   token: string
   address: string
   threshold: number
+  profitThreshold: number
 }) {
   const confirmUrl = `${publicWatchOrigin(input.req)}/api/polymarket-portfolio?action=verify-public-watch&token=${encodeURIComponent(input.token)}`
   const shortAddress = `${input.address.slice(0, 6)}...${input.address.slice(-4)}`
@@ -351,11 +407,11 @@ async function sendPublicWatchConfirmation(input: {
     fromEmail: process.env.POLYMARKET_ALERT_FROM_EMAIL,
     fromName: process.env.POLYMARKET_ALERT_FROM_NAME ?? ALERT_FROM_NAME,
     subject: 'Confirm your PolyDesk portfolio watch',
-    text: `Confirm alerts for ${shortAddress}. PolyDesk will alert you when a filled position crosses ${input.threshold}% down or resolves. ${confirmUrl}`,
+    text: `Confirm alerts for ${shortAddress}. PolyDesk will alert you when a filled position crosses ${input.threshold}% down, ${input.profitThreshold}% up, or resolves. ${confirmUrl}`,
     html: `<div style="margin:0 auto;max-width:520px;padding:28px;font-family:Inter,Arial,sans-serif;color:#111827">
       <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b7280">PolyDesk</p>
       <h1 style="margin:0 0 10px;font-size:22px">Confirm portfolio alerts</h1>
-      <p style="margin:0 0 18px;color:#4b5563">Watch ${shortAddress} and alert when a filled position crosses ${input.threshold}% down or resolves.</p>
+      <p style="margin:0 0 18px;color:#4b5563">Watch ${shortAddress} and alert when a filled position crosses ${input.threshold}% down, ${input.profitThreshold}% up, or resolves.</p>
       <a href="${confirmUrl}" style="display:inline-block;border-radius:10px;background:#111827;color:#fff;padding:11px 16px;text-decoration:none;font-size:14px;font-weight:700">Confirm alerts</a>
       <p style="margin:18px 0 0;color:#6b7280;font-size:12px">If you did not request this, ignore this email.</p>
     </div>`,
@@ -603,6 +659,167 @@ async function retryPendingAlertEmails(privyUserId: string, address: string, to:
       actionUrl: String(snapshot.alertActionUrl || 'https://polymarket.com/portfolio'),
     })
   }
+}
+
+async function notifyFundingReady(input: {
+  privyUserId: string
+  fundingAttemptId: number
+  requestId: string
+  address: string
+  amount: string
+  pusdBalance: string
+}) {
+  const settings = (await requirePool().query(
+    `select alert_email, alert_email_verified
+       from polymarket_alert_settings
+      where privy_user_id = $1`,
+    [input.privyUserId],
+  )).rows[0]
+  const email = settings?.alert_email_verified && settings?.alert_email
+    ? String(settings.alert_email)
+    : null
+  await requirePool().query(
+    `insert into polymarket_alert_history
+      (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot, email_status)
+     values ($1,'funding-ready',$2,$3,$4,'success',$5::jsonb,$6)
+     on conflict do nothing`,
+    [
+      input.privyUserId,
+      input.requestId,
+      'Polymarket funding is ready',
+      `Hash PayLink completed the ${input.amount} USDC funding request and a refreshed Polygon read shows ${input.pusdBalance} pUSD in your Deposit Wallet.`,
+      JSON.stringify({
+        fundingAttemptId: input.fundingAttemptId,
+        requestId: input.requestId,
+        positionAddress: input.address,
+        pusdBalance: input.pusdBalance,
+        alertActionLabel: 'Open portfolio',
+        alertActionUrl: 'https://polydesk.trade/polydesk?service=portfolio&portfolio=trading',
+      }),
+      email ? 'pending' : 'disabled',
+    ],
+  )
+  if (email) await retryPendingAlertEmails(input.privyUserId, input.address, email)
+}
+
+function normalizedPortfolioTotal(value: unknown) {
+  const rows = Array.isArray(value) ? value : [value]
+  return rows.reduce((total, item) => {
+    if (!item || typeof item !== 'object') return total
+    const amount = Number((item as Record<string, unknown>).value)
+    return Number.isFinite(amount) ? total + amount : total
+  }, 0)
+}
+
+export async function processDuePolymarketDigests(limit = 20) {
+  if (!pool) return 0
+  await ensureSchema()
+  const leaseId = randomUUID()
+  const batchSize = Math.max(1, Math.min(100, Math.trunc(limit)))
+  const due = (await requirePool().query(
+    `with candidates as (
+       select s.privy_user_id
+         from polymarket_alert_settings s
+         join polymarket_profiles p on p.privy_user_id = s.privy_user_id
+        where s.digest_frequency in ('daily', 'weekly')
+          and s.alert_email_verified = true
+          and s.alert_email is not null
+          and s.next_digest_at <= now()
+          and (s.digest_lease_until is null or s.digest_lease_until < now())
+          and coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) is not null
+        order by s.next_digest_at asc
+        for update of s skip locked
+        limit $1
+     )
+     update polymarket_alert_settings s
+        set digest_lease_id = $2,
+            digest_lease_until = now() + interval '10 minutes'
+       from candidates c, polymarket_profiles p
+      where s.privy_user_id = c.privy_user_id
+        and p.privy_user_id = s.privy_user_id
+     returning s.privy_user_id, s.alert_email, s.digest_frequency, s.digest_timezone,
+       s.digest_hour_local, s.digest_weekday, s.next_digest_at,
+       coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address`,
+    [batchSize, leaseId],
+  )).rows
+  let processed = 0
+  for (const row of due) {
+    const privyUserId = String(row.privy_user_id)
+    const address = String(row.address)
+    const scheduledAt = row.next_digest_at instanceof Date ? row.next_digest_at : new Date(row.next_digest_at)
+    try {
+      const [positions, portfolioValue] = await Promise.all([
+        dataApiFetch<PolymarketPosition[]>(`/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`),
+        dataApiFetch<unknown>(`/value?user=${encodeURIComponent(address)}`),
+      ])
+      const open = positions.filter(position => Number(position.size) > 0 && Number(position.currentValue) > 0)
+      const claimable = positions.filter(position => position.redeemable === true && Number(position.size) > 0)
+      const openPnl = open.reduce((total, position) => {
+        const pnl = Number(position.cashPnl)
+        return Number.isFinite(pnl) ? total + pnl : total
+      }, 0)
+      const value = normalizedPortfolioTotal(portfolioValue)
+      const digestKey = `${String(row.digest_frequency)}:${scheduledAt.toISOString()}`
+      const label = String(row.digest_frequency) === 'weekly' ? 'Weekly' : 'Daily'
+      const signedPnl = `${openPnl >= 0 ? '+' : '-'}$${Math.abs(openPnl).toFixed(2)}`
+      await requirePool().query(
+        `insert into polymarket_alert_history
+          (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot, email_status)
+         values ($1,'portfolio-digest',null,$2,$3,'info',$4::jsonb,'pending')
+         on conflict do nothing`,
+        [
+          privyUserId,
+          `${label} Polymarket portfolio summary`,
+          `Portfolio value: $${value.toFixed(2)}. Open positions: ${open.length}. Combined open PnL: ${signedPnl}. Claimable positions: ${claimable.length}.`,
+          JSON.stringify({
+            digestKey,
+            positionAddress: address,
+            portfolioValueUsdc: value,
+            openPositions: open.length,
+            openPnlUsdc: openPnl,
+            claimablePositions: claimable.length,
+            alertActionLabel: 'Open portfolio',
+            alertActionUrl: 'https://polydesk.trade/polydesk?service=portfolio',
+          }),
+        ],
+      )
+      await retryPendingAlertEmails(privyUserId, address, String(row.alert_email))
+      const frequency = String(row.digest_frequency) as PolymarketDigestFrequency
+      const nextAt = nextPolymarketDigestAt({
+        after: new Date(),
+        frequency,
+        timezone: String(row.digest_timezone),
+        hourLocal: Number(row.digest_hour_local),
+        weekday: Number(row.digest_weekday),
+      })
+      await requirePool().query(
+        `update polymarket_alert_settings
+            set last_digest_at = now(),
+                next_digest_at = $3,
+                digest_lease_id = null,
+                digest_lease_until = null,
+                updated_at = now()
+          where privy_user_id = $1 and digest_lease_id = $2`,
+        [privyUserId, leaseId, nextAt],
+      )
+      processed += 1
+    } catch (error) {
+      await requirePool().query(
+        `update polymarket_alert_settings
+            set next_digest_at = now() + interval '5 minutes',
+                digest_lease_id = null,
+                digest_lease_until = null,
+                updated_at = now()
+          where privy_user_id = $1 and digest_lease_id = $2`,
+        [privyUserId, leaseId],
+      ).catch(() => undefined)
+      console.warn('[polymarket-digest] delivery failed', {
+        privyUserId,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      })
+    }
+  }
+  return processed
 }
 
 function localPolymarketBuilderConfig() {
@@ -987,15 +1204,23 @@ async function loadProfileBundle(privyUserId: string) {
     settings: settingsRes.rows[0]
       ? {
           lossThresholdPercent: Number(settingsRes.rows[0].loss_threshold_percent),
+          profitThresholdPercent: Number(settingsRes.rows[0].profit_threshold_percent),
           resolvedAlertsEnabled: Boolean(settingsRes.rows[0].resolved_alerts_enabled),
           claimableAlertsEnabled: Boolean(settingsRes.rows[0].claimable_alerts_enabled),
           newPositionAlertsEnabled: Boolean(settingsRes.rows[0].new_position_alerts_enabled),
           movementAlertsEnabled: Boolean(settingsRes.rows[0].movement_alerts_enabled),
+          digestFrequency: String(settingsRes.rows[0].digest_frequency || 'off'),
+          digestTimezone: String(settingsRes.rows[0].digest_timezone || 'UTC'),
+          digestHourLocal: Number(settingsRes.rows[0].digest_hour_local),
+          digestWeekday: Number(settingsRes.rows[0].digest_weekday),
+          nextDigestAt: settingsRes.rows[0].next_digest_at instanceof Date
+            ? settingsRes.rows[0].next_digest_at.toISOString()
+            : null,
           alertEmail: settingsRes.rows[0].alert_email_verified && settingsRes.rows[0].alert_email
             ? String(settingsRes.rows[0].alert_email)
             : '',
         }
-      : { lossThresholdPercent: 20, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, alertEmail: '' },
+      : { lossThresholdPercent: 20, profitThresholdPercent: 50, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, digestFrequency: 'off', digestTimezone: 'UTC', digestHourLocal: 8, digestWeekday: 1, nextDigestAt: null, alertEmail: '' },
     watchlist: watchRes.rows.map(row => ({
       id: Number(row.id),
       marketId: String(row.market_id),
@@ -1021,7 +1246,7 @@ async function loadProfileBundle(privyUserId: string) {
 
 async function insertPositionAlert(input: {
   privyUserId: string
-  alertType: 'loss-threshold' | 'claimable' | 'resolved-loss' | 'new-position'
+  alertType: 'loss-threshold' | 'profit-threshold' | 'claimable' | 'resolved-loss' | 'new-position'
   marketId: string
   title: string
   body: string
@@ -1064,6 +1289,7 @@ async function evaluateAlerts(privyUserId: string, address: string) {
   )).rows[0]
   if (!settingsRow) return 0
   const lossThreshold = Number(settingsRow.loss_threshold_percent)
+  const profitThreshold = Number(settingsRow.profit_threshold_percent)
   const claimableEnabled = Boolean(settingsRow.claimable_alerts_enabled)
   const newPositionAlertsEnabled = Boolean(settingsRow.new_position_alerts_enabled)
   const positionsInitialized = Boolean(settingsRow.positions_initialized)
@@ -1073,6 +1299,7 @@ async function evaluateAlerts(privyUserId: string, address: string) {
   // Treat threshold = 0 as "loss alerts disabled" so users have an off switch
   // without needing a separate flag column.
   const lossAlertsEnabled = Number.isFinite(lossThreshold) && lossThreshold > 0
+  const profitAlertsEnabled = Number.isFinite(profitThreshold) && profitThreshold > 0
 
   let positions: PolymarketPosition[] = []
   try {
@@ -1101,7 +1328,7 @@ async function evaluateAlerts(privyUserId: string, address: string) {
       await client.query('begin')
       await client.query('select pg_advisory_xact_lock(hashtext($1))', [`${privyUserId}:${marketId}:${assetId}`])
       const previous = (await client.query(
-        `select below_loss_threshold, loss_threshold_percent, resolution_status
+        `select below_loss_threshold, loss_threshold_percent, above_profit_threshold, profit_threshold_percent, resolution_status
            from polymarket_position_alert_state
           where privy_user_id = $1 and market_id = $2 and asset_id = $3`,
         [privyUserId, marketId, assetId],
@@ -1112,6 +1339,12 @@ async function evaluateAlerts(privyUserId: string, address: string) {
         thresholdPercent: lossThreshold,
         wasBelowThreshold: Boolean(previous?.below_loss_threshold)
           && Number(previous?.loss_threshold_percent) === lossThreshold,
+      })
+      const profit = crossedProfitThreshold({
+        percentPnl: position.percentPnl,
+        thresholdPercent: profitThreshold,
+        wasAboveThreshold: Boolean(previous?.above_profit_threshold)
+          && Number(previous?.profit_threshold_percent) === profitThreshold,
       })
       const positionSize = typeof position.size === 'number' ? position.size : Number(position.size)
       const claimable = claimableEnabled
@@ -1129,12 +1362,14 @@ async function evaluateAlerts(privyUserId: string, address: string) {
 
       await client.query(
         `insert into polymarket_position_alert_state
-          (privy_user_id, market_id, asset_id, position_address, below_loss_threshold, loss_threshold_percent, resolution_status, last_percent_pnl)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+          (privy_user_id, market_id, asset_id, position_address, below_loss_threshold, loss_threshold_percent, above_profit_threshold, profit_threshold_percent, resolution_status, last_percent_pnl)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          on conflict (privy_user_id, market_id, asset_id) do update set
            position_address = excluded.position_address,
            below_loss_threshold = excluded.below_loss_threshold,
            loss_threshold_percent = excluded.loss_threshold_percent,
+           above_profit_threshold = excluded.above_profit_threshold,
+           profit_threshold_percent = excluded.profit_threshold_percent,
            resolution_status = case
              when polymarket_position_alert_state.resolution_status = 'lost' then 'lost'
              else excluded.resolution_status
@@ -1148,6 +1383,8 @@ async function evaluateAlerts(privyUserId: string, address: string) {
           address,
           lossAlertsEnabled ? threshold.belowThreshold : false,
           lossAlertsEnabled ? lossThreshold : 0,
+          profitAlertsEnabled ? profit.aboveThreshold : false,
+          profitAlertsEnabled ? profitThreshold : 0,
           claimable ? 'claimable' : String(previous?.resolution_status || 'open'),
           threshold.percentPnl,
         ],
@@ -1161,6 +1398,22 @@ async function evaluateAlerts(privyUserId: string, address: string) {
           title: `${title} is down ${roundedLoss}%`,
           body: `Your position crossed the ${lossThreshold}% loss alert. Review it before deciding whether to close.`,
           severity: 'warning',
+          position,
+          emailEnabled: Boolean(alertEmail),
+          actionLabel: 'Review position',
+          actionUrl,
+        }, (text, values) => client.query(text, values))
+        inserted += 1
+      }
+      if (profit.shouldAlert) {
+        const roundedProfit = Math.round(profit.percentPnl ?? 0)
+        await insertPositionAlert({
+          privyUserId,
+          alertType: 'profit-threshold',
+          marketId,
+          title: `${title} is up ${roundedProfit}%`,
+          body: `Your position crossed the ${profitThreshold}% profit alert. Review the current market before deciding whether to take profit.`,
+          severity: 'success',
           position,
           emailEnabled: Boolean(alertEmail),
           actionLabel: 'Review position',
@@ -1232,6 +1485,7 @@ export async function bootstrapPolymarketAlertMonitor() {
         and coalesce(p.deposit_wallet_address, p.trading_address) is not null
         and (
           s.loss_threshold_percent > 0
+          or s.profit_threshold_percent > 0
           or s.new_position_alerts_enabled = true
           or s.claimable_alerts_enabled = true
           or s.resolved_alerts_enabled = true
@@ -1269,6 +1523,7 @@ export async function reconcilePolymarketWatchedPortfolios() {
         and coalesce(p.deposit_wallet_address, p.trading_address) is not null
         and (
           s.loss_threshold_percent > 0
+          or s.profit_threshold_percent > 0
           or s.new_position_alerts_enabled = true
           or s.claimable_alerts_enabled = true
           or s.resolved_alerts_enabled = true
@@ -1550,6 +1805,7 @@ export default async function handler(req: Request, res: Response) {
       const address = cleanString(body.address, 64)
       const email = cleanEmail(body.email)
       const threshold = Math.max(1, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
+      const profitThreshold = Math.max(1, Math.min(500, Math.round(Number(body.profitThresholdPercent ?? 50))))
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
       if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Enter a valid public Polymarket wallet.' })
       if (!email) return res.status(400).json({ ok: false, error: 'Enter an email you can confirm.' })
@@ -1567,9 +1823,9 @@ export default async function handler(req: Request, res: Response) {
         )
         await client.query(
           `insert into polymarket_alert_settings
-            (privy_user_id, loss_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, alert_email, alert_email_verified)
-           values ($1,$2,true,true,$3,null,false)`,
-          [publicId, threshold, newPositionAlertsEnabled],
+            (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, alert_email, alert_email_verified)
+           values ($1,$2,$3,true,true,$4,null,false)`,
+          [publicId, threshold, profitThreshold, newPositionAlertsEnabled],
         )
         await client.query(
           `insert into polymarket_public_watch_tokens
@@ -1585,7 +1841,7 @@ export default async function handler(req: Request, res: Response) {
         client.release()
       }
       try {
-        await sendPublicWatchConfirmation({ req, to: email, token, address, threshold })
+        await sendPublicWatchConfirmation({ req, to: email, token, address, threshold, profitThreshold })
       } catch (error) {
         await requirePool().query('delete from polymarket_profiles where privy_user_id = $1', [publicId]).catch(() => undefined)
         throw error
@@ -1595,6 +1851,7 @@ export default async function handler(req: Request, res: Response) {
         pending: true,
         address,
         lossThresholdPercent: threshold,
+        profitThresholdPercent: profitThreshold,
         message: 'Check your email to confirm alerts.',
       })
     }
@@ -1629,6 +1886,9 @@ export default async function handler(req: Request, res: Response) {
       const watch = await publicWatchIdentity(token)
       if (!watch) return res.status(401).json({ ok: false, error: 'This portfolio watch link is invalid.' })
       const threshold = Math.max(0, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
+      const profitThreshold = Math.max(0, Math.min(500, Math.round(Number(body.profitThresholdPercent ?? 50))))
+      const digest = digestPreferences(body)
+      if (digest.invalidTimezone) return res.status(400).json({ ok: false, error: 'Enter a valid IANA timezone such as Africa/Lagos.' })
       const resolved = Boolean(body.resolvedAlertsEnabled)
       const claimable = Boolean(body.claimableAlertsEnabled)
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
@@ -1650,14 +1910,22 @@ export default async function handler(req: Request, res: Response) {
         await client.query(
           `update polymarket_alert_settings
               set loss_threshold_percent = $2,
-                  resolved_alerts_enabled = $3,
-                  claimable_alerts_enabled = $4,
-                  new_position_alerts_enabled = $5,
-                  alert_email = case when $6 then $7 else null end,
-                  alert_email_verified = $6,
+                  profit_threshold_percent = $3,
+                  resolved_alerts_enabled = $4,
+                  claimable_alerts_enabled = $5,
+                  new_position_alerts_enabled = $6,
+                  digest_frequency = $7,
+                  digest_timezone = $8,
+                  digest_hour_local = $9,
+                  digest_weekday = $10,
+                  next_digest_at = $11,
+                  digest_lease_id = null,
+                  digest_lease_until = null,
+                  alert_email = case when $12 then $13 else null end,
+                  alert_email_verified = $12,
                   updated_at = now()
             where privy_user_id = $1`,
-          [watch.privy_user_id, threshold, resolved, claimable, newPositionAlertsEnabled, verified, email],
+          [watch.privy_user_id, threshold, profitThreshold, resolved, claimable, newPositionAlertsEnabled, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, verified, email],
         )
         await client.query('commit')
       } catch (error) {
@@ -1677,6 +1945,7 @@ export default async function handler(req: Request, res: Response) {
           token,
           address: String(profile?.address ?? ''),
           threshold,
+          profitThreshold,
         })
       }
       const bundle = await loadProfileBundle(String(watch.privy_user_id))
@@ -2064,15 +2333,17 @@ export default async function handler(req: Request, res: Response) {
       )
       if (mode === 'watch') {
         const loss = Math.max(0, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
+        const profit = Math.max(0, Math.min(500, Math.round(Number(body.profitThresholdPercent ?? 50))))
         const emailAlertsEnabled = Boolean(body.emailAlertsEnabled)
         await requirePool().query(
           `update polymarket_alert_settings
               set loss_threshold_percent = $2,
-                  alert_email = $3,
-                  alert_email_verified = $4,
+                  profit_threshold_percent = $3,
+                  alert_email = $4,
+                  alert_email_verified = $5,
                   updated_at = now()
             where privy_user_id = $1`,
-          [privyUserId, loss, emailAlertsEnabled && verifiedEmail ? verifiedEmail : null, emailAlertsEnabled && Boolean(verifiedEmail)],
+          [privyUserId, loss, profit, emailAlertsEnabled && verifiedEmail ? verifiedEmail : null, emailAlertsEnabled && Boolean(verifiedEmail)],
         )
       }
       const bundle = await loadProfileBundle(privyUserId)
@@ -2187,6 +2458,11 @@ export default async function handler(req: Request, res: Response) {
       await requirePool().query(
         `update polymarket_alert_settings
             set loss_threshold_percent = 0,
+                profit_threshold_percent = 0,
+                digest_frequency = 'off',
+                next_digest_at = null,
+                digest_lease_id = null,
+                digest_lease_until = null,
                 resolved_alerts_enabled = false,
                 claimable_alerts_enabled = false,
                 movement_alerts_enabled = false,
@@ -2222,12 +2498,19 @@ export default async function handler(req: Request, res: Response) {
       // 0 means "loss alerts disabled". See evaluateAlerts. 95 is the
       // generous upper bound (anything beyond is effectively the same as off).
       const loss = Math.max(0, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
+      const profit = Math.max(0, Math.min(500, Math.round(Number(body.profitThresholdPercent ?? 50))))
+      const digest = digestPreferences(body)
+      if (digest.invalidTimezone) return res.status(400).json({ ok: false, error: 'Enter a valid IANA timezone such as Africa/Lagos.' })
       const resolved = Boolean(body.resolvedAlertsEnabled)
       const claimable = Boolean(body.claimableAlertsEnabled)
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
       const movement = false
-      const alertEmail = cleanEmail(body.alertEmail)
-      if (alertEmail === '') return res.status(400).json({ ok: false, error: 'Enter a valid alert email or leave it blank.' })
+      const requestedAlertEmail = cleanEmail(body.alertEmail)
+      if (requestedAlertEmail === '') return res.status(400).json({ ok: false, error: 'Enter a valid alert email or leave it blank.' })
+      const alertEmail = requestedAlertEmail || (digest.frequency !== 'off' ? verifiedEmail || null : null)
+      if (digest.frequency !== 'off' && !alertEmail) {
+        return res.status(400).json({ ok: false, error: 'Connect and verify an email before enabling portfolio digests.' })
+      }
       if (alertEmail && (!verifiedEmail || alertEmail !== verifiedEmail)) {
         return res.status(400).json({
           ok: false,
@@ -2240,18 +2523,26 @@ export default async function handler(req: Request, res: Response) {
       if (!profileExists) return res.status(409).json({ ok: false, error: 'Open your PolyDesk trading account first.' })
       await requirePool().query(
         `insert into polymarket_alert_settings
-          (privy_user_id, loss_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, movement_alerts_enabled, alert_email, alert_email_verified)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+          (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, movement_alerts_enabled, digest_frequency, digest_timezone, digest_hour_local, digest_weekday, next_digest_at, alert_email, alert_email_verified)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
          on conflict (privy_user_id) do update set
            loss_threshold_percent = excluded.loss_threshold_percent,
+           profit_threshold_percent = excluded.profit_threshold_percent,
            resolved_alerts_enabled = excluded.resolved_alerts_enabled,
            claimable_alerts_enabled = excluded.claimable_alerts_enabled,
            new_position_alerts_enabled = excluded.new_position_alerts_enabled,
            movement_alerts_enabled = excluded.movement_alerts_enabled,
+           digest_frequency = excluded.digest_frequency,
+           digest_timezone = excluded.digest_timezone,
+           digest_hour_local = excluded.digest_hour_local,
+           digest_weekday = excluded.digest_weekday,
+           next_digest_at = excluded.next_digest_at,
+           digest_lease_id = null,
+           digest_lease_until = null,
            alert_email = excluded.alert_email,
            alert_email_verified = excluded.alert_email_verified,
            updated_at = now()`,
-        [privyUserId, loss, resolved, claimable, newPositionAlertsEnabled, movement, alertEmail, Boolean(alertEmail)],
+        [privyUserId, loss, profit, resolved, claimable, newPositionAlertsEnabled, movement, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, alertEmail, Boolean(alertEmail)],
       )
       await requirePool().query(
         `update polymarket_alert_history
@@ -2263,10 +2554,16 @@ export default async function handler(req: Request, res: Response) {
         ok: true,
         settings: {
           lossThresholdPercent: loss,
+          profitThresholdPercent: profit,
           resolvedAlertsEnabled: resolved,
           claimableAlertsEnabled: claimable,
           newPositionAlertsEnabled,
           movementAlertsEnabled: movement,
+          digestFrequency: digest.frequency,
+          digestTimezone: digest.timezone,
+          digestHourLocal: digest.hourLocal,
+          digestWeekday: digest.weekday,
+          nextDigestAt: digest.nextAt?.toISOString() ?? null,
           alertEmail: alertEmail ?? '',
         },
       })
@@ -2368,13 +2665,46 @@ export default async function handler(req: Request, res: Response) {
       if (funding.fundingRequestId !== requestId || !funding.status) {
         return res.status(502).json({ ok: false, error: 'Hash PayLink returned an invalid funding status.' })
       }
-      const status = funding.status === 'funded'
+      let readinessState = ''
+      let pusdBalance = ''
+      let readinessIssue = ''
+      if (funding.status === 'funded') {
+        const profile = (await requirePool().query(
+          'select trading_address from polymarket_profiles where privy_user_id = $1',
+          [privyUserId],
+        )).rows[0]
+        if (!profile?.trading_address) {
+          readinessIssue = 'The owner wallet is unavailable for the final pUSD check.'
+        } else {
+          const readiness = await checkPolymarketAccountReadiness({
+            ownerAddress: String(profile.trading_address),
+            polymarketWallet: String(attempt.polymarket_address),
+            sourceNetwork: String(attempt.network) === 'arbitrum' ? 'arbitrum' : 'base',
+            sourceToken: 'USDC',
+            requiredBalanceUsdc: '0.000001',
+          })
+          if (readiness.ok) {
+            readinessState = String(readiness.data.state)
+            pusdBalance = String(readiness.data.polymarketAccount.collateral.balance)
+          } else {
+            readinessIssue = readiness.error
+          }
+        }
+      }
+      const delivered = confirmedFundingDelivery({
+        providerStatus: funding.status,
+        readinessState,
+        pusdBalance,
+      })
+      const status = delivered
         ? 'bridge_complete'
-        : funding.status === 'bridging'
-          ? 'bridging'
-          : funding.status === 'expired'
-            ? 'expired'
-            : 'pending'
+        : funding.status === 'funded'
+          ? 'confirmed'
+          : funding.status === 'bridging'
+            ? 'bridging'
+            : funding.status === 'expired'
+              ? 'expired'
+              : 'pending'
       const txHash = cleanString(funding.bridgeTransaction || funding.paymentTransaction || attempt.tx_hash, 96) || null
       const updated = await requirePool().query(
         `update polymarket_funding_attempts
@@ -2383,10 +2713,24 @@ export default async function handler(req: Request, res: Response) {
           returning id, request_id, network, amount, status, tx_hash, deposit_address, created_at`,
         [status, txHash, attempt.id, privyUserId],
       )
+      if (delivered) {
+        await notifyFundingReady({
+          privyUserId,
+          fundingAttemptId: Number(attempt.id),
+          requestId,
+          address: String(attempt.polymarket_address),
+          amount: String(attempt.amount),
+          pusdBalance,
+        })
+      }
       return res.json({
         ok: true,
-        status: funding.status,
-        receiptUrl: funding.status === 'funded' ? funding.receiptUrl : undefined,
+        status: delivered ? 'funded' : funding.status === 'funded' ? 'verifying_balance' : funding.status,
+        providerStatus: funding.status,
+        readinessState: readinessState || undefined,
+        pusdBalance: pusdBalance || undefined,
+        issue: readinessIssue || undefined,
+        receiptUrl: delivered ? funding.receiptUrl : undefined,
         fundingAttempt: updated.rows[0],
       })
     }

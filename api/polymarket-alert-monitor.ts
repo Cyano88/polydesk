@@ -5,6 +5,7 @@ import {
   bootstrapPolymarketAlertMonitor,
   evaluatePolymarketAlertAssets,
   processPolymarketResolutionEvent,
+  processDuePolymarketDigests,
   reconcilePolymarketLpOrders,
   reconcilePolymarketResolutionAlerts,
   reconcilePolymarketWatchedPortfolios,
@@ -15,6 +16,7 @@ const RECONNECT_MAX_MS = 30_000
 const ASSET_EVALUATION_COOLDOWN_MS = 15_000
 const PORTFOLIO_RECONCILIATION_MS = 60_000
 const LP_ORDER_RECONCILIATION_MS = 30_000
+const DIGEST_RECONCILIATION_MS = 60_000
 
 type MarketStreamMessage = {
   event_type?: string
@@ -41,6 +43,7 @@ export function startPolymarketAlertMonitor() {
   let heartbeat: NodeJS.Timeout | null = null
   let portfolioReconciliation: NodeJS.Timeout | null = null
   let lpOrderReconciliation: NodeJS.Timeout | null = null
+  let digestReconciliation: NodeJS.Timeout | null = null
   let reconnectDelay = 1_000
   let stopped = false
 
@@ -179,6 +182,13 @@ export function startPolymarketAlertMonitor() {
           void reconcilePolymarketLpOrders()
         }, LP_ORDER_RECONCILIATION_MS)
         lpOrderReconciliation.unref()
+      }
+      void processDuePolymarketDigests()
+      if (!digestReconciliation) {
+        digestReconciliation = setInterval(() => {
+          void processDuePolymarketDigests()
+        }, DIGEST_RECONCILIATION_MS)
+        digestReconciliation.unref()
       }
     })
     .catch(error => {

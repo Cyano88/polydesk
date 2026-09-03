@@ -6518,10 +6518,16 @@ type PolymarketProfile = {
 
 type PolymarketAlertSettings = {
   lossThresholdPercent: number
+  profitThresholdPercent: number
   resolvedAlertsEnabled: boolean
   claimableAlertsEnabled: boolean
   newPositionAlertsEnabled: boolean
   movementAlertsEnabled: boolean
+  digestFrequency: 'off' | 'daily' | 'weekly'
+  digestTimezone: string
+  digestHourLocal: number
+  digestWeekday: number
+  nextDigestAt: string | null
   alertEmail: string
 }
 
@@ -7721,16 +7727,26 @@ export function PolyPortfolioPanel({
     void (async () => {
       try {
         const token = authenticated ? await getAccessToken() : ''
-        const response = token
-          ? await fetch('/api/polymarket-portfolio', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: 'reconcile-funding', requestId }),
-            })
-          : await fetch(`/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(requestId)}`)
-        const data = await readPolyDeskJson<{ ok?: boolean; status?: string; receiptUrl?: string; error?: string }>(response, 'Could not verify Polymarket funding.')
-        if (!response.ok || !data.ok) throw new Error(data.error || 'Could not verify Polymarket funding.')
-        if (data.status !== 'funded') throw new Error(data.status === 'bridging' ? 'Funding is still bridging and will update automatically.' : 'Polymarket funding is not complete yet.')
+        let data: { ok?: boolean; status?: string; receiptUrl?: string; issue?: string; error?: string } = {}
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const response = token
+            ? await fetch('/api/polymarket-portfolio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'reconcile-funding', requestId }),
+              })
+            : await fetch(`/api/hashpaylink/polymarket-funding?id=${encodeURIComponent(requestId)}`)
+          data = await readPolyDeskJson<typeof data>(response, 'Could not verify Polymarket funding.')
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Could not verify Polymarket funding.')
+          if (data.status === 'funded') break
+          if (data.status !== 'verifying_balance' || !token) {
+            throw new Error(data.status === 'bridging' ? 'Funding is still bridging and will update automatically.' : 'Polymarket funding is not complete yet.')
+          }
+          setFundingReturnMessage(data.issue || 'Hash PayLink is complete. Waiting for refreshed pUSD on Polygon...')
+          if (attempt === 9) throw new Error('Hash PayLink completed, but refreshed pUSD is not visible yet. Reload shortly to verify delivery.')
+          await new Promise(resolve => window.setTimeout(resolve, 3_000))
+        }
+        if (data.status !== 'funded') throw new Error('Polymarket funding is not complete yet.')
         setFundingReturnReceiptUrl(data.receiptUrl ?? '')
         setFundingReturnState('funded')
         setFundingReturnMessage('Polymarket funding delivered and verified.')
@@ -7854,6 +7870,7 @@ export function PolyPortfolioPanel({
           error?: string
           message?: string
           lossThresholdPercent?: number
+          profitThresholdPercent?: number
         }>(response, 'Could not create portfolio watch.')
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not create portfolio watch.')
         if (authenticated) {
@@ -7877,10 +7894,16 @@ export function PolyPortfolioPanel({
           },
           settings: {
             lossThresholdPercent: data.lossThresholdPercent ?? watchLossThreshold,
+            profitThresholdPercent: data.profitThresholdPercent ?? 50,
             resolvedAlertsEnabled: true,
             claimableAlertsEnabled: true,
             newPositionAlertsEnabled: watchNewPositions,
             movementAlertsEnabled: false,
+            digestFrequency: 'off',
+            digestTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            digestHourLocal: 8,
+            digestWeekday: 1,
+            nextDigestAt: null,
             alertEmail: '',
           },
           watchlist: [],
@@ -10478,6 +10501,24 @@ export function PolyPortfolioPanel({
                 </span>
               </div>
             </div>
+            <div>
+              <p className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>Profit threshold</p>
+              <div className='mt-1 flex items-center gap-2'>
+                <input
+                  type='number'
+                  inputMode='numeric'
+                  min={0}
+                  max={500}
+                  step={1}
+                  value={settingsDraft.profitThresholdPercent}
+                  onChange={e => setSettingsDraft(d => d ? { ...d, profitThresholdPercent: Math.max(0, Math.min(500, Math.floor(Number(e.target.value) || 0))) } : d)}
+                  className='w-20 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm tabular-nums dark:border-white/10 dark:bg-white/[0.04] dark:text-white'
+                />
+                <span className='text-xs text-gray-500 dark:text-gray-400'>
+                  {settingsDraft.profitThresholdPercent === 0 ? 'Profit alerts off. Set above 0 to enable' : '% gain triggers an alert'}
+                </span>
+              </div>
+            </div>
             <AlertToggle
               label="New positions"
               hint={unsignedPortfolioAction === 'trading'
@@ -10500,6 +10541,60 @@ export function PolyPortfolioPanel({
                 movementAlertsEnabled: false,
               } : d)}
             />
+            <div>
+              <p className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>Portfolio digest</p>
+              <select
+                value={settingsDraft.digestFrequency}
+                onChange={e => setSettingsDraft(d => d ? { ...d, digestFrequency: e.target.value as 'off' | 'daily' | 'weekly' } : d)}
+                className='mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-white/10 dark:bg-white/[0.04] dark:text-white'
+              >
+                <option value='off'>Off</option>
+                <option value='daily'>Every day</option>
+                <option value='weekly'>Every week</option>
+              </select>
+            </div>
+            {settingsDraft.digestFrequency !== 'off' && (
+              <div className='grid grid-cols-2 gap-2'>
+                <label className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>
+                  Local hour
+                  <input
+                    type='number'
+                    min={0}
+                    max={23}
+                    value={settingsDraft.digestHourLocal}
+                    onChange={e => setSettingsDraft(d => d ? { ...d, digestHourLocal: Math.max(0, Math.min(23, Math.floor(Number(e.target.value) || 0))) } : d)}
+                    className='mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm font-normal normal-case tracking-normal dark:border-white/10 dark:bg-white/[0.04] dark:text-white'
+                  />
+                </label>
+                <label className='text-[11px] font-semibold uppercase tracking-widest text-gray-400'>
+                  Timezone
+                  <input
+                    value={settingsDraft.digestTimezone}
+                    onChange={e => setSettingsDraft(d => d ? { ...d, digestTimezone: e.target.value } : d)}
+                    placeholder='Africa/Lagos'
+                    className='mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm font-normal normal-case tracking-normal dark:border-white/10 dark:bg-white/[0.04] dark:text-white'
+                  />
+                </label>
+              </div>
+            )}
+            {settingsDraft.digestFrequency === 'weekly' && (
+              <label className='block text-[11px] font-semibold uppercase tracking-widest text-gray-400'>
+                Delivery day
+                <select
+                  value={settingsDraft.digestWeekday}
+                  onChange={e => setSettingsDraft(d => d ? { ...d, digestWeekday: Number(e.target.value) } : d)}
+                  className='mt-1 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm font-normal normal-case tracking-normal dark:border-white/10 dark:bg-white/[0.04] dark:text-white'
+                >
+                  <option value={0}>Sunday</option>
+                  <option value={1}>Monday</option>
+                  <option value={2}>Tuesday</option>
+                  <option value={3}>Wednesday</option>
+                  <option value={4}>Thursday</option>
+                  <option value={5}>Friday</option>
+                  <option value={6}>Saturday</option>
+                </select>
+              </label>
+            )}
             <InputBlock
               label="Alert email"
               value={settingsDraft.alertEmail || bundle?.verifiedEmail || ''}
