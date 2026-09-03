@@ -160,7 +160,7 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 4
+export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 5
 
 export function hasMissingZeroScoutProofDelivery(response: unknown): boolean {
   if (!isRecord(response)) return false
@@ -179,9 +179,13 @@ export function smartTraderDeliveryAttemptCount(record: SmartTraderPaidAnalysisR
   return Math.max(0, record.deliveryAttemptCount ?? record.remediationCount ?? 0)
 }
 
+export function smartTraderMaxDeliveryAttempts(record: SmartTraderPaidAnalysisRecord): number {
+  return Math.max(record.maxDeliveryAttempts ?? 0, SMART_TRADER_MAX_DELIVERY_ATTEMPTS)
+}
+
 export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
   return (record.status === 'completed' || record.status === 'failed')
-    && smartTraderDeliveryAttemptCount(record) < (record.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS)
+    && smartTraderDeliveryAttemptCount(record) < smartTraderMaxDeliveryAttempts(record)
     && hasMissingZeroScoutProofDelivery(record.response)
 }
 
@@ -706,7 +710,7 @@ export async function completeSettledSmartTraderAnalysis(
     }
     const missingZeroScoutProof = hasMissingZeroScoutProofDelivery(response)
     const attemptCount = smartTraderDeliveryAttemptCount(current) + 1
-    const maximumAttempts = current.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+    const maximumAttempts = smartTraderMaxDeliveryAttempts(current)
     return {
       ...current,
       status: missingZeroScoutProof ? 'failed' : 'completed',
@@ -1341,7 +1345,7 @@ export async function executeSettledSmartTraderDelivery(
       throw new Error('The persisted payment metadata does not match the verified settlement.')
     }
     const attemptCount = smartTraderDeliveryAttemptCount(current)
-    const maximumAttempts = current.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+    const maximumAttempts = smartTraderMaxDeliveryAttempts(current)
     if (attemptCount >= maximumAttempts) throw new Error('The bounded delivery-attempt budget has been exhausted.')
     const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
     if (current.status === 'completed' && !remediatingMissingProof) {
@@ -1365,7 +1369,7 @@ export async function executeSettledSmartTraderDelivery(
     }
   })
 
-  const maximumAttempts = claimed.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+  const maximumAttempts = smartTraderMaxDeliveryAttempts(claimed)
   try {
     return await runBoundedSmartTraderDelivery({
       initialAttemptCount: smartTraderDeliveryAttemptCount(claimed),
@@ -1530,7 +1534,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     updatedAt: record.updatedAt,
     error: record.status === 'failed' ? clean(record.error, 300) : null,
     deliveryAttemptCount: smartTraderDeliveryAttemptCount(record),
-    maxDeliveryAttempts: record.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS,
+    maxDeliveryAttempts: smartTraderMaxDeliveryAttempts(record),
     retryable: isRemediableMissingZeroScoutProof(record),
     nextRetryAt: record.nextRetryAt || null,
   })
