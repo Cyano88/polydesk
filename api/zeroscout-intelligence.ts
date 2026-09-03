@@ -71,6 +71,7 @@ type ZeroScoutCallOptions = {
   requireProof?: boolean
   endpointPath?: string
   timeoutMs?: number
+  retryAttempts?: number
 }
 
 export type ZeroScoutGeneralResearchArticle = {
@@ -230,8 +231,9 @@ export async function callZeroScoutIntelligence(payload: ZeroScoutPayload, optio
 
   const requestId = cryptoRandomId()
   const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? REQUEST_TIMEOUT_MS) || REQUEST_TIMEOUT_MS)
+  const retryAttempts = Math.max(0, Math.min(3, Number(options.retryAttempts ?? RETRY_ATTEMPTS) || 0))
   let lastError: unknown
-  for (let attempt = 0; attempt <= RETRY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt <= retryAttempts; attempt += 1) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
@@ -264,7 +266,7 @@ export async function callZeroScoutIntelligence(payload: ZeroScoutPayload, optio
       return validateZeroScoutResult(json, options)
     } catch (err) {
       lastError = err
-      if (attempt >= RETRY_ATTEMPTS || !shouldRetry(err)) break
+      if (attempt >= retryAttempts || !shouldRetry(err)) break
       await sleep(RETRY_DELAY_MS * (attempt + 1))
     } finally {
       clearTimeout(timeout)
