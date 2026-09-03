@@ -55,6 +55,20 @@ test('settled ANALYZE recovery record preserves the exact normalized mandate', (
   assert.notEqual(paid.requestHash, differentMandate.requestHash)
 })
 
+test('settled ANALYZE accepts the object parameter encoding emitted by the payment CLI', () => {
+  const paid = buildSettledSmartTraderAnalysisRecord({
+    action: 'ANALYZE',
+    marketId: conditionId,
+    outcome: 'Yes',
+    side: 'BUY',
+    mandate: '{maximumPrice:0.95,maximumSpendUsdc:5,maximumPriceDrift:0.05}',
+  }, servicePayment, now)
+
+  assert.equal(paid.request.mandate.maximumSpendUsdc, 5)
+  assert.equal(paid.request.mandate.maximumPrice, 0.95)
+  assert.equal(paid.request.mandate.maximumPriceDrift, 0.05)
+})
+
 test('Gamma market normalization preserves complete rules and derives the named resolution authority', () => {
   const rules = `${'Rule context. '.repeat(110)}The resolution source for this market is the FOMC statement at https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm. Final fallback rules remain authoritative.`
   const normalized = normalizeMarket({

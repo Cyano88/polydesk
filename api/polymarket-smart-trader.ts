@@ -153,6 +153,27 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
+function parsedObjectParam(value: unknown): JsonRecord {
+  if (isRecord(value)) return value
+  if (typeof value !== 'string' || value.length > 2_000) return {}
+  try {
+    const parsed = JSON.parse(value)
+    if (isRecord(parsed)) return parsed
+  } catch {
+    try {
+      const quotedKeys = value.replace(
+        /([{,]\s*)([A-Za-z][A-Za-z0-9]*)(\s*:)/g,
+        (_match, prefix: string, key: string, colon: string) => `${prefix}${JSON.stringify(key)}${colon}`,
+      )
+      const parsed = JSON.parse(quotedKeys)
+      if (isRecord(parsed)) return parsed
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
 function clean(value: unknown, max = 240) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 }
@@ -244,7 +265,7 @@ function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: 
   if (smartMoneyWallets.length > 10 || smartMoneyWallets.some(wallet => !isAddress(wallet))) {
     return { ok: false, status: 400, error: 'smartMoneyWallets must contain at most 10 valid public EVM addresses.' }
   }
-  const mandate = isRecord(raw.mandate) ? raw.mandate : {}
+  const mandate = parsedObjectParam(raw.mandate)
   return {
     ok: true,
     value: {
