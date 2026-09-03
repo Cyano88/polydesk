@@ -151,15 +151,20 @@ export type SmartTraderPaidAnalysisRecord = {
   remediationReason?: 'missing-zeroscout-proof'
   previousDecisionId?: string
   previousAnalysisHash?: string
+  deliveryAttemptCount?: number
+  maxDeliveryAttempts?: number
+  nextRetryAt?: string
 }
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
-  if (record.status !== 'completed' || (record.remediationCount ?? 0) >= 1 || !isRecord(record.response)) return false
-  const decision = isRecord(record.response.decision) ? record.response.decision : null
+export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 4
+
+export function hasMissingZeroScoutProofDelivery(response: unknown): boolean {
+  if (!isRecord(response)) return false
+  const decision = isRecord(response.decision) ? response.decision : null
   const evidence = decision && isRecord(decision.evidence) ? decision.evidence : null
   if (!decision || !evidence || decision.decision !== 'ESCALATE') return false
   const blockers = Array.isArray(decision.blockers) ? decision.blockers : []
@@ -168,6 +173,16 @@ export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysi
     && !evidence.zeroScoutProof
     && blockers.some(item => typeof item === 'string' && item.includes('ZeroScout research evidence is required'))
     && riskFlags.some(item => typeof item === 'string' && item.includes('ZeroScout research was unavailable'))
+}
+
+export function smartTraderDeliveryAttemptCount(record: SmartTraderPaidAnalysisRecord): number {
+  return Math.max(0, record.deliveryAttemptCount ?? record.remediationCount ?? 0)
+}
+
+export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
+  return (record.status === 'completed' || record.status === 'failed')
+    && smartTraderDeliveryAttemptCount(record) < (record.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS)
+    && hasMissingZeroScoutProofDelivery(record.response)
 }
 
 function parsedObjectParam(value: unknown): JsonRecord {
@@ -674,6 +689,8 @@ export function buildSettledSmartTraderAnalysisRecord(
     payment,
     settledAt,
     updatedAt: settledAt,
+    deliveryAttemptCount: 0,
+    maxDeliveryAttempts: SMART_TRADER_MAX_DELIVERY_ATTEMPTS,
   }
 }
 
@@ -687,14 +704,24 @@ export async function completeSettledSmartTraderAnalysis(
     if (current.payment.payer.toLowerCase() !== payment.payer.toLowerCase()) {
       throw new Error('The settled analysis payer does not match the persisted request.')
     }
+    const missingZeroScoutProof = hasMissingZeroScoutProofDelivery(response)
+    const attemptCount = smartTraderDeliveryAttemptCount(current) + 1
+    const maximumAttempts = current.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
     return {
       ...current,
-      status: 'completed',
+      status: missingZeroScoutProof ? 'failed' : 'completed',
       decisionId: decision.decisionId,
       analysisHash: decision.analysisHash,
       response,
+      deliveryAttemptCount: attemptCount,
+      maxDeliveryAttempts: maximumAttempts,
+      nextRetryAt: missingZeroScoutProof && attemptCount < maximumAttempts
+        ? new Date(Date.now() + 15_000).toISOString()
+        : undefined,
       updatedAt: new Date().toISOString(),
-      error: undefined,
+      error: missingZeroScoutProof
+        ? 'ZeroScout proof delivery was temporarily unavailable; the settled request remains recoverable without another payment.'
+        : undefined,
     }
   })
 }
@@ -1266,6 +1293,121 @@ export async function runPolymarketSmartTrader(
   }
 }
 
+export async function runBoundedSmartTraderDelivery(options: {
+  initialAttemptCount: number
+  maximumAttempts: number
+  run: () => Promise<Awaited<ReturnType<typeof runPolymarketSmartTrader>>>
+  onAttempt: (state: {
+    attemptCount: number
+    maximumAttempts: number
+    result: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+    missingZeroScoutProof: boolean
+    exhausted: boolean
+  }) => Promise<void>
+  retryDelayMs?: number
+  sleep?: (milliseconds: number) => Promise<void>
+}) {
+  let attemptCount = Math.max(0, options.initialAttemptCount)
+  const maximumAttempts = Math.max(attemptCount, options.maximumAttempts)
+  const sleep = options.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
+  let result: Awaited<ReturnType<typeof runPolymarketSmartTrader>> | undefined
+
+  while (attemptCount < maximumAttempts) {
+    attemptCount += 1
+    result = await options.run()
+    const missingZeroScoutProof = result.ok && hasMissingZeroScoutProofDelivery(result.data)
+    const exhausted = attemptCount >= maximumAttempts
+    await options.onAttempt({ attemptCount, maximumAttempts, result, missingZeroScoutProof, exhausted })
+    if (!missingZeroScoutProof || exhausted) break
+    await sleep(options.retryDelayMs ?? 5_000)
+  }
+
+  return { attemptCount, maximumAttempts, result }
+}
+
+export async function executeSettledSmartTraderDelivery(
+  transaction: string,
+  payer: string,
+  dependencies: SmartTraderDependencies = liveDependencies,
+) {
+  const analysisKey = paidAnalysisKey(transaction)
+  const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
+    if (!current || current.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
+      throw new Error('No exact persisted request exists for this settlement transaction. Recovery is refused.')
+    }
+    if (current.payment.transaction.toLowerCase() !== transaction.toLowerCase()
+      || current.payment.payer.toLowerCase() !== payer.toLowerCase()
+      || current.payment.amountAtomic !== '300000') {
+      throw new Error('The persisted payment metadata does not match the verified settlement.')
+    }
+    const attemptCount = smartTraderDeliveryAttemptCount(current)
+    const maximumAttempts = current.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+    if (attemptCount >= maximumAttempts) throw new Error('The bounded delivery-attempt budget has been exhausted.')
+    const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
+    if (current.status === 'completed' && !remediatingMissingProof) {
+      throw new Error('This settlement transaction has already been delivered and is not eligible for remediation.')
+    }
+    const updatedAt = Date.parse(current.updatedAt)
+    if (current.status === 'running' && Number.isFinite(updatedAt) && Date.now() - updatedAt < 10 * 60_000) {
+      throw new Error('Recovery is already running for this settlement transaction.')
+    }
+    return {
+      ...current,
+      status: 'running',
+      maxDeliveryAttempts: maximumAttempts,
+      updatedAt: new Date().toISOString(),
+      error: undefined,
+      ...(remediatingMissingProof ? {
+        remediationReason: 'missing-zeroscout-proof' as const,
+        previousDecisionId: current.previousDecisionId || current.decisionId,
+        previousAnalysisHash: current.previousAnalysisHash || current.analysisHash,
+      } : {}),
+    }
+  })
+
+  const maximumAttempts = claimed.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+  try {
+    return await runBoundedSmartTraderDelivery({
+      initialAttemptCount: smartTraderDeliveryAttemptCount(claimed),
+      maximumAttempts,
+      run: () => runPolymarketSmartTrader(claimed.request, dependencies, claimed.payment),
+      onAttempt: async ({ attemptCount, missingZeroScoutProof, exhausted, result }) => {
+        const analysisData = result.ok && result.data.action === 'ANALYZE' ? result.data : null
+        await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
+          ...(current || claimed),
+          status: analysisData && !missingZeroScoutProof ? 'completed' : exhausted ? 'failed' : 'running',
+          deliveryAttemptCount: attemptCount,
+          maxDeliveryAttempts: maximumAttempts,
+          nextRetryAt: missingZeroScoutProof && !exhausted ? new Date(Date.now() + 5_000).toISOString() : undefined,
+          updatedAt: new Date().toISOString(),
+          ...(analysisData ? {
+            decisionId: analysisData.decision.decisionId,
+            analysisHash: analysisData.decision.analysisHash,
+            response: analysisData,
+            error: missingZeroScoutProof
+              ? exhausted
+                ? 'ZeroScout proof delivery remained unavailable after all bounded attempts.'
+                : 'ZeroScout proof delivery is temporarily unavailable; retrying the settled request.'
+              : undefined,
+          } : {
+            error: result.error,
+          }),
+        }))
+      },
+    })
+  } catch (error) {
+    await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
+      ...(current || claimed),
+      status: 'failed',
+      maxDeliveryAttempts: maximumAttempts,
+      nextRetryAt: undefined,
+      updatedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Recovery failed.',
+    }))
+    throw error
+  }
+}
+
 export default async function polymarketSmartTraderHandler(req: Request, res: Response) {
   if (req.method === 'GET') {
     return res.status(200).json({
@@ -1296,13 +1438,38 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
     network: 'X Layer',
     serviceUrl: '/api/a2mcp/polymarket-smart-trader',
   } : null
+  if (servicePayment && validServicePayment(servicePayment)) {
+    const bound = await bindSettledSmartTraderAnalysis(req.body, servicePayment)
+    if (bound.status === 'completed' && !isRemediableMissingZeroScoutProof(bound) && bound.response) {
+      return res.status(200).json(bound.response)
+    }
+    const boundUpdatedAt = Date.parse(bound.updatedAt)
+    const deliveryIsActive = bound.status === 'running'
+      && Number.isFinite(boundUpdatedAt)
+      && Date.now() - boundUpdatedAt < 10 * 60_000
+    if (!deliveryIsActive) {
+      void executeSettledSmartTraderDelivery(servicePayment.transaction, servicePayment.payer).catch(error => {
+        console.error('[smart-trader] asynchronous paid delivery failed', {
+          transaction: servicePayment.transaction,
+          error: clean(error instanceof Error ? error.message : 'unknown delivery error'),
+        })
+      })
+    }
+    return res.status(202).json({
+      ok: true,
+      schema: 'polydesk-smart-trader-paid-delivery-v1',
+      action: 'ANALYZE',
+      status: bound.status === 'running' ? 'running' : 'accepted',
+      transaction: servicePayment.transaction,
+      paymentStatus: 'settled',
+      statusUrl: `/api/a2mcp/polymarket-smart-trader/payment/${servicePayment.transaction}`,
+      message: 'The settled request is processing asynchronously. Poll statusUrl; no additional payment is required.',
+    })
+  }
   const result = await runPolymarketSmartTrader(req.body, liveDependencies, servicePayment)
   if (!result.ok) {
     const { status, ...body } = result
     return res.status(status).json(body)
-  }
-  if (servicePayment && validServicePayment(servicePayment) && result.data.action === 'ANALYZE') {
-    await completeSettledSmartTraderAnalysis(servicePayment, result.data.decision, result.data)
   }
   return res.status(result.status).json(result.data)
 }
@@ -1338,6 +1505,18 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
   if (!record || record.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
     return res.status(404).json({ ok: false, error: 'No paid analysis record was found for this settlement transaction.' })
   }
+  const updatedAt = Date.parse(record.updatedAt)
+  const staleRunningDelivery = record.status === 'running'
+    && Number.isFinite(updatedAt)
+    && Date.now() - updatedAt >= 10 * 60_000
+  if (staleRunningDelivery || isRemediableMissingZeroScoutProof(record)) {
+    void executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer).catch(error => {
+      console.error('[smart-trader] status-triggered paid delivery failed', {
+        transaction: record.payment.transaction,
+        error: clean(error instanceof Error ? error.message : 'unknown delivery error'),
+      })
+    })
+  }
   return res.status(200).json({
     ok: true,
     transaction: transaction.toLowerCase(),
@@ -1350,5 +1529,9 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     settledAt: record.settledAt,
     updatedAt: record.updatedAt,
     error: record.status === 'failed' ? clean(record.error, 300) : null,
+    deliveryAttemptCount: smartTraderDeliveryAttemptCount(record),
+    maxDeliveryAttempts: record.maxDeliveryAttempts ?? SMART_TRADER_MAX_DELIVERY_ATTEMPTS,
+    retryable: isRemediableMissingZeroScoutProof(record),
+    nextRetryAt: record.nextRetryAt || null,
   })
 }

@@ -1,8 +1,6 @@
-import { mutateDurableJson } from '../api/render-durable-store.js'
 import {
-  isRemediableMissingZeroScoutProof,
-  runPolymarketSmartTrader,
-  type SmartTraderPaidAnalysisRecord,
+  executeSettledSmartTraderDelivery,
+  hasMissingZeroScoutProofDelivery,
 } from '../api/polymarket-smart-trader.js'
 
 const transaction = String(process.argv[2] ?? '').trim()
@@ -44,66 +42,6 @@ if (recoveredPayer !== payer.toLowerCase()) throw new Error('The settlement paye
 if (recoveredPayTo !== payTo) throw new Error('The settlement recipient does not match.')
 if (recoveredAmount !== 300_000n) throw new Error('The settlement amount is not 0.3 USDT.')
 
-const analysisKey = `polydesk:smart-trader:paid-analysis:${transaction.toLowerCase()}`
-const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
-  if (!current || current.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
-    throw new Error('No exact persisted request exists for this settlement transaction. Recovery is refused.')
-  }
-  if (current.payment.transaction.toLowerCase() !== transaction.toLowerCase()
-    || current.payment.payer.toLowerCase() !== payer.toLowerCase()
-    || current.payment.amountAtomic !== '300000') {
-    throw new Error('The persisted payment metadata does not match the verified settlement.')
-  }
-  if ((current.remediationCount ?? 0) >= 1 && current.status !== 'running') {
-    throw new Error('The one-time missing-proof remediation has already been consumed.')
-  }
-  const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
-  if (current.status === 'completed' && !remediatingMissingProof) {
-    throw new Error('This settlement transaction has already been delivered and is not eligible for remediation.')
-  }
-  const updatedAt = Date.parse(current.updatedAt)
-  if (current.status === 'running' && Number.isFinite(updatedAt) && Date.now() - updatedAt < 10 * 60_000) {
-    throw new Error('Recovery is already running for this settlement transaction.')
-  }
-  return {
-    ...current,
-    status: 'running',
-    updatedAt: new Date().toISOString(),
-    error: undefined,
-    ...(remediatingMissingProof ? {
-      remediationCount: (current.remediationCount ?? 0) + 1,
-      remediationReason: 'missing-zeroscout-proof' as const,
-      previousDecisionId: current.decisionId,
-      previousAnalysisHash: current.analysisHash,
-    } : {}),
-  }
-})
-
-let result: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
-try {
-  result = await runPolymarketSmartTrader(claimed.request, undefined, claimed.payment)
-} catch (error) {
-  await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
-    ...(current || claimed),
-    status: 'failed',
-    updatedAt: new Date().toISOString(),
-    error: error instanceof Error ? error.message : 'Recovery failed.',
-  }))
-  throw error
-}
-
-await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
-  ...(current || claimed),
-  status: result.ok ? 'completed' : 'failed',
-  updatedAt: new Date().toISOString(),
-  ...(result.ok ? {
-    decisionId: result.data.decision.decisionId,
-    analysisHash: result.data.decision.analysisHash,
-    response: result.data,
-    error: undefined,
-  } : {
-    error: result.error,
-  }),
-}))
-console.log(JSON.stringify(result))
-if (!result.ok) process.exitCode = 1
+const delivery = await executeSettledSmartTraderDelivery(transaction, payer)
+console.log(JSON.stringify(delivery))
+if (!delivery.result?.ok || hasMissingZeroScoutProofDelivery(delivery.result.data)) process.exitCode = 1

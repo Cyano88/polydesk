@@ -3,10 +3,12 @@ import test from 'node:test'
 import {
   buildSettledSmartTraderAnalysisRecord,
   deriveResolutionSource,
+  hasMissingZeroScoutProofDelivery,
   isRemediableMissingZeroScoutProof,
   normalizeMarket,
   preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
+  runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
   type SmartTraderDependencies,
   type SmartTraderDecisionReceipt,
@@ -92,7 +94,9 @@ test('only a completed missing-ZeroScout-proof delivery is eligible for one reme
   }
 
   assert.equal(isRemediableMissingZeroScoutProof(missingProof), true)
-  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, remediationCount: 1 }), false)
+  assert.equal(hasMissingZeroScoutProofDelivery(missingProof.response), true)
+  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 3 }), true)
+  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 4 }), false)
   assert.equal(isRemediableMissingZeroScoutProof({
     ...missingProof,
     response: {
@@ -105,6 +109,50 @@ test('only a completed missing-ZeroScout-proof delivery is eligible for one reme
       },
     },
   }), false)
+})
+
+test('bounded paid delivery retries missing proof and stops on proof-bearing success', async () => {
+  const attempts: number[] = []
+  const missing = {
+    ok: true as const,
+    status: 200,
+    data: {
+      action: 'ANALYZE' as const,
+      decision: {
+        decision: 'ESCALATE',
+        evidence: { zeroScoutId: null, zeroScoutProof: null },
+        blockers: ['ZeroScout research evidence is required for an approved decision.'],
+        riskFlags: ['ZeroScout research was unavailable; directional opinion is withheld.'],
+      },
+    },
+  } as Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+  const complete = {
+    ok: true as const,
+    status: 200,
+    data: {
+      action: 'ANALYZE' as const,
+      decision: {
+        decision: 'APPROVE',
+        evidence: { zeroScoutId: 'zs_1', zeroScoutProof: { contentHash: 'abc' } },
+        blockers: [],
+        riskFlags: [],
+      },
+    },
+  } as Awaited<ReturnType<typeof runPolymarketSmartTrader>>
+  const queue = [missing, complete]
+
+  const delivery = await runBoundedSmartTraderDelivery({
+    initialAttemptCount: 1,
+    maximumAttempts: 4,
+    run: async () => queue.shift() || complete,
+    onAttempt: async state => { attempts.push(state.attemptCount) },
+    retryDelayMs: 0,
+    sleep: async () => undefined,
+  })
+
+  assert.deepEqual(attempts, [2, 3])
+  assert.equal(delivery.attemptCount, 3)
+  assert.equal(delivery.result, complete)
 })
 
 test('Gamma market normalization preserves complete rules and derives the named resolution authority', () => {
