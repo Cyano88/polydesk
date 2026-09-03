@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   buildSettledSmartTraderAnalysisRecord,
   deriveResolutionSource,
+  isRemediableMissingZeroScoutProof,
   normalizeMarket,
   preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
@@ -67,6 +68,43 @@ test('settled ANALYZE accepts the object parameter encoding emitted by the payme
   assert.equal(paid.request.mandate.maximumSpendUsdc, 5)
   assert.equal(paid.request.mandate.maximumPrice, 0.95)
   assert.equal(paid.request.mandate.maximumPriceDrift, 0.05)
+})
+
+test('only a completed missing-ZeroScout-proof delivery is eligible for one remediation', () => {
+  const paid = buildSettledSmartTraderAnalysisRecord({
+    action: 'ANALYZE',
+    marketId: conditionId,
+    outcome: 'Yes',
+    side: 'BUY',
+  }, servicePayment, now)
+  const missingProof = {
+    ...paid,
+    status: 'completed' as const,
+    response: {
+      action: 'ANALYZE',
+      decision: {
+        decision: 'ESCALATE',
+        evidence: { zeroScoutId: null, zeroScoutProof: null },
+        blockers: ['ZeroScout research evidence is required before this decision can be approved.'],
+        riskFlags: ['ZeroScout research was unavailable; directional opinion is withheld.'],
+      },
+    },
+  }
+
+  assert.equal(isRemediableMissingZeroScoutProof(missingProof), true)
+  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, remediationCount: 1 }), false)
+  assert.equal(isRemediableMissingZeroScoutProof({
+    ...missingProof,
+    response: {
+      action: 'ANALYZE',
+      decision: {
+        decision: 'APPROVE',
+        evidence: { zeroScoutId: 'zs_1', zeroScoutProof: { proof: true } },
+        blockers: [],
+        riskFlags: [],
+      },
+    },
+  }), false)
 })
 
 test('Gamma market normalization preserves complete rules and derives the named resolution authority', () => {

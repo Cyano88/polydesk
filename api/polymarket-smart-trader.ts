@@ -147,10 +147,27 @@ export type SmartTraderPaidAnalysisRecord = {
   analysisHash?: string
   response?: JsonRecord
   error?: string
+  remediationCount?: number
+  remediationReason?: 'missing-zeroscout-proof'
+  previousDecisionId?: string
+  previousAnalysisHash?: string
 }
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
+  if (record.status !== 'completed' || (record.remediationCount ?? 0) >= 1 || !isRecord(record.response)) return false
+  const decision = isRecord(record.response.decision) ? record.response.decision : null
+  const evidence = decision && isRecord(decision.evidence) ? decision.evidence : null
+  if (!decision || !evidence || decision.decision !== 'ESCALATE') return false
+  const blockers = Array.isArray(decision.blockers) ? decision.blockers : []
+  const riskFlags = Array.isArray(decision.riskFlags) ? decision.riskFlags : []
+  return !clean(evidence.zeroScoutId)
+    && !evidence.zeroScoutProof
+    && blockers.some(item => typeof item === 'string' && item.includes('ZeroScout research evidence is required'))
+    && riskFlags.some(item => typeof item === 'string' && item.includes('ZeroScout research was unavailable'))
 }
 
 function parsedObjectParam(value: unknown): JsonRecord {

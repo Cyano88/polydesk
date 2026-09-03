@@ -1,5 +1,6 @@
 import { mutateDurableJson } from '../api/render-durable-store.js'
 import {
+  isRemediableMissingZeroScoutProof,
   runPolymarketSmartTrader,
   type SmartTraderPaidAnalysisRecord,
 } from '../api/polymarket-smart-trader.js'
@@ -53,12 +54,29 @@ const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisK
     || current.payment.amountAtomic !== '300000') {
     throw new Error('The persisted payment metadata does not match the verified settlement.')
   }
-  if (current.status === 'completed') throw new Error('This settlement transaction has already been delivered.')
+  if ((current.remediationCount ?? 0) >= 1 && current.status !== 'running') {
+    throw new Error('The one-time missing-proof remediation has already been consumed.')
+  }
+  const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
+  if (current.status === 'completed' && !remediatingMissingProof) {
+    throw new Error('This settlement transaction has already been delivered and is not eligible for remediation.')
+  }
   const updatedAt = Date.parse(current.updatedAt)
   if (current.status === 'running' && Number.isFinite(updatedAt) && Date.now() - updatedAt < 10 * 60_000) {
     throw new Error('Recovery is already running for this settlement transaction.')
   }
-  return { ...current, status: 'running', updatedAt: new Date().toISOString(), error: undefined }
+  return {
+    ...current,
+    status: 'running',
+    updatedAt: new Date().toISOString(),
+    error: undefined,
+    ...(remediatingMissingProof ? {
+      remediationCount: (current.remediationCount ?? 0) + 1,
+      remediationReason: 'missing-zeroscout-proof' as const,
+      previousDecisionId: current.decisionId,
+      previousAnalysisHash: current.analysisHash,
+    } : {}),
+  }
 })
 
 let result: Awaited<ReturnType<typeof runPolymarketSmartTrader>>
