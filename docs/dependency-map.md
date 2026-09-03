@@ -85,7 +85,7 @@ Source: `src/pages/PolyDesk.tsx`
 | `api/polymarket-submit-order.ts` | Polymarket CLOB | `MOVE_OR_DELETE` | Browser submit is current preferred path; keep only if still used after extraction. |
 | `api/polymarket-portfolio.ts` | `DATABASE_URL`, Privy app secret, Polymarket builder/relayer/RPC, email | `MOVE` | Owns PolyDesk profile, alerts, watchlist, funding attempts, deposit wallet verification. |
 | `api/poly-stream.ts` | `POLY_STREAM_*`, `POLYMARKET_*`, Gamma/CLOB APIs | `MOVE` | World Cup live fixture and market matching. |
-| `api/poly-worldcup-news.ts` | `POLY_NEWS_*` | `MOVE` | News feed for World Cup market context. |
+| `api/poly-worldcup-news.ts` | `POLY_STREAM_API_KEY` | `MOVE` | SportMonks-only football news for market context. |
 | `api/x402-polymarket-scout.ts` | `X402_*`, Polymarket Gamma/CLOB APIs | `MOVE_WITH_BILLING_DECISION` | Product logic belongs to PolyDesk; billing may remain Hash PayLink/OKX.AI during transition. |
 | `api/zeroscout-polymarket-brief.ts` | ZeroScout/intelligence dependencies | `MOVE` | Polymarket operator signal generation. |
 

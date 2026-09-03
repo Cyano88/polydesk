@@ -72,14 +72,9 @@ POLYMARKET_ALLOW_GENERIC_URLS=
 POLYMARKET_LOOKUP_LIMIT=
 POLYMARKET_MARKET_LOOKUP=
 
-POLY_NEWS_QUERY_PARAM=
-POLY_NEWS_LIMIT_PARAM=
-POLY_NEWS_LIMIT=
-POLY_NEWS_API_AUTH_HEADER=
-POLY_NEWS_API_KEY_PARAM=
 ```
 
-These belong to PolyDesk football market discovery and news APIs. `POLY_STREAM_LEAGUE_IDS` must contain current provider league IDs; there is no tournament-specific fallback.
+These belong to PolyDesk football market discovery and SportMonks news APIs. `POLY_STREAM_LEAGUE_IDS` must contain current provider league IDs; there is no general-news fallback.
 
 ## PolyDesk LP Scout / Hash PayLink Env
 

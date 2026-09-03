@@ -289,7 +289,11 @@ export async function getZeroScoutGeneralResearch(
     market,
   })
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), Math.min(15_000, REQUEST_TIMEOUT_MS))
+  const researchTimeoutMs = Math.max(
+    20_000,
+    Math.min(90_000, Number(process.env.ZEROSCOUT_GENERAL_RESEARCH_TIMEOUT_MS || 55_000)),
+  )
+  const timeout = setTimeout(() => controller.abort(), researchTimeoutMs)
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
