@@ -10,6 +10,7 @@ import {
   preflightPolymarketSmartTraderRequest,
   runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
+  shouldRecoverSmartTraderDelivery,
   type SmartTraderDependencies,
   type SmartTraderDecisionReceipt,
   type SmartTraderMarket,
@@ -110,6 +111,36 @@ test('only a completed missing-ZeroScout-proof delivery is eligible for one reme
       },
     },
   }), false)
+})
+
+test('durable recovery selects settled, due proof failures, and stale running deliveries only', () => {
+  const paid = buildSettledSmartTraderAnalysisRecord({
+    action: 'ANALYZE',
+    marketId: conditionId,
+    outcome: 'Yes',
+    side: 'BUY',
+  }, servicePayment, now)
+  const missingProof = {
+    ...paid,
+    status: 'failed' as const,
+    deliveryAttemptCount: 1,
+    response: {
+      action: 'ANALYZE',
+      decision: {
+        decision: 'ESCALATE',
+        evidence: { zeroScoutId: null, zeroScoutProof: null },
+        blockers: ['ZeroScout research evidence is required before this decision can be approved.'],
+        riskFlags: ['ZeroScout research was unavailable; directional opinion is withheld.'],
+      },
+    },
+  }
+
+  assert.equal(shouldRecoverSmartTraderDelivery(paid, now), true)
+  assert.equal(shouldRecoverSmartTraderDelivery({ ...missingProof, nextRetryAt: new Date(now - 1).toISOString() }, now), true)
+  assert.equal(shouldRecoverSmartTraderDelivery({ ...missingProof, nextRetryAt: new Date(now + 1).toISOString() }, now), false)
+  assert.equal(shouldRecoverSmartTraderDelivery({ ...paid, status: 'running', updatedAt: new Date(now - 10 * 60_000).toISOString() }, now), true)
+  assert.equal(shouldRecoverSmartTraderDelivery({ ...paid, status: 'running', updatedAt: new Date(now - 60_000).toISOString() }, now), false)
+  assert.equal(shouldRecoverSmartTraderDelivery({ ...missingProof, deliveryAttemptCount: 6 }, now), false)
 })
 
 test('bounded paid delivery retries missing proof and stops on proof-bearing success', async () => {

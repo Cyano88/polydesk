@@ -29,7 +29,7 @@ import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
-import { polymarketSmartTraderDecisionHandler, polymarketSmartTraderPaymentStatusHandler } from './api/polymarket-smart-trader.js'
+import { polymarketSmartTraderDecisionHandler, polymarketSmartTraderPaymentStatusHandler, startSmartTraderDeliveryWorker } from './api/polymarket-smart-trader.js'
 import polymarketCopyPrepareHandler from './api/polymarket-copy-prepare.js'
 import polymarketAgentFlowHandler from './api/polymarket-agent-flow.js'
 import polymarketAccountReadinessHandler from './api/polymarket-account-readiness.js'
@@ -285,4 +285,5 @@ app.listen(PORT, () => {
   const scheduledWarm = setInterval(() => void warmPulse('scheduled'), PULSE_WARM_INTERVAL_MS)
   scheduledWarm.unref()
   startPolymarketAlertMonitor()
+  startSmartTraderDeliveryWorker()
 })

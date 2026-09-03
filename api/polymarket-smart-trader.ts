@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
-import { hasRenderDurableStore, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
+import { hasRenderDurableStore, listDurableJsonByPrefix, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
@@ -10,6 +10,9 @@ const CLOB_ORIGIN = 'https://clob.polymarket.com'
 const DATA_ORIGIN = 'https://data-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
 const DECISION_TTL_MS = 15 * 60_000
+const DELIVERY_RUNNING_STALE_MS = 10 * 60_000
+const DELIVERY_ALERT_AGE_MS = 5 * 60_000
+const PAID_ANALYSIS_PREFIX = 'polydesk:smart-trader:paid-analysis:'
 const SCORE_LABEL = 'risk-adjusted-opportunity-screening-not-profit-forecast' as const
 
 type JsonRecord = Record<string, unknown>
@@ -187,6 +190,18 @@ export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysi
   return (record.status === 'completed' || record.status === 'failed')
     && smartTraderDeliveryAttemptCount(record) < smartTraderMaxDeliveryAttempts(record)
     && hasMissingZeroScoutProofDelivery(record.response)
+}
+
+export function shouldRecoverSmartTraderDelivery(record: SmartTraderPaidAnalysisRecord, now = Date.now()) {
+  if (smartTraderDeliveryAttemptCount(record) >= smartTraderMaxDeliveryAttempts(record)) return false
+  if (record.status === 'settled') return true
+  const updatedAt = Date.parse(record.updatedAt)
+  if (record.status === 'running') {
+    return Number.isFinite(updatedAt) && now - updatedAt >= DELIVERY_RUNNING_STALE_MS
+  }
+  if (!isRemediableMissingZeroScoutProof(record)) return false
+  const nextRetryAt = record.nextRetryAt ? Date.parse(record.nextRetryAt) : Number.NaN
+  return !Number.isFinite(nextRetryAt) || nextRetryAt <= now
 }
 
 function parsedObjectParam(value: unknown): JsonRecord {
@@ -657,7 +672,7 @@ function validServicePayment(value: unknown): value is SmartTraderServicePayment
 }
 
 function paidAnalysisKey(transaction: string) {
-  return `polydesk:smart-trader:paid-analysis:${transaction.toLowerCase()}`
+  return `${PAID_ANALYSIS_PREFIX}${transaction.toLowerCase()}`
 }
 
 export async function bindSettledSmartTraderAnalysis(
@@ -1370,11 +1385,22 @@ export async function executeSettledSmartTraderDelivery(
   })
 
   const maximumAttempts = smartTraderMaxDeliveryAttempts(claimed)
+  let nextAttemptCount = smartTraderDeliveryAttemptCount(claimed)
+  let attemptStartedAt = Date.now()
   try {
     return await runBoundedSmartTraderDelivery({
       initialAttemptCount: smartTraderDeliveryAttemptCount(claimed),
       maximumAttempts,
-      run: () => runPolymarketSmartTrader(claimed.request, dependencies, claimed.payment),
+      run: () => {
+        nextAttemptCount += 1
+        attemptStartedAt = Date.now()
+        console.info('[smart-trader] paid delivery attempt started', {
+          transaction: claimed.payment.transaction,
+          attempt: nextAttemptCount,
+          maximumAttempts,
+        })
+        return runPolymarketSmartTrader(claimed.request, dependencies, claimed.payment)
+      },
       onAttempt: async ({ attemptCount, missingZeroScoutProof, exhausted, result }) => {
         const analysisData = result.ok && result.data.action === 'ANALYZE' ? result.data : null
         await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
@@ -1397,6 +1423,18 @@ export async function executeSettledSmartTraderDelivery(
             error: result.error,
           }),
         }))
+        console.info('[smart-trader] paid delivery attempt finished', {
+          transaction: claimed.payment.transaction,
+          attempt: attemptCount,
+          maximumAttempts,
+          durationMs: Date.now() - attemptStartedAt,
+          outcome: analysisData && !missingZeroScoutProof
+            ? 'proof_delivered'
+            : missingZeroScoutProof
+              ? exhausted ? 'proof_missing_exhausted' : 'proof_missing_retryable'
+              : 'delivery_failed',
+          decisionId: analysisData?.decision.decisionId,
+        })
       },
     })
   } catch (error) {
@@ -1410,6 +1448,66 @@ export async function executeSettledSmartTraderDelivery(
     }))
     throw error
   }
+}
+
+let smartTraderWorkerActive = false
+
+export async function recoverPendingSmartTraderDeliveries(
+  dependencies: SmartTraderDependencies = liveDependencies,
+  now = Date.now(),
+) {
+  if (!hasRenderDurableStore()) return { scanned: 0, eligible: 0, recovered: 0 }
+  const records = await listDurableJsonByPrefix<SmartTraderPaidAnalysisRecord>(PAID_ANALYSIS_PREFIX, 100)
+  const eligible = records.filter(record => (
+    record?.schema === 'polydesk-smart-trader-paid-analysis-v1'
+    && shouldRecoverSmartTraderDelivery(record, now)
+  )).slice(0, 4)
+  let recovered = 0
+  for (const record of eligible) {
+    const settledAt = Date.parse(record.settledAt)
+    if (Number.isFinite(settledAt) && now - settledAt >= DELIVERY_ALERT_AGE_MS) {
+      console.warn('[smart-trader] overdue paid delivery recovery', {
+        transaction: record.payment.transaction,
+        status: record.status,
+        ageMs: now - settledAt,
+        attemptCount: smartTraderDeliveryAttemptCount(record),
+        maximumAttempts: smartTraderMaxDeliveryAttempts(record),
+      })
+    }
+    try {
+      await executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer, dependencies)
+      recovered += 1
+    } catch (error) {
+      console.error('[smart-trader] durable paid delivery recovery failed', {
+        transaction: record.payment.transaction,
+        error: clean(error instanceof Error ? error.message : 'unknown delivery error'),
+      })
+    }
+  }
+  return { scanned: records.length, eligible: eligible.length, recovered }
+}
+
+export function startSmartTraderDeliveryWorker() {
+  if (!hasRenderDurableStore()) return
+  const intervalMs = Math.max(30_000, Number(process.env.SMART_TRADER_RECOVERY_INTERVAL_MS) || 60_000)
+  const sweep = async () => {
+    if (smartTraderWorkerActive) return
+    smartTraderWorkerActive = true
+    try {
+      const result = await recoverPendingSmartTraderDeliveries()
+      if (result.eligible) console.info('[smart-trader] durable recovery sweep', result)
+    } catch (error) {
+      console.error('[smart-trader] durable recovery sweep failed', {
+        error: clean(error instanceof Error ? error.message : 'unknown recovery error'),
+      })
+    } finally {
+      smartTraderWorkerActive = false
+    }
+  }
+  const startup = setTimeout(() => void sweep(), 2_000)
+  startup.unref()
+  const scheduled = setInterval(() => void sweep(), intervalMs)
+  scheduled.unref()
 }
 
 export default async function polymarketSmartTraderHandler(req: Request, res: Response) {
@@ -1509,11 +1607,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
   if (!record || record.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
     return res.status(404).json({ ok: false, error: 'No paid analysis record was found for this settlement transaction.' })
   }
-  const updatedAt = Date.parse(record.updatedAt)
-  const staleRunningDelivery = record.status === 'running'
-    && Number.isFinite(updatedAt)
-    && Date.now() - updatedAt >= 10 * 60_000
-  if (staleRunningDelivery || isRemediableMissingZeroScoutProof(record)) {
+  if (shouldRecoverSmartTraderDelivery(record)) {
     void executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer).catch(error => {
       console.error('[smart-trader] status-triggered paid delivery failed', {
         transaction: record.payment.transaction,

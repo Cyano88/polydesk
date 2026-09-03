@@ -40,6 +40,20 @@ export async function readDurableJson<T>(key: string): Promise<T | undefined> {
   return result.rows[0]?.value as T | undefined
 }
 
+export async function listDurableJsonByPrefix<T>(prefix: string, limit = 100): Promise<T[]> {
+  if (!pool) return []
+  await ensureSchema()
+  const boundedLimit = Math.max(1, Math.min(500, Math.floor(limit)))
+  const result = await pool.query(
+    `select value from render_durable_kv
+      where left(store_key, length($1)) = $1
+      order by updated_at asc
+      limit $2`,
+    [prefix, boundedLimit],
+  )
+  return result.rows.map(row => row.value as T)
+}
+
 export async function writeDurableJson(key: string, value: unknown): Promise<void> {
   await ensureSchema()
   await requirePool().query(

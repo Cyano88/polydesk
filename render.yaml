@@ -110,6 +110,8 @@ services:
         value: https://zeroscout.app
       - key: ZEROSCOUT_INTEGRATION_SECRET
         sync: false
+      - key: SMART_TRADER_RECOVERY_INTERVAL_MS
+        value: "60000"
 
       - key: DEFAULT_AGENT_SLUG
         value: polydesk-agent
