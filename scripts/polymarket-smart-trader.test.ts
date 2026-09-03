@@ -96,8 +96,8 @@ test('only a completed missing-ZeroScout-proof delivery is eligible for one reme
   assert.equal(isRemediableMissingZeroScoutProof(missingProof), true)
   assert.equal(hasMissingZeroScoutProofDelivery(missingProof.response), true)
   assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 3 }), true)
-  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 4 }), true)
-  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 5 }), false)
+  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 5 }), true)
+  assert.equal(isRemediableMissingZeroScoutProof({ ...missingProof, deliveryAttemptCount: 6 }), false)
   assert.equal(isRemediableMissingZeroScoutProof({
     ...missingProof,
     response: {

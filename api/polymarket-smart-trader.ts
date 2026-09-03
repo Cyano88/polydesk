@@ -160,7 +160,7 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 5
+export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 6
 
 export function hasMissingZeroScoutProofDelivery(response: unknown): boolean {
   if (!isRecord(response)) return false
