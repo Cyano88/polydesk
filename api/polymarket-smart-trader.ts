@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
-import { getGeneralResearchNews, getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
+import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import { hasRenderDurableStore, readDurableJson, writeDurableJson } from './render-durable-store.js'
-import { callZeroScoutIntelligence, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
+import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
 const CLOB_ORIGIN = 'https://clob.polymarket.com'
@@ -100,7 +100,7 @@ export type SmartTraderDependencies = {
   researchReady: () => Promise<void>
   research: (context: Record<string, unknown>) => Promise<ZeroScoutIntelligenceResult | null>
   sportsNews: (query: string) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
-  generalNews: (query: string) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
+  generalNews: (query: string, market: { conditionId: string; question?: string; title?: string; description?: string | null; resolutionSource?: string | null }) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
   now: () => number
   saveDecision: (decision: SmartTraderDecisionReceipt) => Promise<void>
   readDecision: (decisionId: string) => Promise<SmartTraderDecisionReceipt | null>
@@ -427,8 +427,14 @@ const liveDependencies: SmartTraderDependencies = {
       publishedAt: article.publishedAt,
     }))
   },
-  generalNews: async query => {
-    const articles = await getGeneralResearchNews(query)
+  generalNews: async (query, market) => {
+    const articles = await getZeroScoutGeneralResearch(query, {
+      conditionId: market.conditionId,
+      question: market.question || market.title || query,
+      description: market.description || undefined,
+      resolutionRules: market.description || market.question || market.title || query,
+      resolutionSource: market.resolutionSource || undefined,
+    })
     return articles.slice(0, 8).map(article => ({
       title: article.title,
       description: article.description,
@@ -490,7 +496,7 @@ export async function preflightPolymarketSmartTraderProviders(
       || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${evidenceMarket.question} ${input.query}`)
     const newsEvidence = likelySports
       ? await dependencies.sportsNews(evidenceQuery)
-      : await dependencies.generalNews(evidenceQuery)
+      : await dependencies.generalNews(evidenceQuery, evidenceMarket)
     if (!newsEvidence.length) {
       return {
         ok: false as const,
@@ -1008,7 +1014,7 @@ export async function runPolymarketSmartTrader(
   const likelySports = input.category === 'sports' || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${selected.market.title} ${input.query}`)
   const researchNews = likelySports
     ? await dependencies.sportsNews(input.query || selected.market.title).catch(() => [])
-    : await dependencies.generalNews(input.query || selected.market.title).catch(() => [])
+    : await dependencies.generalNews(input.query || selected.market.title, selected.market).catch(() => [])
   const research = await dependencies.research({
     proofClass: 'polydesk_smart_market_research',
     observedAt: new Date(dependencies.now()).toISOString(),
@@ -1111,7 +1117,7 @@ export async function runPolymarketSmartTrader(
         marketData: 'Polymarket Gamma and CLOB public APIs',
         smartMoney: selected.smartMoney,
         news: researchNews,
-        newsLane: likelySports ? 'sports-provider' : 'general-news-provider',
+        newsLane: likelySports ? 'sportmonks-sports' : 'zeroscout-general',
         zeroScout: research ? {
           id: research.id,
           summary: research.summary,

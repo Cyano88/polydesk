@@ -38,10 +38,8 @@ type CacheEntry = {
   }
 }
 
-const DEFAULT_QUERY = '(football OR soccer) AND (match OR league OR tournament)'
 const DEFAULT_CACHE_MS = 15 * 60 * 1000
 const FALLBACK_IMAGE = '/brand/world-globe.png'
-const DEFAULT_NEWS_API_URL = 'https://gnews.io/api/v4/search'
 const DEFAULT_SPORTMONKS_BASE = 'https://api.sportmonks.com/v3/football'
 
 const cache = new Map<string, CacheEntry>()
@@ -319,7 +317,8 @@ export function sportmonksNewsUrls(query: FootballNewsQuery = {}) {
   const base = process.env.POLY_STREAM_BASE_URL?.trim() || DEFAULT_SPORTMONKS_BASE
   const types = normalized.type === 'all' ? ['pre-match', 'post-match'] : [normalized.type || 'pre-match']
   return types.map(type => {
-    const url = new URL(`${base}/news/${type}`)
+    const providerType = type === 'post-match' ? 'postmatch' : 'prematch'
+    const url = new URL(`${base}/news/${providerType}`)
     url.searchParams.set('include', 'league;fixture;lines')
     url.searchParams.set('order', 'desc')
     url.searchParams.set('per_page', '25')
@@ -340,6 +339,11 @@ async function fetchSportmonksArticles(query: FootballNewsQuery): Promise<PolyWo
     if (!response.ok) throw new Error(`Sportmonks News returned ${response.status}`)
     return extractArticles(await response.json())
   }))
+  const fulfilled = responses.filter((result): result is PromiseFulfilledResult<ProviderArticle[]> => result.status === 'fulfilled')
+  if (!fulfilled.length) {
+    const rejected = responses.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    throw rejected?.reason instanceof Error ? rejected.reason : new Error('Sportmonks News request failed')
+  }
   const normalized = responses
     .filter((result): result is PromiseFulfilledResult<ProviderArticle[]> => result.status === 'fulfilled')
     .flatMap(result => result.value)
@@ -350,72 +354,6 @@ async function fetchSportmonksArticles(query: FootballNewsQuery): Promise<PolyWo
     ...article,
     polymarketMarkets: await relatedPolymarketMarkets(article).catch(() => []),
   })))
-}
-
-async function fetchProviderArticles(
-  query: FootballNewsQuery = {},
-  requireExactTerms = true,
-  requireFootball = true,
-): Promise<PolyWorldCupArticle[]> {
-  const apiKey = envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY')
-  const configuredUrl = envValue('POLY_NEWS_API_URL', 'NEWS_API_URL')
-  const apiUrl = configuredUrl || (apiKey ? DEFAULT_NEWS_API_URL : '')
-  if (!apiUrl) return []
-
-  const url = new URL(apiUrl)
-  const queryParam = process.env.POLY_NEWS_QUERY_PARAM?.trim() || 'q'
-  const limitParam = process.env.POLY_NEWS_LIMIT_PARAM?.trim() || 'max'
-  const requestedTerms = [query.team, query.league].filter(Boolean).join(' ')
-  if (!url.searchParams.has(queryParam)) url.searchParams.set(queryParam, requestedTerms || envValue('POLY_NEWS_QUERY', 'NEWS_QUERY') || DEFAULT_QUERY)
-  if (!url.searchParams.has(limitParam)) url.searchParams.set(limitParam, process.env.POLY_NEWS_LIMIT?.trim() || '10')
-  if (!url.searchParams.has('lang')) url.searchParams.set('lang', process.env.POLY_NEWS_LANG?.trim() || 'en')
-
-  const headers: Record<string, string> = { Accept: 'application/json' }
-  const authHeader = process.env.POLY_NEWS_API_AUTH_HEADER?.trim()
-  if (apiKey && authHeader) {
-    headers[authHeader] = apiKey
-  } else if (apiKey) {
-    const keyParam = process.env.POLY_NEWS_API_KEY_PARAM?.trim() || 'apikey'
-    if (!url.searchParams.has(keyParam)) url.searchParams.set(keyParam, apiKey)
-  }
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-  try {
-    const response = await fetch(url, { headers, signal: controller.signal })
-    if (!response.ok) throw new Error(`News provider returned ${response.status}`)
-    const payload = await response.json()
-    const normalized = (extractArticles(payload).map(article => normalizeArticle(article, requireFootball)).filter(Boolean) as PolyWorldCupArticle[])
-      .filter(article => {
-        if (!requireExactTerms) return true
-        const text = normalizeSearchText(`${article.title} ${article.description}`)
-        const team = normalizeSearchText(query.team || '')
-        const league = normalizeSearchText(query.league || '')
-        return (!team || text.includes(team)) && (!league || text.includes(league))
-      })
-      .sort((a, b) => articleTimeValue(b) - articleTimeValue(a))
-      .slice(0, 10)
-    return Promise.all(normalized.map(async article => ({
-      ...article,
-      polymarketMarkets: await relatedPolymarketMarkets(article).catch(() => []),
-    })))
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-export async function getGeneralResearchNews(query: string): Promise<PolyWorldCupArticle[]> {
-  // GNews rejects unquoted special characters (including the question mark
-  // commonly present in Polymarket titles). General research uses plain
-  // keyword search, so remove punctuation before constructing the provider URL.
-  const requested = asString(query)
-    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 180)
-  if (!requested) return []
-  return fetchProviderArticles({ team: requested }, false, false)
 }
 
 export async function getPolyWorldcupNewsFeed(requestedQuery: FootballNewsQuery = {}) {
@@ -433,22 +371,17 @@ export async function getPolyWorldcupNewsFeed(requestedQuery: FootballNewsQuery 
   }
 
   const sportmonksConfigured = Boolean(envValue('POLY_STREAM_API_KEY', 'SPORTS_API_KEY'))
-  const fallbackConfigured = Boolean(envValue('POLY_NEWS_API_KEY', 'NEWS_API_KEY') || envValue('POLY_NEWS_API_URL', 'NEWS_API_URL'))
-  const providerConfigured = sportmonksConfigured || fallbackConfigured
+  const providerConfigured = sportmonksConfigured
   try {
     const sportmonksArticles = sportmonksConfigured
-      ? await fetchSportmonksArticles(query).catch(() => [])
+      ? await fetchSportmonksArticles(query)
       : []
-    const providerArticles = sportmonksArticles.length
-      ? sportmonksArticles
-      : await fetchProviderArticles(query)
+    const providerArticles = sportmonksArticles
     const articles = dedupeArticles(providerArticles)
     const feed = {
       ok: true as const,
       providerConfigured,
-      source: sportmonksArticles.length
-        ? 'sportmonks'
-        : providerArticles.length ? envValue('POLY_NEWS_PROVIDER', 'NEWS_PROVIDER') || 'gnews' : 'unavailable',
+      source: sportmonksArticles.length ? 'sportmonks' : 'unavailable',
       mode: providerArticles.length ? 'live' as const : 'unavailable' as const,
       updatedAt: new Date().toISOString(),
       freshnessSeconds: 0,

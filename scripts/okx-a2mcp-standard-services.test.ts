@@ -10,7 +10,7 @@ import okxA2mcpStandardServiceHandler, {
   preflightSmartTraderBeforeSettlement,
   smartTraderRequestInput,
 } from '../api/okx-a2mcp-standard-services.js'
-import { polyDeskAgentServices } from '../api/a2mcp-services.js'
+import { polyDeskAgentServices, polyDeskOkxMarketplacePlan } from '../api/a2mcp-services.js'
 
 test('public service catalog documents optional football relevance filters', () => {
   const services = polyDeskAgentServices()
@@ -19,6 +19,18 @@ test('public service catalog documents optional football relevance filters', () 
   assert.ok(matchData?.input.includes('optional exact team name'))
   assert.ok(news?.input.includes('optional exact team name'))
   assert.ok(news?.input.includes('optional league name'))
+})
+
+test('catalog exposes the four-service OKX AI migration plan without removing compatibility routes', () => {
+  assert.equal(polyDeskOkxMarketplacePlan.length, 4)
+  assert.deepEqual(polyDeskOkxMarketplacePlan.map(service => service.name), [
+    'PolyDesk Agent Trade Rail',
+    'PolyDesk Market Intelligence',
+    'PolyDesk Trader Intelligence and Governed Copy',
+    'PolyDesk Research Mission',
+  ])
+  assert.deepEqual(polyDeskOkxMarketplacePlan.map(service => service.type), ['A2MCP', 'A2MCP', 'A2MCP', 'A2A'])
+  assert.ok(polyDeskAgentServices().length >= 6)
 })
 
 test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => {

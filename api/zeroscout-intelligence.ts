@@ -73,6 +73,22 @@ type ZeroScoutCallOptions = {
   timeoutMs?: number
 }
 
+export type ZeroScoutGeneralResearchArticle = {
+  title: string
+  description: string
+  source: string
+  url: string
+  publishedAt: string
+}
+
+export type ZeroScoutGeneralResearchMarket = {
+  conditionId: string
+  question: string
+  description?: string
+  resolutionRules: string
+  resolutionSource?: string
+}
+
 type ZeroScoutReadinessRequest = Pick<ZeroScoutPayload, 'analysisType' | 'proofClass'>
 
 function sleep(ms: number) {
@@ -253,6 +269,79 @@ export async function callZeroScoutIntelligence(payload: ZeroScoutPayload, optio
     }
   }
   throw lastError instanceof Error ? lastError : new Error('ZeroScout request failed.')
+}
+
+export async function getZeroScoutGeneralResearch(
+  query: string,
+  market: ZeroScoutGeneralResearchMarket,
+): Promise<ZeroScoutGeneralResearchArticle[]> {
+  const endpoint = configuredEndpoint('/api/integrations/polydesk-general-research')
+  const secret = (process.env.ZEROSCOUT_INTEGRATION_SECRET ?? '').trim()
+  if (!secret) {
+    const error = new Error('ZeroScout integration is not configured. Set ZEROSCOUT_INTEGRATION_SECRET on the server.') as Error & { status?: number }
+    error.status = 503
+    throw error
+  }
+  const body = JSON.stringify({
+    schema: 'zeroscout.polydesk-general-research.request',
+    schemaVersion: '1.0.0',
+    query,
+    market,
+  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Math.min(15_000, REQUEST_TIMEOUT_MS))
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer ' + secret,
+        'x-hashpaylink-request-id': cryptoRandomId(),
+        'x-hashpaylink-analysis-type': 'polydesk-general-research',
+      },
+      body,
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    let json: Record<string, unknown>
+    try {
+      json = text ? JSON.parse(text) as Record<string, unknown> : {}
+    } catch {
+      const error = new Error('ZeroScout general research returned a non-JSON response: ' + text.slice(0, 180)) as Error & { status?: number }
+      error.status = 502
+      throw error
+    }
+    if (!response.ok) {
+      const message = typeof json.error === 'string' ? json.error : 'ZeroScout general research failed with HTTP ' + response.status
+      const error = new Error(message) as Error & { status?: number }
+      error.status = response.status
+      throw error
+    }
+    if (
+      json.schema !== 'zeroscout.polydesk-general-research.result'
+      || json.schemaVersion !== '1.0.0'
+      || json.provider !== 'ZeroScout'
+      || json.lane !== 'general-market'
+      || !Array.isArray(json.articles)
+    ) {
+      const error = new Error('ZeroScout general research returned an invalid structured response.') as Error & { status?: number }
+      error.status = 502
+      throw error
+    }
+    return json.articles
+      .map(value => value && typeof value === 'object' ? value as Record<string, unknown> : {})
+      .map(value => ({
+        title: typeof value.title === 'string' ? value.title.trim() : '',
+        description: typeof value.description === 'string' ? value.description.trim() : '',
+        source: typeof value.source === 'string' ? value.source.trim() : '',
+        url: typeof value.url === 'string' ? value.url.trim() : '',
+        publishedAt: typeof value.publishedAt === 'string' ? value.publishedAt.trim() : '',
+      }))
+      .filter(article => Boolean(article.title && article.description && article.source && /^https?:\/\//i.test(article.url)))
+      .slice(0, 8)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function cryptoRandomId() {

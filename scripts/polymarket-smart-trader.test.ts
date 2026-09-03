@@ -383,17 +383,21 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
   assert.equal((received.market as Record<string, unknown>).description, 'Resolves Yes if Team A wins the final.')
 })
 
-test('ANALYZE uses the configured general-news provider outside sports', async () => {
+test('ANALYZE routes non-sports evidence through ZeroScout general research', async () => {
+  let receivedMarket: Record<string, unknown> | undefined
   const deps = dependencies({
     resolveMarket: async () => [market({ category: 'politics', question: 'Will the proposal pass?' })],
     sportsNews: async () => { throw new Error('sports provider must not be used') },
-    generalNews: async () => [{
+    generalNews: async (_query, selectedMarket) => {
+      receivedMarket = selectedMarket
+      return [{
       title: 'Proposal enters final vote',
       description: 'The latest sourced update.',
-      source: 'GNews provider',
+      source: 'ZeroScout cited publisher',
       url: 'https://example.com/proposal',
       publishedAt: new Date(now - 60_000).toISOString(),
-    }],
+      }]
+    },
   })
   const result = await runPolymarketSmartTrader({
     action: 'ANALYZE',
@@ -404,8 +408,10 @@ test('ANALYZE uses the configured general-news provider outside sports', async (
   }, deps)
   assert.equal(result.ok, true)
   if (!result.ok) return
-  assert.equal(result.data.evidence.newsLane, 'general-news-provider')
+  assert.equal(result.data.evidence.newsLane, 'zeroscout-general')
   assert.equal(result.data.evidence.news.length, 1)
+  assert.equal(receivedMarket?.conditionId, conditionId)
+  assert.match(String(receivedMarket?.description), /Resolves Yes/)
 })
 
 test('PREPARE returns a preview-only official plugin handoff and performs no signing', async () => {

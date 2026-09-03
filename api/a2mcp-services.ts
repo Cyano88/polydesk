@@ -106,6 +106,48 @@ export function polyDeskAgentServices() {
   return services
 }
 
+export const polyDeskOkxMarketplacePlan = [
+  {
+    id: 'polydesk-agent-trade-rail',
+    name: 'PolyDesk Agent Trade Rail',
+    type: 'A2MCP',
+    role: 'Flagship bundled workflow',
+    capabilityEndpoints: [
+      '/api/a2mcp/polymarket-smart-trader',
+      '/api/a2mcp/polymarket-funding-link',
+      '/api/a2mcp/polymarket-agent-flow',
+    ],
+    launchState: 'building',
+  },
+  {
+    id: 'polydesk-market-intelligence',
+    name: 'PolyDesk Market Intelligence',
+    type: 'A2MCP',
+    role: 'Evidence-backed market analysis and durable decision receipt',
+    capabilityEndpoints: ['/api/a2mcp/polymarket-smart-trader'],
+    launchState: 'migration-ready',
+  },
+  {
+    id: 'polydesk-trader-intelligence',
+    name: 'PolyDesk Trader Intelligence and Governed Copy',
+    type: 'A2MCP',
+    role: 'Public-wallet analysis, position ranking, and bounded copy preparation',
+    capabilityEndpoints: [
+      '/api/a2mcp/polymarket-portfolio-watch',
+      '/api/a2mcp/polymarket-smart-trader',
+    ],
+    launchState: 'building',
+  },
+  {
+    id: 'polydesk-research-mission',
+    name: 'PolyDesk Research Mission',
+    type: 'A2A',
+    role: 'Custom multi-market, trader, or strategy investigation',
+    capabilityEndpoints: [],
+    launchState: 'requires-marketplace-migration',
+  },
+] as const
+
 export default function a2mcpServicesHandler(_req: Request, res: Response) {
   res.json({
     ok: true,
@@ -113,7 +155,9 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     agentId: 5427,
     protocol: 'OKX Agent Payments Protocol',
     baseUrl: String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, ''),
-    summary: 'Six focused services: football data, football news, LP research, smart-market analysis, verified funding, and governed buyer-controlled trading.',
+    summary: 'PolyDesk is consolidating its existing capabilities into four OKX AI marketplace services led by the Agent Trade Rail.',
+    marketplacePlan: polyDeskOkxMarketplacePlan,
+    compatibilityServices: services,
     rule: 'Every service returns machine-readable JSON. Each registered marketplace route issues a non-zero x402 challenge and returns its result only on the paid replay.',
     services,
     docs: '/docs/okx-ai',

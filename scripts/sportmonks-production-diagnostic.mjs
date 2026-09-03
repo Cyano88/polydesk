@@ -14,6 +14,8 @@ const requests = [
   ['leagues', `${base}/leagues`],
   ['range', `${base}/fixtures/between/${isoDate(-7)}/${isoDate(21)}?include=participants;state;scores;league&per_page=50`],
   ['configured-leagues', `${base}/fixtures/between/${isoDate(-7)}/${isoDate(21)}?include=participants;state;scores;league&per_page=50&filters=fixtureLeagues:${configuredLeagueIds}`],
+  ['prematch-news', `${base}/news/prematch?include=league;fixture;lines&per_page=5`],
+  ['postmatch-news', `${base}/news/postmatch?include=league;fixture;lines&per_page=5`],
 ]
 
 for (const [name, rawUrl] of requests) {

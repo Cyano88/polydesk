@@ -2,56 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Request } from 'express'
 import {
-  getGeneralResearchNews,
   getPolyWorldcupNewsFeed,
   requestFootballNewsQuery,
   sportmonksNewsUrls,
 } from '../api/poly-worldcup-news.js'
 
-test('general research news retains non-football provider articles', async () => {
-  const previous = {
-    key: process.env.NEWS_API_KEY,
-    url: process.env.NEWS_API_URL,
-  }
-  const originalFetch = globalThis.fetch
-  process.env.NEWS_API_KEY = 'test-key'
-  process.env.NEWS_API_URL = 'https://gnews.io/api/v4/search'
-  globalThis.fetch = async input => {
-    const url = String(input)
-    if (url.startsWith('https://gamma-api.polymarket.com/')) {
-      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
-    }
-    assert.equal(new URL(url).searchParams.get('q'), 'Federal Reserve September decision')
-    return new Response(JSON.stringify({
-      articles: [{
-        title: 'Federal Reserve officials weigh September interest-rate decision',
-        description: 'Policy makers are reviewing inflation and employment data.',
-        url: 'https://example.com/fed-september',
-        publishedAt: '2026-09-02T12:00:00.000Z',
-        source: { name: 'Example News' },
-      }],
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  }
-
-  try {
-    const articles = await getGeneralResearchNews('Federal Reserve: September decision?')
-    assert.equal(articles.length, 1)
-    assert.match(articles[0].title, /Federal Reserve/)
-    assert.equal(articles[0].tag, 'News')
-  } finally {
-    globalThis.fetch = originalFetch
-    if (previous.key === undefined) delete process.env.NEWS_API_KEY
-    else process.env.NEWS_API_KEY = previous.key
-    if (previous.url === undefined) delete process.env.NEWS_API_URL
-    else process.env.NEWS_API_URL = previous.url
-  }
-})
-
 test('Sportmonks news uses official preview and recap endpoints', () => {
   const urls = sportmonksNewsUrls({ league: 'La Liga', type: 'all' }).map(value => new URL(value))
   assert.deepEqual(urls.map(url => url.pathname), [
-    '/v3/football/news/pre-match',
-    '/v3/football/news/post-match',
+    '/v3/football/news/prematch',
+    '/v3/football/news/postmatch',
   ])
   for (const url of urls) {
     assert.equal(url.searchParams.get('include'), 'league;fixture;lines')
@@ -81,7 +41,7 @@ test('Sportmonks is primary and a filtered response cannot leak unrelated news',
     if (url.startsWith('https://gamma-api.polymarket.com/')) {
       return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
-    if (url.includes('/news/post-match')) {
+    if (url.includes('/news/postmatch')) {
       return new Response('{"data":[]}', { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
     return new Response(JSON.stringify({
@@ -122,5 +82,33 @@ test('Sportmonks is primary and a filtered response cannot leak unrelated news',
     else process.env.POLY_STREAM_API_KEY = previous.key
     if (previous.fallbackKey === undefined) delete process.env.POLY_NEWS_API_KEY
     else process.env.POLY_NEWS_API_KEY = previous.fallbackKey
+  }
+})
+
+test('sports news fails closed instead of falling back to a general-news provider', async () => {
+  const previous = {
+    sportmonks: process.env.POLY_STREAM_API_KEY,
+    general: process.env.POLY_NEWS_API_KEY,
+  }
+  const originalFetch = globalThis.fetch
+  process.env.POLY_STREAM_API_KEY = 'test-key'
+  process.env.POLY_NEWS_API_KEY = 'must-not-be-used'
+  globalThis.fetch = async input => {
+    const url = String(input)
+    assert.match(url, /api\.sportmonks\.com/)
+    return new Response('{"data":[]}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  try {
+    const feed = await getPolyWorldcupNewsFeed({ team: 'No Fallback FC', type: 'all' })
+    assert.equal(feed.mode, 'unavailable')
+    assert.equal(feed.source, 'unavailable')
+    assert.equal(feed.articles.length, 0)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (previous.sportmonks === undefined) delete process.env.POLY_STREAM_API_KEY
+    else process.env.POLY_STREAM_API_KEY = previous.sportmonks
+    if (previous.general === undefined) delete process.env.POLY_NEWS_API_KEY
+    else process.env.POLY_NEWS_API_KEY = previous.general
   }
 })
