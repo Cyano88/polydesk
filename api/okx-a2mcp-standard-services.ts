@@ -19,6 +19,7 @@ import a2mcpPolymarketGovernedOpenHandler, {
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
 import polymarketSmartTraderHandler, {
+  bindSettledSmartTraderAnalysis,
   checkPolymarketSmartTraderOperational,
   polymarketSmartTraderReady,
   preflightPolymarketSmartTraderProviders,
@@ -922,6 +923,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   const path = routePath(req) as StandardServicePath
   const service = serviceDefinitions[path]
   if (!service) return res.status(404).json({ ok: false, error: 'OKX A2MCP service not found' })
+  let smartTraderBody: Record<string, unknown> | undefined
   if (path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores') {
     const body = isRecord(req.body) ? req.body : {}
     const requestedDate = clean(req.query.date) || clean(body.date) || new Date().toISOString().slice(0, 10)
@@ -988,6 +990,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
   }
   if (path === '/api/a2mcp/polymarket-smart-trader') {
     const body = smartTraderRequestInput(req)
+    smartTraderBody = body
     req.body = body
     const hasPaymentProof = Boolean(req.headers['payment-signature'] || req.headers['x-payment'])
     // Preserve empty marketplace discovery probes so buyer tooling can receive
@@ -1046,6 +1049,22 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
       kind: 'okx_agent_payments_x402',
       seller: requirements.payTo,
       serviceUrl: path,
+    }
+    if (path === '/api/a2mcp/polymarket-smart-trader') {
+      if (!smartTraderBody) throw new Error('The paid Smart Market Trader request body is unavailable.')
+      const boundAnalysis = await bindSettledSmartTraderAnalysis(smartTraderBody, {
+        provider: 'OKX Agent Payments Protocol',
+        transaction: clean(paidReq.payment.transaction),
+        payer: clean(paidReq.payment.payer),
+        amountAtomic: clean(paidReq.payment.amount),
+        network: 'X Layer',
+        serviceUrl: '/api/a2mcp/polymarket-smart-trader',
+      })
+      if (boundAnalysis.status === 'completed' && boundAnalysis.response) {
+        for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
+        res.setHeader('X-PolyDesk-Idempotent-Replay', 'true')
+        return res.status(200).json(boundAnalysis.response)
+      }
     }
     res.once('finish', () => {
       if (res.statusCode < 200 || res.statusCode >= 300) return

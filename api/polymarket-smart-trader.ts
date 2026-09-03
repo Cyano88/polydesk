@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
-import { hasRenderDurableStore, readDurableJson, writeDurableJson } from './render-durable-store.js'
+import { hasRenderDurableStore, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
@@ -133,6 +133,20 @@ type ParsedRequest = {
     maximumSpendUsdc: number
     maximumShares: number
   }
+}
+
+export type SmartTraderPaidAnalysisRecord = {
+  schema: 'polydesk-smart-trader-paid-analysis-v1'
+  status: 'settled' | 'running' | 'completed' | 'failed'
+  requestHash: string
+  request: ParsedRequest
+  payment: SmartTraderServicePayment
+  settledAt: string
+  updatedAt: string
+  decisionId?: string
+  analysisHash?: string
+  response?: JsonRecord
+  error?: string
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -583,6 +597,68 @@ function validServicePayment(value: unknown): value is SmartTraderServicePayment
     && amountAtomic === 300_000n
     && value.network === 'X Layer'
     && value.serviceUrl === '/api/a2mcp/polymarket-smart-trader'
+}
+
+function paidAnalysisKey(transaction: string) {
+  return `polydesk:smart-trader:paid-analysis:${transaction.toLowerCase()}`
+}
+
+export async function bindSettledSmartTraderAnalysis(
+  raw: unknown,
+  payment: SmartTraderServicePayment,
+): Promise<SmartTraderPaidAnalysisRecord> {
+  const record = buildSettledSmartTraderAnalysisRecord(raw, payment)
+  return mutateDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(payment.transaction), current => {
+    if (current?.requestHash && current.requestHash !== record.requestHash) {
+      throw new Error('This settlement transaction is already bound to a different analysis request.')
+    }
+    return current || record
+  })
+}
+
+export function buildSettledSmartTraderAnalysisRecord(
+  raw: unknown,
+  payment: SmartTraderServicePayment,
+  now = Date.now(),
+): SmartTraderPaidAnalysisRecord {
+  const parsed = parseRequest(raw)
+  if (!parsed.ok) throw new Error(parsed.error)
+  if (parsed.value.action !== 'ANALYZE') throw new Error('Only ANALYZE can be bound to a settled analysis payment.')
+  if (!validServicePayment(payment)) throw new Error('The settled analysis payment metadata is invalid.')
+  const request = JSON.parse(JSON.stringify(parsed.value)) as ParsedRequest
+  const requestHash = stableHash(request)
+  const settledAt = new Date(now).toISOString()
+  return {
+    schema: 'polydesk-smart-trader-paid-analysis-v1',
+    status: 'settled',
+    requestHash,
+    request,
+    payment,
+    settledAt,
+    updatedAt: settledAt,
+  }
+}
+
+export async function completeSettledSmartTraderAnalysis(
+  payment: SmartTraderServicePayment,
+  decision: SmartTraderDecisionReceipt,
+  response: JsonRecord,
+) {
+  await mutateDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(payment.transaction), current => {
+    if (!current) throw new Error('The settled analysis request was not persisted before delivery.')
+    if (current.payment.payer.toLowerCase() !== payment.payer.toLowerCase()) {
+      throw new Error('The settled analysis payer does not match the persisted request.')
+    }
+    return {
+      ...current,
+      status: 'completed',
+      decisionId: decision.decisionId,
+      analysisHash: decision.analysisHash,
+      response,
+      updatedAt: new Date().toISOString(),
+      error: undefined,
+    }
+  })
 }
 
 export function validateSmartTraderDecisionReceipt(
@@ -1073,13 +1149,14 @@ export async function runPolymarketSmartTrader(
     ...(tradeAssessment && (!tradeStance || !evidenceQuality) ? ['ZeroScout returned an invalid direct-trade assessment enum.'] : []),
     ...(research && normalizedResearchConfidence < 50 ? ['ZeroScout confidence is below the execution-preparation threshold.'] : []),
   ]
-  const decisionId = decisionIdFor(dependencies.decisionNonce(), now, selected.market.conditionId, selected.outcome.tokenId)
+  const decisionNow = dependencies.now()
+  const decisionId = decisionIdFor(dependencies.decisionNonce(), decisionNow, selected.market.conditionId, selected.outcome.tokenId)
   const decision: SmartTraderDecisionReceipt = {
     schema: 'polydesk-smart-trader-decision-v2',
     decisionId,
     decision: selected.eligible && Boolean(input.side) && supportedTradeAssessment && validServicePayment(servicePayment) ? 'APPROVE' : 'ESCALATE',
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + DECISION_TTL_MS).toISOString(),
+    createdAt: new Date(decisionNow).toISOString(),
+    expiresAt: new Date(decisionNow + DECISION_TTL_MS).toISOString(),
     analysisHash: '',
     market: {
       conditionId: selected.market.conditionId,
@@ -1186,6 +1263,9 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
     const { status, ...body } = result
     return res.status(status).json(body)
   }
+  if (servicePayment && validServicePayment(servicePayment) && result.data.action === 'ANALYZE') {
+    await completeSettledSmartTraderAnalysis(servicePayment, result.data.decision, result.data)
+  }
   return res.status(result.status).json(result.data)
 }
 
@@ -1205,4 +1285,32 @@ export async function polymarketSmartTraderDecisionHandler(req: Request, res: Re
   } catch {
     return res.status(503).json({ ok: false, error: 'Durable decision storage is unavailable.' })
   }
+}
+
+export async function polymarketSmartTraderPaymentStatusHandler(req: Request, res: Response) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return res.status(405).json({ ok: false, error: 'Use GET for paid analysis status.' })
+  }
+  const transaction = clean(req.params.transaction, 200)
+  if (!/^0x[a-fA-F0-9]{64}$/.test(transaction)) {
+    return res.status(400).json({ ok: false, error: 'Invalid settlement transaction.' })
+  }
+  const record = await readDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(transaction))
+  if (!record || record.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
+    return res.status(404).json({ ok: false, error: 'No paid analysis record was found for this settlement transaction.' })
+  }
+  return res.status(200).json({
+    ok: true,
+    transaction: transaction.toLowerCase(),
+    status: record.status,
+    decisionId: record.decisionId || null,
+    analysisHash: record.analysisHash || null,
+    decisionUrl: record.decisionId
+      ? `/api/a2mcp/polymarket-smart-trader/decision/${record.decisionId}`
+      : null,
+    settledAt: record.settledAt,
+    updatedAt: record.updatedAt,
+    error: record.status === 'failed' ? clean(record.error, 300) : null,
+  })
 }

@@ -29,7 +29,7 @@ import polymarketBuilderHandoffHandler from './api/polymarket-builder-handoff.js
 import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
-import { polymarketSmartTraderDecisionHandler } from './api/polymarket-smart-trader.js'
+import { polymarketSmartTraderDecisionHandler, polymarketSmartTraderPaymentStatusHandler } from './api/polymarket-smart-trader.js'
 import polymarketCopyPrepareHandler from './api/polymarket-copy-prepare.js'
 import polymarketAgentFlowHandler from './api/polymarket-agent-flow.js'
 import polymarketAccountReadinessHandler from './api/polymarket-account-readiness.js'
@@ -183,6 +183,7 @@ app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardSer
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/a2mcp/polymarket-smart-trader', strictLimiter, okxA2mcpStandardServiceHandler)
 app.get('/api/a2mcp/polymarket-smart-trader/decision/:decisionId', readLimiter, polymarketSmartTraderDecisionHandler)
+app.get('/api/a2mcp/polymarket-smart-trader/payment/:transaction', readLimiter, polymarketSmartTraderPaymentStatusHandler)
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)
 app.post('/api/a2mcp/polymarket-agent-flow', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/polymarket-governed-open/authorize', strictLimiter, polymarketGovernedOpenAuthorizationHandler)

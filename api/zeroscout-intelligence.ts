@@ -63,8 +63,8 @@ export type ZeroScoutIntelligenceResult = {
 
 const MAX_PAYLOAD_BYTES = 96_000
 const DEFAULT_INTELLIGENCE_PATH = '/api/integrations/intelligence'
-const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.ZEROSCOUT_REQUEST_TIMEOUT_MS ?? 120_000) || 120_000)
-const RETRY_ATTEMPTS = Math.max(0, Math.min(3, Number(process.env.ZEROSCOUT_RETRY_ATTEMPTS ?? 1) || 0))
+const REQUEST_TIMEOUT_MS = Math.max(1000, Number(process.env.ZEROSCOUT_REQUEST_TIMEOUT_MS ?? 75_000) || 75_000)
+const RETRY_ATTEMPTS = Math.max(0, Math.min(3, Number(process.env.ZEROSCOUT_RETRY_ATTEMPTS ?? 0) || 0))
 const RETRY_DELAY_MS = Math.max(100, Number(process.env.ZEROSCOUT_RETRY_DELAY_MS ?? 500) || 500)
 
 type ZeroScoutCallOptions = {
