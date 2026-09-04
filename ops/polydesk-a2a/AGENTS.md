@@ -35,7 +35,16 @@ Create a temporary JSON request containing only:
 
 Never place a private key, seed phrase, password, API secret, reusable authorization, CLOB credential, operator key, or bearer token in the request. Never invent a missing wallet, cap, price, expiry, market, outcome, or buyer agent ID. Ask the buyer for a missing public field through the task's returned communication script.
 
-Service `38496` is the managed monitoring subscription. It must never invoke this bounded BUY worker. Route it only to the dedicated subscription adapter after that adapter has passed the production acceptance gate.
+Service `38496` is the managed monitoring subscription. It must never invoke this bounded BUY worker. Its immutable service ID is `09b9ee03-1273-4b8e-91df-c713b44c641d`.
+
+For an accepted `38496` subscription, collect only the public portfolio address, email, integration source, loss and profit thresholds, alert toggles, and digest schedule. Build a `polydesk-managed-agent-subscription-v1` JSON request. The action is `enroll` for first setup or `update_preferences` for a complete replacement. Copy the real `jobId` and `buyerAgentId`; never invent them. Run:
+
+```bash
+cd /opt/polydesk-a2a/app
+npm run managed-agent:operator -- --request /tmp/polydesk-managed-agent-request.json
+```
+
+The operator independently intersects both official OKX subscription directories and requires the exact provider and immutable service ID before enrollment, preference updates, or resume. An `email_confirmation_required` response is not active monitoring. Pause, cancellation, missing-directory reconciliation, and expiry disable future monitoring. This subscription grants no trading authority.
 
 Run:
 

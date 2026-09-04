@@ -1,0 +1,28 @@
+[Unit]
+Description=PolyDesk managed Polymarket subscription reconciler
+After=network-online.target polydesk-a2a-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polydesk
+Group=polydesk
+WorkingDirectory=/opt/polydesk-a2a/app
+Environment=HOME=/home/polydesk
+Environment=PATH=/home/polydesk/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/polydesk-a2a/worker.env
+ExecStart=/usr/bin/npm run managed-agent:operator
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/polydesk-a2a /home/polydesk
+
+[Install]
+WantedBy=multi-user.target

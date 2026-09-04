@@ -1,0 +1,28 @@
+{
+  "schema": "polydesk-managed-agent-subscription-v1",
+  "action": "enroll",
+  "subscription": {
+    "jobId": "COPY_FROM_ACCEPTED_OKX_SUBSCRIPTION",
+    "providerAgentId": "5427",
+    "serviceListingId": "38496",
+    "serviceId": "09b9ee03-1273-4b8e-91df-c713b44c641d",
+    "buyerAgentId": "COPY_FROM_ACCEPTED_OKX_SUBSCRIPTION",
+    "status": "active",
+    "periodStartAt": "COPY_FROM_OFFICIAL_OKX_DIRECTORY",
+    "periodEndAt": "COPY_FROM_OFFICIAL_OKX_DIRECTORY"
+  },
+  "preferences": {
+    "address": "0x0000000000000000000000000000000000000000",
+    "email": "user@example.com",
+    "integrationSource": "okx-ai",
+    "lossThresholdPercent": 50,
+    "profitThresholdPercent": 50,
+    "newPositionAlertsEnabled": true,
+    "resolvedAlertsEnabled": true,
+    "claimableAlertsEnabled": true,
+    "digestFrequency": "daily",
+    "digestTimezone": "Africa/Lagos",
+    "digestHourLocal": 8,
+    "digestWeekday": 1
+  }
+}

@@ -38,6 +38,7 @@ import { startPolymarketAlertMonitor } from './api/polymarket-alert-monitor.js'
 import polymarketRelayerBuilderSignerHandler from './api/polymarket-relayer-builder-signer.js'
 import polymarketSubmitOrderHandler from './api/polymarket-submit-order.js'
 import polydeskA2aTradingAgentHandler, { polydeskA2aTradingReceiptHandler } from './api/polydesk-a2a-trading-agent.js'
+import polydeskManagedAgentSubscriptionHandler from './api/polydesk-managed-agent-subscription.js'
 import polydeskMarketContextHandler, {
   createPolydeskMarketContextHealthHandler,
 } from './api/polydesk-market-context.js'
@@ -166,6 +167,7 @@ app.post('/api/polymarket-relayer-builder-signer', strictLimiter, polymarketRela
 app.post('/api/polymarket-submit-order', strictLimiter, polymarketSubmitOrderHandler)
 app.all('/api/a2a/polydesk-trading-agent', strictLimiter, polydeskA2aTradingAgentHandler)
 app.get('/api/a2a/polydesk-trading-agent/receipt/:missionId', readLimiter, polydeskA2aTradingReceiptHandler)
+app.post('/api/a2a/polydesk-managed-agent', strictLimiter, polydeskManagedAgentSubscriptionHandler)
 if (process.env.POLYDESK_MARKET_CONTEXT_ENABLED === 'true') {
   app.get(
     '/api/agent/polymarket-context/health',

@@ -41,6 +41,9 @@ install -o polydesk -g polydesk -m 0640 \
 install -o root -g root -m 0644 \
   /opt/polydesk-a2a/app/ops/polydesk-a2a/polydesk-a2a-daemon.service \
   /etc/systemd/system/polydesk-a2a-daemon.service
+install -o root -g root -m 0644 \
+  /opt/polydesk-a2a/app/ops/polydesk-a2a/polydesk-managed-agent.service \
+  /etc/systemd/system/polydesk-managed-agent.service
 
 if [[ ! -e /etc/polydesk-a2a/worker.env ]]; then
   umask 027
@@ -48,6 +51,8 @@ if [[ ! -e /etc/polydesk-a2a/worker.env ]]; then
     'POLYDESK_A2A_OPERATOR_KEY=SET_BEFORE_START' \
     'POLYDESK_A2A_URL=https://polydesk.trade/api/a2a/polydesk-trading-agent' \
     'POLYDESK_A2A_RECEIPT_ORIGIN=https://polydesk.trade/api/a2a/polydesk-trading-agent' \
+    'POLYDESK_MANAGED_AGENT_URL=https://polydesk.trade/api/a2a/polydesk-managed-agent' \
+    'POLYDESK_MANAGED_RECONCILE_MS=300000' \
     'POLYDESK_A2A_WORKER_STATE=/var/lib/polydesk-a2a/worker.json' \
     'ONCHAINOS_BIN=/home/polydesk/.local/bin/onchainos' \
     'OKX_A2A_BIN=/usr/local/bin/okx-a2a' \
@@ -61,6 +66,8 @@ systemctl daemon-reload
 sudo -u polydesk env HOME=/home/polydesk npm --prefix /opt/polydesk-a2a/app run typecheck:server
 sudo -u polydesk env HOME=/home/polydesk npm --prefix /opt/polydesk-a2a/app run test:a2a-trading
 sudo -u polydesk env HOME=/home/polydesk npm --prefix /opt/polydesk-a2a/app run test:a2a-worker
+sudo -u polydesk env HOME=/home/polydesk npm --prefix /opt/polydesk-a2a/app run test:managed-agent-subscription
+sudo -u polydesk env HOME=/home/polydesk npm --prefix /opt/polydesk-a2a/app run test:managed-agent-directory
 
 printf 'Pocket worker: %s\n' "$(systemctl is-active pocket-nft-worker)"
 printf 'PolyDesk commit: %s\n' "$(sudo -u polydesk git -C /opt/polydesk-a2a/app rev-parse --short HEAD)"

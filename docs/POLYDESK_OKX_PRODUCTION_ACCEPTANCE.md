@@ -9,7 +9,7 @@ This document is the release gate for PolyDesk Agent `#5427`. It separates the t
 | Product | Type | Current listing | Price | Current readiness |
 |---|---|---:|---:|---|
 | One-Off Trade Mission | A2A | `#38484` PolyDesk Trading Agent | 0.1 USDT per task | Ready for host verification, then one controlled paid acceptance task |
-| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Blocked until the subscription adapter binds the OKX lifecycle to verified monitoring preferences |
+| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Adapter implemented; deployment and controlled live-trial verification remain |
 | Polymarket Integration Conformance Audit | A2A | Not listed | Quote | Planned |
 
 The marketplace currently also exposes six paid A2MCP listings. They remain compatibility capabilities during migration and are not additional products.
@@ -21,9 +21,9 @@ The marketplace currently also exposes six paid A2MCP listings. They remain comp
 3. The provider profile still describes the old football, LP, funding, and governed-trading capability mix.
 4. The one-off worker implements a bounded BUY mission with grant checking, durable delivery state, action-required handling, and PnL follow-up.
 5. The portfolio subsystem implements verified-email enrollment, configurable profit and loss thresholds, new-position, resolution and claimable alerts, daily or weekly digests, and origin-aware destination links.
-6. The subscription listing is not yet connected to that portfolio subsystem. It currently describes recurring signals and copy trading.
+6. The dedicated subscription adapter now binds exact OKX subscription identity, verified email, preferences, and pause/cancel/expiry to the portfolio subsystem. The marketplace description still advertises the legacy recurring-signals/copy-trading scope and must not be sold until corrected.
 7. The old worker accepted both `#38484` and `#38496`, allowing a subscription event to enter the one-off BUY path. The source now fails closed: only `#38484` is accepted.
-8. The private worker host could not be inspected from the current workstation because `pocket-nft-signer-1` did not resolve. Its deployed revision and daemon health remain unverified.
+8. The private worker host was verified at commit `db9c82f`; its daemon was active/enabled and contained no route from `#38496` into the BUY worker. The new managed-subscription reconciler still requires deployment and service-health verification.
 
 ## Gate A: One-Off Trade Mission
 
@@ -56,6 +56,15 @@ Do not start the trial or subscription until all checks pass:
 - monitoring grants no trading authority;
 - copy trading requires a separate bounded authorization containing amount, maximum price, expiry, and market selection;
 - subscription activation, delivery, pause, cancellation, and expiry are covered by integration tests and one controlled live trial.
+
+Implemented controls awaiting live acceptance:
+
+- exact intersection of both official OKX active-subscription directories;
+- immutable provider `5427`, listing `38496`, and service UUID matching;
+- monitoring disabled until email ownership is confirmed;
+- one central monitoring switch applied to periodic digests, portfolio reconciliation, live asset events, resolution events, and watched LP lifecycle email recipients;
+- restart-safe address selection across watched, deposit, trading, and fallback Polymarket addresses;
+- complete-snapshot reconciliation that disables missing or expired jobs but never treats a malformed directory response as an empty list.
 
 ## Gate C: Marketplace migration
 

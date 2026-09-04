@@ -123,6 +123,7 @@ function ensureSchema() {
       alter table polymarket_alert_settings
         add column if not exists alert_email text,
         add column if not exists alert_email_verified boolean not null default false,
+        add column if not exists monitoring_enabled boolean not null default true,
         add column if not exists new_position_alerts_enabled boolean not null default false,
         add column if not exists positions_initialized boolean not null default false,
         add column if not exists profit_threshold_percent integer not null default 50,
@@ -135,6 +136,22 @@ function ensureSchema() {
         add column if not exists digest_lease_id text,
         add column if not exists digest_lease_until timestamptz,
         add column if not exists integration_source text not null default 'polydesk';
+
+      create table if not exists polymarket_managed_subscriptions (
+        job_id text primary key,
+        privy_user_id text not null unique references polymarket_profiles(privy_user_id) on delete cascade,
+        provider_agent_id text not null,
+        service_listing_id text not null,
+        service_id text not null,
+        buyer_agent_id text not null,
+        status text not null,
+        period_start_at timestamptz not null,
+        period_end_at timestamptz not null,
+        preferences_hash text not null,
+        last_reconciled_at timestamptz,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
 
       create table if not exists polymarket_watchlist (
         id serial primary key,
@@ -349,6 +366,14 @@ function cleanEmail(value: unknown) {
   if (!raw) return null
   if (raw.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return ''
   return raw
+}
+
+export async function ensurePolymarketPortfolioSchema() {
+  await ensureSchema()
+}
+
+export function getPolymarketPortfolioPool() {
+  return requirePool()
 }
 
 function digestPreferences(body: Record<string, unknown>, after = new Date()) {
@@ -737,6 +762,7 @@ export async function processDuePolymarketDigests(limit = 20) {
          from polymarket_alert_settings s
          join polymarket_profiles p on p.privy_user_id = s.privy_user_id
         where s.digest_frequency in ('daily', 'weekly')
+          and s.monitoring_enabled = true
           and s.alert_email_verified = true
           and s.alert_email is not null
           and s.next_digest_at <= now()
@@ -989,6 +1015,7 @@ async function insertLpLifecycleAlerts(input: {
       where p.privy_user_id = $1
          or (
            lower(coalesce(p.watched_address, p.polymarket_address)) = lower($2)
+           and s.monitoring_enabled = true
            and s.alert_email_verified = true
          )`,
     [input.ownerPrivyUserId, input.positionAddress],
@@ -1234,11 +1261,12 @@ async function loadProfileBundle(privyUserId: string) {
             ? settingsRes.rows[0].next_digest_at.toISOString()
             : null,
           integrationSource: String(settingsRes.rows[0].integration_source || 'polydesk'),
+          monitoringEnabled: settingsRes.rows[0].monitoring_enabled !== false,
           alertEmail: settingsRes.rows[0].alert_email_verified && settingsRes.rows[0].alert_email
             ? String(settingsRes.rows[0].alert_email)
             : '',
         }
-      : { lossThresholdPercent: 20, profitThresholdPercent: 50, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, digestFrequency: 'off', digestTimezone: 'UTC', digestHourLocal: 8, digestWeekday: 1, nextDigestAt: null, integrationSource: 'polydesk', alertEmail: '' },
+      : { lossThresholdPercent: 20, profitThresholdPercent: 50, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, digestFrequency: 'off', digestTimezone: 'UTC', digestHourLocal: 8, digestWeekday: 1, nextDigestAt: null, integrationSource: 'polydesk', monitoringEnabled: true, alertEmail: '' },
     watchlist: watchRes.rows.map(row => ({
       id: Number(row.id),
       marketId: String(row.market_id),
@@ -1306,6 +1334,7 @@ async function evaluateAlerts(privyUserId: string, address: string) {
     [privyUserId],
   )).rows[0]
   if (!settingsRow) return 0
+  if (settingsRow.monitoring_enabled === false) return 0
   const lossThreshold = Number(settingsRow.loss_threshold_percent)
   const profitThreshold = Number(settingsRow.profit_threshold_percent)
   const claimableEnabled = Boolean(settingsRow.claimable_alerts_enabled)
@@ -1495,12 +1524,13 @@ export async function bootstrapPolymarketAlertMonitor() {
   if (!pool) return [] as string[]
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select p.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
+    `select p.privy_user_id, coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address
        from polymarket_profiles p
        join polymarket_alert_settings s on s.privy_user_id = p.privy_user_id
       where s.alert_email is not null
+        and s.monitoring_enabled = true
         and s.alert_email_verified = true
-        and coalesce(p.deposit_wallet_address, p.trading_address) is not null
+        and coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) is not null
         and (
           s.loss_threshold_percent > 0
           or s.profit_threshold_percent > 0
@@ -1524,7 +1554,7 @@ export async function bootstrapPolymarketAlertMonitor() {
        from polymarket_position_alert_state s
        join polymarket_profiles p on p.privy_user_id = s.privy_user_id
       where s.resolution_status <> 'lost'
-        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
+        and lower(s.position_address) = lower(coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address))`,
   )).rows
   return assets.map(row => String(row.asset_id)).filter(Boolean)
 }
@@ -1533,12 +1563,13 @@ export async function reconcilePolymarketWatchedPortfolios() {
   if (!pool) return
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select p.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
+    `select p.privy_user_id, coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address
        from polymarket_profiles p
        join polymarket_alert_settings s on s.privy_user_id = p.privy_user_id
       where s.alert_email is not null
+        and s.monitoring_enabled = true
         and s.alert_email_verified = true
-        and coalesce(p.deposit_wallet_address, p.trading_address) is not null
+        and coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) is not null
         and (
           s.loss_threshold_percent > 0
           or s.profit_threshold_percent > 0
@@ -1563,11 +1594,13 @@ export async function evaluatePolymarketAlertAssets(assetIds: string[]) {
   if (!pool || assetIds.length === 0) return
   await ensureSchema()
   const profiles = (await requirePool().query(
-    `select distinct s.privy_user_id, coalesce(p.deposit_wallet_address, p.trading_address) as address
+    `select distinct s.privy_user_id, coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address
       from polymarket_position_alert_state s
        join polymarket_profiles p on p.privy_user_id = s.privy_user_id
+       join polymarket_alert_settings a on a.privy_user_id = s.privy_user_id
       where s.asset_id = any($1::text[])
-        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
+        and a.monitoring_enabled = true
+        and lower(s.position_address) = lower(coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address))`,
     [assetIds],
   )).rows
   await Promise.all(profiles.map(row =>
@@ -1585,18 +1618,19 @@ export async function processPolymarketResolutionEvent(event: PolymarketResoluti
   await ensureSchema()
   const rows = (await requirePool().query(
     `select s.privy_user_id, s.market_id, s.asset_id, s.resolution_status,
-            p.trading_address, p.deposit_wallet_address,
+            coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address,
             a.alert_email, a.alert_email_verified, a.resolved_alerts_enabled
        from polymarket_position_alert_state s
       join polymarket_profiles p on p.privy_user_id = s.privy_user_id
        join polymarket_alert_settings a on a.privy_user_id = s.privy_user_id
       where lower(s.market_id) = lower($1)
-        and lower(s.position_address) = lower(coalesce(p.deposit_wallet_address, p.trading_address))`,
+        and a.monitoring_enabled = true
+        and lower(s.position_address) = lower(coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address))`,
     [event.market],
   )).rows
 
   for (const row of rows) {
-    const address = String(row.deposit_wallet_address || row.trading_address)
+    const address = String(row.address)
     const alertEmail = row.alert_email_verified && row.alert_email ? String(row.alert_email) : null
     if (String(row.asset_id).toLowerCase() === event.winningAssetId.toLowerCase()) {
       await evaluateAlerts(String(row.privy_user_id), address)
@@ -1674,7 +1708,8 @@ export async function reconcilePolymarketResolutionAlerts() {
        join polymarket_profiles p on p.privy_user_id = s.privy_user_id
        join polymarket_alert_settings a on a.privy_user_id = s.privy_user_id
       where s.resolution_status = 'open'
-        and lower(s.position_address) = lower(coalesce(p.watched_address, p.polymarket_address))
+        and a.monitoring_enabled = true
+        and lower(s.position_address) = lower(coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address))
         and (a.claimable_alerts_enabled = true or a.resolved_alerts_enabled = true)
       limit 500`,
   )).rows
@@ -1785,7 +1820,21 @@ export default async function handler(req: Request, res: Response) {
         )
         await client.query(
           `update polymarket_alert_settings
-              set alert_email = $2, alert_email_verified = true, updated_at = now()
+              set alert_email = $2,
+                  alert_email_verified = true,
+                  monitoring_enabled = case
+                    when exists (
+                      select 1 from polymarket_managed_subscriptions m
+                       where m.privy_user_id = $1
+                         and m.status = 'active'
+                         and m.period_end_at > now()
+                    ) then true
+                    when not exists (
+                      select 1 from polymarket_managed_subscriptions m where m.privy_user_id = $1
+                    ) then monitoring_enabled
+                    else false
+                  end,
+                  updated_at = now()
             where privy_user_id = $1`,
           [watch.privy_user_id, watch.email],
         )
