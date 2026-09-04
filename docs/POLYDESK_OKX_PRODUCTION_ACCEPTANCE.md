@@ -9,7 +9,7 @@ This document is the release gate for PolyDesk Agent `#5427`. It separates the t
 | Product | Type | Current listing | Price | Current readiness |
 |---|---|---:|---:|---|
 | One-Off Trade Mission | A2A | `#38484` PolyDesk Trading Agent | 0.1 USDT per task | Ready for host verification, then one controlled paid acceptance task |
-| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Adapter implemented; deployment and controlled live-trial verification remain |
+| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Adapter and scheduler live; controlled enrollment and lifecycle acceptance remain |
 | Polymarket Integration Conformance Audit | A2A | Not listed | Quote | Planned |
 
 The marketplace currently also exposes six paid A2MCP listings. They remain compatibility capabilities during migration and are not additional products.
@@ -23,7 +23,8 @@ The marketplace currently also exposes six paid A2MCP listings. They remain comp
 5. The portfolio subsystem implements verified-email enrollment, configurable profit and loss thresholds, new-position, resolution and claimable alerts, daily or weekly digests, and origin-aware destination links.
 6. The dedicated subscription adapter now binds exact OKX subscription identity, verified email, preferences, and pause/cancel/expiry to the portfolio subsystem. The marketplace description still advertises the legacy recurring-signals/copy-trading scope and must not be sold until corrected.
 7. The old worker accepted both `#38484` and `#38496`, allowing a subscription event to enter the one-off BUY path. The source now fails closed: only `#38484` is accepted.
-8. The private worker host was verified at commit `db9c82f`; its daemon was active/enabled and contained no route from `#38496` into the BUY worker. The new managed-subscription reconciler still requires deployment and service-health verification.
+8. The private worker host is synchronized with the managed-subscription runtime. The one-off daemon remains active/enabled with no route from `#38496` into the BUY worker. A non-root five-minute managed-subscription reconciliation schedule completed an unattended live cycle successfully.
+9. Live marketplace truth shows three active `#38496` jobs: one full-price membership for buyer Agent `#2191` ending 2026-09-13 UTC, plus micro-priced sandbox/DACS checks for Agents `#1791` and `#8178` ending 2026-09-09 and 2026-09-24 UTC. None is enrolled in the new monitoring contract; do not assume there are zero active users or silently migrate the full-price buyer.
 
 ## Gate A: One-Off Trade Mission
 
