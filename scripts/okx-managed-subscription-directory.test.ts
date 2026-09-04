@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { exactManagedSubscriptions } from '../api/okx-managed-subscription-directory.js'
+import { catalogAndStatusManagedSubscriptions, exactManagedSubscriptions } from '../api/okx-managed-subscription-directory.js'
 import { MANAGED_AGENT_SERVICE_ID } from '../api/polydesk-managed-agent-subscription.js'
 
 const active = {
@@ -10,6 +10,7 @@ const active = {
     { jobId: '0x' + 'b'.repeat(64), subEndTime: 1790236860, status: 1 },
   ],
 }
+const singleActive = { ok: true, data: [active.data[0]] }
 
 test('intersects both official directories and requires exact provider and immutable service id', () => {
   const provider = {
@@ -38,4 +39,27 @@ test('does not convert a device/provider identity mismatch into an empty authori
       serviceId: MANAGED_AGENT_SERVICE_ID, status: 1, subStartTime: 1787558460, subEndTime: 1790236860,
     }] },
   }), /directories disagree/)
+})
+
+test('uses explicit PolyDesk job status only when the catalog has one exact subscription listing', () => {
+  const jobId = '0x' + 'a'.repeat(64)
+  const services = { ok: true, data: { list: [{
+    id: 38496,
+    serviceId: MANAGED_AGENT_SERVICE_ID,
+    serviceName: 'PolyDesk Trading Membership',
+    subscription: [{ fee: '5', interval: 'month' }],
+  }] } }
+  const statuses = new Map([[jobId, `Task status: accepted\n  jobId:    ${jobId}\n  title:    DACS 订阅巡检 - PolyDesk Trading Membership\n  budget:   0.00001 USDT\n  user:    8178\n  asp: 5427\n`]])
+  const result = catalogAndStatusManagedSubscriptions(singleActive, services, statuses)
+  assert.equal(result.length, 1)
+  assert.equal(result[0].buyerAgentId, '8178')
+  assert.equal(result[0].serviceId, MANAGED_AGENT_SERVICE_ID)
+})
+
+test('status fallback refuses ambiguity or a buyer job not bound to PolyDesk', () => {
+  const jobId = '0x' + 'a'.repeat(64)
+  const exactService = { id: 38496, serviceId: MANAGED_AGENT_SERVICE_ID, serviceName: 'PolyDesk Trading Membership', subscription: [{}] }
+  const goodStatus = `Task status: accepted\njobId: ${jobId}\ntitle: PolyDesk Trading Membership\nuser: 8178\nasp: 5427`
+  assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService, { ...exactService, id: 999 }] } }, new Map([[jobId, goodStatus]])), /exactly one/)
+  assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService] } }, new Map([[jobId, goodStatus.replace('asp: 5427', 'asp: 10764')]])), /did not bind/)
 })

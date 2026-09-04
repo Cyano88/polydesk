@@ -48,7 +48,7 @@ async function submitRequest(path: string) {
     const active = await listExactManagedSubscriptions()
     const authoritative = active.find(item => item.jobId === requested.jobId && item.buyerAgentId === requested.buyerAgentId)
     if (!authoritative) throw new Error('The exact managed-agent subscription is not active in both official OKX directories.')
-    body.subscription = authoritative
+    body.subscription = { ...authoritative, periodStartAt: requested.periodStartAt }
   }
   return post(body)
 }
