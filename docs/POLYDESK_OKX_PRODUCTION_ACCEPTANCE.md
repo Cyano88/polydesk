@@ -71,6 +71,7 @@ Implemented and live-verified controls:
 - multi-ASP account handling that verifies Agent `5427` through its sole exact subscription listing and each active job's explicit provider/buyer status when the account-level provider directory defaults to another ASP.
 - controlled sandbox enrollment, verified-email activation, pause/resume enforcement, daily-digest delivery, and restart-safe reconciliation.
 - first-snapshot suppression for existing profit, loss, and claimable states, preventing historical positions from generating alerts when monitoring is initialized.
+- Implemented in source, pending deployment and controlled delivery proof: deduplicated lifecycle emails for trial-ending, trial-expired, successful-renewal, and explicitly reported payment-failure events, with bounded retries and origin-aware return links.
 
 ## Gate C: Marketplace migration
 

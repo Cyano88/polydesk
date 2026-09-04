@@ -40,6 +40,29 @@ test('email provider retries one transient response and then succeeds', async ()
   }
 })
 
+test('email provider preserves a valid idempotency key across retries', async () => {
+  const previousKey = process.env.RESEND_API_KEY
+  const previousFetch = globalThis.fetch
+  process.env.RESEND_API_KEY = 'test-key'
+  const keys: string[] = []
+  globalThis.fetch = async (_input, init) => {
+    keys.push(new Headers(init?.headers).get('Idempotency-Key') ?? '')
+    return new Response('', { status: keys.length === 1 ? 503 : 200 })
+  }
+  try {
+    await sendTransactionalEmail({ ...email, idempotencyKey: 'managed-lifecycle/event-123' })
+    assert.deepEqual(keys, ['managed-lifecycle/event-123', 'managed-lifecycle/event-123'])
+    await assert.rejects(
+      () => sendTransactionalEmail({ ...email, idempotencyKey: 'bad\nkey' }),
+      /idempotency key is invalid/,
+    )
+  } finally {
+    globalThis.fetch = previousFetch
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY
+    else process.env.RESEND_API_KEY = previousKey
+  }
+})
+
 test('email provider does not retry or expose a permanent provider response body', async () => {
   const previousKey = process.env.RESEND_API_KEY
   const previousFetch = globalThis.fetch

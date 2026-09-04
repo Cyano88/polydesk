@@ -3,7 +3,7 @@ import type { Request, Response } from 'express'
 import { getAddress, isAddress } from 'viem'
 import { sendTransactionalEmail } from './email-provider.js'
 import { nextPolymarketDigestAt, validDigestTimezone, type PolymarketDigestFrequency } from './polymarket-digest-schedule.js'
-import { polymarketIntegrationSource } from './polymarket-alert-destination.js'
+import { polymarketIntegrationSource, polymarketPortfolioDestination } from './polymarket-alert-destination.js'
 import { ensurePolymarketPortfolioSchema, getPolymarketPortfolioPool } from './polymarket-portfolio.js'
 
 type JsonRecord = Record<string, unknown>
@@ -14,6 +14,7 @@ export const MANAGED_AGENT_LISTING_ID = '38496' as const
 export const MANAGED_AGENT_SERVICE_ID = '09b9ee03-1273-4b8e-91df-c713b44c641d' as const
 
 export type ManagedSubscriptionStatus = 'active' | 'paused' | 'cancelled' | 'expired'
+export type ManagedLifecycleEmailType = 'trial_ending' | 'trial_expired' | 'renewal_success' | 'payment_failed'
 
 export type ManagedSubscriptionIdentity = {
   jobId: string
@@ -159,6 +160,32 @@ export function managedMonitoringEnabled(input: {
     && Date.parse(input.periodEndAt) > (input.now ?? Date.now())
 }
 
+const DAY_MS = 24 * 60 * 60_000
+
+function isTrialPeriod(subscription: Pick<ManagedSubscriptionIdentity, 'periodStartAt' | 'periodEndAt'>) {
+  const duration = Date.parse(subscription.periodEndAt) - Date.parse(subscription.periodStartAt)
+  return duration > 0 && duration <= 4 * DAY_MS
+}
+
+export function plannedManagedLifecycleEmails(input: {
+  previous?: ManagedSubscriptionIdentity | null
+  current?: ManagedSubscriptionIdentity | null
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const events: ManagedLifecycleEmailType[] = []
+  if (input.current?.status === 'active') {
+    const remaining = Date.parse(input.current.periodEndAt) - now
+    if (isTrialPeriod(input.current) && remaining > 0 && remaining <= DAY_MS) events.push('trial_ending')
+    if (input.previous && Date.parse(input.current.periodEndAt) > Date.parse(input.previous.periodEndAt)) {
+      events.push('renewal_success')
+    }
+  } else if (input.previous && isTrialPeriod(input.previous) && Date.parse(input.previous.periodEndAt) <= now) {
+    events.push('trial_expired')
+  }
+  return events
+}
+
 function authenticated(req: Request) {
   const expected = process.env.POLYDESK_A2A_OPERATOR_KEY?.trim() ?? ''
   const supplied = String(req.headers['x-polydesk-operator-key'] ?? '').trim()
@@ -174,6 +201,154 @@ function publicOrigin(req: Request) {
   if (/^https:\/\/[^/]+$/i.test(configured)) return configured
   const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? 'polydesk.trade').split(',')[0].trim()
   return `https://${host}`
+}
+
+function lifecycleDestination(source: unknown) {
+  const configuredOrigin = String(process.env.POLYDESK_PUBLIC_ORIGIN ?? process.env.PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '')
+  const polydeskOrigin = /^https:\/\/[^/]+$/i.test(configuredOrigin) ? configuredOrigin : 'https://polydesk.trade'
+  return polymarketPortfolioDestination(source, {
+    polydeskUrl: `${polydeskOrigin}/polydesk?service=portfolio`,
+    okxAiUrl: process.env.POLYDESK_OKX_AI_RETURN_URL,
+    circleMarketplaceUrl: process.env.POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL,
+  })
+}
+
+function lifecycleEmailCopy(type: ManagedLifecycleEmailType, periodEndAt: string) {
+  const end = new Date(periodEndAt).toUTCString()
+  if (type === 'trial_ending') return {
+    subject: 'Your PolyDesk free trial ends tomorrow',
+    heading: 'Your free trial ends tomorrow',
+    body: `Managed monitoring is scheduled to end on ${end} unless the subscription renews.`,
+  }
+  if (type === 'trial_expired') return {
+    subject: 'Your PolyDesk free trial has ended',
+    heading: 'Your free trial has ended',
+    body: `Managed monitoring stopped when the trial ended on ${end}.`,
+  }
+  if (type === 'renewal_success') return {
+    subject: 'Your PolyDesk subscription renewed',
+    heading: 'Subscription renewed',
+    body: `Managed monitoring remains active through ${end}.`,
+  }
+  return {
+    subject: 'Your PolyDesk subscription payment failed',
+    heading: 'Subscription payment failed',
+    body: `Managed monitoring stopped because the subscription was not renewed through ${end}.`,
+  }
+}
+
+function lifecycleEmailHtml(heading: string, body: string, label: string, url: string) {
+  return `<div style="margin:0 auto;max-width:520px;padding:28px;font-family:Arial,sans-serif;color:#111827"><p>PolyDesk</p><h1>${heading}</h1><p>${body}</p><a href="${url}">${label}</a><p>PolyDesk never trades, closes, or claims without separate signed approval.</p></div>`
+}
+
+async function queueLifecycleEmail(jobId: string, type: ManagedLifecycleEmailType, periodEndAt: string) {
+  const eventKey = `${type}:${new Date(periodEndAt).toISOString()}`
+  await getPolymarketPortfolioPool().query(
+    `insert into polymarket_managed_subscription_email_events
+       (job_id, event_key, event_type, period_end_at)
+     values ($1,$2,$3,$4)
+     on conflict (job_id, event_key) do nothing`,
+    [jobId, eventKey, type, periodEndAt],
+  )
+}
+
+async function pendingLifecycleEmails() {
+  await getPolymarketPortfolioPool().query(
+    `update polymarket_managed_subscription_email_events
+        set status='skipped', next_attempt_at=null, updated_at=now()
+      where event_type='trial_ending' and period_end_at <= now()
+        and status in ('pending','failed','sending')`,
+  )
+  return (await getPolymarketPortfolioPool().query(
+    `select e.job_id, e.event_key, e.event_type, e.period_end_at,
+            s.alert_email, s.integration_source
+       from polymarket_managed_subscription_email_events e
+       join polymarket_managed_subscriptions m on m.job_id=e.job_id
+       join polymarket_alert_settings s on s.privy_user_id=m.privy_user_id
+      where e.status in ('pending','failed','sending') and e.attempts < 5
+        and (e.next_attempt_at is null or e.next_attempt_at <= now())
+        and s.alert_email_verified=true and s.alert_email is not null
+      order by e.created_at asc
+      limit 20`,
+  )).rows
+}
+
+async function claimLifecycleEmail(jobId: string, eventKey: string) {
+  return Boolean((await getPolymarketPortfolioPool().query(
+    `update polymarket_managed_subscription_email_events
+        set status='sending', attempts=attempts+1, next_attempt_at=now() + interval '10 minutes', updated_at=now()
+      where job_id=$1 and event_key=$2 and status in ('pending','failed','sending')
+        and attempts < 5 and (next_attempt_at is null or next_attempt_at <= now())
+    returning attempts`,
+    [jobId, eventKey],
+  )).rows[0])
+}
+
+async function markLifecycleEmailSent(jobId: string, eventKey: string) {
+  await getPolymarketPortfolioPool().query(
+    `update polymarket_managed_subscription_email_events
+        set status='sent', sent_at=now(), last_error=null, next_attempt_at=null, updated_at=now()
+      where job_id=$1 and event_key=$2`,
+    [jobId, eventKey],
+  )
+}
+
+async function markLifecycleEmailFailed(jobId: string, eventKey: string, error: unknown) {
+  await getPolymarketPortfolioPool().query(
+    `update polymarket_managed_subscription_email_events
+        set status='failed', last_error=$3,
+            next_attempt_at=case when attempts < 5 then now() + make_interval(mins => least(60, 5 * attempts)) else null end,
+            updated_at=now()
+      where job_id=$1 and event_key=$2`,
+    [jobId, eventKey, error instanceof Error ? error.message : 'Email provider unavailable.'],
+  )
+}
+
+async function sendLifecycleEmail(row: JsonRecord) {
+  const jobId = String(row.job_id)
+  const eventKey = String(row.event_key)
+  if (!await claimLifecycleEmail(jobId, eventKey)) return false
+  const type = String(row.event_type) as ManagedLifecycleEmailType
+  const copy = lifecycleEmailCopy(type, new Date(String(row.period_end_at)).toISOString())
+  const destination = lifecycleDestination(row.integration_source)
+  try {
+    await sendTransactionalEmail({
+      to: String(row.alert_email),
+      fromEmail: process.env.POLYMARKET_ALERT_FROM_EMAIL,
+      fromName: process.env.POLYMARKET_ALERT_FROM_NAME ?? 'PolyDesk',
+      subject: copy.subject,
+      text: `${copy.heading}. ${copy.body} ${destination.label}: ${destination.url}`,
+      html: lifecycleEmailHtml(copy.heading, copy.body, destination.label, destination.url),
+      context: 'Managed subscription lifecycle',
+      idempotencyKey: `managed-lifecycle/${hash(`${jobId}:${eventKey}`)}`,
+    })
+    await markLifecycleEmailSent(jobId, eventKey)
+    return true
+  } catch (error) {
+    await markLifecycleEmailFailed(jobId, eventKey, error)
+    return false
+  }
+}
+
+async function deliverPendingLifecycleEmails() {
+  let sent = 0
+  for (const row of await pendingLifecycleEmails()) {
+    if (await sendLifecycleEmail(row)) sent += 1
+  }
+  return sent
+}
+
+function managedIdentityFromRow(row: JsonRecord): ManagedSubscriptionIdentity {
+  return {
+    jobId: String(row.job_id),
+    providerAgentId: POLYDESK_AGENT_ID,
+    serviceListingId: MANAGED_AGENT_LISTING_ID,
+    serviceId: MANAGED_AGENT_SERVICE_ID,
+    buyerAgentId: String(row.buyer_agent_id),
+    status: String(row.status) as ManagedSubscriptionStatus,
+    periodStartAt: new Date(String(row.period_start_at)).toISOString(),
+    periodEndAt: new Date(String(row.period_end_at)).toISOString(),
+  }
 }
 
 async function sendConfirmation(req: Request, email: string, address: string, token: string) {
@@ -330,6 +505,13 @@ async function reconcile(subscriptions: ManagedSubscriptionIdentity[]) {
   const jobIds = active.map(item => item.jobId)
   const database = getPolymarketPortfolioPool()
   for (const item of active) {
+    const previousRow = (await database.query(
+      `select job_id, buyer_agent_id, status, period_start_at, period_end_at
+         from polymarket_managed_subscriptions
+        where job_id=$1 and provider_agent_id=$2 and service_listing_id=$3 and service_id=$4`,
+      [item.jobId, POLYDESK_AGENT_ID, MANAGED_AGENT_LISTING_ID, MANAGED_AGENT_SERVICE_ID],
+    )).rows[0] as JsonRecord | undefined
+    const previous = previousRow ? managedIdentityFromRow(previousRow) : null
     await database.query(
       `with refreshed as (
          update polymarket_managed_subscriptions
@@ -344,21 +526,34 @@ async function reconcile(subscriptions: ManagedSubscriptionIdentity[]) {
       [item.jobId, item.buyerAgentId, item.periodEndAt,
         POLYDESK_AGENT_ID, MANAGED_AGENT_LISTING_ID, MANAGED_AGENT_SERVICE_ID],
     )
+    if (previous) {
+      for (const type of plannedManagedLifecycleEmails({ previous, current: item })) {
+        await queueLifecycleEmail(item.jobId, type, item.periodEndAt)
+      }
+    }
   }
-  const expired = (await database.query(
+  const expiredRows = (await database.query(
     `with stopped as (
        update polymarket_managed_subscriptions
           set status='expired', last_reconciled_at=now(), updated_at=now()
         where provider_agent_id=$1 and service_listing_id=$2 and service_id=$3
           and status in ('active','paused') and not (job_id = any($4::text[]))
-       returning privy_user_id
+       returning job_id, privy_user_id, buyer_agent_id, status, period_start_at, period_end_at
      )
      update polymarket_alert_settings s set monitoring_enabled=false, updated_at=now()
        from stopped where s.privy_user_id=stopped.privy_user_id
-     returning s.privy_user_id`,
+     returning stopped.job_id, stopped.buyer_agent_id, stopped.status,
+               stopped.period_start_at, stopped.period_end_at`,
     [POLYDESK_AGENT_ID, MANAGED_AGENT_LISTING_ID, MANAGED_AGENT_SERVICE_ID, jobIds],
-  )).rowCount ?? 0
-  return { active: active.length, stopped: expired }
+  )).rows as JsonRecord[]
+  for (const row of expiredRows) {
+    const previous = managedIdentityFromRow(row)
+    for (const type of plannedManagedLifecycleEmails({ previous })) {
+      await queueLifecycleEmail(previous.jobId, type, previous.periodEndAt)
+    }
+  }
+  const notified = await deliverPendingLifecycleEmails()
+  return { active: active.length, stopped: expiredRows.length, notified }
 }
 
 export default async function polydeskManagedAgentSubscriptionHandler(req: Request, res: Response) {
@@ -382,6 +577,13 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
       const expected = action === 'pause' ? 'paused' : action === 'cancel' ? 'cancelled' : 'active'
       if (subscription.status !== expected) throw new Error(`${action} requires subscription status ${expected}.`)
       return res.json({ ok: true, ...(await setLifecycle(subscription)) })
+    }
+    if (action === 'payment_failed') {
+      const subscription = validateManagedSubscriptionIdentity(body.subscription)
+      if (subscription.status !== 'expired') throw new Error('payment_failed requires subscription status expired.')
+      const lifecycle = await setLifecycle(subscription)
+      await queueLifecycleEmail(subscription.jobId, 'payment_failed', subscription.periodEndAt)
+      return res.json({ ok: true, ...lifecycle, notified: await deliverPendingLifecycleEmails() })
     }
     if (action === 'reconcile_active') {
       if (body.complete !== true || !Array.isArray(body.subscriptions)) throw new Error('A complete authoritative subscription snapshot is required.')

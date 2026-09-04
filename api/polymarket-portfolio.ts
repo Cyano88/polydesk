@@ -154,6 +154,25 @@ function ensureSchema() {
         updated_at timestamptz not null default now()
       );
 
+      create table if not exists polymarket_managed_subscription_email_events (
+        job_id text not null references polymarket_managed_subscriptions(job_id) on delete cascade,
+        event_key text not null,
+        event_type text not null,
+        period_end_at timestamptz not null,
+        status text not null default 'pending',
+        attempts integer not null default 0,
+        sent_at timestamptz,
+        next_attempt_at timestamptz,
+        last_error text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (job_id, event_key)
+      );
+
+      create index if not exists polymarket_managed_subscription_email_retry_idx
+        on polymarket_managed_subscription_email_events (next_attempt_at)
+        where status in ('pending', 'failed');
+
       create table if not exists polymarket_watchlist (
         id serial primary key,
         privy_user_id text not null,

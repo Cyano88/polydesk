@@ -9,6 +9,7 @@ type SendEmailInput = {
   text: string
   html: string
   context: string
+  idempotencyKey?: string
 }
 
 function formatFrom(email?: string, name?: string) {
@@ -20,6 +21,10 @@ export async function sendTransactionalEmail(input: SendEmailInput) {
   const resendApiKey = process.env.RESEND_API_KEY?.trim()
   if (!resendApiKey || !input.fromEmail) {
     throw new Error(`${input.context} email is not configured. Set RESEND_API_KEY and a verified FROM email.`)
+  }
+  const idempotencyKey = String(input.idempotencyKey ?? '').trim()
+  if (idempotencyKey.length > 256 || /[\r\n]/.test(idempotencyKey)) {
+    throw new Error(`${input.context} email idempotency key is invalid.`)
   }
   const from = formatFrom(input.fromEmail, input.fromName)
   let lastStatus = 0
@@ -34,6 +39,7 @@ export async function sendTransactionalEmail(input: SendEmailInput) {
           Authorization: `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json',
           'User-Agent': 'PolyDesk/1.0 (+https://polydesk.trade)',
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
         },
         body: JSON.stringify({
           from,
