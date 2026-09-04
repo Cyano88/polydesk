@@ -3,8 +3,8 @@ import { getAddress, isAddress } from 'viem'
 import type { AutoTradeSignal } from './polydesk-a2a-trading-agent.js'
 
 type JsonRecord = Record<string, unknown>
-const SUPPORTED_A2A_SERVICE_IDS = new Set(['38484', '38496'] as const)
-type SupportedA2aServiceId = '38484' | '38496'
+const SUPPORTED_A2A_SERVICE_IDS = new Set(['38484'] as const)
+type SupportedA2aServiceId = '38484'
 
 export type A2aWorkerRequest = {
   schema: 'polydesk-a2a-worker-request-v1'
@@ -111,7 +111,7 @@ export function validateA2aWorkerRequest(value: unknown): A2aWorkerRequest {
   if (String(value.agentId) !== '5427') throw new Error('Worker is restricted to PolyDesk Agent #5427.')
   const serviceId = String(value.serviceId)
   if (!SUPPORTED_A2A_SERVICE_IDS.has(serviceId as SupportedA2aServiceId)) {
-    throw new Error('Worker is restricted to PolyDesk A2A services #38484 and #38496.')
+    throw new Error('The bounded trade worker is restricted to PolyDesk A2A service #38484.')
   }
   const jobId = String(value.jobId ?? '').trim()
   if (!validJobId(jobId)) throw new Error('jobId is invalid.')

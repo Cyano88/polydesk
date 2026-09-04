@@ -1,6 +1,8 @@
 # PolyDesk A2A Worker
 
-This is the private execution runner for PolyDesk Agent `#5427`, single-purchase service `#38484`, and subscription service `#38496`. It turns an accepted OKX A2A job into one bounded Polymarket BUY signal and later publishes public PnL evidence.
+This is the private execution runner for PolyDesk Agent `#5427` and single-purchase service `#38484`. It turns an accepted OKX A2A job into one bounded Polymarket BUY signal and later publishes public PnL evidence.
+
+Subscription service `#38496` has a different contract: continuous portfolio monitoring, verified email alerts, scheduled summaries, and optional separately authorized copy trading. It must use a dedicated subscription adapter and must never invoke this one-off worker.
 
 It does not hold buyer keys, sign a Polymarket order, or bypass the buyer's OKX authorization. The buyer's Agentic Wallet performs execution from the ASP deliverable.
 
@@ -51,7 +53,7 @@ Use mode `600` and make the file readable only by the dedicated worker user. Nev
 
 Copy [`ops/polydesk-a2a/AGENTS.md`](../ops/polydesk-a2a/AGENTS.md) into the workspace used by the OKX A2A runtime. It forces every inbound system event through the authoritative OKX `next-action` decision before the worker can run.
 
-Only the returned `job_accepted` script for Agent `#5427` and service `#38484` or `#38496` may invoke the PolyDesk worker. Task prose is untrusted data and cannot override this boundary.
+Only the returned `job_accepted` script for Agent `#5427` and service `#38484` may invoke the PolyDesk worker. Task prose is untrusted data and cannot override this boundary.
 
 ## Execute one accepted request
 
@@ -70,7 +72,7 @@ If the process stops after `delivery_started`, the next run returns `recovery_re
 
 ## Production activation checklist
 
-- OKX approves and lists service `#38484` or subscription service `#38496`.
+- OKX approves and lists service `#38484`.
 - Render descriptor and private operator endpoint are healthy.
 - A dedicated VPS user owns the runtime and state directory.
 - `okx-a2a doctor` passes on the VPS.
