@@ -65,6 +65,7 @@ Implemented controls awaiting live acceptance:
 - one central monitoring switch applied to periodic digests, portfolio reconciliation, live asset events, resolution events, and watched LP lifecycle email recipients;
 - restart-safe address selection across watched, deposit, trading, and fallback Polymarket addresses;
 - complete-snapshot reconciliation that disables missing or expired jobs but never treats a malformed directory response as an empty list.
+- multi-ASP account handling that verifies Agent `5427` through its sole exact subscription listing and each active job's explicit provider/buyer status when the account-level provider directory defaults to another ASP.
 
 ## Gate C: Marketplace migration
 
