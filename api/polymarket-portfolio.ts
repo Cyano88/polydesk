@@ -15,6 +15,7 @@ import {
   polymarketPositionUrl,
   shouldCloseMissingLpOrder,
   shouldAlertNewPosition,
+  shouldNotifyPositionTransition,
   type PolymarketResolutionEvent,
 } from './polymarket-alert-rules.js'
 import { registerPolymarketAlertAsset } from './polymarket-alert-events.js'
@@ -1413,7 +1414,10 @@ async function evaluateAlerts(privyUserId: string, address: string) {
           threshold.percentPnl,
         ],
       )
-      if (threshold.shouldAlert) {
+      if (shouldNotifyPositionTransition({
+        positionsInitialized,
+        transitionDetected: threshold.shouldAlert,
+      })) {
         const roundedLoss = Math.abs(Math.round(threshold.percentPnl ?? 0))
         await insertPositionAlert({
           privyUserId,
@@ -1429,7 +1433,10 @@ async function evaluateAlerts(privyUserId: string, address: string) {
         }, (text, values) => client.query(text, values))
         inserted += 1
       }
-      if (profit.shouldAlert) {
+      if (shouldNotifyPositionTransition({
+        positionsInitialized,
+        transitionDetected: profit.shouldAlert,
+      })) {
         const roundedProfit = Math.round(profit.percentPnl ?? 0)
         await insertPositionAlert({
           privyUserId,
@@ -1460,7 +1467,10 @@ async function evaluateAlerts(privyUserId: string, address: string) {
         }, (text, values) => client.query(text, values))
         inserted += 1
       }
-      if (shouldAlertClaimable) {
+      if (shouldNotifyPositionTransition({
+        positionsInitialized,
+        transitionDetected: shouldAlertClaimable,
+      })) {
         await insertPositionAlert({
           privyUserId,
           alertType: 'claimable',

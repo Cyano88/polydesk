@@ -152,6 +152,13 @@ export function shouldAlertNewPosition(input: {
     && size > 0
 }
 
+export function shouldNotifyPositionTransition(input: {
+  positionsInitialized: boolean
+  transitionDetected: boolean
+}) {
+  return input.positionsInitialized && input.transitionDetected
+}
+
 export function resolutionTransition(
   position: PolymarketAlertPosition,
   event: PolymarketResolutionEvent,

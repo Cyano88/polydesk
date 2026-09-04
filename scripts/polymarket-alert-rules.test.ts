@@ -11,6 +11,7 @@ import {
   resolutionTransition,
   shouldCloseMissingLpOrder,
   shouldAlertNewPosition,
+  shouldNotifyPositionTransition,
 } from '../api/polymarket-alert-rules.js'
 import { nextPolymarketDigestAt, validDigestTimezone } from '../api/polymarket-digest-schedule.js'
 import { polymarketIntegrationSource, polymarketPortfolioDestination } from '../api/polymarket-alert-destination.js'
@@ -160,6 +161,21 @@ test('new-position alerts baseline existing positions before notifying', () => {
     positionsInitialized: true,
     positionAlreadyKnown: true,
     size: 10,
+  }), false)
+})
+
+test('existing threshold and claimable states are silent during the first portfolio baseline', () => {
+  assert.equal(shouldNotifyPositionTransition({
+    positionsInitialized: false,
+    transitionDetected: true,
+  }), false)
+  assert.equal(shouldNotifyPositionTransition({
+    positionsInitialized: true,
+    transitionDetected: true,
+  }), true)
+  assert.equal(shouldNotifyPositionTransition({
+    positionsInitialized: true,
+    transitionDetected: false,
   }), false)
 })
 
