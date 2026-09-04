@@ -41,6 +41,7 @@
     "test:a2a-worker": "node --import tsx --test scripts/polydesk-a2a-worker.test.ts",
     "test:managed-agent-subscription": "node --import tsx --test scripts/polydesk-managed-agent-subscription.test.ts",
     "test:managed-agent-directory": "node --import tsx --test scripts/okx-managed-subscription-directory.test.ts",
+    "test:conformance-audit": "node --import tsx --test scripts/polydesk-integration-conformance-audit.test.ts",
     "test:hyperliquid-subscription": "node --import tsx --test scripts/polydesk-hyperliquid-subscription.test.ts",
     "test:context-staging": "node --import tsx --test scripts/polydesk-context-staging.test.ts",
     "context:staging": "node --import tsx scripts/polydesk-context-staging.ts",

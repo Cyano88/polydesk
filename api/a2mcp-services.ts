@@ -158,7 +158,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     agentId: AGENT_ID,
     protocol: 'OKX Agent Payments Protocol',
     baseUrl,
-    summary: 'PolyDesk offers one bounded trade mission, continuous non-custodial agent management, and a planned external integration conformance audit.',
+    summary: 'PolyDesk offers one bounded trade mission, continuous non-custodial agent management, and a fixed-scope external integration conformance audit.',
     discovery: {
       wellKnown: baseUrl + '/.well-known/polydesk.json',
       catalog: baseUrl + '/api/a2mcp/services',

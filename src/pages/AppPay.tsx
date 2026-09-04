@@ -41,7 +41,7 @@ export default function AppPay() {
           Available now
         </div>
         <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Choose a PolyDesk product on OKX</h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">The current listings are being reconciled into three product contracts. Products without a marketplace ID are clearly marked as planned.</p>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">The current listings are being reconciled into three product contracts. Products without a marketplace ID are clearly marked as pending listing.</p>
         <div className="mt-5 grid gap-2">
           {polydeskMarketplaceProducts.map(product => {
             const url = marketplaceProductUrl(product)
@@ -50,7 +50,7 @@ export default function AppPay() {
                 <span className="block text-sm font-black text-gray-950 dark:text-white">{product.name}</span>
                 <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">{product.scope}</span>
               </span>
-              {url ? <ArrowUpRight className="h-4 w-4 shrink-0" /> : <span className="text-xs font-semibold text-gray-400">Planned</span>}
+              {url ? <ArrowUpRight className="h-4 w-4 shrink-0" /> : <span className="text-xs font-semibold text-gray-400">Listing pending</span>}
             </>
             return url ? (
               <a key={product.id} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.05]">{content}</a>

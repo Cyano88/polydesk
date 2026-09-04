@@ -34,7 +34,8 @@ test('catalog exposes exactly three products without promoting compatibility rou
   ])
   assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.type), ['A2A', 'A2A', 'A2A'])
   assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.marketplace.serviceId), [38484, 38496, null])
-  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.implementationStatus), ['production-capabilities', 'production-capabilities', 'planned'])
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.implementationStatus), ['production-capabilities', 'production-capabilities', 'production-capabilities'])
+  assert.deepEqual(polyDeskMarketplaceProducts[2].pricing, { mode: 'per-task', amountUsdt: 25 })
   assert.equal(polyDeskAgentServices().length, 6)
 })
 

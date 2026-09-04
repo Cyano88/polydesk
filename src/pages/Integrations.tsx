@@ -98,8 +98,8 @@ export default function Integrations() {
                 const price = product.pricing.mode === 'subscription'
                   ? `${product.pricing.amountUsdt} USDT monthly · ${product.pricing.freeTrialDays}-day trial`
                   : product.pricing.mode === 'per-task'
-                    ? `${product.pricing.amountUsdt} USDT per mission`
-                    : 'Marketplace listing planned'
+                    ? `${product.pricing.amountUsdt} USDT per ${product.lifecycle === 'assessment' ? 'assessment' : 'mission'}`
+                    : 'Pricing by scope'
                 return (
                   <article key={product.id} className={index === 0 ? 'rounded-3xl bg-gray-950 p-6 text-white dark:bg-white dark:text-gray-950' : 'rounded-3xl border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.04]'}>
                     <p className={index === 0 ? 'text-xs font-bold uppercase tracking-widest text-white/50 dark:text-gray-500' : 'text-xs font-bold uppercase tracking-widest text-gray-400'}>{product.lifecycle}</p>

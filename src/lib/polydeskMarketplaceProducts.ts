@@ -68,15 +68,15 @@ export const polymarketIntegrationConformanceAudit: PolyDeskMarketplaceProduct =
   id: 'polymarket-integration-conformance-audit',
   name: 'Polymarket Integration Conformance Audit',
   type: 'A2A',
-  scope: 'Evidence-backed assessment of an external platform\'s Polymarket payment, wallet, authorization, execution, recovery, and receipt controls.',
+  scope: 'A fixed-scope, evidence-backed assessment of one external platform\'s Polymarket payment, wallet, authorization, execution, recovery, and receipt controls.',
   lifecycle: 'assessment',
-  implementationStatus: 'planned',
+  implementationStatus: 'production-capabilities',
   marketplace: {
     serviceId: null,
     currentListingName: null,
     migrationStatus: 'not-listed',
   },
-  pricing: { mode: 'quote', amountUsdt: null },
+  pricing: { mode: 'per-task', amountUsdt: 25 },
   includes: [
     'machine-readable conformance report',
     'human-readable findings and remediation plan',

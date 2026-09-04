@@ -9,8 +9,8 @@ This document is the release gate for PolyDesk Agent `#5427`. It separates the t
 | Product | Type | Current listing | Price | Current readiness |
 |---|---|---:|---:|---|
 | One-Off Trade Mission | A2A | `#38484` PolyDesk Trading Agent | 0.1 USDT per task | Ready for host verification, then one controlled paid acceptance task |
-| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Adapter and scheduler live; controlled enrollment and lifecycle acceptance remain |
-| Polymarket Integration Conformance Audit | A2A | Not listed | Quote | Planned |
+| Manage My Polymarket Agent | A2A | `#38496` PolyDesk Trading Membership | 5 USDT per month, 3-day trial | Sandbox lifecycle accepted; full-price buyer migration and listing correction remain |
+| Polymarket Integration Conformance Audit | A2A | Not listed | 25 USDT per task | Contract and report validation implemented; marketplace listing pending |
 
 The marketplace currently also exposes six paid A2MCP listings. They remain compatibility capabilities during migration and are not additional products.
 
@@ -24,7 +24,9 @@ The marketplace currently also exposes six paid A2MCP listings. They remain comp
 6. The dedicated subscription adapter now binds exact OKX subscription identity, verified email, preferences, and pause/cancel/expiry to the portfolio subsystem. The marketplace description still advertises the legacy recurring-signals/copy-trading scope and must not be sold until corrected.
 7. The old worker accepted both `#38484` and `#38496`, allowing a subscription event to enter the one-off BUY path. The source now fails closed: only `#38484` is accepted.
 8. The private worker host is synchronized with the managed-subscription runtime. The one-off daemon remains active/enabled with no route from `#38496` into the BUY worker. A non-root five-minute managed-subscription reconciliation schedule completed an unattended live cycle successfully.
-9. Live marketplace truth shows three active `#38496` jobs: one full-price membership for buyer Agent `#2191` ending 2026-09-13 UTC, plus micro-priced sandbox/DACS checks for Agents `#1791` and `#8178` ending 2026-09-09 and 2026-09-24 UTC. None is enrolled in the new monitoring contract; do not assume there are zero active users or silently migrate the full-price buyer.
+9. Live marketplace truth shows three active `#38496` jobs: one full-price membership for buyer Agent `#2191` ending 2026-09-13 UTC, plus micro-priced sandbox/DACS checks for Agents `#1791` and `#8178` ending 2026-09-09 and 2026-09-24 UTC. The controlled Agent `#8178` acceptance exercised enrollment, verified email, pause, resume, monitoring, and a daily digest. The full-price buyer has not been migrated; do not silently change that buyer's contract.
+10. The provider task directory reports 96 non-terminal tasks: 86 open, 7 accepted, and 3 submitted. Five use a normal 0.1 or 0.3 USDT price; the other 91 are micro-priced checks. The directory response does not identify the selected service, so every normal-priced obligation must be reconciled before a legacy listing is removed.
+11. The conformance-audit report contract now enforces six mandatory controls, evidence-linked pass/fail results, remediation for failures, deterministic report identifiers, safe HTTPS origins, and rejection of credential-bearing fields. Its marketplace service ID does not exist yet.
 
 ## Gate A: One-Off Trade Mission
 
@@ -58,7 +60,7 @@ Do not start the trial or subscription until all checks pass:
 - copy trading requires a separate bounded authorization containing amount, maximum price, expiry, and market selection;
 - subscription activation, delivery, pause, cancellation, and expiry are covered by integration tests and one controlled live trial.
 
-Implemented controls awaiting live acceptance:
+Implemented and live-verified controls:
 
 - exact intersection of both official OKX active-subscription directories;
 - immutable provider `5427`, listing `38496`, and service UUID matching;
@@ -67,6 +69,8 @@ Implemented controls awaiting live acceptance:
 - restart-safe address selection across watched, deposit, trading, and fallback Polymarket addresses;
 - complete-snapshot reconciliation that disables missing or expired jobs but never treats a malformed directory response as an empty list.
 - multi-ASP account handling that verifies Agent `5427` through its sole exact subscription listing and each active job's explicit provider/buyer status when the account-level provider directory defaults to another ASP.
+- controlled sandbox enrollment, verified-email activation, pause/resume enforcement, daily-digest delivery, and restart-safe reconciliation.
+- first-snapshot suppression for existing profit, loss, and claimable states, preventing historical positions from generating alerts when monitoring is initialized.
 
 ## Gate C: Marketplace migration
 
@@ -77,8 +81,8 @@ After Gates A and B pass:
 3. update the Agent `#5427` profile to the three-product positioning;
 4. verify approval and active status after the edits;
 5. run discovery from a separate buyer session;
-6. roll down the six A2MCP compatibility listings only after their capabilities are reachable through the two production products;
-7. build and list Polymarket Integration Conformance Audit last.
+6. reconcile every normal-priced non-terminal provider task, then roll down the six A2MCP compatibility listings only after their capabilities are reachable through the two production products;
+7. list Polymarket Integration Conformance Audit at 25 USDT only after its report-contract tests pass and the correct owner account is active.
 
 ## Stop conditions
 
