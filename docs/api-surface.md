@@ -62,15 +62,16 @@ submits directly to Polymarket for final cryptographic verification.
 An integration that opens the managed portfolio UI should include one
 allowlisted channel key:
 
-- OKX.AI: `https://polydesk.trade/polydesk?service=portfolio&integration=okx-ai`
-- Circle marketplace: `https://polydesk.trade/polydesk?service=portfolio&integration=circle-marketplace`
+- OKX.AI: `https://polydesk.trade/polydesk?service=portfolio&portfolio=trading&wallet=monitor&integration=okx-ai`
+- Circle marketplace: `https://polydesk.trade/polydesk?service=portfolio&portfolio=trading&wallet=monitor&integration=circle-marketplace`
 - Direct PolyDesk: omit `integration` or use `integration=polydesk`
 
-When the user saves verified email alerts, PolyDesk persists only the channel
-key. Digest and funding-ready portfolio buttons are resolved server-side from
-that key. Arbitrary return URLs are never accepted. OKX.AI resolves to Agent
-#5427 by default. Circle routing remains on PolyDesk until the server operator
-sets `POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL` to the canonical HTTPS listing.
+After an authenticated user enters through one of these URLs, PolyDesk persists
+only the allowlisted channel key; no arbitrary return URL is accepted. Digest
+and funding-ready portfolio buttons are resolved server-side from that key.
+OKX.AI resolves to Agent #5427 by default. Circle routing remains on PolyDesk
+until the server operator sets `POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL` to the
+canonical HTTPS listing.
 
 ## Retired PolyDesk routes
 

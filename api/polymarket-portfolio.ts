@@ -2063,6 +2063,21 @@ export default async function handler(req: Request, res: Response) {
 
     const body = (req.body ?? {}) as Record<string, unknown>
 
+    if (action === 'set-integration-source') {
+      const integrationSource = polymarketIntegrationSource(body.integrationSource)
+      if (!integrationSource) return res.status(400).json({ ok: false, error: 'Unsupported integration source.' })
+      const saved = (await requirePool().query(
+        `insert into polymarket_alert_settings (privy_user_id, integration_source)
+         values ($1,$2)
+         on conflict (privy_user_id) do update set
+           integration_source = excluded.integration_source,
+           updated_at = now()
+         returning integration_source`,
+        [privyUserId, integrationSource],
+      )).rows[0]
+      return res.json({ ok: true, integrationSource: String(saved.integration_source) })
+    }
+
     if (action === 'record-lp-probes') {
       const requested = Array.isArray(body.probes) ? body.probes.slice(0, 8) : []
       if (!requested.length) return res.status(400).json({ ok: false, error: 'At least one LP probe is required.' })

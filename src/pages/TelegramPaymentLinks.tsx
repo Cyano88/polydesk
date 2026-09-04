@@ -7124,7 +7124,7 @@ export function PolyPortfolioPanel({
   const [claimNotice, setClaimNotice] = useState('')
   const [claimSuccess, setClaimSuccess] = useState('')
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(initialPortfolioAction === 'trading' && initialTradingWalletTab === 'monitor')
   const [settingsDraft, setSettingsDraft] = useState<PolymarketAlertSettings | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [watchLossThreshold, setWatchLossThreshold] = useState(20)
@@ -7165,6 +7165,7 @@ export function PolyPortfolioPanel({
   const [lpMakerRebatesToday, setLpMakerRebatesToday] = useState<number | null>(null)
   const [lpOrderCancelBusy, setLpOrderCancelBusy] = useState('')
   const [embeddedWalletBusy, setEmbeddedWalletBusy] = useState(false)
+  const integrationSourcePersisted = useRef('')
 
   useEffect(() => {
     const persisted: Record<string, LpProbeSample[]> = {}
@@ -7623,6 +7624,7 @@ export function PolyPortfolioPanel({
     setUnsignedPortfolioAction(initialPortfolioAction)
     if (initialPortfolioAction === 'trading') {
       setTradingWalletTab(initialTradingWalletTab ?? 'positions')
+      if (initialTradingWalletTab === 'monitor') setSettingsOpen(true)
     }
   }, [initialPortfolioAction, initialTradingWalletTab])
 
@@ -7822,6 +7824,41 @@ export function PolyPortfolioPanel({
       integrationSource: integrationSourceFromQuery ?? settings.integrationSource,
     })
   }, [settings, integrationSourceFromQuery])
+
+  useEffect(() => {
+    if (!authenticated || publicWatchToken || !integrationSourceFromQuery || !settings) return
+    if (settings.integrationSource === integrationSourceFromQuery) return
+    if (integrationSourcePersisted.current === integrationSourceFromQuery) return
+    integrationSourcePersisted.current = integrationSourceFromQuery
+    void (async () => {
+      try {
+        const token = await getAccessToken()
+        if (!token) {
+          integrationSourcePersisted.current = ''
+          return
+        }
+        const response = await fetch('/api/polymarket-portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            action: 'set-integration-source',
+            integrationSource: integrationSourceFromQuery,
+          }),
+        })
+        const data = await readPolyDeskJson<{ ok?: boolean; integrationSource?: PolymarketIntegrationSource }>(response, 'Could not remember the originating platform.')
+        if (!response.ok || !data.ok || data.integrationSource !== integrationSourceFromQuery) {
+          integrationSourcePersisted.current = ''
+          return
+        }
+        setBundle(current => current?.settings ? {
+          ...current,
+          settings: { ...current.settings, integrationSource: integrationSourceFromQuery },
+        } : current)
+      } catch {
+        integrationSourcePersisted.current = ''
+      }
+    })()
+  }, [authenticated, getAccessToken, integrationSourceFromQuery, publicWatchToken, settings])
 
   useEffect(() => {
     if (unsignedPortfolioAction !== 'trading') return
@@ -9957,7 +9994,7 @@ export function PolyPortfolioPanel({
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm dark:border-white/10 dark:bg-[#17181d]">
           {[
             { key: 'positions', label: 'Positions', icon: LineChart },
-            { key: 'monitor', label: 'Monitor', icon: Bell },
+            { key: 'monitor', label: 'Manage', icon: Bell },
             { key: 'fund', label: 'Fund', icon: Download },
             { key: 'withdraw', label: 'Withdraw', icon: ArrowRight },
           ].map(({ key, label, icon: Icon }) => (
@@ -10475,10 +10512,14 @@ export function PolyPortfolioPanel({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-              {unsignedPortfolioAction === 'trading' ? 'Portfolio monitor' : 'Watch alerts'}
+              {unsignedPortfolioAction === 'trading' ? 'Manage your agent' : 'Watch alerts'}
             </p>
             <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
-              {uniqueUnreadAlerts.length > 0 ? `${uniqueUnreadAlerts.length} active` : 'No active alerts'}
+              {uniqueUnreadAlerts.length > 0
+                ? `${uniqueUnreadAlerts.length} active alerts`
+                : settingsDraft
+                  ? 'Portfolio monitoring is active'
+                  : 'Connect your account to enable monitoring'}
             </p>
             {activeLpOrderCount > 0 && (
               <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
@@ -10491,9 +10532,44 @@ export function PolyPortfolioPanel({
             onClick={() => setSettingsOpen(open => !open)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/[0.04]"
           >
-            <Bell className="h-3.5 w-3.5" /> Settings
+            <Bell className="h-3.5 w-3.5" /> {settingsOpen ? 'Close controls' : 'Edit controls'}
           </button>
         </div>
+
+        {settingsDraft && (
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-gray-50 px-2.5 py-2 dark:bg-white/[0.04]">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Email</p>
+              <p className="mt-1 truncate text-xs font-semibold text-gray-800 dark:text-gray-100">
+                {settingsDraft.alertEmail || bundle?.verifiedEmail || 'Not connected'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-2.5 py-2 dark:bg-white/[0.04]">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">PnL rules</p>
+              <p className="mt-1 text-xs font-semibold text-gray-800 dark:text-gray-100">
+                {settingsDraft.lossThresholdPercent > 0 ? `-${settingsDraft.lossThresholdPercent}%` : 'Off'}
+                {' / '}
+                {settingsDraft.profitThresholdPercent > 0 ? `+${settingsDraft.profitThresholdPercent}%` : 'Off'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-2.5 py-2 dark:bg-white/[0.04]">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Summary</p>
+              <p className="mt-1 text-xs font-semibold capitalize text-gray-800 dark:text-gray-100">
+                {settingsDraft.digestFrequency}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {(integrationSourceFromQuery || settingsDraft?.integrationSource) && (
+          <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+            Connected through {(integrationSourceFromQuery ?? settingsDraft?.integrationSource) === 'okx-ai'
+              ? 'OKX.AI'
+              : (integrationSourceFromQuery ?? settingsDraft?.integrationSource) === 'circle-marketplace'
+                ? 'Circle Marketplace'
+                : 'PolyDesk'}. Email actions return you to that platform.
+          </p>
+        )}
 
         {settingsOpen && settingsDraft && (
           <div className="mt-2.5 space-y-2.5 rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
@@ -10623,7 +10699,7 @@ export function PolyPortfolioPanel({
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
             >
               {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Save settings
+              Save agent controls
             </button>
           </div>
         )}
