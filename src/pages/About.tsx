@@ -11,6 +11,7 @@ import {
   KeyIcon,
 } from '@heroicons/react/24/outline'
 import PolymarketMark from '../components/PolymarketMark'
+import { marketplaceProductPrice, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 import './about.css'
 
 type InfrastructureKey = 'polymarket' | 'sportmonks' | 'zeroscout' | 'hashpaylink' | 'okx' | 'xlayer'
@@ -213,7 +214,7 @@ export default function About() {
             PolyDesk
           </Link>
           <div className="flex items-center gap-5 text-sm">
-            <Link to="/integrations" className="hidden text-slate-500 transition hover:text-slate-950 sm:inline">Integrations</Link>
+            <Link to="/integrations" className="text-slate-500 transition hover:text-slate-950">Integrations</Link>
             <Link to="/docs" className="hidden text-slate-500 transition hover:text-slate-950 sm:inline">Docs</Link>
             <a href="https://x.com/PolyDeskTrade" target="_blank" rel="noreferrer" className="hidden text-slate-500 transition hover:text-slate-950 md:inline">Support</a>
             <Link to="/polydesk" className="about-primary-button about-header-cta">
@@ -251,7 +252,7 @@ export default function About() {
               />
               <figcaption className="about-media-overlay">
                 <span>PolyDesk on OKX.AI</span>
-                <strong>Direct tools and governed trading from one provider.</strong>
+                <strong>Three governed products from one provider.</strong>
               </figcaption>
             </figure>
           </div>
@@ -312,34 +313,28 @@ export default function About() {
 
           <div className="about-scene-copy about-product-copy order-1 max-w-xl lg:order-2">
             <p className="about-kicker">03 / Verify and distribute</p>
-            <h2 className="mt-4 text-balance text-[clamp(2.5rem,4.5vw,4.5rem)] font-semibold leading-[.98] tracking-[-0.055em]">Buy one result or delegate the complete mission.</h2>
+            <h2 className="mt-4 text-balance text-[clamp(2.5rem,4.5vw,4.5rem)] font-semibold leading-[.98] tracking-[-0.055em]">Three products. One control layer.</h2>
             <p className="mt-5 text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
-              Agent #5427 lets buyers purchase one machine-readable result, delegate one bounded trading task, or subscribe to recurring access. OKX.AI distributes the services; X Layer settles pay-per-use payments.
+              Buy one bounded trade, subscribe to continuous monitoring, or assess an external Polymarket integration. Agent #5427 is registered on OKX.AI and awaiting marketplace approval.
             </p>
             <InfrastructureBadges items={['okx', 'xlayer']} />
             <div className="about-offer-grid">
-              <div className="about-offer-column">
-                <p className="about-offer-label">Direct APIs</p>
+              <div className="about-offer-column about-offer-column--wide">
+                <p className="about-offer-label">PolyDesk products</p>
                 <dl>
-                  <div><dt>Football Match Live Data</dt><dd>0.1</dd></div>
-                  <div><dt>Football News Brief</dt><dd>0.1</dd></div>
-                  <div><dt>Verified Polymarket Funding</dt><dd>0.1</dd></div>
-                  <div><dt>Governed Polymarket Trader</dt><dd>0.1</dd></div>
-                  <div><dt>Polymarket LP Scout</dt><dd>0.3</dd></div>
+                  {polydeskMarketplaceProducts.map(product => (
+                    <div key={product.id}><dt>{product.name}</dt><dd>{marketplaceProductPrice(product)}</dd></div>
+                  ))}
                 </dl>
-              </div>
-              <div className="about-offer-column">
-                <p className="about-offer-label">Delegated access</p>
-                <dl>
-                  <div><dt>One-off trading task</dt><dd>0.1</dd></div>
-                  <div><dt>Trading membership</dt><dd>5 / month</dd></div>
-                </dl>
-                <p className="about-offer-currency">Prices in USDT</p>
+                <p className="about-offer-currency">Internal APIs support these products; they are not separate product lines.</p>
               </div>
             </div>
-            <a href="https://www.okx.ai/agents/5427" target="_blank" rel="noreferrer" className="about-primary-button mt-7 h-11 px-4">
-              View Agent 5427 <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-            </a>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link to="/integrations" className="about-primary-button h-11 px-4">Integration paths <ArrowLongRightIcon className="h-4 w-4" /></Link>
+              <a href="https://www.okx.ai/agents/5427" target="_blank" rel="noreferrer" className="about-secondary-button h-11 px-4">
+                View registration <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+              </a>
+            </div>
           </div>
         </div>
       </section>

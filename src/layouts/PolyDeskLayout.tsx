@@ -196,7 +196,7 @@ function PolyDeskWorkspace() {
           <div className="flex items-center gap-1.5">
             <Link
               to="/integrations"
-              className="hidden h-9 items-center rounded-full px-3 text-[11px] font-bold text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.08] dark:hover:text-white sm:inline-flex"
+              className="inline-flex h-9 items-center rounded-full px-2 text-[11px] font-bold text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.08] dark:hover:text-white sm:px-3"
             >
               Integrate
             </Link>

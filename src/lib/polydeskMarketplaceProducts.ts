@@ -97,3 +97,13 @@ export function marketplaceProductUrl(product: PolyDeskMarketplaceProduct) {
     ? 'https://www.okx.ai/agents/5427?source=polydesk#service-' + product.marketplace.serviceId
     : null
 }
+
+export function marketplaceProductPrice(product: PolyDeskMarketplaceProduct) {
+  if (product.pricing.mode === 'subscription') {
+    return `${product.pricing.amountUsdt} USDT / month${product.pricing.freeTrialDays ? `, ${product.pricing.freeTrialDays}-day trial` : ''}`
+  }
+  if (product.pricing.mode === 'per-task') {
+    return `${product.pricing.amountUsdt} USDT / ${product.lifecycle === 'assessment' ? 'assessment' : 'mission'}`
+  }
+  return 'Pricing by scope'
+}

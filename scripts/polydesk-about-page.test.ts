@@ -9,10 +9,11 @@ test('investor landing page leads with the verified PolyDesk value proposition',
 
   assert.ok(source.includes('Research the market. Govern the action. Keep the proof.'))
   assert.ok(source.includes('PolyDesk is a Polymarket intelligence and buyer-governed execution platform.'))
-  assert.ok(source.includes('Direct APIs'))
-  for (const service of ['Football Match Live Data', 'Football News Brief', 'Verified Polymarket Funding', 'Governed Polymarket Trader', 'Polymarket LP Scout']) assert.ok(source.includes(service))
-  assert.ok(source.includes('One-off trading task'))
-  assert.ok(source.includes('Trading membership'))
+  assert.ok(source.includes('Three products. One control layer.'))
+  assert.ok(source.includes('polydeskMarketplaceProducts.map'))
+  assert.ok(source.includes('marketplaceProductPrice(product)'))
+  assert.ok(source.includes('Internal APIs support these products; they are not separate product lines.'))
+  assert.ok(!source.includes('Direct APIs'))
   assert.ok(source.includes('The buyer keeps every wallet key and signature'))
 })
 

@@ -20,6 +20,7 @@ const sections = [
   {
     label: 'Machine interfaces',
     links: [
+      { label: 'Integration manifest', path: '/.well-known/polydesk.json', external: true },
       { label: 'Service catalog', path: '/api/a2mcp/services', external: true },
       { label: 'Trader flow', path: '/api/polymarket-agent-flow', external: true },
     ],

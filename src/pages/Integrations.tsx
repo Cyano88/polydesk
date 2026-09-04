@@ -9,7 +9,7 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import PolymarketMark from '../components/PolymarketMark'
-import { marketplaceProductUrl, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
+import { marketplaceProductPrice, marketplaceProductUrl, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 
 const audiences = [
   {
@@ -46,7 +46,7 @@ export default function Integrations() {
             PolyDesk
           </Link>
           <nav className='flex items-center gap-4 text-sm font-medium'>
-            <Link to='/docs' className='hidden text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white sm:inline'>Docs</Link>
+            <Link to='/docs' className='text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white'>Docs</Link>
             <Link to='/about' className='hidden text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white sm:inline'>About</Link>
             <Link to='/polydesk?agent=1' className='rounded-full bg-gray-950 px-4 py-2 text-white transition hover:bg-black dark:bg-white dark:text-gray-950'>Open PolyDesk</Link>
           </nav>
@@ -60,6 +60,10 @@ export default function Integrations() {
           <p className='mt-6 max-w-2xl text-lg leading-8 text-gray-600 dark:text-gray-300'>
             The web application is the human reference client. The same verified capabilities are available to agents and infrastructure through bounded, machine-readable services.
           </p>
+          <div className='mt-6 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100'>
+            <strong>OKX.AI status: registered</strong>
+            <span className='text-amber-800/80 dark:text-amber-100/70'>Public discovery begins after Agent #5427 marketplace approval.</span>
+          </div>
           <div className='mt-8 flex flex-wrap gap-3'>
             <Link to='/polydesk?agent=1' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
               Ask PolyDesk <ArrowRightIcon className='h-4 w-4' />
@@ -95,18 +99,13 @@ export default function Integrations() {
             <div className='grid gap-3'>
               {polydeskMarketplaceProducts.map((product, index) => {
                 const url = marketplaceProductUrl(product)
-                const price = product.pricing.mode === 'subscription'
-                  ? `${product.pricing.amountUsdt} USDT monthly · ${product.pricing.freeTrialDays}-day trial`
-                  : product.pricing.mode === 'per-task'
-                    ? `${product.pricing.amountUsdt} USDT per ${product.lifecycle === 'assessment' ? 'assessment' : 'mission'}`
-                    : 'Pricing by scope'
                 return (
                   <article key={product.id} className={index === 0 ? 'rounded-3xl bg-gray-950 p-6 text-white dark:bg-white dark:text-gray-950' : 'rounded-3xl border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.04]'}>
                     <p className={index === 0 ? 'text-xs font-bold uppercase tracking-widest text-white/50 dark:text-gray-500' : 'text-xs font-bold uppercase tracking-widest text-gray-400'}>{product.lifecycle}</p>
                     <h3 className='mt-2 text-xl font-semibold'>{product.name}</h3>
                     <p className={index === 0 ? 'mt-2 text-sm leading-6 text-white/70 dark:text-gray-600' : 'mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'}>{product.scope}</p>
-                    <p className='mt-5 text-sm font-semibold'>{price}</p>
-                    {url && <a className='mt-4 inline-flex items-center gap-2 text-sm font-semibold underline underline-offset-4' href={url} target='_blank' rel='noreferrer'>Current listing <ArrowTopRightOnSquareIcon className='h-4 w-4' /></a>}
+                    <p className='mt-5 text-sm font-semibold'>{marketplaceProductPrice(product)}</p>
+                    {url && <a className='mt-4 inline-flex items-center gap-2 text-sm font-semibold underline underline-offset-4' href={url} target='_blank' rel='noreferrer'>View registration <ArrowTopRightOnSquareIcon className='h-4 w-4' /></a>}
                   </article>
                 )
               })}
@@ -153,7 +152,7 @@ export default function Integrations() {
           <div className='mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 sm:flex-row sm:items-center'>
             <div>
               <h2 className='text-2xl font-semibold'>Build on PolyDesk.</h2>
-              <p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>Start with the versioned public manifest or inspect the live OKX.AI service catalog.</p>
+              <p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>Start with the versioned manifest. Use the integration audit when you want PolyDesk to assess an existing platform flow.</p>
             </div>
             <div className='flex flex-wrap gap-3'>
               <Link to='/docs/okx-ai' className='inline-flex min-h-11 items-center rounded-full bg-gray-950 px-5 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>Developer guide</Link>

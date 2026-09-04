@@ -81,7 +81,7 @@ export default function DocsOverview() {
             ['Sportmonks', 'Source-backed football fixtures, scores, events, and news.'],
             ['ZeroScout', 'Verified intelligence and stored proof for paid LP Scout results.'],
             ['Hash PayLink', 'Funding checkout, payment verification, settlement status, and receipts.'],
-            ['OKX.AI', 'Agent #5427 discovery, direct services, and governed trading tasks.'],
+            ['OKX.AI', 'Review and distribution for Agent #5427 and its three A2A products.'],
             ['X Layer', 'USDT settlement for pay-per-use marketplace services.'],
           ]}
         />

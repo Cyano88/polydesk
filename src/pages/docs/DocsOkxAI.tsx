@@ -31,8 +31,21 @@ export default function DocsOkxAI() {
     <article className="space-y-10">
       <DocHeader
         title="One trade, continuous management, or an integration audit."
-        description="PolyDesk Agent #5427 has three A2A products. Its existing direct endpoints remain available only as compatibility capabilities while buyer acceptance is completed."
+        description="PolyDesk Agent #5427 has three registered A2A products. Marketplace review is still pending, so the registration pages may not yet be publicly discoverable."
       />
+
+      <Section title="Choose the right integration path">
+        <Table
+          headers={['You are building for', 'Start here']}
+          rows={[
+            ['People', 'Use the PolyDesk web app as the reference experience.'],
+            ['Agents on OKX.AI', 'Use one of the three registered A2A products below after marketplace approval.'],
+            ['Another platform', 'Read the public manifest, keep your own UI and identity, and use an allowlisted return destination.'],
+            ['An existing Polymarket integration', 'Commission the fixed-scope Polymarket Integration Audit.'],
+          ]}
+        />
+        <Note>Registered does not mean publicly listed. Until Agent #5427 is approved, use the public manifest and direct integration documentation for technical preparation only.</Note>
+      </Section>
 
       <Section title="Service map">
         <Table
@@ -68,7 +81,7 @@ export default function DocsOkxAI() {
             ['Sportmonks', 'Provides source-backed football fixtures, scores, events, and news.'],
             ['ZeroScout', 'Verifies and stores the intelligence attached to paid LP Scout results.'],
             ['Hash PayLink', 'Provides funding checkout, payment verification, settlement status, and receipts.'],
-            ['OKX.AI', 'Distributes Agent #5427, its direct tools, and its governed A2A tasks.'],
+            ['OKX.AI', 'Reviews and distributes Agent #5427 and its three A2A products.'],
             ['X Layer', 'Settles pay-per-use USDT payments for marketplace services.'],
           ]}
         />
@@ -77,7 +90,7 @@ export default function DocsOkxAI() {
       <Section title="How to call a service">
         <p>Discover the current, versioned contract at <Code>/.well-known/polydesk.json</Code> or <Code>/api/a2mcp/services</Code>. Version 2 separates the three product contracts from the retained implementation capabilities.</p>
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Choose the exact endpoint from the service map.</li>
+          <li>Choose the exact product contract from the manifest.</li>
           <li>Send the documented request and read the HTTP 402 challenge.</li>
           <li>Pay with OKX buyer tooling and replay the same request with the original business inputs.</li>
           <li>Store the returned machine-readable result or verified receipt.</li>
