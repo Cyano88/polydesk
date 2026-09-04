@@ -9,11 +9,7 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import PolymarketMark from '../components/PolymarketMark'
-import {
-  okxMarketplaceServices,
-  okxTradingAgentService,
-  okxTradingTaskService,
-} from '../lib/okxMarketplaceServices'
+import { marketplaceProductUrl, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 
 const audiences = [
   {
@@ -93,34 +89,28 @@ export default function Integrations() {
           <div className='grid gap-12 lg:grid-cols-[0.8fr_1.2fr]'>
             <div>
               <p className='text-xs font-bold uppercase tracking-[0.2em] text-gray-500'>Service model</p>
-              <h2 className='mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Use one capability or delegate the mission.</h2>
-              <p className='mt-4 leading-7 text-gray-600 dark:text-gray-300'>Direct tools return one focused result. The Trading Task coordinates one bounded mission. Membership provides recurring access without transferring wallet custody.</p>
+              <h2 className='mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Three products. One non-custodial control layer.</h2>
+              <p className='mt-4 leading-7 text-gray-600 dark:text-gray-300'>Run one bounded mission, continuously manage an agent, or assess an external Polymarket integration. Internal API capabilities support these products; they are not separate product lines.</p>
             </div>
             <div className='grid gap-3'>
-              <article className='rounded-3xl bg-gray-950 p-6 text-white dark:bg-white dark:text-gray-950'>
-                <p className='text-xs font-bold uppercase tracking-widest text-white/50 dark:text-gray-500'>One mission</p>
-                <h3 className='mt-2 text-xl font-semibold'>{okxTradingTaskService.name}</h3>
-                <p className='mt-2 text-sm leading-6 text-white/70 dark:text-gray-600'>{okxTradingTaskService.summary}</p>
-                <p className='mt-5 text-sm font-semibold'>{okxTradingTaskService.priceUsdt} USDT per task</p>
-              </article>
-              <article className='rounded-3xl border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.04]'>
-                <p className='text-xs font-bold uppercase tracking-widest text-gray-400'>Recurring access</p>
-                <h3 className='mt-2 text-xl font-semibold'>{okxTradingAgentService.name}</h3>
-                <p className='mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'>{okxTradingAgentService.summary}</p>
-                <p className='mt-5 text-sm font-semibold'>{okxTradingAgentService.subscriptionUsdtMonthly} USDT monthly · {okxTradingAgentService.freeTrialDays}-day trial</p>
-              </article>
+              {polydeskMarketplaceProducts.map((product, index) => {
+                const url = marketplaceProductUrl(product)
+                const price = product.pricing.mode === 'subscription'
+                  ? `${product.pricing.amountUsdt} USDT monthly · ${product.pricing.freeTrialDays}-day trial`
+                  : product.pricing.mode === 'per-task'
+                    ? `${product.pricing.amountUsdt} USDT per mission`
+                    : 'Marketplace listing planned'
+                return (
+                  <article key={product.id} className={index === 0 ? 'rounded-3xl bg-gray-950 p-6 text-white dark:bg-white dark:text-gray-950' : 'rounded-3xl border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.04]'}>
+                    <p className={index === 0 ? 'text-xs font-bold uppercase tracking-widest text-white/50 dark:text-gray-500' : 'text-xs font-bold uppercase tracking-widest text-gray-400'}>{product.lifecycle}</p>
+                    <h3 className='mt-2 text-xl font-semibold'>{product.name}</h3>
+                    <p className={index === 0 ? 'mt-2 text-sm leading-6 text-white/70 dark:text-gray-600' : 'mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'}>{product.scope}</p>
+                    <p className='mt-5 text-sm font-semibold'>{price}</p>
+                    {url && <a className='mt-4 inline-flex items-center gap-2 text-sm font-semibold underline underline-offset-4' href={url} target='_blank' rel='noreferrer'>Current listing <ArrowTopRightOnSquareIcon className='h-4 w-4' /></a>}
+                  </article>
+                )
+              })}
             </div>
-          </div>
-
-          <div className='mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-            {okxMarketplaceServices.map(service => (
-              <article key={service.key} className='rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.035]'>
-                <p className='text-[10px] font-bold uppercase tracking-widest text-gray-400'>Direct service #{service.serviceId}</p>
-                <h3 className='mt-2 font-semibold'>{service.name}</h3>
-                <p className='mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'>{service.summary}</p>
-                <code className='mt-4 block truncate rounded-lg bg-gray-100 px-3 py-2 text-[11px] text-gray-600 dark:bg-black/20 dark:text-gray-400'>{service.endpoint.replace('https://polydesk.trade', '')}</code>
-              </article>
-            ))}
           </div>
         </section>
 

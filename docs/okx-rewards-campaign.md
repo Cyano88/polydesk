@@ -4,7 +4,7 @@ Status: approved pilot; public claims and payouts remain disabled until the fund
 
 ## Product priority
 
-The public campaign leads with the PolyDesk Trading Agent subscription. It coordinates one bounded Polymarket BUY from a public signal through account readiness, buyer-controlled execution, and public PnL evidence. The five paid A2MCP services remain visible as direct tools the A2A agent can call.
+The public campaign leads with One-Off Trade Mission, currently mapped to service `#38484`. Manage My Polymarket Agent is the separate recurring monitoring product currently mapped to `#38496`; it must not be described as another one-off trade package. Six paid A2MCP listings remain callable as compatibility capabilities during migration, not as additional product lines.
 
 The A2A subscription has its own proof model. It must not be submitted to the direct-API transaction-hash claim path. A2A tester rewards remain closed until PolyDesk records an accepted OKX job, its delivered autotrade instruction, the buyer-controlled execution, and the resulting public PnL receipt as one verifiable mission.
 
@@ -22,7 +22,7 @@ An activity is eligible only when PolyDesk itself observes all of the following:
 
 1. An OKX Agent Payments Protocol settlement succeeds.
 2. The paid replay returns a successful response.
-3. The service is one of Agent #5427's five registered services.
+3. The service is one of Agent #5427's six registered direct compatibility capabilities.
 4. The payer and X Layer transaction hash are present.
 5. The payer is not an excluded operator, treasury or test wallet.
 6. The settled amount exactly matches the registered service price.

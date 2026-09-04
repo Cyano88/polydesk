@@ -5,7 +5,7 @@ const response = await fetch(`${baseUrl}/.well-known/polydesk.json`, {
 
 if (!response.ok) throw new Error(`PolyDesk discovery returned HTTP ${response.status}`)
 const manifest = await response.json()
-if (manifest.schema !== 'polydesk-integration-manifest' || manifest.schemaVersion !== '1.0.0') {
+if (manifest.schema !== 'polydesk-integration-manifest' || manifest.schemaVersion !== '2.0.0') {
   throw new Error('Unsupported PolyDesk integration manifest')
 }
 
@@ -13,12 +13,18 @@ console.log(JSON.stringify({
   provider: manifest.provider,
   status: manifest.status,
   payment: manifest.integration.payment,
-  services: manifest.services.map(service => ({
-    id: service.id,
-    marketplaceServiceId: service.marketplaceServiceId,
-    method: service.method,
-    endpoint: `${manifest.baseUrl}${service.endpoint}`,
-    price: service.price,
-    requestSchema: service.requestSchema,
+  products: manifest.products.map(product => ({
+    id: product.id,
+    name: product.name,
+    type: product.type,
+    implementationStatus: product.implementationStatus,
+    marketplace: product.marketplace,
+    pricing: product.pricing,
+  })),
+  capabilities: manifest.capabilities.map(capability => ({
+    id: capability.id,
+    method: capability.method,
+    endpoint: `${manifest.baseUrl}${capability.endpoint}`,
+    requestSchema: capability.requestSchema,
   })),
 }, null, 2))

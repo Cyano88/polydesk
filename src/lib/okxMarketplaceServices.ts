@@ -1,3 +1,5 @@
+import { manageMyPolymarketAgent, oneOffTradeMission, polydeskMarketplaceProducts } from './polydeskMarketplaceProducts'
+
 export type OkxMarketplaceService = {
   key: 'football-live' | 'football-news' | 'verified-funding' | 'governed-trader' | 'lp-scout' | 'smart-trader'
   serviceId: number
@@ -11,19 +13,21 @@ const OKX_AGENT_ID = 5427
 const OKX_AGENT_URL = `https://www.okx.ai/agents/${OKX_AGENT_ID}`
 
 export const okxTradingAgentService = {
-  serviceId: 38496,
-  name: 'PolyDesk Trading Membership',
-  summary: 'One bounded Polymarket BUY from public signal through account readiness, buyer-controlled execution, and public PnL evidence.',
-  subscriptionUsdtMonthly: 5,
-  freeTrialDays: 3,
+  serviceId: manageMyPolymarketAgent.marketplace.serviceId as number,
+  name: manageMyPolymarketAgent.name,
+  summary: manageMyPolymarketAgent.scope,
+  subscriptionUsdtMonthly: manageMyPolymarketAgent.pricing.amountUsdt as number,
+  freeTrialDays: manageMyPolymarketAgent.pricing.freeTrialDays as number,
 } as const
 
 export const okxTradingTaskService = {
-  serviceId: 38484,
-  name: 'PolyDesk Trading Agent',
-  summary: 'One bounded Polymarket BUY mission with buyer-controlled execution and public PnL evidence.',
-  priceUsdt: 0.1,
+  serviceId: oneOffTradeMission.marketplace.serviceId as number,
+  name: oneOffTradeMission.name,
+  summary: oneOffTradeMission.scope,
+  priceUsdt: oneOffTradeMission.pricing.amountUsdt as number,
 } as const
+
+export { polydeskMarketplaceProducts }
 
 export const okxMarketplaceServices: OkxMarketplaceService[] = [
   {
@@ -92,8 +96,8 @@ export function matchOkxMarketplaceService(value: string) {
 }
 
 export function okxMarketplaceServiceLinks() {
-  return okxMarketplaceServices.map(service => ({
-    label: service.name,
-    url: okxMarketplaceServiceUrl(service),
-  }))
+  return polydeskMarketplaceProducts.flatMap(product => product.marketplace.serviceId ? [{
+    label: product.name,
+    url: okxMarketplaceServiceUrl({ serviceId: product.marketplace.serviceId }),
+  }] : [])
 }

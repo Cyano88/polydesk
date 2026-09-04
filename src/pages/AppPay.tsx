@@ -1,5 +1,5 @@
 import { ArrowUpRight, CircleDollarSign, CreditCard, FlaskConical, LockKeyhole } from '../components/icons'
-import { okxMarketplaceServices, okxMarketplaceServiceUrl } from '../lib/okxMarketplaceServices'
+import { marketplaceProductUrl, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 
 const plannedServices = [
   { icon: FlaskConical, title: 'Market apps' },
@@ -40,24 +40,24 @@ export default function AppPay() {
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-gray-950 text-[9px] tracking-normal text-white dark:bg-white dark:text-gray-950">OKX</span>
           Available now
         </div>
-        <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Choose a PolyDesk service on OKX</h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">Open the exact service card, then tap <strong className="font-black text-gray-700 dark:text-gray-200">Use now</strong> for its agent-ready instruction.</p>
+        <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Choose a PolyDesk product on OKX</h2>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">The current listings are being reconciled into three product contracts. Products without a marketplace ID are clearly marked as planned.</p>
         <div className="mt-5 grid gap-2">
-          {okxMarketplaceServices.map(service => (
-            <a
-              key={service.serviceId}
-              href={okxMarketplaceServiceUrl(service)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.05]"
-            >
+          {polydeskMarketplaceProducts.map(product => {
+            const url = marketplaceProductUrl(product)
+            const content = <>
               <span>
-                <span className="block text-sm font-black text-gray-950 dark:text-white">{service.name}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">{service.summary}</span>
+                <span className="block text-sm font-black text-gray-950 dark:text-white">{product.name}</span>
+                <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-gray-400">{product.scope}</span>
               </span>
-              <ArrowUpRight className="h-4 w-4 shrink-0" />
-            </a>
-          ))}
+              {url ? <ArrowUpRight className="h-4 w-4 shrink-0" /> : <span className="text-xs font-semibold text-gray-400">Planned</span>}
+            </>
+            return url ? (
+              <a key={product.id} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/[0.05]">{content}</a>
+            ) : (
+              <div key={product.id} className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 text-left dark:border-white/10">{content}</div>
+            )
+          })}
         </div>
       </section>
     </div>

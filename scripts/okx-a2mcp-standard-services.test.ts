@@ -12,10 +12,9 @@ import okxA2mcpStandardServiceHandler, {
 } from '../api/okx-a2mcp-standard-services.js'
 import a2mcpServicesHandler, {
   polyDeskAgentServices,
-  polyDeskMarketplaceA2aServices,
-  polyDeskOkxMarketplacePlan,
+  polyDeskMarketplaceProducts,
 } from '../api/a2mcp-services.js'
-import { okxMarketplaceServices, okxTradingAgentService, okxTradingTaskService } from '../src/lib/okxMarketplaceServices.js'
+import { okxMarketplaceServices } from '../src/lib/okxMarketplaceServices.js'
 
 test('public service catalog documents optional football relevance filters', () => {
   const services = polyDeskAgentServices()
@@ -26,16 +25,17 @@ test('public service catalog documents optional football relevance filters', () 
   assert.ok(news?.input.includes('optional league name'))
 })
 
-test('catalog exposes the four-service OKX AI migration plan without removing compatibility routes', () => {
-  assert.equal(polyDeskOkxMarketplacePlan.length, 4)
-  assert.deepEqual(polyDeskOkxMarketplacePlan.map(service => service.name), [
-    'PolyDesk Agent Trade Rail',
-    'PolyDesk Market Intelligence',
-    'PolyDesk Trader Intelligence and Governed Copy',
-    'PolyDesk Research Mission',
+test('catalog exposes exactly three products without promoting compatibility routes', () => {
+  assert.equal(polyDeskMarketplaceProducts.length, 3)
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.name), [
+    'One-Off Trade Mission',
+    'Manage My Polymarket Agent',
+    'Polymarket Integration Conformance Audit',
   ])
-  assert.deepEqual(polyDeskOkxMarketplacePlan.map(service => service.type), ['A2MCP', 'A2MCP', 'A2MCP', 'A2A'])
-  assert.ok(polyDeskAgentServices().length >= 6)
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.type), ['A2A', 'A2A', 'A2A'])
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.marketplace.serviceId), [38484, 38496, null])
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.implementationStatus), ['production-capabilities', 'production-capabilities', 'planned'])
+  assert.equal(polyDeskAgentServices().length, 6)
 })
 
 test('versioned integration manifest matches the verified marketplace registry', () => {
@@ -44,13 +44,6 @@ test('versioned integration manifest matches the verified marketplace registry',
   assert.deepEqual(
     direct.map(service => service.marketplaceServiceId).sort((a, b) => a - b),
     okxMarketplaceServices.map(service => service.serviceId).sort((a, b) => a - b),
-  )
-  assert.deepEqual(
-    polyDeskMarketplaceA2aServices.map(service => [service.serviceId, service.name]),
-    [
-      [okxTradingTaskService.serviceId, okxTradingTaskService.name],
-      [okxTradingAgentService.serviceId, okxTradingAgentService.name],
-    ],
   )
   for (const service of direct) {
     assert.equal(service.status, 'production')
@@ -77,7 +70,7 @@ test('public integration manifest declares discovery, payment, polling, and cust
   a2mcpServicesHandler({} as Request, res)
 
   assert.equal(body.schema, 'polydesk-integration-manifest')
-  assert.equal(body.schemaVersion, '1.0.0')
+  assert.equal(body.schemaVersion, '2.0.0')
   assert.equal(body.status, 'production')
   assert.equal(body.discovery.wellKnown, 'https://polydesk.trade/.well-known/polydesk.json')
   assert.equal(body.integration.payment.requiredStatus, 402)
@@ -88,8 +81,13 @@ test('public integration manifest declares discovery, payment, polling, and cust
   assert.equal(body.integration.asynchronousResults.callbacksSupported, false)
   assert.match(body.integration.custody, /never accepts private keys/i)
   assert.deepEqual(body.integration.returnRouting.allowlistedSources, ['polydesk', 'okx-ai', 'circle-marketplace'])
-  assert.equal(body.marketplace.a2aServices.length, 2)
-  assert.equal(body.marketplace.directServices.length, 6)
+  assert.equal(body.products.length, 3)
+  assert.equal(body.services.length, 3)
+  assert.equal(body.capabilities.length, 6)
+  assert.equal(body.marketplace.products.length, 3)
+  assert.equal(body.marketplace.currentCompatibilityListings.a2a.length, 2)
+  assert.equal(body.marketplace.currentCompatibilityListings.directA2mcp.length, 6)
+  assert.doesNotMatch(JSON.stringify(body.products), /Agent Trade Rail|Research Mission|Smart Market OOS Trader/)
   assert.equal(headers['Cache-Control'], 'public, max-age=300')
 })
 

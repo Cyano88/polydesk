@@ -148,7 +148,7 @@ export default function OkxRewards() {
             <dt className="text-xs font-medium text-gray-400">Governed trading</dt>
             <dd className="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{okxTradingTaskService.priceUsdt} USDT / task</dd>
             <dd className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">or {okxTradingAgentService.subscriptionUsdtMonthly} USDT / month</dd>
-            <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">{okxTradingAgentService.freeTrialDays}-day membership trial</dd>
+            <dd className="mt-1 text-xs text-gray-500 dark:text-gray-400">{okxTradingAgentService.freeTrialDays}-day managed-agent trial</dd>
           </dl>
         </div>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -156,7 +156,7 @@ export default function OkxRewards() {
             Buy one trading task <ArrowRight className="h-4 w-4" />
           </a>
           <a href={okxMarketplaceServiceUrl(okxTradingAgentService)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gray-950 px-5 text-sm font-semibold text-white transition hover:bg-black dark:bg-white dark:text-gray-950">
-            Start membership <ArrowRight className="h-4 w-4" />
+            Manage my agent <ArrowRight className="h-4 w-4" />
           </a>
           <a href="#how-it-works" className="inline-flex h-11 items-center justify-center rounded-full border border-gray-300 px-5 text-sm font-semibold text-gray-700 transition hover:border-gray-400 dark:border-white/15 dark:text-gray-200">
             How it works
@@ -188,7 +188,7 @@ export default function OkxRewards() {
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">Direct tools</p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">Need one result instead?</h2>
           </div>
-          <p className="max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Buy one API call without starting a full trading mission.</p>
+          <p className="max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Legacy pay-per-call capabilities remain available during the marketplace migration. They are not additional product lines.</p>
         </div>
         <div className="mt-5 divide-y divide-gray-200 border-y border-gray-200 dark:divide-white/10 dark:border-white/10">
           {okxMarketplaceServices.map(service => (

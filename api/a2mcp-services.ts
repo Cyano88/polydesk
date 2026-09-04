@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { standardServiceInputSchema, type StandardServicePath } from './okx-a2mcp-standard-services.js'
+import { polydeskMarketplaceProducts } from '../src/lib/polydeskMarketplaceProducts.js'
 
 type Service = {
   id: string
@@ -142,62 +143,7 @@ export function polyDeskAgentServices() {
   }))
 }
 
-export const polyDeskMarketplaceA2aServices = [
-  {
-    serviceId: 38484,
-    name: 'PolyDesk Trading Agent',
-    type: 'A2A',
-    pricing: { mode: 'per-task', amount: '0.1', asset: 'USDT' },
-  },
-  {
-    serviceId: 38496,
-    name: 'PolyDesk Trading Membership',
-    type: 'A2A',
-    pricing: { mode: 'subscription', amount: '5', asset: 'USDT', interval: 'month', freeTrialHours: 72 },
-  },
-] as const
-
-export const polyDeskOkxMarketplacePlan = [
-  {
-    id: 'polydesk-agent-trade-rail',
-    name: 'PolyDesk Agent Trade Rail',
-    type: 'A2MCP',
-    role: 'Flagship bundled workflow',
-    capabilityEndpoints: [
-      '/api/a2mcp/polymarket-smart-trader',
-      '/api/a2mcp/polymarket-funding-link',
-      '/api/a2mcp/polymarket-agent-flow',
-    ],
-    launchState: 'available-via-composed-services',
-  },
-  {
-    id: 'polydesk-market-intelligence',
-    name: 'PolyDesk Market Intelligence',
-    type: 'A2MCP',
-    role: 'Evidence-backed market analysis and durable decision receipt',
-    capabilityEndpoints: ['/api/a2mcp/polymarket-smart-trader'],
-    launchState: 'production',
-  },
-  {
-    id: 'polydesk-trader-intelligence',
-    name: 'PolyDesk Trader Intelligence and Governed Copy',
-    type: 'A2MCP',
-    role: 'Public-wallet analysis, position ranking, and bounded copy preparation',
-    capabilityEndpoints: [
-      '/api/a2mcp/polymarket-portfolio-watch',
-      '/api/a2mcp/polymarket-smart-trader',
-    ],
-    launchState: 'production',
-  },
-  {
-    id: 'polydesk-research-mission',
-    name: 'PolyDesk Research Mission',
-    type: 'A2A',
-    role: 'Custom multi-market, trader, or strategy investigation',
-    capabilityEndpoints: [],
-    launchState: 'available-via-a2a-services',
-  },
-] as const
+export const polyDeskMarketplaceProducts = polydeskMarketplaceProducts
 
 export default function a2mcpServicesHandler(_req: Request, res: Response) {
   const baseUrl = String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, '')
@@ -206,13 +152,13 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
   res.json({
     ok: true,
     schema: 'polydesk-integration-manifest',
-    schemaVersion: '1.0.0',
+    schemaVersion: '2.0.0',
     status: 'production',
     provider: 'PolyDesk',
     agentId: AGENT_ID,
     protocol: 'OKX Agent Payments Protocol',
     baseUrl,
-    summary: 'PolyDesk exposes production Polymarket intelligence, verified funding, governed trading, and portfolio services for people, agents, and platforms.',
+    summary: 'PolyDesk offers one bounded trade mission, continuous non-custodial agent management, and a planned external integration conformance audit.',
     discovery: {
       wellKnown: baseUrl + '/.well-known/polydesk.json',
       catalog: baseUrl + '/api/a2mcp/services',
@@ -248,14 +194,23 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     marketplace: {
       agentId: AGENT_ID,
       profileUrl: AGENT_PROFILE_URL,
-      a2aServices: polyDeskMarketplaceA2aServices,
-      directServices: publicServices.map(service => service.marketplace),
+      targetProductCount: polyDeskMarketplaceProducts.length,
+      products: polyDeskMarketplaceProducts,
+      currentCompatibilityListings: {
+        a2a: [
+          { serviceId: 38484, listingName: 'PolyDesk Trading Agent', targetProductId: 'one-off-trade-mission' },
+          { serviceId: 38496, listingName: 'PolyDesk Trading Membership', targetProductId: 'manage-my-polymarket-agent' },
+        ],
+        directA2mcp: publicServices.map(service => service.marketplace),
+      },
+      migrationRule: 'Keep current listings live until the three-product contract is tested. Then rename the two A2A listings and roll down superseded direct listings in one controlled migration.',
     },
-    marketplacePlan: polyDeskOkxMarketplacePlan,
+    products: polyDeskMarketplaceProducts,
+    capabilities: publicServices,
     compatibilityServices: publicServices,
-    deprecatedAliases: ['marketplacePlan', 'compatibilityServices'],
-    rule: 'Every service returns machine-readable JSON. Each registered marketplace route issues a non-zero x402 challenge and returns its result only on the paid replay.',
-    services: publicServices,
+    deprecatedAliases: ['compatibilityServices'],
+    rule: 'Products are the customer-facing marketplace offers. Capabilities are retained implementation routes and must not be presented as additional products.',
+    services: polyDeskMarketplaceProducts,
     docs: '/docs/okx-ai',
   })
 }

@@ -93,12 +93,12 @@ export default function DocsOverview() {
       </Section>
 
       <Section title="For agents and developers">
-        <p>The versioned public machine manifest lists the six direct services, their request schemas, prices, payment contract, free preparation calls, recovery routes, and safety boundaries.</p>
+        <p>The versioned public machine manifest declares three customer-facing products and separately documents the retained implementation capabilities, payment contract, recovery routes, and safety boundaries.</p>
         <CodeBlock>{`curl https://polydesk.trade/api/a2mcp/services`}</CodeBlock>
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Need information only? Use Football Match Live Data, Football News Brief, or LP Scout.</li>
-          <li>Need account funding? Use Verified Polymarket Funding with the owner EOA.</li>
-          <li>Need a governed trade? Read <Code>/api/polymarket-agent-flow</Code> and follow its single <Code>nextAction</Code>.</li>
+          <li>Need one bounded result? Use One-Off Trade Mission.</li>
+          <li>Need continuous alerts and summaries? Use Manage My Polymarket Agent.</li>
+          <li>Need an external integration assessed? Use the planned Polymarket Integration Conformance Audit.</li>
         </ol>
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/okx-ai">Continue to the OKX.AI service guide</Link></p>
       </Section>
