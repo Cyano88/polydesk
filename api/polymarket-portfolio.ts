@@ -21,6 +21,7 @@ import { fetchHashPayLinkPolymarketFundingStatus } from './hashpaylink-polymarke
 import { latestHashPayLinkCheckoutEvent, type StoredHashPayLinkWebhookEvent } from './hashpaylink-webhook-store.js'
 import { checkPolymarketAccountReadiness } from './polymarket-account-readiness.js'
 import { nextPolymarketDigestAt, type PolymarketDigestFrequency, validDigestTimezone } from './polymarket-digest-schedule.js'
+import { polymarketIntegrationSource, polymarketPortfolioDestination } from './polymarket-alert-destination.js'
 import { ensurePolymarketDepositWallet } from './polymarket-deposit-wallet.js'
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from './polymarket-lp-recovery.js'
 
@@ -104,6 +105,7 @@ function ensureSchema() {
         last_digest_at timestamptz,
         digest_lease_id text,
         digest_lease_until timestamptz,
+        integration_source text not null default 'polydesk',
         alert_email text,
         updated_at timestamptz not null default now()
       );
@@ -131,7 +133,8 @@ function ensureSchema() {
         add column if not exists next_digest_at timestamptz,
         add column if not exists last_digest_at timestamptz,
         add column if not exists digest_lease_id text,
-        add column if not exists digest_lease_until timestamptz;
+        add column if not exists digest_lease_until timestamptz,
+        add column if not exists integration_source text not null default 'polydesk';
 
       create table if not exists polymarket_watchlist (
         id serial primary key,
@@ -661,6 +664,16 @@ async function retryPendingAlertEmails(privyUserId: string, address: string, to:
   }
 }
 
+function portfolioAlertDestination(source: unknown) {
+  const configuredOrigin = (process.env.POLYDESK_PUBLIC_ORIGIN ?? process.env.PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '')
+  const polydeskOrigin = /^https:\/\/[^/]+$/i.test(configuredOrigin) ? configuredOrigin : 'https://polydesk.trade'
+  return polymarketPortfolioDestination(source, {
+    polydeskUrl: `${polydeskOrigin}/polydesk?service=portfolio`,
+    okxAiUrl: process.env.POLYDESK_OKX_AI_RETURN_URL,
+    circleMarketplaceUrl: process.env.POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL,
+  })
+}
+
 async function notifyFundingReady(input: {
   privyUserId: string
   fundingAttemptId: number
@@ -670,7 +683,7 @@ async function notifyFundingReady(input: {
   pusdBalance: string
 }) {
   const settings = (await requirePool().query(
-    `select alert_email, alert_email_verified
+    `select alert_email, alert_email_verified, integration_source
        from polymarket_alert_settings
       where privy_user_id = $1`,
     [input.privyUserId],
@@ -678,6 +691,7 @@ async function notifyFundingReady(input: {
   const email = settings?.alert_email_verified && settings?.alert_email
     ? String(settings.alert_email)
     : null
+  const destination = portfolioAlertDestination(settings?.integration_source)
   await requirePool().query(
     `insert into polymarket_alert_history
       (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot, email_status)
@@ -693,8 +707,9 @@ async function notifyFundingReady(input: {
         requestId: input.requestId,
         positionAddress: input.address,
         pusdBalance: input.pusdBalance,
-        alertActionLabel: 'Open portfolio',
-        alertActionUrl: 'https://polydesk.trade/polydesk?service=portfolio&portfolio=trading',
+        integrationSource: destination.source,
+        alertActionLabel: destination.label,
+        alertActionUrl: destination.url,
       }),
       email ? 'pending' : 'disabled',
     ],
@@ -738,7 +753,7 @@ export async function processDuePolymarketDigests(limit = 20) {
       where s.privy_user_id = c.privy_user_id
         and p.privy_user_id = s.privy_user_id
      returning s.privy_user_id, s.alert_email, s.digest_frequency, s.digest_timezone,
-       s.digest_hour_local, s.digest_weekday, s.next_digest_at,
+       s.digest_hour_local, s.digest_weekday, s.next_digest_at, s.integration_source,
        coalesce(p.watched_address, p.deposit_wallet_address, p.trading_address, p.polymarket_address) as address`,
     [batchSize, leaseId],
   )).rows
@@ -762,6 +777,7 @@ export async function processDuePolymarketDigests(limit = 20) {
       const digestKey = `${String(row.digest_frequency)}:${scheduledAt.toISOString()}`
       const label = String(row.digest_frequency) === 'weekly' ? 'Weekly' : 'Daily'
       const signedPnl = `${openPnl >= 0 ? '+' : '-'}$${Math.abs(openPnl).toFixed(2)}`
+      const destination = portfolioAlertDestination(row.integration_source)
       await requirePool().query(
         `insert into polymarket_alert_history
           (privy_user_id, alert_type, market_id, title, body, severity, source_snapshot, email_status)
@@ -778,8 +794,9 @@ export async function processDuePolymarketDigests(limit = 20) {
             openPositions: open.length,
             openPnlUsdc: openPnl,
             claimablePositions: claimable.length,
-            alertActionLabel: 'Open portfolio',
-            alertActionUrl: 'https://polydesk.trade/polydesk?service=portfolio',
+            integrationSource: destination.source,
+            alertActionLabel: destination.label,
+            alertActionUrl: destination.url,
           }),
         ],
       )
@@ -1216,11 +1233,12 @@ async function loadProfileBundle(privyUserId: string) {
           nextDigestAt: settingsRes.rows[0].next_digest_at instanceof Date
             ? settingsRes.rows[0].next_digest_at.toISOString()
             : null,
+          integrationSource: String(settingsRes.rows[0].integration_source || 'polydesk'),
           alertEmail: settingsRes.rows[0].alert_email_verified && settingsRes.rows[0].alert_email
             ? String(settingsRes.rows[0].alert_email)
             : '',
         }
-      : { lossThresholdPercent: 20, profitThresholdPercent: 50, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, digestFrequency: 'off', digestTimezone: 'UTC', digestHourLocal: 8, digestWeekday: 1, nextDigestAt: null, alertEmail: '' },
+      : { lossThresholdPercent: 20, profitThresholdPercent: 50, resolvedAlertsEnabled: true, claimableAlertsEnabled: true, newPositionAlertsEnabled: false, movementAlertsEnabled: false, digestFrequency: 'off', digestTimezone: 'UTC', digestHourLocal: 8, digestWeekday: 1, nextDigestAt: null, integrationSource: 'polydesk', alertEmail: '' },
     watchlist: watchRes.rows.map(row => ({
       id: Number(row.id),
       marketId: String(row.market_id),
@@ -1807,6 +1825,7 @@ export default async function handler(req: Request, res: Response) {
       const threshold = Math.max(1, Math.min(95, Math.round(Number(body.lossThresholdPercent ?? 20))))
       const profitThreshold = Math.max(1, Math.min(500, Math.round(Number(body.profitThresholdPercent ?? 50))))
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
+      const integrationSource = polymarketIntegrationSource(body.integrationSource) ?? 'polydesk'
       if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Enter a valid public Polymarket wallet.' })
       if (!email) return res.status(400).json({ ok: false, error: 'Enter an email you can confirm.' })
       const watchId = randomUUID()
@@ -1823,9 +1842,9 @@ export default async function handler(req: Request, res: Response) {
         )
         await client.query(
           `insert into polymarket_alert_settings
-            (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, alert_email, alert_email_verified)
-           values ($1,$2,$3,true,true,$4,null,false)`,
-          [publicId, threshold, profitThreshold, newPositionAlertsEnabled],
+            (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, integration_source, alert_email, alert_email_verified)
+           values ($1,$2,$3,true,true,$4,$5,null,false)`,
+          [publicId, threshold, profitThreshold, newPositionAlertsEnabled, integrationSource],
         )
         await client.query(
           `insert into polymarket_public_watch_tokens
@@ -1892,6 +1911,7 @@ export default async function handler(req: Request, res: Response) {
       const resolved = Boolean(body.resolvedAlertsEnabled)
       const claimable = Boolean(body.claimableAlertsEnabled)
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
+      const integrationSource = polymarketIntegrationSource(body.integrationSource)
       const email = cleanEmail(body.alertEmail)
       if (!email) return res.status(400).json({ ok: false, error: 'Enter an email you can confirm.' })
       const emailChanged = String(watch.email).toLowerCase() !== email
@@ -1923,9 +1943,10 @@ export default async function handler(req: Request, res: Response) {
                   digest_lease_until = null,
                   alert_email = case when $12 then $13 else null end,
                   alert_email_verified = $12,
+                  integration_source = coalesce($14, integration_source),
                   updated_at = now()
             where privy_user_id = $1`,
-          [watch.privy_user_id, threshold, profitThreshold, resolved, claimable, newPositionAlertsEnabled, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, verified, email],
+          [watch.privy_user_id, threshold, profitThreshold, resolved, claimable, newPositionAlertsEnabled, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, verified, email, integrationSource],
         )
         await client.query('commit')
       } catch (error) {
@@ -2505,6 +2526,7 @@ export default async function handler(req: Request, res: Response) {
       const claimable = Boolean(body.claimableAlertsEnabled)
       const newPositionAlertsEnabled = Boolean(body.newPositionAlertsEnabled)
       const movement = false
+      const integrationSource = polymarketIntegrationSource(body.integrationSource)
       const requestedAlertEmail = cleanEmail(body.alertEmail)
       if (requestedAlertEmail === '') return res.status(400).json({ ok: false, error: 'Enter a valid alert email or leave it blank.' })
       const alertEmail = requestedAlertEmail || (digest.frequency !== 'off' ? verifiedEmail || null : null)
@@ -2521,10 +2543,10 @@ export default async function handler(req: Request, res: Response) {
       }
       const profileExists = (await requirePool().query('select 1 from polymarket_profiles where privy_user_id = $1 and coalesce(deposit_wallet_address, trading_address) is not null', [privyUserId])).rowCount
       if (!profileExists) return res.status(409).json({ ok: false, error: 'Open your PolyDesk trading account first.' })
-      await requirePool().query(
+      const savedSettings = (await requirePool().query(
         `insert into polymarket_alert_settings
-          (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, movement_alerts_enabled, digest_frequency, digest_timezone, digest_hour_local, digest_weekday, next_digest_at, alert_email, alert_email_verified)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          (privy_user_id, loss_threshold_percent, profit_threshold_percent, resolved_alerts_enabled, claimable_alerts_enabled, new_position_alerts_enabled, movement_alerts_enabled, digest_frequency, digest_timezone, digest_hour_local, digest_weekday, next_digest_at, alert_email, alert_email_verified, integration_source)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,coalesce($15,'polydesk'))
          on conflict (privy_user_id) do update set
            loss_threshold_percent = excluded.loss_threshold_percent,
            profit_threshold_percent = excluded.profit_threshold_percent,
@@ -2541,9 +2563,11 @@ export default async function handler(req: Request, res: Response) {
            digest_lease_until = null,
            alert_email = excluded.alert_email,
            alert_email_verified = excluded.alert_email_verified,
-           updated_at = now()`,
-        [privyUserId, loss, profit, resolved, claimable, newPositionAlertsEnabled, movement, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, alertEmail, Boolean(alertEmail)],
-      )
+           integration_source = coalesce($15, polymarket_alert_settings.integration_source),
+           updated_at = now()
+         returning integration_source`,
+        [privyUserId, loss, profit, resolved, claimable, newPositionAlertsEnabled, movement, digest.frequency, digest.timezone, digest.hourLocal, digest.weekday, digest.nextAt, alertEmail, Boolean(alertEmail), integrationSource],
+      )).rows[0]
       await requirePool().query(
         `update polymarket_alert_history
             set email_status = 'disabled', email_next_attempt_at = null
@@ -2564,6 +2588,7 @@ export default async function handler(req: Request, res: Response) {
           digestHourLocal: digest.hourLocal,
           digestWeekday: digest.weekday,
           nextDigestAt: digest.nextAt?.toISOString() ?? null,
+          integrationSource: String(savedSettings?.integration_source || 'polydesk'),
           alertEmail: alertEmail ?? '',
         },
       })

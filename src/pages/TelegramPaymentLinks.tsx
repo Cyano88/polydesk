@@ -6501,6 +6501,7 @@ function buildTelegramBotStartUrl(payload: string) {
 // ── Polymarket Portfolio + football hub ───────────────────────────────────────
 
 type PolymarketBridgeNetwork = 'base' | 'arbitrum' | 'solana'
+type PolymarketIntegrationSource = 'polydesk' | 'okx-ai' | 'circle-marketplace'
 
 type PolymarketProfile = {
   polymarketAddress: string
@@ -6528,6 +6529,7 @@ type PolymarketAlertSettings = {
   digestHourLocal: number
   digestWeekday: number
   nextDigestAt: string | null
+  integrationSource: PolymarketIntegrationSource
   alertEmail: string
 }
 
@@ -7037,6 +7039,13 @@ export function PolyPortfolioPanel({
 }) {
   const showLegacyBack = surface !== 'standalone'
   const [portfolioSearchParams] = useSearchParams()
+  const integrationSourceFromQuery = useMemo<PolymarketIntegrationSource | null>(() => {
+    const source = String(portfolioSearchParams.get('integration') ?? portfolioSearchParams.get('source') ?? '').trim().toLowerCase()
+    if (source === 'okx-ai' || source === 'okx.ai' || source === 'okx') return 'okx-ai'
+    if (source === 'circle-marketplace' || source === 'circle') return 'circle-marketplace'
+    if (source === 'polydesk' || source === 'direct' || source === 'web') return 'polydesk'
+    return null
+  }, [portfolioSearchParams])
   const { ready: privyReady, authenticated, login, getAccessToken } = usePrivy()
   const { wallets: privyWallets } = useWallets()
   const { createWallet } = useCreateWallet({
@@ -7808,8 +7817,11 @@ export function PolyPortfolioPanel({
   }, [unsignedPortfolioAction, tradingPortfolioAddress, liveLoadedAddress, liveLoading, livePositions.length, evaluateAlerts])
 
   useEffect(() => {
-    if (settings) setSettingsDraft(settings)
-  }, [settings])
+    if (settings) setSettingsDraft({
+      ...settings,
+      integrationSource: integrationSourceFromQuery ?? settings.integrationSource,
+    })
+  }, [settings, integrationSourceFromQuery])
 
   useEffect(() => {
     if (unsignedPortfolioAction !== 'trading') return
@@ -7863,6 +7875,7 @@ export function PolyPortfolioPanel({
             email,
             lossThresholdPercent: watchLossThreshold,
             newPositionAlertsEnabled: watchNewPositions,
+            integrationSource: integrationSourceFromQuery ?? 'polydesk',
           }),
         })
         const data = await readPolyDeskJson<{
@@ -7904,6 +7917,7 @@ export function PolyPortfolioPanel({
             digestHourLocal: 8,
             digestWeekday: 1,
             nextDigestAt: null,
+            integrationSource: integrationSourceFromQuery ?? 'polydesk',
             alertEmail: '',
           },
           watchlist: [],
@@ -9029,8 +9043,8 @@ export function PolyPortfolioPanel({
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(publicWatchToken
-          ? { token: publicWatchToken, ...settingsDraft }
-          : { ...settingsDraft }),
+          ? { token: publicWatchToken, ...settingsDraft, integrationSource: integrationSourceFromQuery ?? settingsDraft.integrationSource }
+          : { ...settingsDraft, integrationSource: integrationSourceFromQuery ?? settingsDraft.integrationSource }),
       })
       const data = await readPolyDeskJson<{ ok?: boolean; settings?: PolymarketAlertSettings; error?: string; verifiedEmail?: string; emailConfirmationPending?: boolean }>(res, 'Could not save alert settings.')
       if (!res.ok || !data.ok || !data.settings) throw new Error(data.error || 'Could not save alert settings.')

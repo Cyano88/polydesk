@@ -57,6 +57,21 @@ publishing a terminal receipt. Builder
 attribution is already bound into the CLOB V2 signed order, and the buyer
 submits directly to Polymarket for final cryptographic verification.
 
+## Portfolio email return routing
+
+An integration that opens the managed portfolio UI should include one
+allowlisted channel key:
+
+- OKX.AI: `https://polydesk.trade/polydesk?service=portfolio&integration=okx-ai`
+- Circle marketplace: `https://polydesk.trade/polydesk?service=portfolio&integration=circle-marketplace`
+- Direct PolyDesk: omit `integration` or use `integration=polydesk`
+
+When the user saves verified email alerts, PolyDesk persists only the channel
+key. Digest and funding-ready portfolio buttons are resolved server-side from
+that key. Arbitrary return URLs are never accepted. OKX.AI resolves to Agent
+#5427 by default. Circle routing remains on PolyDesk until the server operator
+sets `POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL` to the canonical HTTPS listing.
+
 ## Retired PolyDesk routes
 
 These routes are deliberately no longer mounted:

@@ -52,7 +52,11 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: POLYMARKET_EMAIL_ALERTS_ENABLED
-        value: "true"
+        value: 'true'
+      - key: POLYDESK_OKX_AI_RETURN_URL
+        value: https://www.okx.ai/agents/5427
+      - key: POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL
+        sync: false
 
       - key: POLYDESK_MARKET_CONTEXT_ENABLED
         value: 'false'

@@ -13,6 +13,7 @@ import {
   shouldAlertNewPosition,
 } from '../api/polymarket-alert-rules.js'
 import { nextPolymarketDigestAt, validDigestTimezone } from '../api/polymarket-digest-schedule.js'
+import { polymarketIntegrationSource, polymarketPortfolioDestination } from '../api/polymarket-alert-destination.js'
 
 test('LP order lifecycle prefers terminal state and detects partial fills', () => {
   assert.equal(normalizeLpOrderLifecycle({ status: 'LIVE', originalSize: '10', matchedSize: '0' }), 'live')
@@ -114,6 +115,31 @@ test('digest scheduling respects local timezone and weekly weekday', () => {
     hourLocal: 1,
     weekday: 1,
   })?.toISOString(), '2026-11-02T06:00:00.000Z')
+})
+
+test('portfolio email destinations preserve only allowlisted integration channels', () => {
+  assert.equal(polymarketIntegrationSource('OKX.AI'), 'okx-ai')
+  assert.equal(polymarketIntegrationSource('https://attacker.example'), null)
+  assert.deepEqual(polymarketPortfolioDestination('okx-ai'), {
+    source: 'okx-ai',
+    label: 'Open in OKX.AI',
+    url: 'https://www.okx.ai/agents/5427',
+  })
+  assert.deepEqual(polymarketPortfolioDestination('circle-marketplace', {
+    circleMarketplaceUrl: 'https://circle.example/marketplace/polydesk',
+  }), {
+    source: 'circle-marketplace',
+    label: 'Open in Circle',
+    url: 'https://circle.example/marketplace/polydesk',
+  })
+  assert.deepEqual(polymarketPortfolioDestination('circle-marketplace', {
+    polydeskUrl: 'https://polydesk.trade/polydesk?service=portfolio',
+    circleMarketplaceUrl: 'http://attacker.example',
+  }), {
+    source: 'polydesk',
+    label: 'Open portfolio',
+    url: 'https://polydesk.trade/polydesk?service=portfolio',
+  })
 })
 
 test('new-position alerts baseline existing positions before notifying', () => {
