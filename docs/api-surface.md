@@ -10,6 +10,16 @@ Hash PayLink owns checkout, wallet funding, payment verification, and receipts.
 PolyDesk must not provision or manage an x402 payer wallet, execute a local Circle
 CLI payment, or generate a second payment receipt.
 
+## Public integration entry
+
+- `https://polydesk.trade/integrations` explains the people, agent, and platform surfaces.
+- `https://polydesk.trade/docs/okx-ai` documents the governed OKX.AI flows.
+- `GET https://polydesk.trade/api/a2mcp/services` is the machine-readable service catalog.
+
+The PolyDesk web application is the human-facing reference client. External
+agents and platforms integrate through typed A2A or HTTP contracts and retain
+their own identity, user experience, and allowlisted return destination.
+
 ## Hash PayLink LP Scout flow
 
 1. The browser requests `GET /api/x402/polymarket-scout` with a unique

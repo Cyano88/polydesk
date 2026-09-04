@@ -8,6 +8,7 @@ const sections = [
     label: 'Product',
     links: [
       { label: 'Product guide', path: '/docs', end: true },
+      { label: 'Integrations', path: '/integrations' },
     ],
   },
   {

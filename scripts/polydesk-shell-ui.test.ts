@@ -12,6 +12,7 @@ import { mergeVerifiedRewardMarket, verifiedDailyRewardPool } from '../api/polym
 
 const layout = readFileSync(new URL('../src/layouts/PolyDeskLayout.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+const integrationsPage = readFileSync(new URL('../src/pages/Integrations.tsx', import.meta.url), 'utf8')
 const tradeActivity = readFileSync(new URL('../src/pages/TradeActivity.tsx', import.meta.url), 'utf8')
 const portfolioApi = readFileSync(new URL('../api/polymarket-portfolio.ts', import.meta.url), 'utf8')
 const agentWorkspace = readFileSync(new URL('../src/pages/AgentWorkspace.tsx', import.meta.url), 'utf8')
@@ -224,9 +225,9 @@ test('Portfolio consolidates balance, owned actions and watched-market trading',
   assert.match(paymentLinks, /Balance temporarily unavailable\./)
   assert.match(paymentLinks, /tradingPusdFailureCount >= 2/)
   assert.doesNotMatch(paymentLinks, /\{tradingPusdError && <p className="mt-3 text-xs text-amber/)
-  assert.match(paymentLinks, /\{ key: 'monitor', label: 'Manage'/)
-  assert.match(paymentLinks, /Manage your agent/)
-  assert.match(paymentLinks, /Save agent controls/)
+  assert.match(paymentLinks, /\{ key: 'monitor', label: 'Alerts'/)
+  assert.match(paymentLinks, /Portfolio notifications/)
+  assert.match(paymentLinks, /Save notifications/)
   assert.match(portfolioApi, /action === 'set-integration-source'/)
   assert.match(portfolioApi, /polymarketIntegrationSource\(body\.integrationSource\)/)
   assert.match(paymentLinks, /\{ key: 'orders', label: 'Open LP orders'/)
@@ -240,6 +241,21 @@ test('Portfolio consolidates balance, owned actions and watched-market trading',
   assert.match(polyDeskPage, /orderSource="watch-position"/)
   assert.doesNotMatch(tradingSurface, /title="Sign out wallet"/)
   assert.doesNotMatch(tradingSurface, />\s*Change\s*</)
+})
+
+test('public integrations route separates people, agents and platforms around verified services', () => {
+  assert.match(app, /path="\/integrations" element=\{<Integrations \/>\}/)
+  assert.match(layout, /to="\/integrations"/)
+  assert.match(integrationsPage, /For people/)
+  assert.match(integrationsPage, /For agents/)
+  assert.match(integrationsPage, /For platforms/)
+  assert.match(integrationsPage, /okxMarketplaceServices/)
+  assert.match(integrationsPage, /okxTradingTaskService/)
+  assert.match(integrationsPage, /okxTradingAgentService/)
+  assert.match(integrationsPage, /to='\/docs\/okx-ai'/)
+  assert.match(integrationsPage, /to='\/polydesk\?agent=1'/)
+  assert.match(integrationsPage, /never requests wallet secrets/)
+  assert.match(integrationsPage, /Hash PayLink remains the funding checkout/)
 })
 
 test('Pulse rotates verified liquidity intelligence without inventing provider data', () => {

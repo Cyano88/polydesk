@@ -4,6 +4,7 @@ import PolyDeskLayout from './layouts/PolyDeskLayout'
 import { PolyDeskLoadingState } from './components/PolyDeskLoadState'
 
 const About = lazy(() => import('./pages/About'))
+const Integrations = lazy(() => import('./pages/Integrations'))
 const PolyDesk = lazy(() => import('./pages/PolyDesk'))
 const LPScoutReport = lazy(() => import('./pages/LPScoutReport'))
 const Opportunity = lazy(() => import('./pages/Opportunity'))
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/rewards" element={<OkxRewards />} />
         </Route>
         <Route path="/about" element={<About />} />
+        <Route path="/integrations" element={<Integrations />} />
         <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />
         <Route path="/opportunity/:slug" element={<Opportunity />} />
         <Route path="/docs" element={<DocsLayout />}>

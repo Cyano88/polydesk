@@ -213,6 +213,7 @@ export default function About() {
             PolyDesk
           </Link>
           <div className="flex items-center gap-5 text-sm">
+            <Link to="/integrations" className="hidden text-slate-500 transition hover:text-slate-950 sm:inline">Integrations</Link>
             <Link to="/docs" className="hidden text-slate-500 transition hover:text-slate-950 sm:inline">Docs</Link>
             <a href="https://x.com/PolyDeskTrade" target="_blank" rel="noreferrer" className="hidden text-slate-500 transition hover:text-slate-950 md:inline">Support</a>
             <Link to="/polydesk" className="about-primary-button about-header-cta">
