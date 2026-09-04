@@ -79,11 +79,18 @@ export function catalogAndStatusManagedSubscriptions(
   statusOutputs: ReadonlyMap<string, string>,
 ): ManagedSubscriptionIdentity[] {
   const currentActiveRows = activeRows(activeResponse)
-  if (!record(serviceResponse) || serviceResponse.ok !== true || !record(serviceResponse.data)
-    || !Array.isArray(serviceResponse.data.list)) {
+  if (!record(serviceResponse) || serviceResponse.ok !== true) {
     throw new Error('Official PolyDesk service catalog response is invalid.')
   }
-  const subscriptionServices = serviceResponse.data.list.filter(item => (
+  const catalog = record(serviceResponse.data)
+    ? serviceResponse.data
+    : Array.isArray(serviceResponse.data) && record(serviceResponse.data[0])
+      ? serviceResponse.data[0]
+      : null
+  if (!catalog || !Array.isArray(catalog.list)) {
+    throw new Error('Official PolyDesk service catalog response is invalid.')
+  }
+  const subscriptionServices = catalog.list.filter(item => (
     record(item) && Array.isArray(item.subscription) && item.subscription.length > 0
   ))
   if (subscriptionServices.length !== 1) {

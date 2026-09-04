@@ -54,6 +54,7 @@ test('uses explicit PolyDesk job status only when the catalog has one exact subs
   assert.equal(result.length, 1)
   assert.equal(result[0].buyerAgentId, '8178')
   assert.equal(result[0].serviceId, MANAGED_AGENT_SERVICE_ID)
+  assert.equal(catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: [services.data] }, statuses).length, 1)
 })
 
 test('status fallback refuses ambiguity or a buyer job not bound to PolyDesk', () => {
