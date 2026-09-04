@@ -4,7 +4,7 @@ Status: approved pilot; public claims and payouts remain disabled until the fund
 
 ## Product priority
 
-The public campaign leads with One-Off Trade Mission, currently mapped to service `#38484`. Manage My Polymarket Agent is the separate recurring monitoring product currently mapped to `#38496`; it must not be described as another one-off trade package. Six paid A2MCP listings remain callable as compatibility capabilities during migration, not as additional product lines.
+The public campaign leads with One-Off Polymarket Trade, service `#38484`. Managed Polymarket Agent is the separate recurring monitoring product at `#38496`; it must not be described as another one-off trade package. Polymarket Integration Audit is the fixed-scope external assessment at `#40363`. Six paid A2MCP listings remain callable as compatibility capabilities during buyer acceptance, not as additional product lines.
 
 The A2A subscription has its own proof model. It must not be submitted to the direct-API transaction-hash claim path. A2A tester rewards remain closed until PolyDesk records an accepted OKX job, its delivered autotrade instruction, the buyer-controlled execution, and the resulting public PnL receipt as one verifiable mission.
 

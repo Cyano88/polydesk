@@ -30,24 +30,24 @@ export default function DocsOkxAI() {
   return (
     <article className="space-y-10">
       <DocHeader
-        title="One mission, continuous management, or integration assurance."
-        description="PolyDesk Agent #5427 is migrating to three clear products while its existing direct endpoints remain available only as compatibility capabilities."
+        title="One trade, continuous management, or an integration audit."
+        description="PolyDesk Agent #5427 has three A2A products. Its existing direct endpoints remain available only as compatibility capabilities while buyer acceptance is completed."
       />
 
       <Section title="Service map">
         <Table
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
-            ['One-Off Trade Mission', '0.1 USDT / mission', 'Current listing #38484; rename pending'],
-            ['Manage My Polymarket Agent', '5 USDT / month, 3-day trial', 'Current listing #38496; rename pending'],
-            ['Polymarket Integration Conformance Audit', 'Quoted per assessment', 'Planned; not yet listed'],
+            ['One-Off Polymarket Trade', '0.1 USDT / task', 'Listing #38484'],
+            ['Managed Polymarket Agent', '5 USDT / month, 3-day trial', 'Listing #38496'],
+            ['Polymarket Integration Audit', '25 USDT / task', 'Listing #40363'],
           ]}
         />
         <Note>These are the three customer-facing products. Existing A2MCP routes remain callable during migration, but they are underlying capabilities rather than additional products.</Note>
       </Section>
 
       <Section title="A2A governed trading">
-        <p><strong>One-Off Trade Mission</strong> uses current listing #38484 for one bounded request and then stops. <strong>Manage My Polymarket Agent</strong> uses current listing #38496 for continuous portfolio monitoring, alerts, summaries, and optional separately authorized bounded copy trading.</p>
+        <p><strong>One-Off Polymarket Trade</strong> uses listing #38484 for one bounded request and then stops. <strong>Managed Polymarket Agent</strong> uses listing #38496 for continuous portfolio monitoring, alerts, summaries, and optional separately authorized bounded copy trading.</p>
         <p>PolyDesk verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one bounded Polymarket BUY signal. Paying for the service through OKX Agentic Wallet does not by itself prove that wallet can grant Polymarket approvals or sign the order; placement requires a compatible EVM signer controlling the verified Deposit Wallet.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Publish a task with an explicit Polymarket BUY cap.</li>

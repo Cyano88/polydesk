@@ -96,9 +96,9 @@ export default function DocsOverview() {
         <p>The versioned public machine manifest declares three customer-facing products and separately documents the retained implementation capabilities, payment contract, recovery routes, and safety boundaries.</p>
         <CodeBlock>{`curl https://polydesk.trade/api/a2mcp/services`}</CodeBlock>
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Need one bounded result? Use One-Off Trade Mission.</li>
-          <li>Need continuous alerts and summaries? Use Manage My Polymarket Agent.</li>
-          <li>Need an external integration assessed? Use the planned Polymarket Integration Conformance Audit.</li>
+          <li>Need one bounded result? Use One-Off Polymarket Trade.</li>
+          <li>Need continuous alerts and summaries? Use Managed Polymarket Agent.</li>
+          <li>Need an external integration assessed? Use Polymarket Integration Audit.</li>
         </ol>
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/okx-ai">Continue to the OKX.AI service guide</Link></p>
       </Section>

@@ -2,7 +2,7 @@
 
 This is the private execution runner for PolyDesk Agent `#5427` and single-purchase service `#38484`. It turns an accepted OKX A2A job into one bounded Polymarket BUY signal and later publishes public PnL evidence.
 
-Subscription service `#38496` has a different contract: continuous portfolio monitoring, verified email alerts, scheduled summaries, and optional separately authorized copy trading. It must use a dedicated subscription adapter and must never invoke this one-off worker.
+Managed Polymarket Agent service `#38496` has a different contract: continuous portfolio monitoring, verified email alerts, scheduled summaries, and optional separately authorized copy trading. It must use a dedicated subscription adapter and must never invoke this one-off worker.
 
 It does not hold buyer keys, sign a Polymarket order, or bypass the buyer's OKX authorization. The buyer's Agentic Wallet performs execution from the ASP deliverable.
 

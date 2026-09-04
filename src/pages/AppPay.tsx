@@ -38,10 +38,10 @@ export default function AppPay() {
       <section className="polydesk-card mt-4 p-5 sm:p-6">
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-gray-950 text-[9px] tracking-normal text-white dark:bg-white dark:text-gray-950">OKX</span>
-          Available now
+          Marketplace registration
         </div>
         <h2 className="mt-4 text-xl font-black tracking-tight text-gray-950 dark:text-white">Choose a PolyDesk product on OKX</h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">The current listings are being reconciled into three product contracts. Products without a marketplace ID are clearly marked as pending listing.</p>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 dark:text-gray-400">The three A2A products are registered. Public availability follows the marketplace status of Agent #5427.</p>
         <div className="mt-5 grid gap-2">
           {polydeskMarketplaceProducts.map(product => {
             const url = marketplaceProductUrl(product)

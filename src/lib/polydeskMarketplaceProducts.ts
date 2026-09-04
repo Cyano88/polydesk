@@ -8,7 +8,7 @@ export type PolyDeskMarketplaceProduct = {
   marketplace: {
     serviceId: number | null
     currentListingName: string | null
-    migrationStatus: 'rename-pending' | 'not-listed'
+    migrationStatus: 'registered'
   }
   pricing: {
     mode: 'per-task' | 'subscription' | 'quote'
@@ -22,15 +22,15 @@ export type PolyDeskMarketplaceProduct = {
 
 export const oneOffTradeMission: PolyDeskMarketplaceProduct = {
   id: 'one-off-trade-mission',
-  name: 'One-Off Trade Mission',
+  name: 'One-Off Polymarket Trade',
   type: 'A2A',
   scope: 'One bounded Polymarket mission from request and intelligence through readiness, buyer approval, execution handoff, and verified receipt.',
   lifecycle: 'one-off',
   implementationStatus: 'production-capabilities',
   marketplace: {
     serviceId: 38484,
-    currentListingName: 'PolyDesk Trading Agent',
-    migrationStatus: 'rename-pending',
+    currentListingName: 'One-Off Polymarket Trade',
+    migrationStatus: 'registered',
   },
   pricing: { mode: 'per-task', amountUsdt: 0.1 },
   includes: [
@@ -44,15 +44,15 @@ export const oneOffTradeMission: PolyDeskMarketplaceProduct = {
 
 export const manageMyPolymarketAgent: PolyDeskMarketplaceProduct = {
   id: 'manage-my-polymarket-agent',
-  name: 'Manage My Polymarket Agent',
+  name: 'Managed Polymarket Agent',
   type: 'A2A',
   scope: 'Continuous portfolio and configured-address monitoring with verified email alerts, scheduled summaries, and optional separately authorized bounded copy trading.',
   lifecycle: 'subscription',
   implementationStatus: 'production-capabilities',
   marketplace: {
     serviceId: 38496,
-    currentListingName: 'PolyDesk Trading Membership',
-    migrationStatus: 'rename-pending',
+    currentListingName: 'Managed Polymarket Agent',
+    migrationStatus: 'registered',
   },
   pricing: { mode: 'subscription', amountUsdt: 5, interval: 'month', freeTrialDays: 3 },
   includes: [
@@ -66,15 +66,15 @@ export const manageMyPolymarketAgent: PolyDeskMarketplaceProduct = {
 
 export const polymarketIntegrationConformanceAudit: PolyDeskMarketplaceProduct = {
   id: 'polymarket-integration-conformance-audit',
-  name: 'Polymarket Integration Conformance Audit',
+  name: 'Polymarket Integration Audit',
   type: 'A2A',
   scope: 'A fixed-scope, evidence-backed assessment of one external platform\'s Polymarket payment, wallet, authorization, execution, recovery, and receipt controls.',
   lifecycle: 'assessment',
   implementationStatus: 'production-capabilities',
   marketplace: {
-    serviceId: null,
-    currentListingName: null,
-    migrationStatus: 'not-listed',
+    serviceId: 40363,
+    currentListingName: 'Polymarket Integration Audit',
+    migrationStatus: 'registered',
   },
   pricing: { mode: 'per-task', amountUsdt: 25 },
   includes: [

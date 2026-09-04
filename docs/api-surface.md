@@ -21,8 +21,8 @@ The PolyDesk web application is the human-facing reference client. External
 agents and platforms integrate through typed A2A or HTTP contracts and retain
 their own identity, user experience, and allowlisted return destination.
 Manifest version 2 declares exactly three customer-facing products: One-Off
-Trade Mission, Manage My Polymarket Agent, and the planned Polymarket Integration
-Conformance Audit. It separately declares retained implementation capabilities,
+Polymarket Trade, Managed Polymarket Agent, and Polymarket Integration Audit.
+They are registered as A2A listings `#38484`, `#38496`, and `#40363`. The manifest separately declares retained implementation capabilities,
 their payment headers, X Layer USDT contract, request schemas, marketplace IDs,
 polling/receipt delivery, and custody rules. Compatibility routes must not be
 presented as additional PolyDesk products.

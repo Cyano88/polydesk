@@ -158,7 +158,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     agentId: AGENT_ID,
     protocol: 'OKX Agent Payments Protocol',
     baseUrl,
-    summary: 'PolyDesk offers one bounded trade mission, continuous non-custodial agent management, and a fixed-scope external integration conformance audit.',
+    summary: 'PolyDesk offers one bounded Polymarket trade, continuous non-custodial agent management, and a fixed-scope external integration audit.',
     discovery: {
       wellKnown: baseUrl + '/.well-known/polydesk.json',
       catalog: baseUrl + '/api/a2mcp/services',
@@ -198,12 +198,13 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
       products: polyDeskMarketplaceProducts,
       currentCompatibilityListings: {
         a2a: [
-          { serviceId: 38484, listingName: 'PolyDesk Trading Agent', targetProductId: 'one-off-trade-mission' },
-          { serviceId: 38496, listingName: 'PolyDesk Trading Membership', targetProductId: 'manage-my-polymarket-agent' },
+          { serviceId: 38484, listingName: 'One-Off Polymarket Trade', targetProductId: 'one-off-trade-mission' },
+          { serviceId: 38496, listingName: 'Managed Polymarket Agent', targetProductId: 'manage-my-polymarket-agent' },
+          { serviceId: 40363, listingName: 'Polymarket Integration Audit', targetProductId: 'polymarket-integration-conformance-audit' },
         ],
         directA2mcp: publicServices.map(service => service.marketplace),
       },
-      migrationRule: 'Keep current listings live until the three-product contract is tested. Then rename the two A2A listings and roll down superseded direct listings in one controlled migration.',
+      migrationRule: 'Keep all six direct compatibility listings live until buyer-side acceptance passes and every existing paid obligation has been reconciled. Then roll them down in one controlled migration.',
     },
     products: polyDeskMarketplaceProducts,
     capabilities: publicServices,

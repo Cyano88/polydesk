@@ -28,12 +28,13 @@ test('public service catalog documents optional football relevance filters', () 
 test('catalog exposes exactly three products without promoting compatibility routes', () => {
   assert.equal(polyDeskMarketplaceProducts.length, 3)
   assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.name), [
-    'One-Off Trade Mission',
-    'Manage My Polymarket Agent',
-    'Polymarket Integration Conformance Audit',
+    'One-Off Polymarket Trade',
+    'Managed Polymarket Agent',
+    'Polymarket Integration Audit',
   ])
   assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.type), ['A2A', 'A2A', 'A2A'])
-  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.marketplace.serviceId), [38484, 38496, null])
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.marketplace.serviceId), [38484, 38496, 40363])
+  assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.marketplace.migrationStatus), ['registered', 'registered', 'registered'])
   assert.deepEqual(polyDeskMarketplaceProducts.map(product => product.implementationStatus), ['production-capabilities', 'production-capabilities', 'production-capabilities'])
   assert.deepEqual(polyDeskMarketplaceProducts[2].pricing, { mode: 'per-task', amountUsdt: 25 })
   assert.equal(polyDeskAgentServices().length, 6)
@@ -86,7 +87,7 @@ test('public integration manifest declares discovery, payment, polling, and cust
   assert.equal(body.services.length, 3)
   assert.equal(body.capabilities.length, 6)
   assert.equal(body.marketplace.products.length, 3)
-  assert.equal(body.marketplace.currentCompatibilityListings.a2a.length, 2)
+  assert.equal(body.marketplace.currentCompatibilityListings.a2a.length, 3)
   assert.equal(body.marketplace.currentCompatibilityListings.directA2mcp.length, 6)
   assert.doesNotMatch(JSON.stringify(body.products), /Agent Trade Rail|Research Mission|Smart Market OOS Trader/)
   assert.equal(headers['Cache-Control'], 'public, max-age=300')

@@ -1,4 +1,4 @@
-# One-Off Trade Mission A2A Worker
+# One-Off Polymarket Trade A2A Worker
 
 This is the overarching A2A service for PolyDesk Agent `#5427`. It combines public wallet watching, deterministic selection, account readiness, verified funding guidance, bounded trade preparation, buyer-controlled execution, and public PnL evidence in one task.
 
@@ -23,15 +23,15 @@ The A2A marketplace task has no public service endpoint. The private operator AP
 
 ## Marketplace transition
 
-**Target product:** One-Off Trade Mission
+**Target product:** One-Off Polymarket Trade
 
-**Current listing:** PolyDesk Trading Agent `#38484`
+**Current listing:** One-Off Polymarket Trade `#38484`
 
 **Type:** A2A task
 
 **Price:** 0.1 USDT per mission
 
-Manage My Polymarket Agent is a separate subscription product currently mapped to the legacy PolyDesk Trading Membership listing `#38496` at 5 USDT per month with a 3-day trial. Its scope is continuous portfolio monitoring, alerts, and summaries. It must not be presented as repeated access to this one-off worker. Keep the current listings live until the managed subscription onboarding and marketplace migration pass their acceptance tests.
+Managed Polymarket Agent is a separate subscription product at listing `#38496`, priced at 5 USDT per month with a 3-day trial. Its scope is continuous portfolio monitoring, alerts, and summaries. It must not be presented as repeated access to this one-off worker. The old PolyDesk Trading Membership title remains accepted only for in-flight subscription reconciliation.
 
 **Description:**
 

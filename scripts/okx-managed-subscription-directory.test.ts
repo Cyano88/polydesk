@@ -41,15 +41,15 @@ test('does not convert a device/provider identity mismatch into an empty authori
   }), /directories disagree/)
 })
 
-test('uses explicit PolyDesk job status only when the catalog has one exact subscription listing', () => {
+test('uses the final managed listing name for new subscriptions', () => {
   const jobId = '0x' + 'a'.repeat(64)
   const services = { ok: true, data: { list: [{
     id: 38496,
     serviceId: MANAGED_AGENT_SERVICE_ID,
-    serviceName: 'PolyDesk Trading Membership',
+    serviceName: 'Managed Polymarket Agent',
     subscription: [{ fee: '5', interval: 'month' }],
   }] } }
-  const statuses = new Map([[jobId, `Task status: accepted\n  jobId:    ${jobId}\n  title:    DACS 订阅巡检 - PolyDesk Trading Membership\n  budget:   0.00001 USDT\n  user:    8178\n  asp: 5427\n`]])
+  const statuses = new Map([[jobId, `Task status: accepted\n  jobId:    ${jobId}\n  title:    Managed Polymarket Agent\n  budget:   0.00001 USDT\n  user:    8178\n  asp: 5427\n`]])
   const result = catalogAndStatusManagedSubscriptions(singleActive, services, statuses)
   assert.equal(result.length, 1)
   assert.equal(result[0].buyerAgentId, '8178')
@@ -57,10 +57,23 @@ test('uses explicit PolyDesk job status only when the catalog has one exact subs
   assert.equal(catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: [services.data] }, statuses).length, 1)
 })
 
+test('keeps legacy in-flight subscription titles compatible during migration', () => {
+  const jobId = '0x' + 'a'.repeat(64)
+  const services = { ok: true, data: { list: [{
+    id: 38496,
+    serviceId: MANAGED_AGENT_SERVICE_ID,
+    serviceName: 'Managed Polymarket Agent',
+    subscription: [{ fee: '5', interval: 'month' }],
+  }] } }
+  const statuses = new Map([[jobId, `Task status: accepted\njobId: ${jobId}\ntitle: DACS subscription check - PolyDesk Trading Membership\nuser: 8178\nasp: 5427`]])
+  assert.equal(catalogAndStatusManagedSubscriptions(singleActive, services, statuses).length, 1)
+})
+
 test('status fallback refuses ambiguity or a buyer job not bound to PolyDesk', () => {
   const jobId = '0x' + 'a'.repeat(64)
-  const exactService = { id: 38496, serviceId: MANAGED_AGENT_SERVICE_ID, serviceName: 'PolyDesk Trading Membership', subscription: [{}] }
-  const goodStatus = `Task status: accepted\njobId: ${jobId}\ntitle: PolyDesk Trading Membership\nuser: 8178\nasp: 5427`
+  const exactService = { id: 38496, serviceId: MANAGED_AGENT_SERVICE_ID, serviceName: 'Managed Polymarket Agent', subscription: [{}] }
+  const goodStatus = `Task status: accepted\njobId: ${jobId}\ntitle: Managed Polymarket Agent\nuser: 8178\nasp: 5427`
   assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService, { ...exactService, id: 999 }] } }, new Map([[jobId, goodStatus]])), /exactly one/)
   assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService] } }, new Map([[jobId, goodStatus.replace('asp: 5427', 'asp: 10764')]])), /did not bind/)
+  assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService] } }, new Map([[jobId, goodStatus.replace('Managed Polymarket Agent', 'Fake Managed Polymarket Agent Offer')]])), /did not bind/)
 })

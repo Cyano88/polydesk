@@ -1,6 +1,6 @@
-# Polymarket Integration Conformance Audit
+# Polymarket Integration Audit
 
-This is PolyDesk's fixed-scope A2A assessment for one external platform integration. The launch price is 25 USDT per task.
+This is PolyDesk's fixed-scope A2A assessment for one external platform integration. It is registered as service `#40363` at 25 USDT per task.
 
 ## Scope
 

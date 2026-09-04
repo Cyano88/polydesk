@@ -9,6 +9,7 @@ import {
 
 type JsonRecord = Record<string, unknown>
 const execFileAsync = promisify(execFile)
+const MANAGED_AGENT_LISTING_NAMES = ['Managed Polymarket Agent', 'PolyDesk Trading Membership'] as const
 
 function record(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -16,6 +17,16 @@ function record(value: unknown): value is JsonRecord {
 
 function text(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : ''
+}
+
+function isManagedAgentListingName(value: unknown) {
+  const name = text(value)
+  return MANAGED_AGENT_LISTING_NAMES.some(candidate => name === candidate)
+}
+
+function isManagedAgentTaskTitle(value: unknown) {
+  const title = text(value)
+  return MANAGED_AGENT_LISTING_NAMES.some(candidate => title === candidate || title.endsWith(` - ${candidate}`))
 }
 
 function epoch(value: unknown, label: string) {
@@ -100,7 +111,7 @@ export function catalogAndStatusManagedSubscriptions(
   if (!record(service)
     || String(service.id) !== MANAGED_AGENT_LISTING_ID
     || text(service.serviceId) !== MANAGED_AGENT_SERVICE_ID
-    || text(service.serviceName) !== 'PolyDesk Trading Membership') {
+    || !isManagedAgentListingName(service.serviceName)) {
     throw new Error('The sole PolyDesk subscription listing does not match the managed-agent contract.')
   }
   const result: ManagedSubscriptionIdentity[] = []
@@ -113,7 +124,7 @@ export function catalogAndStatusManagedSubscriptions(
     const buyerAgentId = output.match(/^\s*user:\s*(\d{1,18})\s*$/mi)?.[1]
     const providerAgentId = output.match(/^\s*asp:\s*(\d{1,18})\s*$/mi)?.[1]
     if (status !== 'accepted' || returnedJobId !== jobId || providerAgentId !== POLYDESK_AGENT_ID
-      || !buyerAgentId || !title.includes('PolyDesk Trading Membership')) {
+      || !buyerAgentId || !isManagedAgentTaskTitle(title)) {
       throw new Error(`Official status did not bind active subscription ${jobId} to PolyDesk's managed listing.`)
     }
     const periodEndAt = epoch(item.subEndTime, 'subEndTime')
