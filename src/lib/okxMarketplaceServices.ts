@@ -1,5 +1,5 @@
 export type OkxMarketplaceService = {
-  key: 'football-live' | 'football-news' | 'verified-funding' | 'governed-trader' | 'lp-scout'
+  key: 'football-live' | 'football-news' | 'verified-funding' | 'governed-trader' | 'lp-scout' | 'smart-trader'
   serviceId: number
   name: string
   summary: string
@@ -20,7 +20,7 @@ export const okxTradingAgentService = {
 
 export const okxTradingTaskService = {
   serviceId: 38484,
-  name: 'PolyDesk Trading Task',
+  name: 'PolyDesk Trading Agent',
   summary: 'One bounded Polymarket BUY mission with buyer-controlled execution and public PnL evidence.',
   priceUsdt: 0.1,
 } as const
@@ -56,7 +56,7 @@ export const okxMarketplaceServices: OkxMarketplaceService[] = [
     name: 'Governed Polymarket Trader',
     summary: 'Watch or pick, verify readiness, enforce a mandate, then hand off a buyer-signed trade.',
     endpoint: 'https://polydesk.trade/api/a2mcp/polymarket-portfolio-watch',
-    match: /\b(governed polymarket trader|governed trader|governed trade|copy trade|trade service|trading service|trader)\b/i,
+    match: /\b(governed polymarket trader|governed trader|governed trade|copy trade|trade service|trading service)\b/i,
   },
   {
     key: 'lp-scout',
@@ -65,6 +65,14 @@ export const okxMarketplaceServices: OkxMarketplaceService[] = [
     summary: 'Maker-focused research across rewards, spread, depth, and execution risk.',
     endpoint: 'https://polydesk.trade/api/a2mcp/okx/polymarket-lp-scout',
     match: /\b(polymarket lp scout|lp scout|liquidity scout|maker research|lp research|lp)\b/i,
+  },
+  {
+    key: 'smart-trader',
+    serviceId: 40269,
+    name: 'Smart Market OOS Trader',
+    summary: 'Evidence-backed market analysis with durable decisions and a preview-first handoff to the official Polymarket trading integration.',
+    endpoint: 'https://polydesk.trade/api/a2mcp/polymarket-smart-trader',
+    match: /\b(smart market oos trader|smart market trader|smart trader|market analysis|direct trade intelligence)\b/i,
   },
 ]
 

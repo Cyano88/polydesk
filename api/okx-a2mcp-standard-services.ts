@@ -563,7 +563,49 @@ const serviceDefinitions = {
   },
 } as const
 
-type StandardServicePath = keyof typeof serviceDefinitions
+export type StandardServicePath = keyof typeof serviceDefinitions
+
+export function standardServiceInputSchema(path: StandardServicePath) {
+  const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
+  const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
+  const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
+  const isSmartTrader = path === '/api/a2mcp/polymarket-smart-trader'
+  const isFootballLive = path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores'
+
+  if (isFundingLink) return {
+    carrier: 'body',
+    type: 'object',
+    properties: fundingLinkBodyProperties,
+    required: fundingLinkRequiredFields,
+    additionalProperties: false,
+  }
+  if (isGovernedTrader) return {
+    carrier: 'body',
+    type: 'object',
+    properties: governedTraderBodyProperties,
+    required: governedTraderRequiredFields,
+    additionalProperties: false,
+  }
+  if (isSmartTrader) return {
+    carrier: 'body',
+    type: 'object',
+    properties: smartTraderBodyProperties,
+    required: smartTraderRequiredFields,
+    additionalProperties: false,
+  }
+  if (isPortfolioWatch) return {
+    carrier: 'body',
+    type: 'object',
+    properties: portfolioWatchBodyProperties,
+    additionalProperties: true,
+  }
+  return {
+    carrier: 'body',
+    type: 'object',
+    properties: isFootballLive ? footballLiveBodyProperties : footballNewsBodyProperties,
+    additionalProperties: true,
+  }
+}
 
 let standardServicesServerPromise: Promise<x402HTTPResourceServer> | undefined
 
@@ -666,10 +708,6 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
   const service = serviceDefinitions[path]
   const isFundingLink = path === '/api/a2mcp/polymarket-funding-link'
   const isGovernedTrader = path === '/api/a2mcp/polymarket-agent-flow'
-  const isPortfolioWatch = path === '/api/a2mcp/polymarket-portfolio-watch'
-  const isSmartTrader = path === '/api/a2mcp/polymarket-smart-trader'
-  const isFootballLive = path === '/api/a2mcp/football-live-data' || path === '/api/a2mcp/worldcup-live-scores'
-  const isFootballNews = path === '/api/a2mcp/football-news-brief' || path === '/api/a2mcp/worldcup-market-news'
   const discoveryExtensions = isFundingLink
     ? fundingLinkDiscoveryExtension()
     : isGovernedTrader
@@ -715,46 +753,7 @@ export function buildStandardServiceRouteConfig(req: Request, path: StandardServ
         protocol: 'OKX Agent Payments Protocol',
         payment: { network: 'X Layer', asset: 'USDT', amount: price },
         message: 'Pay this x402 challenge from an OKX Agentic Wallet, then replay the request with the payment header.',
-        ...(isFundingLink ? {
-          inputSchema: {
-            type: 'object',
-            properties: fundingLinkBodyProperties,
-            required: fundingLinkRequiredFields,
-            additionalProperties: false,
-          },
-        } : isGovernedTrader ? {
-          inputSchema: {
-            type: 'object',
-            properties: governedTraderBodyProperties,
-            required: governedTraderRequiredFields,
-            additionalProperties: false,
-          },
-        } : isSmartTrader ? {
-          inputSchema: {
-            type: 'object',
-            properties: smartTraderBodyProperties,
-            required: smartTraderRequiredFields,
-            additionalProperties: false,
-          },
-        } : isPortfolioWatch ? {
-          inputSchema: {
-            type: 'object',
-            properties: portfolioWatchBodyProperties,
-            additionalProperties: true,
-          },
-        } : isFootballLive ? {
-          inputSchema: {
-            type: 'object',
-            properties: footballLiveBodyProperties,
-            additionalProperties: true,
-          },
-        } : isFootballNews ? {
-          inputSchema: {
-            type: 'object',
-            properties: footballNewsBodyProperties,
-            additionalProperties: true,
-          },
-        } : {}),
+        inputSchema: standardServiceInputSchema(path),
       },
     }),
   }

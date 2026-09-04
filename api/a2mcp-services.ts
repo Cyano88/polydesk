@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express'
+import { standardServiceInputSchema, type StandardServicePath } from './okx-a2mcp-standard-services.js'
 
 type Service = {
   id: string
+  marketplaceServiceId: number
   name: string
   oneLine: string
   endpoint: string
@@ -14,9 +16,14 @@ type Service = {
   boundary: string
 }
 
+const AGENT_ID = 5427
+const AGENT_PROFILE_URL = 'https://www.okx.ai/agents/' + AGENT_ID
+const XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
+
 const services: Service[] = [
   {
     id: 'polymarket-lp-scout',
+    marketplaceServiceId: 33342,
     name: 'Polymarket LP Scout',
     oneLine: 'Research active reward markets and receive maker-oriented limit-order instructions.',
     endpoint: '/api/a2mcp/okx/polymarket-lp-scout',
@@ -29,6 +36,7 @@ const services: Service[] = [
   },
   {
     id: 'football-live-data',
+    marketplaceServiceId: 33343,
     name: 'Football Match Live Data',
     oneLine: 'Reuse provider-truth fixtures, live scores, match events, and verified Polymarket trade metadata.',
     endpoint: '/api/a2mcp/worldcup-live-scores',
@@ -41,6 +49,7 @@ const services: Service[] = [
   },
   {
     id: 'football-news-brief',
+    marketplaceServiceId: 33346,
     name: 'Football News Brief',
     oneLine: 'Reuse current football headlines with source links and related active Polymarket events.',
     endpoint: '/api/a2mcp/worldcup-market-news',
@@ -53,6 +62,7 @@ const services: Service[] = [
   },
   {
     id: 'verified-polymarket-funding',
+    marketplaceServiceId: 33344,
     name: 'Verified Polymarket Funding',
     oneLine: 'Fund only the deterministic Deposit Wallet controlled by the supplied owner EOA.',
     endpoint: '/api/a2mcp/polymarket-funding-link',
@@ -68,6 +78,7 @@ const services: Service[] = [
   },
   {
     id: 'governed-polymarket-trader',
+    marketplaceServiceId: 33345,
     name: 'Governed Polymarket Trader',
     oneLine: 'Watch, pick, or copy a public signal; verify the buyer account; fund if needed; enforce a mandate; submit directly; publish proof.',
     endpoint: '/api/a2mcp/polymarket-portfolio-watch',
@@ -86,7 +97,8 @@ const services: Service[] = [
   },
   {
     id: 'polymarket-smart-trader',
-    name: 'PolyDesk Smart Market Trader',
+    marketplaceServiceId: 40269,
+    name: 'Smart Market OOS Trader',
     oneLine: 'Purchase one PolyDesk analysis workflow to discover when needed, research an exact Polymarket outcome, verify funding readiness, and prepare its included OnchainOS preview.',
     endpoint: '/api/a2mcp/polymarket-smart-trader',
     method: 'POST',
@@ -103,9 +115,47 @@ const services: Service[] = [
   },
 ]
 
-export function polyDeskAgentServices() {
-  return services
+function serviceInputSchema(service: Service) {
+  if (service.id === 'polymarket-lp-scout') return {
+    carrier: 'query',
+    type: 'object',
+    properties: {
+      scoutMode: { type: 'string', enum: ['best', 'market', 'news', 'football'], default: 'best' },
+      context: { type: 'string', description: 'Polymarket URL or slug; required for market mode.' },
+      budget: { type: 'string', pattern: '^[0-9]+(?:\\.[0-9]{1,6})?$' },
+    },
+    additionalProperties: false,
+  }
+  return standardServiceInputSchema(service.endpoint as StandardServicePath)
 }
+
+export function polyDeskAgentServices() {
+  return services.map(service => ({
+    ...service,
+    status: 'production' as const,
+    marketplace: {
+      agentId: AGENT_ID,
+      serviceId: service.marketplaceServiceId,
+      profileUrl: AGENT_PROFILE_URL + '#service-' + service.marketplaceServiceId,
+    },
+    requestSchema: serviceInputSchema(service),
+  }))
+}
+
+export const polyDeskMarketplaceA2aServices = [
+  {
+    serviceId: 38484,
+    name: 'PolyDesk Trading Agent',
+    type: 'A2A',
+    pricing: { mode: 'per-task', amount: '0.1', asset: 'USDT' },
+  },
+  {
+    serviceId: 38496,
+    name: 'PolyDesk Trading Membership',
+    type: 'A2A',
+    pricing: { mode: 'subscription', amount: '5', asset: 'USDT', interval: 'month', freeTrialHours: 72 },
+  },
+] as const
 
 export const polyDeskOkxMarketplacePlan = [
   {
@@ -118,7 +168,7 @@ export const polyDeskOkxMarketplacePlan = [
       '/api/a2mcp/polymarket-funding-link',
       '/api/a2mcp/polymarket-agent-flow',
     ],
-    launchState: 'building',
+    launchState: 'available-via-composed-services',
   },
   {
     id: 'polydesk-market-intelligence',
@@ -126,7 +176,7 @@ export const polyDeskOkxMarketplacePlan = [
     type: 'A2MCP',
     role: 'Evidence-backed market analysis and durable decision receipt',
     capabilityEndpoints: ['/api/a2mcp/polymarket-smart-trader'],
-    launchState: 'migration-ready',
+    launchState: 'production',
   },
   {
     id: 'polydesk-trader-intelligence',
@@ -137,7 +187,7 @@ export const polyDeskOkxMarketplacePlan = [
       '/api/a2mcp/polymarket-portfolio-watch',
       '/api/a2mcp/polymarket-smart-trader',
     ],
-    launchState: 'building',
+    launchState: 'production',
   },
   {
     id: 'polydesk-research-mission',
@@ -145,22 +195,67 @@ export const polyDeskOkxMarketplacePlan = [
     type: 'A2A',
     role: 'Custom multi-market, trader, or strategy investigation',
     capabilityEndpoints: [],
-    launchState: 'requires-marketplace-migration',
+    launchState: 'available-via-a2a-services',
   },
 ] as const
 
 export default function a2mcpServicesHandler(_req: Request, res: Response) {
+  const baseUrl = String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, '')
+  const publicServices = polyDeskAgentServices()
+  res.setHeader('Cache-Control', 'public, max-age=300')
   res.json({
     ok: true,
+    schema: 'polydesk-integration-manifest',
+    schemaVersion: '1.0.0',
+    status: 'production',
     provider: 'PolyDesk',
-    agentId: 5427,
+    agentId: AGENT_ID,
     protocol: 'OKX Agent Payments Protocol',
-    baseUrl: String(process.env.PUBLIC_APP_URL || 'https://polydesk.trade').replace(/\/+$/, ''),
-    summary: 'PolyDesk is consolidating its existing capabilities into four OKX AI marketplace services led by the Agent Trade Rail.',
+    baseUrl,
+    summary: 'PolyDesk exposes production Polymarket intelligence, verified funding, governed trading, and portfolio services for people, agents, and platforms.',
+    discovery: {
+      wellKnown: baseUrl + '/.well-known/polydesk.json',
+      catalog: baseUrl + '/api/a2mcp/services',
+      humanGuide: baseUrl + '/integrations',
+      technicalGuide: baseUrl + '/docs/okx-ai',
+    },
+    integration: {
+      requestContentType: 'application/json',
+      responseContentType: 'application/json',
+      payment: {
+        requiredStatus: 402,
+        challengeHeader: 'PAYMENT-REQUIRED',
+        replayHeader: 'PAYMENT-SIGNATURE',
+        network: { name: 'X Layer', caip2: 'eip155:196' },
+        asset: { symbol: 'USDT', address: XLAYER_USDT, decimals: 6 },
+        rule: 'The buyer must inspect and approve every payment challenge before signing. A paid replay must preserve the original business inputs.',
+      },
+      errors: {
+        shape: { ok: false, error: 'machine_readable_or_human_safe_string' },
+        nonBillable: 'Validation, provider-readiness, and ambiguous-input failures occur before a payment challenge whenever possible.',
+      },
+      asynchronousResults: {
+        callbacksSupported: false,
+        delivery: 'polling-and-public-receipts',
+        rule: 'Callers poll the declared status or receipt endpoint. Arbitrary caller-supplied webhook URLs are not accepted.',
+      },
+      custody: 'PolyDesk never accepts private keys, seed phrases, or reusable Polymarket CLOB credentials. Financial actions remain buyer-approved.',
+      returnRouting: {
+        allowlistedSources: ['polydesk', 'okx-ai', 'circle-marketplace'],
+        rule: 'Human portfolio and email links resolve from a stored allowlisted integration key, never an arbitrary return URL.',
+      },
+    },
+    marketplace: {
+      agentId: AGENT_ID,
+      profileUrl: AGENT_PROFILE_URL,
+      a2aServices: polyDeskMarketplaceA2aServices,
+      directServices: publicServices.map(service => service.marketplace),
+    },
     marketplacePlan: polyDeskOkxMarketplacePlan,
-    compatibilityServices: services,
+    compatibilityServices: publicServices,
+    deprecatedAliases: ['marketplacePlan', 'compatibilityServices'],
     rule: 'Every service returns machine-readable JSON. Each registered marketplace route issues a non-zero x402 challenge and returns its result only on the paid replay.',
-    services,
+    services: publicServices,
     docs: '/docs/okx-ai',
   })
 }

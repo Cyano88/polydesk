@@ -14,11 +14,16 @@ CLI payment, or generate a second payment receipt.
 
 - `https://polydesk.trade/integrations` explains the people, agent, and platform surfaces.
 - `https://polydesk.trade/docs/okx-ai` documents the governed OKX.AI flows.
-- `GET https://polydesk.trade/api/a2mcp/services` is the machine-readable service catalog.
+- `GET https://polydesk.trade/.well-known/polydesk.json` is the stable discovery entry.
+- `GET https://polydesk.trade/api/a2mcp/services` is its versioned machine-readable service manifest.
 
 The PolyDesk web application is the human-facing reference client. External
 agents and platforms integrate through typed A2A or HTTP contracts and retain
 their own identity, user experience, and allowlisted return destination.
+The manifest declares the payment headers, X Layer USDT contract, per-service
+request schemas, marketplace IDs, polling/receipt delivery, and custody rules.
+Arbitrary callback and return URLs are intentionally unsupported; a new platform
+must receive an allowlisted integration key and server-side destination mapping.
 
 ## Hash PayLink LP Scout flow
 

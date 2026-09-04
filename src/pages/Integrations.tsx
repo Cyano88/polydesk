@@ -71,6 +71,9 @@ export default function Integrations() {
             <Link to='/docs/okx-ai' className='inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-300 px-6 text-sm font-semibold text-gray-800 hover:bg-white dark:border-white/15 dark:text-gray-100 dark:hover:bg-white/[0.06]'>
               Read integration docs
             </Link>
+            <a href='/api/a2mcp/services' className='inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-300 px-6 text-sm font-semibold text-gray-800 hover:bg-white dark:border-white/15 dark:text-gray-100 dark:hover:bg-white/[0.06]'>
+              Machine-readable manifest <ArrowTopRightOnSquareIcon className='h-4 w-4' />
+            </a>
           </div>
         </section>
 
@@ -160,10 +163,11 @@ export default function Integrations() {
           <div className='mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 sm:flex-row sm:items-center'>
             <div>
               <h2 className='text-2xl font-semibold'>Build on PolyDesk.</h2>
-              <p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>Start with the public contracts or inspect the live OKX.AI service catalog.</p>
+              <p className='mt-2 text-sm text-gray-600 dark:text-gray-300'>Start with the versioned public manifest or inspect the live OKX.AI service catalog.</p>
             </div>
             <div className='flex flex-wrap gap-3'>
               <Link to='/docs/okx-ai' className='inline-flex min-h-11 items-center rounded-full bg-gray-950 px-5 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>Developer guide</Link>
+              <a href='/.well-known/polydesk.json' className='inline-flex min-h-11 items-center rounded-full border border-gray-300 px-5 text-sm font-semibold dark:border-white/15'>Integration manifest</a>
               <a href='https://www.okx.ai/agents/5427' target='_blank' rel='noreferrer' className='inline-flex min-h-11 items-center gap-2 rounded-full border border-gray-300 px-5 text-sm font-semibold dark:border-white/15'>Agent #5427 <ArrowTopRightOnSquareIcon className='h-4 w-4' /></a>
             </div>
           </div>

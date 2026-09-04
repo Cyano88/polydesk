@@ -256,6 +256,9 @@ test('public integrations route separates people, agents and platforms around ve
   assert.match(integrationsPage, /to='\/polydesk\?agent=1'/)
   assert.match(integrationsPage, /never requests wallet secrets/)
   assert.match(integrationsPage, /Hash PayLink remains the funding checkout/)
+  assert.match(integrationsPage, /Machine-readable manifest/)
+  assert.match(integrationsPage, /\.well-known\/polydesk\.json/)
+  assert.match(server, /app\.get\('\/.well-known\/polydesk\.json', readLimiter, a2mcpServicesHandler\)/)
 })
 
 test('Pulse rotates verified liquidity intelligence without inventing provider data', () => {

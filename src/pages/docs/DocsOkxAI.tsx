@@ -38,20 +38,21 @@ export default function DocsOkxAI() {
         <Table
           headers={['Service', 'Price', 'Endpoint']}
           rows={[
-            ['PolyDesk Trading Task #38484', '0.1 USDT / task', 'OKX A2A task'],
+            ['PolyDesk Trading Agent #38484', '0.1 USDT / task', 'OKX A2A task'],
             ['PolyDesk Trading Membership #38496', '5 USDT / month, 3-day trial', 'OKX A2A task'],
             ['Polymarket LP Scout', '0.3 USDT', <Code>/api/a2mcp/okx/polymarket-lp-scout</Code>],
             ['Football Match Live Data', '0.1 USDT', <Code>/api/a2mcp/worldcup-live-scores</Code>],
             ['Football News Brief', '0.1 USDT', <Code>/api/a2mcp/worldcup-market-news</Code>],
             ['Verified Polymarket Funding', '0.1 USDT', <Code>/api/a2mcp/polymarket-funding-link</Code>],
             ['Governed Polymarket Trader', '0.1 USDT', <Code>/api/a2mcp/polymarket-portfolio-watch</Code>],
+            ['Smart Market OOS Trader', '0.3 USDT', <Code>/api/a2mcp/polymarket-smart-trader</Code>],
           ]}
         />
-        <Note>The one-off task and membership coordinate the same bounded mission. The five A2MCP services remain independent pay-per-call tools for agents that need only one result.</Note>
+        <Note>The one-off task and membership coordinate the same bounded mission. The six A2MCP services remain independent pay-per-call tools for agents that need only one result.</Note>
       </Section>
 
       <Section title="A2A governed trading">
-        <p><strong>PolyDesk Trading Task #38484</strong> provides one bounded mission for 0.1 USDT. <strong>PolyDesk Trading Membership #38496</strong> provides recurring access for 5 USDT per month with a 3-day trial. Both take a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits.</p>
+        <p><strong>PolyDesk Trading Agent #38484</strong> provides one bounded mission for 0.1 USDT. <strong>PolyDesk Trading Membership #38496</strong> provides recurring access for 5 USDT per month with a 3-day trial. Both take a public watched wallet or exact BUY, the buyer owner EOA, and written spend, price and expiry limits.</p>
         <p>PolyDesk verifies the owner-derived Deposit Wallet, returns funding or collateral approval when required, and otherwise delivers one bounded Polymarket BUY signal. Paying for the service through OKX Agentic Wallet does not by itself prove that wallet can grant Polymarket approvals or sign the order; placement requires a compatible EVM signer controlling the verified Deposit Wallet.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Publish a task with an explicit Polymarket BUY cap.</li>
@@ -79,12 +80,14 @@ export default function DocsOkxAI() {
       </Section>
 
       <Section title="How to call a service">
+        <p>Discover the current, versioned contract at <Code>/.well-known/polydesk.json</Code> or <Code>/api/a2mcp/services</Code>. It declares service IDs, request schemas, prices, payment headers, recovery routes, custody boundaries, and return-routing rules.</p>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Choose the exact endpoint from the service map.</li>
           <li>Send the documented request and read the HTTP 402 challenge.</li>
           <li>Pay with OKX buyer tooling and replay the same request with the original business inputs.</li>
           <li>Store the returned machine-readable result or verified receipt.</li>
         </ol>
+        <Note>OKX Agentic Wallet is the verified reference buyer. Another platform may orchestrate the same endpoints only if its payment adapter satisfies the issued challenge. PolyDesk does not accept arbitrary webhook or return URLs; asynchronous results use declared status and receipt endpoints.</Note>
       </Section>
 
       <Section title="Try the football services">

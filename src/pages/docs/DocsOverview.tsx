@@ -93,7 +93,7 @@ export default function DocsOverview() {
       </Section>
 
       <Section title="For agents and developers">
-        <p>The public machine catalog lists the five direct services, their exact inputs and outputs, prices, free preparation calls, and safety boundaries.</p>
+        <p>The versioned public machine manifest lists the six direct services, their request schemas, prices, payment contract, free preparation calls, recovery routes, and safety boundaries.</p>
         <CodeBlock>{`curl https://polydesk.trade/api/a2mcp/services`}</CodeBlock>
         <ol className="list-decimal space-y-2 pl-5">
           <li>Need information only? Use Football Match Live Data, Football News Brief, or LP Scout.</li>

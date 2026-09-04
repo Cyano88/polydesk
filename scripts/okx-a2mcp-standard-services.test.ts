@@ -10,7 +10,12 @@ import okxA2mcpStandardServiceHandler, {
   preflightSmartTraderBeforeSettlement,
   smartTraderRequestInput,
 } from '../api/okx-a2mcp-standard-services.js'
-import { polyDeskAgentServices, polyDeskOkxMarketplacePlan } from '../api/a2mcp-services.js'
+import a2mcpServicesHandler, {
+  polyDeskAgentServices,
+  polyDeskMarketplaceA2aServices,
+  polyDeskOkxMarketplacePlan,
+} from '../api/a2mcp-services.js'
+import { okxMarketplaceServices, okxTradingAgentService, okxTradingTaskService } from '../src/lib/okxMarketplaceServices.js'
 
 test('public service catalog documents optional football relevance filters', () => {
   const services = polyDeskAgentServices()
@@ -31,6 +36,61 @@ test('catalog exposes the four-service OKX AI migration plan without removing co
   ])
   assert.deepEqual(polyDeskOkxMarketplacePlan.map(service => service.type), ['A2MCP', 'A2MCP', 'A2MCP', 'A2A'])
   assert.ok(polyDeskAgentServices().length >= 6)
+})
+
+test('versioned integration manifest matches the verified marketplace registry', () => {
+  const direct = polyDeskAgentServices()
+  assert.equal(direct.length, 6)
+  assert.deepEqual(
+    direct.map(service => service.marketplaceServiceId).sort((a, b) => a - b),
+    okxMarketplaceServices.map(service => service.serviceId).sort((a, b) => a - b),
+  )
+  assert.deepEqual(
+    polyDeskMarketplaceA2aServices.map(service => [service.serviceId, service.name]),
+    [
+      [okxTradingTaskService.serviceId, okxTradingTaskService.name],
+      [okxTradingAgentService.serviceId, okxTradingAgentService.name],
+    ],
+  )
+  for (const service of direct) {
+    assert.equal(service.status, 'production')
+    assert.equal(service.marketplace.agentId, 5427)
+    assert.equal(service.marketplace.serviceId, service.marketplaceServiceId)
+    assert.equal(service.requestSchema.type, 'object')
+  }
+  const lpScout = direct.find(service => service.id === 'polymarket-lp-scout')
+  const smartTrader = direct.find(service => service.id === 'polymarket-smart-trader')
+  assert.deepEqual(lpScout?.requestSchema.properties.scoutMode.enum, ['best', 'market', 'news', 'football'])
+  assert.equal(lpScout?.requestSchema.properties.budget.type, 'string')
+  assert.equal(smartTrader?.requestSchema.properties.marketId.maxLength, 320)
+  assert.equal(smartTrader?.requestSchema.properties.decisionId.pattern, '^pstd_[a-f0-9]{24,64}$')
+  assert.equal(smartTrader?.requestSchema.additionalProperties, false)
+})
+
+test('public integration manifest declares discovery, payment, polling, and custody contracts', () => {
+  let body: Record<string, any> = {}
+  const headers: Record<string, string> = {}
+  const res = {
+    setHeader(name: string, value: string) { headers[name] = value; return this },
+    json(value: Record<string, any>) { body = value; return this },
+  } as unknown as Response
+  a2mcpServicesHandler({} as Request, res)
+
+  assert.equal(body.schema, 'polydesk-integration-manifest')
+  assert.equal(body.schemaVersion, '1.0.0')
+  assert.equal(body.status, 'production')
+  assert.equal(body.discovery.wellKnown, 'https://polydesk.trade/.well-known/polydesk.json')
+  assert.equal(body.integration.payment.requiredStatus, 402)
+  assert.equal(body.integration.payment.challengeHeader, 'PAYMENT-REQUIRED')
+  assert.equal(body.integration.payment.replayHeader, 'PAYMENT-SIGNATURE')
+  assert.equal(body.integration.payment.network.caip2, 'eip155:196')
+  assert.equal(body.integration.payment.asset.address, '0x779ded0c9e1022225f8e0630b35a9b54be713736')
+  assert.equal(body.integration.asynchronousResults.callbacksSupported, false)
+  assert.match(body.integration.custody, /never accepts private keys/i)
+  assert.deepEqual(body.integration.returnRouting.allowlistedSources, ['polydesk', 'okx-ai', 'circle-marketplace'])
+  assert.equal(body.marketplace.a2aServices.length, 2)
+  assert.equal(body.marketplace.directServices.length, 6)
+  assert.equal(headers['Cache-Control'], 'public, max-age=300')
 })
 
 test('standard OKX exact services advertise EIP-3009 instead of Permit2', () => {
