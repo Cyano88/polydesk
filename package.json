@@ -16,6 +16,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "test:polydesk-shell": "node --import tsx --test scripts/polydesk-shell-ui.test.ts",
     "test:polymarket-alerts": "node --import tsx --test scripts/polymarket-alert-rules.test.ts",
+    "test:polymarket-data-api": "node --import tsx --test scripts/polymarket-data-api.test.ts",
     "test:email-provider": "node --import tsx --test scripts/email-provider.test.ts",
     "test:hashpaylink-funding": "node --import tsx --test scripts/hashpaylink-polymarket-funding.test.ts",
     "test:hashpaylink-agentic": "node --import tsx --test scripts/hashpaylink-agentic-checkout.test.ts",

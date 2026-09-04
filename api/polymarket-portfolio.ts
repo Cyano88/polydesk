@@ -5,6 +5,7 @@ import { isAddress } from 'viem'
 import { PrivyClient, type User } from '@privy-io/server-auth'
 import { BuilderConfig } from '@polymarket/builder-signing-sdk'
 import { sendTransactionalEmail } from './email-provider.js'
+import { fetchPolymarketData } from './polymarket-data-api.js'
 import {
   confirmedFundingDelivery,
   crossedLossThreshold,
@@ -25,7 +26,6 @@ import { polymarketIntegrationSource, polymarketPortfolioDestination } from './p
 import { ensurePolymarketDepositWallet } from './polymarket-deposit-wallet.js'
 import { polymarketLpGammaIdentity, polymarketLpSlugFromUrl } from './polymarket-lp-recovery.js'
 
-const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 const CLOB_API_ORIGIN = 'https://clob.polymarket.com'
 const GAMMA_API_ORIGIN = 'https://gamma-api.polymarket.com'
 const REQUEST_TIMEOUT_MS = 10_000
@@ -469,29 +469,6 @@ function serializeAlertRecord(row: Record<string, unknown>) {
 
 const SUPPORTED_NETWORKS = new Set(['base', 'arbitrum', 'solana'])
 
-async function dataApiFetch<T>(path: string): Promise<T> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(`${DATA_API_ORIGIN}${path}`, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
-    const text = await response.text()
-    let data: unknown = null
-    try { data = text ? JSON.parse(text) : null } catch { data = null }
-    if (!response.ok) {
-      const message = typeof data === 'object' && data && 'error' in data
-        ? String((data as { error?: unknown }).error)
-        : text.slice(0, 160)
-      throw new Error(message || `Polymarket data-api HTTP ${response.status}`)
-    }
-    return data as T
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
 async function clobPublicFetch<T>(path: string): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -789,10 +766,10 @@ export async function processDuePolymarketDigests(limit = 20) {
     const address = String(row.address)
     const scheduledAt = row.next_digest_at instanceof Date ? row.next_digest_at : new Date(row.next_digest_at)
     try {
-      const [positions, portfolioValue] = await Promise.all([
-        dataApiFetch<PolymarketPosition[]>(`/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`),
-        dataApiFetch<unknown>(`/value?user=${encodeURIComponent(address)}`),
-      ])
+      const positions = await fetchPolymarketData<PolymarketPosition[]>(
+        `/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`,
+      )
+      const portfolioValue = await fetchPolymarketData<unknown>(`/value?user=${encodeURIComponent(address)}`)
       const open = positions.filter(position => Number(position.size) > 0 && Number(position.currentValue) > 0)
       const claimable = positions.filter(position => position.redeemable === true && Number(position.size) > 0)
       const openPnl = open.reduce((total, position) => {
@@ -1350,7 +1327,7 @@ async function evaluateAlerts(privyUserId: string, address: string) {
 
   let positions: PolymarketPosition[] = []
   try {
-    positions = await dataApiFetch<PolymarketPosition[]>(`/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`)
+    positions = await fetchPolymarketData<PolymarketPosition[]>(`/positions?user=${encodeURIComponent(address)}&sizeThreshold=0&limit=100`)
     if (!Array.isArray(positions)) positions = []
   } catch {
     return 0
@@ -1765,7 +1742,7 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET' && action === 'value') {
       const address = cleanString(req.query.address, 64)
       if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
-      const data = await dataApiFetch<unknown>(`/value?user=${encodeURIComponent(address)}`)
+      const data = await fetchPolymarketData<unknown>(`/value?user=${encodeURIComponent(address)}`)
       return res.json({ ok: true, value: data })
     }
     if (req.method === 'GET' && action === 'positions') {
@@ -1774,7 +1751,7 @@ export default async function handler(req: Request, res: Response) {
       const sizeThreshold = cleanString(req.query.sizeThreshold, 12) || '1'
       const limit = cleanString(req.query.limit, 6) || '50'
       const url = `/positions?user=${encodeURIComponent(address)}&sizeThreshold=${encodeURIComponent(sizeThreshold)}&limit=${encodeURIComponent(limit)}`
-      const data = await dataApiFetch<unknown>(url)
+      const data = await fetchPolymarketData<unknown>(url)
       return res.json({ ok: true, positions: Array.isArray(data) ? data : [] })
     }
     if (req.method === 'GET' && action === 'rebates') {
@@ -1800,7 +1777,7 @@ export default async function handler(req: Request, res: Response) {
       if (!isAddress(address)) return res.status(400).json({ ok: false, error: 'Provide a valid 0x Polymarket address.' })
       const requestedLimit = Number(req.query.limit ?? 50)
       const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.trunc(requestedLimit))) : 50
-      const data = await dataApiFetch<unknown>(`/activity?user=${encodeURIComponent(address)}&limit=${limit}&sortBy=TIMESTAMP&sortDirection=DESC`)
+      const data = await fetchPolymarketData<unknown>(`/activity?user=${encodeURIComponent(address)}&limit=${limit}&sortBy=TIMESTAMP&sortDirection=DESC`)
       return res.json({ ok: true, activity: Array.isArray(data) ? data : [] })
     }
 

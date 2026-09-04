@@ -1,8 +1,6 @@
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
-
-const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
-const REQUEST_TIMEOUT_MS = 10_000
+import { fetchPolymarketData } from './polymarket-data-api.js'
 
 type PolymarketPosition = {
   conditionId?: string
@@ -69,29 +67,6 @@ function asNumber(value: unknown) {
 
 function roundUsd(value: number) {
   return Math.round(value * 100) / 100
-}
-
-async function dataApiFetch<T>(path: string): Promise<T> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(`${DATA_API_ORIGIN}${path}`, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
-    const text = await response.text()
-    let data: unknown = null
-    try { data = text ? JSON.parse(text) : null } catch { data = null }
-    if (!response.ok) {
-      const message = typeof data === 'object' && data && 'error' in data
-        ? String((data as { error?: unknown }).error)
-        : text.slice(0, 160)
-      throw new Error(message || `Polymarket data-api HTTP ${response.status}`)
-    }
-    return data as T
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 function summarizePosition(position: PolymarketPosition) {
@@ -177,12 +152,13 @@ export default async function a2mcpPolymarketPortfolioWatchHandler(req: Request,
 
     const agent = clean(requestValue(req, 'agent') || req.headers['x-buyer-agent'] || req.headers['x-agent-slug'] || 'external-agent', 80)
     const limit = Math.max(1, Math.min(100, Number(requestValue(req, 'limit') || 50) || 50))
-    const [valueData, positionData, activityData] = await Promise.all([
-      dataApiFetch<unknown>(`/value?user=${encodeURIComponent(wallet)}`),
-      dataApiFetch<unknown>(`/positions?user=${encodeURIComponent(wallet)}&sizeThreshold=0&limit=${limit}`),
-      dataApiFetch<unknown>(`/activity?user=${encodeURIComponent(wallet)}&type=TRADE&side=BUY&sortBy=TIMESTAMP&sortDirection=DESC&limit=${Math.min(limit, 50)}`)
-        .catch(() => null),
-    ])
+    const valueData = await fetchPolymarketData<unknown>(`/value?user=${encodeURIComponent(wallet)}`)
+    const positionData = await fetchPolymarketData<unknown>(
+      `/positions?user=${encodeURIComponent(wallet)}&sizeThreshold=0&limit=${limit}`,
+    )
+    const activityData = await fetchPolymarketData<unknown>(
+      `/activity?user=${encodeURIComponent(wallet)}&type=TRADE&side=BUY&sortBy=TIMESTAMP&sortDirection=DESC&limit=${Math.min(limit, 50)}`,
+    ).catch(() => null)
 
     const positions = Array.isArray(positionData) ? positionData.map(item => summarizePosition(item as PolymarketPosition)) : []
     const openPositions = positions.filter(position => position.currentValue > 0 || position.size > 0)
