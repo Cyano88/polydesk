@@ -3,11 +3,13 @@ import test from 'node:test'
 import {
   buildSettledSmartTraderAnalysisRecord,
   deriveResolutionSource,
+  filterMarketsByQuery,
   hasMissingZeroScoutProofDelivery,
   isRemediableMissingZeroScoutProof,
   normalizeMarket,
   preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
+  polymarketSearchQuery,
   runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
   shouldRecoverSmartTraderDelivery,
@@ -384,6 +386,41 @@ test('ANALYZE can discover by query inside the single paid workflow', async () =
   if (!result.ok) return
   assert.equal(searchCalls, 1)
   assert.equal(result.data.decision.decision, 'APPROVE')
+})
+
+test('market discovery strips buyer intent words and rejects unrelated fuzzy-search results', () => {
+  assert.equal(polymarketSearchQuery('Find active liquid Polymarket markets about football'), 'football')
+  const football = market({
+    question: 'Will Georgia be a top 4 seed in the College Football Playoffs?',
+    eventSlug: 'ncaa-football-playoff-top-four',
+  })
+  const unrelated = market({
+    conditionId: `0x${'56'.repeat(32)}`,
+    question: 'Will Euphoria be the most searched TV show on Google in 2026?',
+    description: 'Resolves from Google Year in Search rankings.',
+    eventSlug: 'most-searched-tv-show-on-google-2026',
+    marketSlug: 'will-euphoria-rank-first',
+  })
+  assert.deepEqual(filterMarketsByQuery([unrelated, football], 'Find active liquid Polymarket markets about football'), [football])
+})
+
+test('ANALYZE provider preflight rejects unrelated search results before payment', async () => {
+  const result = await preflightPolymarketSmartTraderProviders({
+    action: 'ANALYZE',
+    query: 'Find active liquid Polymarket markets about football',
+    side: 'BUY',
+  }, dependencies({
+    searchMarkets: async () => [market({
+      question: 'Will Euphoria be the most searched TV show on Google in 2026?',
+      description: 'Resolves from Google Year in Search rankings.',
+      eventSlug: 'most-searched-tv-show-on-google-2026',
+      marketSlug: 'will-euphoria-rank-first',
+    })],
+  }))
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.status, 404)
+  assert.match(result.error, /No active Polymarket market matched/i)
 })
 
 test('ANALYZE provider preflight rejects an empty exact lookup before payment', async () => {

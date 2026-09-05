@@ -437,6 +437,40 @@ function marketsFromPayload(payload: unknown) {
   return [...unique.values()]
 }
 
+const MARKET_SEARCH_STOP_WORDS = new Set([
+  'a', 'about', 'active', 'an', 'and', 'available', 'current', 'currently',
+  'discover', 'find', 'for', 'in', 'liquid', 'liquidity', 'market', 'markets',
+  'of', 'on', 'open', 'or', 'please', 'polymarket', 'prediction', 'predictions',
+  'search', 'show', 'the', 'to', 'trade', 'trading', 'with',
+])
+
+function normalizedSearchWords(value: string) {
+  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+}
+
+export function polymarketSearchQuery(query: string) {
+  const terms = normalizedSearchWords(query).filter(term => !MARKET_SEARCH_STOP_WORDS.has(term))
+  return terms.join(' ') || query.trim()
+}
+
+export function filterMarketsByQuery(markets: SmartTraderMarket[], query: string) {
+  const terms = normalizedSearchWords(polymarketSearchQuery(query))
+  if (!terms.length) return markets
+  return markets.filter(market => {
+    const text = normalizedSearchWords([
+      market.question,
+      market.description,
+      market.category,
+      market.eventSlug,
+      market.marketSlug,
+    ].filter(Boolean).join(' '))
+    const words = new Set(text)
+    const matches = terms.filter(term => words.has(term)).length
+    return terms.length === 1 ? matches === 1 : matches >= Math.max(2, Math.ceil(terms.length * 0.6))
+  })
+}
+
 async function fetchJson(url: string) {
   const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   if (!response.ok) throw new Error(`Upstream returned HTTP ${response.status}.`)
@@ -445,7 +479,7 @@ async function fetchJson(url: string) {
 
 async function liveSearchMarkets(query: string, category?: string) {
   if (query) {
-    const params = new URLSearchParams({ q: query, events_status: 'active', limit_per_type: '20', keep_closed_markets: '0', search_profiles: 'false', search_tags: 'false' })
+    const params = new URLSearchParams({ q: polymarketSearchQuery(query), events_status: 'active', limit_per_type: '20', keep_closed_markets: '0', search_profiles: 'false', search_tags: 'false' })
     return marketsFromPayload(await fetchJson(`${GAMMA_ORIGIN}/public-search?${params.toString()}`))
   }
   const params = new URLSearchParams({ active: 'true', closed: 'false', order: 'volume24hr', ascending: 'false', limit: '20' })
@@ -581,7 +615,8 @@ export async function preflightPolymarketSmartTraderProviders(
       withinPaymentPreflight(Promise.resolve(marketLookup), 'Polymarket market preflight'),
       withinPaymentPreflight(dependencies.researchReady(), 'ZeroScout readiness preflight'),
     ])
-    const activeMarkets = markets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
+    const relevantMarkets = input.marketId ? markets : filterMarketsByQuery(markets, input.query)
+    const activeMarkets = relevantMarkets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
     if (!activeMarkets.length) {
       return { ok: false as const, status: 404, error: 'No active Polymarket market matched this ANALYZE request.' }
     }
@@ -1121,6 +1156,7 @@ export async function runPolymarketSmartTrader(
   } catch (error) {
     return { ok: false as const, status: 502, error: `Polymarket lookup failed: ${error instanceof Error ? error.message : 'unknown error'}` }
   }
+  if (!input.marketId) markets = filterMarketsByQuery(markets, input.query)
   markets = markets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
   if (!markets.length) return { ok: false as const, status: 404, error: 'No active Polymarket market accepting orders matched the request.' }
   const { ranked, smartMoneySources } = await rankMarketOutcomes(markets, input, dependencies)
