@@ -6,17 +6,11 @@ import {
   CommandLineIcon,
   EnvelopeIcon,
   ShieldCheckIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline'
 import PolymarketMark from '../components/PolymarketMark'
 import { marketplaceProductPrice, marketplaceProductUrl, polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 
 const audiences = [
-  {
-    title: 'For people',
-    body: 'Use the PolyDesk web application to research markets, inspect portfolios, request agent help, approve trades, and manage notifications.',
-    icon: UserIcon,
-  },
   {
     title: 'For agents',
     body: 'Call typed A2A and HTTP services for one result, one governed trading mission, or recurring portfolio monitoring.',
@@ -30,7 +24,7 @@ const audiences = [
 ] as const
 
 const lifecycle = [
-  ['01', 'Request', 'A person writes a plain-language request, or an agent sends a typed service payload.'],
+  ['01', 'Request', 'An agent or platform sends a typed service request with explicit limits.'],
   ['02', 'Verify', 'PolyDesk checks live market data, wallet readiness, evidence, and the buyer-defined limits.'],
   ['03', 'Approve', 'Read-only results return immediately. Funding and trading wait for the buyer-controlled signature.'],
   ['04', 'Prove', 'The caller receives machine-readable output, status, and public execution evidence where available.'],
@@ -48,7 +42,7 @@ export default function Integrations() {
           <nav className='flex items-center gap-4 text-sm font-medium'>
             <Link to='/docs' className='text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white'>Docs</Link>
             <Link to='/' className='hidden text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white sm:inline'>Foundation</Link>
-            <a href='/polydesk?agent=1' className='rounded-full bg-gray-950 px-4 py-2 text-white transition hover:bg-black dark:bg-white dark:text-gray-950'>Open PolyDesk</a>
+            <a href='/api/a2mcp/services' className='rounded-full bg-gray-950 px-4 py-2 text-white transition hover:bg-black dark:bg-white dark:text-gray-950'>Service catalog</a>
           </nav>
         </div>
       </header>
@@ -56,20 +50,17 @@ export default function Integrations() {
       <main>
         <section className='mx-auto max-w-6xl px-5 pb-16 pt-20 sm:px-8 sm:pb-24 sm:pt-28'>
           <p className='text-xs font-bold uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400'>Polymarket infrastructure</p>
-          <h1 className='mt-5 max-w-4xl text-5xl font-semibold tracking-[-0.055em] sm:text-7xl'>One PolyDesk stack for people, agents, and platforms.</h1>
+          <h1 className='mt-5 max-w-4xl text-5xl font-semibold tracking-[-0.055em] sm:text-7xl'>Polymarket infrastructure for agents and platforms.</h1>
           <p className='mt-6 max-w-2xl text-lg leading-8 text-gray-600 dark:text-gray-300'>
-            The web application is the human reference client. The same verified capabilities are available to agents and infrastructure through bounded, machine-readable services.
+            Integrate bounded trading, managed portfolio operations, and independent flow audits through versioned machine-readable services.
           </p>
           <div className='mt-6 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100'>
             <strong>OKX.AI status: registered</strong>
             <span className='text-amber-800/80 dark:text-amber-100/70'>Public discovery begins after Agent #5427 marketplace approval.</span>
           </div>
           <div className='mt-8 flex flex-wrap gap-3'>
-            <a href='/polydesk?agent=1' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
-              Ask PolyDesk <ArrowRightIcon className='h-4 w-4' />
-            </a>
-            <Link to='/docs/okx-ai' className='inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-300 px-6 text-sm font-semibold text-gray-800 hover:bg-white dark:border-white/15 dark:text-gray-100 dark:hover:bg-white/[0.06]'>
-              Read integration docs
+            <Link to='/docs/okx-ai' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
+              View agent services <ArrowRightIcon className='h-4 w-4' />
             </Link>
             <a href='/api/a2mcp/services' className='inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-300 px-6 text-sm font-semibold text-gray-800 hover:bg-white dark:border-white/15 dark:text-gray-100 dark:hover:bg-white/[0.06]'>
               Machine-readable manifest <ArrowTopRightOnSquareIcon className='h-4 w-4' />
@@ -78,7 +69,7 @@ export default function Integrations() {
         </section>
 
         <section className='border-y border-black/5 bg-white dark:border-white/10 dark:bg-white/[0.025]'>
-          <div className='mx-auto grid max-w-6xl gap-px px-5 py-12 sm:grid-cols-3 sm:px-8'>
+          <div className='mx-auto grid max-w-6xl gap-px px-5 py-12 sm:grid-cols-2 sm:px-8'>
             {audiences.map(({ title, body, icon: Icon }) => (
               <article key={title} className='border-black/5 py-6 sm:border-r sm:px-7 sm:first:pl-0 sm:last:border-r-0 dark:border-white/10'>
                 <Icon className='h-6 w-6 text-gray-500 dark:text-gray-400' />
@@ -116,7 +107,7 @@ export default function Integrations() {
         <section className='bg-gray-950 text-white dark:bg-black'>
           <div className='mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24'>
             <p className='text-xs font-bold uppercase tracking-[0.2em] text-white/45'>Shared lifecycle</p>
-            <h2 className='mt-4 max-w-2xl text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Natural language for people. Typed contracts for machines.</h2>
+            <h2 className='mt-4 max-w-2xl text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Typed contracts from request to proof.</h2>
             <div className='mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4'>
               {lifecycle.map(([index, title, body]) => (
                 <article key={index}>

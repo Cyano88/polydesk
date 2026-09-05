@@ -1,6 +1,6 @@
 # PolyDesk API Boundary
 
-Updated: 2026-07-27
+Updated: 2026-09-05
 
 ## Product boundary
 
@@ -12,14 +12,16 @@ CLI payment, or generate a second payment receipt.
 
 ## Public integration entry
 
-- `https://polydesk.trade/integrations` explains the people, agent, and platform surfaces.
+- `https://polydesk.trade/integrations` explains the agent and platform integration surfaces.
 - `https://polydesk.trade/docs/okx-ai` documents the governed OKX.AI flows.
 - `GET https://polydesk.trade/.well-known/polydesk.json` is the stable discovery entry.
 - `GET https://polydesk.trade/api/a2mcp/services` is its versioned machine-readable product manifest.
 
-The PolyDesk web application is the human-facing reference client. External
-agents and platforms integrate through typed A2A or HTTP contracts and retain
-their own identity, user experience, and allowlisted return destination.
+PolyDesk does not market a standalone consumer application. Agents and
+platforms integrate through typed A2A or HTTP contracts and retain their own
+identity, user experience, and allowlisted return destination. The retained
+operator console is an operational approval, monitoring, and evidence surface,
+not a public product or discovery entry.
 Manifest version 2 declares exactly three customer-facing products: One-Off
 Polymarket Trade, Managed Polymarket Agent, and Polymarket Integration Audit.
 They are registered as A2A listings `#38484`, `#38496`, and `#40363`. The manifest separately declares retained implementation capabilities,

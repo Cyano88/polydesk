@@ -12,11 +12,6 @@ import { polydeskMarketplaceProducts } from '../lib/polydeskMarketplaceProducts'
 
 const audiences = [
   {
-    label: 'People',
-    title: 'A reference application',
-    body: 'Research markets, inspect portfolios, configure monitoring, and approve financial actions from one human-facing workspace.',
-  },
-  {
     label: 'Agents',
     title: 'Bounded machine services',
     body: 'Use typed contracts for one trade, continuous portfolio management, or a verifiable integration assessment.',
@@ -53,8 +48,8 @@ export default function About() {
           <div className="flex items-center gap-4 text-sm font-medium sm:gap-6">
             <Link to="/integrations" className="text-slate-600 transition hover:text-slate-950">Integrations</Link>
             <Link to="/docs" className="hidden text-slate-600 transition hover:text-slate-950 sm:inline">Docs</Link>
-            <a href="/polydesk" className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-950 px-4 text-white transition hover:bg-black">
-              Open app <ArrowRightIcon className="h-4 w-4" />
+            <a href="/.well-known/polydesk.json" className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-950 px-4 text-white transition hover:bg-black">
+              Public manifest <ArrowTopRightOnSquareIcon className="h-4 w-4" />
             </a>
           </div>
         </nav>
@@ -68,7 +63,7 @@ export default function About() {
               The open control layer for Polymarket agents.
             </h1>
             <p className="mt-8 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl sm:leading-9">
-              PolyDesk gives people, agents, and platforms a shared standard for market intelligence, explicit authorization, and verifiable execution.
+              PolyDesk gives agents and platforms a shared standard for market intelligence, explicit authorization, and verifiable execution.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link to="/integrations" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-semibold text-white transition hover:bg-black">
@@ -117,8 +112,8 @@ export default function About() {
 
         <section className="bg-slate-950 text-white">
           <div className="mx-auto max-w-7xl px-5 py-24 sm:px-8 sm:py-32 lg:px-10">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/45">One standard, three entry points</p>
-            <div className="mt-12 grid gap-10 sm:grid-cols-3">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/45">One standard, two integration paths</p>
+            <div className="mt-12 grid gap-10 sm:grid-cols-2">
               {audiences.map(item => (
                 <article key={item.label} className="border-t border-white/20 pt-6">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/40">{item.label}</p>
@@ -155,7 +150,7 @@ export default function About() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/docs/okx-ai" className="inline-flex min-h-11 items-center rounded-full bg-slate-950 px-5 text-sm font-semibold text-white">Developer docs</Link>
-              <a href="/polydesk" className="inline-flex min-h-11 items-center rounded-full border border-slate-300 px-5 text-sm font-semibold">Open reference app</a>
+              <a href="/.well-known/polydesk.json" className="inline-flex min-h-11 items-center rounded-full border border-slate-300 px-5 text-sm font-semibold">Public manifest</a>
             </div>
           </div>
         </section>

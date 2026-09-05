@@ -5,9 +5,9 @@ import PolymarketMark from '../../components/PolymarketMark'
 
 const sections = [
   {
-    label: 'Product',
+    label: 'Start here',
     links: [
-      { label: 'Product guide', path: '/docs', end: true },
+      { label: 'Integration overview', path: '/docs', end: true },
       { label: 'Integrations', path: '/integrations' },
     ],
   },
@@ -70,9 +70,9 @@ export default function DocsLayout() {
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <a href="/polydesk" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
+            <a href="/.well-known/polydesk.json" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
               <ExternalLink className="h-3.5 w-3.5" />
-              Open app
+              Manifest
             </a>
           </div>
         </div>
