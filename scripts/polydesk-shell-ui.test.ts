@@ -63,7 +63,7 @@ test('unresolved authentication restores once, then keeps the product publicly b
   assert.ok(restoringGuard >= 0)
   assert.match(layout, /Restoring your desk/)
   assert.match(layout, /import\.meta\.env\.DEV && searchParams\.get\('preview'\) === '1'/)
-  assert.match(layout, /const previewMode = localPreview \|\| !authenticated/)
+  assert.doesNotMatch(layout, /portfolio: previewMode \? 'preview' : 'trading'/)
   assert.match(layout, /<Link to=\{makeTo\('portfolio', \{ portfolio: 'trading', wallet: 'positions' \}\)\} className="group flex items-center/)
   assert.doesNotMatch(layout, /debugLabel="polydesk-header-sign-in"/)
   assert.doesNotMatch(layout, />\s*Sign in\s*</)

@@ -113,7 +113,6 @@ function PolyDeskWorkspace() {
   const service = searchParams.get('service') ?? ''
   const agentOpen = searchParams.get('agent') === '1' || Boolean(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
-  const previewMode = localPreview || !authenticated
   const portfolioRoute = searchParams.get('portfolio')
   const controlSection = portfolioRoute === 'watch' ? 'monitors' : 'account'
   const workspace: Workspace = agentOpen
@@ -268,7 +267,7 @@ function PolyDeskWorkspace() {
                 {
                   id: 'account',
                   label: 'Account',
-                  to: makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' }),
+                  to: makeTo('portfolio', { portfolio: 'trading', wallet: 'positions' }),
                 },
                 { id: 'monitors', label: 'Monitors', to: makeTo('portfolio', { portfolio: 'watch' }) },
               ].map(item => (
