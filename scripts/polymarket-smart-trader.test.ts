@@ -341,6 +341,61 @@ async function analyzeForBuy(deps: SmartTraderDependencies, extra: Record<string
   return result.data.decision
 }
 
+test('ANALYZE binds the requested amount without widening a stricter mandate', async () => {
+  for (const [amountUsdc, maximumSpendUsdc, expected] of [[5, undefined, 5], [5, 10, 5], [5, 3, 3], [0.01, undefined, 0.01]]) {
+    const decision = await analyzeForBuy(dependencies(), { amountUsdc, mandate: { maximumSpendUsdc } })
+    assert.equal(decision.mandate.maximumSpendUsdc, expected)
+  }
+  const deps = dependencies()
+  const decision = await analyzeForBuy(deps, { amountUsdc: 5 })
+  const result = await runPolymarketSmartTrader({ action: 'PREPARE', decisionId: decision.decisionId, marketId: 'will-team-a-win-the-final', outcome: 'Yes', side: 'BUY', amountUsdc: 6 }, deps)
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.match(result.error, /maximumSpendUsdc/)
+})
+
+test('ANALYZE rejects invalid explicit spend values before providers', async () => {
+  for (const value of [0, -1, 0.001, Infinity, NaN, 'invalid']) {
+    for (const params of [{ amountUsdc: value }, { mandate: { maximumSpendUsdc: value } }]) {
+      const result = await preflightPolymarketSmartTraderRequest({ action: 'ANALYZE', marketId: conditionId, side: 'BUY', ...params })
+      assert.equal(result.ok, false)
+    }
+  }
+})
+
+test('ANALYZE falls back from empty or failed football research using the exact market', async () => {
+  for (const fail of [false, true]) {
+    let generalCalls = 0
+    const deps = dependencies({
+      sportsNews: async () => { if (fail) throw new Error('provider unavailable'); return [] },
+      generalNews: async (query, selectedMarket, trade) => {
+        generalCalls++
+        assert.equal(query, 'Will Team A win the final?')
+        assert.equal(selectedMarket.conditionId, conditionId)
+        assert.equal(trade.requestedSide, 'BUY')
+        return [{ title: 'Verified final update', description: 'Sourced update', source: 'Official', url: 'https://example.com/final', publishedAt: new Date(now).toISOString() }]
+      },
+    })
+    const decision = await analyzeForBuy(deps)
+    assert.equal(generalCalls, 1)
+    assert.equal(decision.evidence.newsCount, 1)
+  }
+})
+
+test('ANALYZE routes Valorant to general research and cannot approve empty evidence', async () => {
+  let sportsCalls = 0
+  let generalCalls = 0
+  const deps = dependencies({
+    resolveMarket: async () => [market({ question: 'Valorant: NRG vs LOUD' })],
+    sportsNews: async () => { sportsCalls++; return [] },
+    generalNews: async () => { generalCalls++; return [] },
+  })
+  const decision = await analyzeForBuy(deps, { category: 'sports' })
+  assert.equal(sportsCalls, 0)
+  assert.equal(generalCalls, 1)
+  assert.equal(decision.decision, 'ESCALATE')
+  assert.ok(decision.blockers.some(value => value.includes('No cited market research')))
+})
+
 test('DISCOVER ranks eligible outcomes and only applies smart-money tag with observed wallet evidence', async () => {
   const result = await runPolymarketSmartTrader({
     action: 'DISCOVER',

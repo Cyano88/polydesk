@@ -324,6 +324,9 @@ function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: 
   }
   const outcome = clean(raw.outcome, 100) || undefined
   const amountUsdc = raw.amountUsdc === undefined ? undefined : number(raw.amountUsdc, Number.NaN)
+  if (amountUsdc !== undefined && (!Number.isFinite(amountUsdc) || amountUsdc < 0.01 || amountUsdc > 10_000)) {
+    return { ok: false, status: 400, error: 'amountUsdc must be finite and between 0.01 and 10000.' }
+  }
   const shares = raw.shares === undefined ? undefined : number(raw.shares, Number.NaN)
   const limitPrice = raw.limitPrice === undefined ? undefined : number(raw.limitPrice, Number.NaN)
   const expiresAt = raw.expiresAt === undefined ? undefined : Math.floor(number(raw.expiresAt, Number.NaN))
@@ -351,6 +354,9 @@ function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: 
     return { ok: false, status: 400, error: 'smartMoneyWallets must contain at most 10 valid public EVM addresses.' }
   }
   const mandate = parsedObjectParam(raw.mandate)
+  if (mandate.maximumSpendUsdc !== undefined && (!Number.isFinite(Number(mandate.maximumSpendUsdc)) || Number(mandate.maximumSpendUsdc) < 0.01 || Number(mandate.maximumSpendUsdc) > 10_000)) {
+    return { ok: false, status: 400, error: 'maximumSpendUsdc must be finite and between 0.01 and 10000.' }
+  }
   return {
     ok: true,
     value: {
@@ -376,7 +382,10 @@ function parseRequest(raw: unknown): { ok: true; value: ParsedRequest } | { ok: 
         minimumHoursToResolution: boundedNumber(mandate.minimumHoursToResolution, 1, 0, 8_760),
         maximumBookAgeSeconds: boundedNumber(mandate.maximumBookAgeSeconds, 120, 5, 3_600),
         maximumPriceDrift: boundedNumber(mandate.maximumPriceDrift, 0.05, 0.001, 0.5),
-        maximumSpendUsdc: boundedNumber(mandate.maximumSpendUsdc, 10, 0.01, 10_000),
+        maximumSpendUsdc: Math.min(
+          boundedNumber(mandate.maximumSpendUsdc, amountUsdc ?? 10, 0.01, 10_000),
+          amountUsdc ?? 10_000,
+        ),
         maximumShares: boundedNumber(mandate.maximumShares, 1_000, 0.01, 1_000_000),
       },
     },
@@ -1256,13 +1265,18 @@ export async function runPolymarketSmartTrader(
       },
     }
   }
-  const likelySports = input.category === 'sports' || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${selected.market.title} ${input.query}`)
-  const researchNews = likelySports
-    ? await dependencies.sportsNews(input.query || selected.market.title).catch(() => [])
-    : input.side ? await dependencies.generalNews(input.query || selected.market.title, selected.market, {
-        requestedOutcome: selected.outcome.label,
-        requestedSide: input.side,
-      }).catch(() => []) : []
+  const researchQuery = selected.market.title
+  const nonFootball = /\b(valorant|vlr|esports|counter.strike|dota|nba|nfl|tennis|basketball|baseball|cricket|hockey)\b/i.test(`${researchQuery} ${selected.market.description}`)
+  const likelySports = !nonFootball && (input.category === 'sports' || selected.market.category === 'sports' || /\b(football|soccer|match|league|cup)\b/i.test(researchQuery))
+  let newsLane = likelySports ? 'sportmonks-sports' : 'zeroscout-general'
+  let researchNews = likelySports ? await dependencies.sportsNews(researchQuery).catch(() => []) : []
+  if (!researchNews.length && input.side) {
+    newsLane = 'zeroscout-general'
+    researchNews = await dependencies.generalNews(researchQuery, selected.market, {
+      requestedOutcome: selected.outcome.label,
+      requestedSide: input.side,
+    }).catch(() => [])
+  }
   const research = await dependencies.research({
     proofClass: 'polydesk_smart_market_research',
     observedAt: new Date(dependencies.now()).toISOString(),
@@ -1300,6 +1314,7 @@ export async function runPolymarketSmartTrader(
   const riskFlags = [...selected.riskFlags, ...(research?.riskFlags || []), ...(research ? [] : ['ZeroScout research was unavailable; directional opinion is withheld.'])]
   const decisionBlockers = [
     ...selected.blockers,
+    ...(!researchNews.length ? ['No cited market research was retrieved; directional approval is withheld.'] : []),
     ...(!validServicePayment(servicePayment) ? ['A settled 0.3 USDT ANALYZE payment is required before this receipt can authorize PREPARE.'] : []),
     ...(!input.side ? ['ANALYZE requires side BUY or SELL before it can approve a trade preparation.'] : []),
     ...(!research ? ['ZeroScout research evidence is required for an approved decision.'] : []),
@@ -1317,7 +1332,7 @@ export async function runPolymarketSmartTrader(
   const decision: SmartTraderDecisionReceipt = {
     schema: 'polydesk-smart-trader-decision-v2',
     decisionId,
-    decision: selected.eligible && Boolean(input.side) && supportedTradeAssessment && validServicePayment(servicePayment) ? 'APPROVE' : 'ESCALATE',
+    decision: decisionBlockers.length === 0 && selected.eligible && Boolean(input.side) && supportedTradeAssessment && validServicePayment(servicePayment) ? 'APPROVE' : 'ESCALATE',
     createdAt: new Date(decisionNow).toISOString(),
     expiresAt: new Date(decisionNow + DECISION_TTL_MS).toISOString(),
     analysisHash: '',
@@ -1367,7 +1382,7 @@ export async function runPolymarketSmartTrader(
         marketData: 'Polymarket Gamma and CLOB public APIs',
         smartMoney: selected.smartMoney,
         news: researchNews,
-        newsLane: likelySports ? 'sportmonks-sports' : 'zeroscout-general',
+        newsLane,
         zeroScout: research ? {
           id: research.id,
           summary: research.summary,
