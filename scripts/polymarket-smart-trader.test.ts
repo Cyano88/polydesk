@@ -5,6 +5,7 @@ import {
   deriveResolutionSource,
   filterMarketsByQuery,
   hasMissingZeroScoutProofDelivery,
+  isRemediableAfterAnalysisEngineUpgrade,
   isRemediableMissingZeroScoutProof,
   normalizeMarket,
   preflightPolymarketSmartTraderProviders,
@@ -13,6 +14,7 @@ import {
   runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
   shouldRecoverSmartTraderDelivery,
+  SMART_TRADER_ANALYSIS_ENGINE_VERSION,
   type SmartTraderDependencies,
   type SmartTraderDecisionReceipt,
   type SmartTraderMarket,
@@ -58,6 +60,7 @@ test('settled ANALYZE recovery record preserves the exact normalized mandate', (
   assert.equal(paid.request.mandate.maximumSpendUsdc, 5)
   assert.equal(paid.request.mandate.maximumPrice, 0.6)
   assert.equal(paid.payment.transaction, servicePayment.transaction)
+  assert.equal(paid.analysisEngineVersion, SMART_TRADER_ANALYSIS_ENGINE_VERSION)
   assert.notEqual(paid.requestHash, differentMandate.requestHash)
 })
 
@@ -143,6 +146,39 @@ test('durable recovery selects settled, due proof failures, and stale running de
   assert.equal(shouldRecoverSmartTraderDelivery({ ...paid, status: 'running', updatedAt: new Date(now - 10 * 60_000).toISOString() }, now), true)
   assert.equal(shouldRecoverSmartTraderDelivery({ ...paid, status: 'running', updatedAt: new Date(now - 60_000).toISOString() }, now), false)
   assert.equal(shouldRecoverSmartTraderDelivery({ ...missingProof, deliveryAttemptCount: 6 }, now), false)
+})
+
+test('an exhausted missing-proof payment gets one recovery after an analysis-engine upgrade', () => {
+  const paid = buildSettledSmartTraderAnalysisRecord({
+    action: 'ANALYZE',
+    marketId: conditionId,
+    outcome: 'Yes',
+    side: 'BUY',
+  }, servicePayment, now)
+  const exhausted = {
+    ...paid,
+    status: 'failed' as const,
+    analysisEngineVersion: undefined,
+    deliveryAttemptCount: 6,
+    maxDeliveryAttempts: 6,
+    response: {
+      action: 'ANALYZE',
+      decision: {
+        decision: 'ESCALATE',
+        evidence: { zeroScoutId: null, zeroScoutProof: null },
+        blockers: ['ZeroScout research evidence is required for an approved decision.'],
+        riskFlags: ['ZeroScout research was unavailable; directional opinion is withheld.'],
+      },
+    },
+  }
+
+  assert.equal(isRemediableAfterAnalysisEngineUpgrade(exhausted), true)
+  assert.equal(shouldRecoverSmartTraderDelivery(exhausted, now), false)
+  assert.equal(shouldRecoverSmartTraderDelivery(exhausted, now, { allowEngineUpgradeRemediation: true }), true)
+  assert.equal(isRemediableAfterAnalysisEngineUpgrade({
+    ...exhausted,
+    analysisEngineVersion: SMART_TRADER_ANALYSIS_ENGINE_VERSION,
+  }), false)
 })
 
 test('bounded paid delivery retries missing proof and stops on proof-bearing success', async () => {

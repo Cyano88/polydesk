@@ -155,8 +155,9 @@ export type SmartTraderPaidAnalysisRecord = {
   analysisHash?: string
   response?: JsonRecord
   error?: string
+  analysisEngineVersion?: string
   remediationCount?: number
-  remediationReason?: 'missing-zeroscout-proof'
+  remediationReason?: 'missing-zeroscout-proof' | 'analysis-engine-upgrade'
   previousDecisionId?: string
   previousAnalysisHash?: string
   deliveryAttemptCount?: number
@@ -169,6 +170,7 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 6
+export const SMART_TRADER_ANALYSIS_ENGINE_VERSION = 'zeroscout-resilient-routing-v1'
 
 export function hasMissingZeroScoutProofDelivery(response: unknown): boolean {
   if (!isRecord(response)) return false
@@ -197,14 +199,26 @@ export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysi
     && hasMissingZeroScoutProofDelivery(record.response)
 }
 
-export function shouldRecoverSmartTraderDelivery(record: SmartTraderPaidAnalysisRecord, now = Date.now()) {
-  if (smartTraderDeliveryAttemptCount(record) >= smartTraderMaxDeliveryAttempts(record)) return false
+export function isRemediableAfterAnalysisEngineUpgrade(record: SmartTraderPaidAnalysisRecord): boolean {
+  return (record.status === 'completed' || record.status === 'failed')
+    && record.analysisEngineVersion !== SMART_TRADER_ANALYSIS_ENGINE_VERSION
+    && hasMissingZeroScoutProofDelivery(record.response)
+}
+
+export function shouldRecoverSmartTraderDelivery(
+  record: SmartTraderPaidAnalysisRecord,
+  now = Date.now(),
+  options: { allowEngineUpgradeRemediation?: boolean } = {},
+) {
+  const engineUpgradeRemediation = options.allowEngineUpgradeRemediation === true
+    && isRemediableAfterAnalysisEngineUpgrade(record)
+  if (smartTraderDeliveryAttemptCount(record) >= smartTraderMaxDeliveryAttempts(record) && !engineUpgradeRemediation) return false
   if (record.status === 'settled') return true
   const updatedAt = Date.parse(record.updatedAt)
   if (record.status === 'running') {
     return Number.isFinite(updatedAt) && now - updatedAt >= DELIVERY_RUNNING_STALE_MS
   }
-  if (!isRemediableMissingZeroScoutProof(record)) return false
+  if (!isRemediableMissingZeroScoutProof(record) && !engineUpgradeRemediation) return false
   const nextRetryAt = record.nextRetryAt ? Date.parse(record.nextRetryAt) : Number.NaN
   return !Number.isFinite(nextRetryAt) || nextRetryAt <= now
 }
@@ -767,6 +781,7 @@ export function buildSettledSmartTraderAnalysisRecord(
     payment,
     settledAt,
     updatedAt: settledAt,
+    analysisEngineVersion: SMART_TRADER_ANALYSIS_ENGINE_VERSION,
     deliveryAttemptCount: 0,
     maxDeliveryAttempts: SMART_TRADER_MAX_DELIVERY_ATTEMPTS,
   }
@@ -1411,6 +1426,7 @@ export async function executeSettledSmartTraderDelivery(
   transaction: string,
   payer: string,
   dependencies: SmartTraderDependencies = liveDependencies,
+  options: { allowEngineUpgradeRemediation?: boolean } = {},
 ) {
   const analysisKey = paidAnalysisKey(transaction)
   const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
@@ -1424,9 +1440,11 @@ export async function executeSettledSmartTraderDelivery(
     }
     const attemptCount = smartTraderDeliveryAttemptCount(current)
     const maximumAttempts = smartTraderMaxDeliveryAttempts(current)
-    if (attemptCount >= maximumAttempts) throw new Error('The bounded delivery-attempt budget has been exhausted.')
+    const engineUpgradeRemediation = options.allowEngineUpgradeRemediation === true
+      && isRemediableAfterAnalysisEngineUpgrade(current)
+    if (attemptCount >= maximumAttempts && !engineUpgradeRemediation) throw new Error('The bounded delivery-attempt budget has been exhausted.')
     const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
-    if (current.status === 'completed' && !remediatingMissingProof) {
+    if (current.status === 'completed' && !remediatingMissingProof && !engineUpgradeRemediation) {
       throw new Error('This settlement transaction has already been delivered and is not eligible for remediation.')
     }
     const updatedAt = Date.parse(current.updatedAt)
@@ -1436,11 +1454,13 @@ export async function executeSettledSmartTraderDelivery(
     return {
       ...current,
       status: 'running',
+      analysisEngineVersion: SMART_TRADER_ANALYSIS_ENGINE_VERSION,
+      deliveryAttemptCount: engineUpgradeRemediation ? 0 : attemptCount,
       maxDeliveryAttempts: maximumAttempts,
       updatedAt: new Date().toISOString(),
       error: undefined,
-      ...(remediatingMissingProof ? {
-        remediationReason: 'missing-zeroscout-proof' as const,
+      ...(remediatingMissingProof || engineUpgradeRemediation ? {
+        remediationReason: engineUpgradeRemediation ? 'analysis-engine-upgrade' as const : 'missing-zeroscout-proof' as const,
         previousDecisionId: current.previousDecisionId || current.decisionId,
         previousAnalysisHash: current.previousAnalysisHash || current.analysisHash,
       } : {}),
@@ -1663,8 +1683,14 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
   if (!record || record.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
     return res.status(404).json({ ok: false, error: 'No paid analysis record was found for this settlement transaction.' })
   }
-  if (shouldRecoverSmartTraderDelivery(record)) {
-    void executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer).catch(error => {
+  const engineUpgradeRemediationAvailable = isRemediableAfterAnalysisEngineUpgrade(record)
+  if (shouldRecoverSmartTraderDelivery(record, Date.now(), { allowEngineUpgradeRemediation: true })) {
+    void executeSettledSmartTraderDelivery(
+      record.payment.transaction,
+      record.payment.payer,
+      liveDependencies,
+      { allowEngineUpgradeRemediation: true },
+    ).catch(error => {
       console.error('[smart-trader] status-triggered paid delivery failed', {
         transaction: record.payment.transaction,
         error: clean(error instanceof Error ? error.message : 'unknown delivery error'),
@@ -1685,7 +1711,8 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     error: record.status === 'failed' ? clean(record.error, 300) : null,
     deliveryAttemptCount: smartTraderDeliveryAttemptCount(record),
     maxDeliveryAttempts: smartTraderMaxDeliveryAttempts(record),
-    retryable: isRemediableMissingZeroScoutProof(record),
+    retryable: isRemediableMissingZeroScoutProof(record) || engineUpgradeRemediationAvailable,
+    engineUpgradeRemediationAvailable,
     nextRetryAt: record.nextRetryAt || null,
   })
 }
