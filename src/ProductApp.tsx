@@ -9,6 +9,7 @@ import { arcChain, baseMainnet } from './lib/chains'
 import { POLYDESK_WALLET_LIST } from './lib/privyLoginOptions'
 
 export default function ProductApp() {
+  const requiresPrivy = /^\/(?:polydesk|rewards)(?:\/|$)/.test(window.location.pathname)
   const [privyTheme, setPrivyTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light'
     return window.localStorage.getItem('polydesk-theme') === 'dark' ? 'dark' : 'light'
@@ -51,7 +52,7 @@ export default function ProductApp() {
     </BrowserRouter>
   )
 
-  if (!PRIVY_AUTH_ENABLED) return app
+  if (!PRIVY_AUTH_ENABLED || !requiresPrivy) return app
 
   return (
     <PrivyProvider appId={PRIVY_APP_ID!} config={privyConfig}>

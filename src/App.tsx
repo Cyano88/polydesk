@@ -21,12 +21,12 @@ export default function App() {
   return (
     <Suspense fallback={<RouteLoading />}>
       <Routes>
+        <Route path="/" element={<About />} />
         <Route element={<PolyDeskLayout />}>
-          <Route path="/" element={<PolyDesk />} />
           <Route path="/polydesk" element={<PolyDesk />} />
           <Route path="/rewards" element={<OkxRewards />} />
         </Route>
-        <Route path="/about" element={<About />} />
+        <Route path="/about" element={<Navigate to="/" replace />} />
         <Route path="/integrations" element={<Integrations />} />
         <Route path="/report/lp-scout/:activityId" element={<LPScoutReport />} />
         <Route path="/opportunity/:slug" element={<Opportunity />} />

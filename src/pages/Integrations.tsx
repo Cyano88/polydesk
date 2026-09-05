@@ -47,8 +47,8 @@ export default function Integrations() {
           </Link>
           <nav className='flex items-center gap-4 text-sm font-medium'>
             <Link to='/docs' className='text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white'>Docs</Link>
-            <Link to='/about' className='hidden text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white sm:inline'>About</Link>
-            <Link to='/polydesk?agent=1' className='rounded-full bg-gray-950 px-4 py-2 text-white transition hover:bg-black dark:bg-white dark:text-gray-950'>Open PolyDesk</Link>
+            <Link to='/' className='hidden text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white sm:inline'>Foundation</Link>
+            <a href='/polydesk?agent=1' className='rounded-full bg-gray-950 px-4 py-2 text-white transition hover:bg-black dark:bg-white dark:text-gray-950'>Open PolyDesk</a>
           </nav>
         </div>
       </header>
@@ -65,9 +65,9 @@ export default function Integrations() {
             <span className='text-amber-800/80 dark:text-amber-100/70'>Public discovery begins after Agent #5427 marketplace approval.</span>
           </div>
           <div className='mt-8 flex flex-wrap gap-3'>
-            <Link to='/polydesk?agent=1' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
+            <a href='/polydesk?agent=1' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
               Ask PolyDesk <ArrowRightIcon className='h-4 w-4' />
-            </Link>
+            </a>
             <Link to='/docs/okx-ai' className='inline-flex min-h-12 items-center gap-2 rounded-full border border-gray-300 px-6 text-sm font-semibold text-gray-800 hover:bg-white dark:border-white/15 dark:text-gray-100 dark:hover:bg-white/[0.06]'>
               Read integration docs
             </Link>
