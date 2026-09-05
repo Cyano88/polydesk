@@ -42,37 +42,11 @@ function normalizeTradingWalletTab(value: string | null): TradingWalletTab | und
     : undefined
 }
 
-function LocalPreviewOverview({
-}: Record<string, never>) {
-  return (
-    <section className="space-y-5">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Overview</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Portfolio</h1>
-      </div>
-      <div className="polydesk-card p-5">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Total value</p>
-        <p className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">N/A</p>
-        <p className="mt-1 text-xs text-gray-400">Connect your account to load live balances.</p>
-        <div className="mt-5 grid grid-cols-3 gap-2 border-t border-gray-100 pt-4 dark:border-white/10">
-          {['Trading balance', 'Open positions', 'Claimable'].map(label => (
-            <div key={label}>
-              <p className="text-[10px] leading-4 text-gray-400">{label}</p>
-              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">N/A</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 export default function PolyDesk() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = usePrivy()
   const activeLane = normalizeLane(searchParams.get('lane'))
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
-  const browsePreview = localPreview || !user
   const activeServiceView = normalizeServiceView(searchParams.get('service'))
   const portfolioAction = normalizePortfolioAction(searchParams.get('portfolio'))
   const tradingWalletTab = normalizeTradingWalletTab(searchParams.get('wallet'))
@@ -84,7 +58,7 @@ export default function PolyDesk() {
   const agentMessage = searchParams.get('agentMessage')?.trim() ?? ''
   const effectiveAgentLane = activeLane || (lpScoutActivityId ? 'lp-scout' : '')
   const [isAgentOpen, setIsAgentOpen] = useState(Boolean(effectiveAgentLane || agentRouteOpen))
-  const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView || 'pulse')
+  const [serviceView, setServiceView] = useState<PolyDeskServiceView>(activeServiceView || 'portfolio')
   const [previousServiceView, setPreviousServiceView] = useState<PolyDeskServiceView>('')
   const [lpScoutPrefill, setLpScoutPrefill] = useState<LpScoutPrefill | null>(null)
   const [watchedTrade, setWatchedTrade] = useState<{
@@ -94,7 +68,7 @@ export default function PolyDesk() {
     price: number
   } | null>(null)
   const helperKey = effectiveAgentLane || 'choose-lane'
-  const welcomeText = 'Welcome back. Ask about your portfolio, funding, governed trades, live football, football news, or LP opportunities. Type "I want to use PolyDesk pay-per-call services" to choose an exact OKX service.'
+  const welcomeText = 'Ask about a market, portfolio state, funding readiness, or a bounded agent action. Financial actions still require your approval.'
 
   const ownerKey = useMemo(() => {
     const privyIdentity = user?.id?.trim()
@@ -151,11 +125,19 @@ export default function PolyDesk() {
   }, [activeLane, agentRouteOpen])
 
   useEffect(() => {
-    setServiceView(activeServiceView || 'pulse')
+    setServiceView(activeServiceView || 'portfolio')
     if (activeServiceView) {
       setIsAgentOpen(false)
     }
   }, [activeServiceView])
+
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = 'PolyDesk Operator Console'
+    return () => {
+      document.title = previousTitle
+    }
+  }, [])
 
   useEffect(() => {
     const legacyService = searchParams.get('service')
@@ -181,32 +163,13 @@ export default function PolyDesk() {
           : serviceView === 'football' || serviceView === 'worldcup-news' || serviceView === 'worldcup-scores' || serviceView === 'pulse' || serviceView === 'activity' ? 'max-w-2xl' : 'max-w-md',
       )}>
         <Suspense fallback={<PolyDeskLoadingState label="Opening workspace" />}>
-        {!isAgentOpen && !serviceView && (
-          browsePreview ? (
-            <LocalPreviewOverview />
-          ) : (
-            <>
-              <PolyPortfolioPanel
-                onBack={() => undefined}
-                onOpenLpScout={() => openServiceView('lp-scout')}
-                onOpenWorldCup={() => openServiceView('football')}
-                telegramOwner={ownerKey}
-                telegramId=""
-                surface="standalone"
-                initialPortfolioAction="trading"
-                initialTradingWalletTab="positions"
-              />
-            </>
-          )
-        )}
-
         {isAgentOpen && (
           <section className="flex h-full min-h-0 w-full max-w-2xl flex-col bg-white dark:bg-[#111114]">
             <header className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
               <span className="text-gray-800 dark:text-gray-100">
                 <PolyDeskAgentIcon header isStatic />
               </span>
-              <h1 className="min-w-0 text-sm font-semibold text-gray-950 dark:text-white">PolyDesk Agent</h1>
+              <h1 className="min-w-0 text-sm font-semibold text-gray-950 dark:text-white">Agent workspace</h1>
             </header>
             <TelegramHelperPanel
               key={helperKey}
@@ -221,7 +184,7 @@ export default function PolyDesk() {
               initialNotice=""
               lockedHelperMode="polydesk"
               welcomeText={welcomeText}
-              inputPlaceholder="Ask Desk Agent..."
+              inputPlaceholder="Ask about markets or portfolio state"
               hideTopDivider
               autoQuestion={agentMessage || undefined}
               autoQuestionKey={lpScoutActivityId ? `lp-scout:${lpScoutActivityId}` : undefined}
@@ -230,6 +193,7 @@ export default function PolyDesk() {
               lpScoutReceiptUrl={lpScoutReceiptUrl || undefined}
               lpScoutAgentSlug={lpScoutAgentSlug || undefined}
               singlePolyDeskAgent
+              hidePowerBadge
               immersive
               onRecoverTelegramName={() => undefined}
               onBack={() => {
@@ -254,34 +218,28 @@ export default function PolyDesk() {
               <Pulse />
             ) : serviceView === 'portfolio' ? (
               <>
-                {browsePreview && !searchParams.get('portfolio') ? (
-                  <LocalPreviewOverview />
-                ) : (
-                  <>
-                  <PolyPortfolioPanel
-                    onBack={closeServiceView}
-                    onOpenLpScout={() => openServiceView('lp-scout')}
-                    onOpenWorldCup={() => openServiceView('football')}
-                    telegramOwner={ownerKey}
-                    telegramId=""
-                    surface="standalone"
-                    initialPortfolioAction={portfolioAction}
-                    initialTradingWalletTab={tradingWalletTab}
-                    onTradeWatchedPosition={setWatchedTrade}
-                  />
-                  {portfolioAction === 'watch' && watchedTrade && (
-                    <section className="mt-4 scroll-mt-28" data-polydesk-watched-trade="true">
-                      <PolymarketLimitOrderTicket
-                        marketTitle={watchedTrade.title}
-                        marketUrl={watchedTrade.marketUrl}
-                        yesQuote={watchedTrade.outcome === 'YES' ? watchedTrade.price : 1 - watchedTrade.price}
-                        noQuote={watchedTrade.outcome === 'NO' ? watchedTrade.price : 1 - watchedTrade.price}
-                        initialOutcome={watchedTrade.outcome}
-                        orderSource="watch-position"
-                      />
-                    </section>
-                  )}
-                  </>
+                <PolyPortfolioPanel
+                  onBack={closeServiceView}
+                  onOpenLpScout={() => openServiceView('lp-scout')}
+                  onOpenWorldCup={() => openServiceView('football')}
+                  telegramOwner={ownerKey}
+                  telegramId=""
+                  surface="standalone"
+                  initialPortfolioAction={portfolioAction}
+                  initialTradingWalletTab={tradingWalletTab}
+                  onTradeWatchedPosition={setWatchedTrade}
+                />
+                {portfolioAction === 'watch' && watchedTrade && (
+                  <section className="mt-4 scroll-mt-28" data-polydesk-watched-trade="true">
+                    <PolymarketLimitOrderTicket
+                      marketTitle={watchedTrade.title}
+                      marketUrl={watchedTrade.marketUrl}
+                      yesQuote={watchedTrade.outcome === 'YES' ? watchedTrade.price : 1 - watchedTrade.price}
+                      noQuote={watchedTrade.outcome === 'NO' ? watchedTrade.price : 1 - watchedTrade.price}
+                      initialOutcome={watchedTrade.outcome}
+                      orderSource="watch-position"
+                    />
+                  </section>
                 )}
               </>
             ) : serviceView === 'football' ? (

@@ -232,8 +232,8 @@ export default function TradeActivity() {
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Overview</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Activity</h1>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Execution evidence</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-gray-950 dark:text-white">Receipts</h1>
         {!loading && <p className="mt-1 text-xs text-gray-400">{rows.length} record{rows.length === 1 ? '' : 's'}</p>}
       </div>
 
@@ -305,10 +305,10 @@ export default function TradeActivity() {
       ) : (
         <section className="polydesk-card mt-6 px-5 py-12 text-center">
           <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-300"><History className="h-5 w-5" /></span>
-          <h2 className="mt-4 text-sm font-black text-gray-950 dark:text-white">No recent activity</h2>
-          <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Your completed market actions and LP Scout requests will appear here.</p>
+          <h2 className="mt-4 text-sm font-black text-gray-950 dark:text-white">No receipts yet</h2>
+          <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-gray-500 dark:text-gray-400">Verified trades and intelligence reports will appear here.</p>
           {!tradingAddress && (
-            <Link to={localPreview ? '/polydesk?preview=1&service=portfolio&portfolio=preview' : '/polydesk?service=portfolio&portfolio=trading&wallet=balance'} className="polydesk-primary-cta mt-4">Set up Account</Link>
+            <Link to={localPreview ? '/polydesk?preview=1&service=portfolio&portfolio=preview' : '/polydesk?service=portfolio&portfolio=trading&wallet=balance'} className="polydesk-primary-cta mt-4">Open Control</Link>
           )}
         </section>
       )}

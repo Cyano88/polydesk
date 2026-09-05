@@ -2,13 +2,12 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import {
-  Activity as PulseIcon,
+  Activity as MarketsIcon,
   Copy,
-  Gift,
+  FileText,
   LayoutDashboard,
   LogOut,
   Moon,
-  Radar,
   Sun,
 } from '../components/icons'
 import { PRIVY_AUTH_ENABLED } from '../lib/authMode'
@@ -17,7 +16,7 @@ import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
 import PolyDeskAgentIcon from '../components/PolyDeskAgentIcon'
 import PolymarketMark from '../components/PolymarketMark'
 
-type Workspace = 'overview' | 'agent' | 'scout' | 'pulse'
+type Workspace = 'control' | 'markets' | 'agent' | 'receipts'
 
 function shortAddress(value: string) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(value)) return 'Account'
@@ -116,22 +115,14 @@ function PolyDeskWorkspace() {
   const localPreview = import.meta.env.DEV && searchParams.get('preview') === '1'
   const previewMode = localPreview || !authenticated
   const portfolioRoute = searchParams.get('portfolio')
-  const overviewSection = service === 'activity'
-    ? 'activity'
-    : portfolioRoute === 'watch'
-      ? 'watch'
-      : portfolioRoute === 'external'
-        ? 'tip'
-        : 'portfolio'
+  const controlSection = portfolioRoute === 'watch' ? 'monitors' : 'account'
   const workspace: Workspace = agentOpen
     ? 'agent'
-    : service === 'pulse'
-      ? 'pulse'
-    : service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'football' || service === 'lp-scout'
-      ? 'scout'
-      : service === 'portfolio' || service === 'activity'
-        ? 'overview'
-        : 'pulse'
+    : service === 'activity'
+      ? 'receipts'
+      : service === 'pulse' || service === 'worldcup' || service === 'worldcup-news' || service === 'worldcup-scores' || service === 'football' || service === 'lp-scout'
+        ? 'markets'
+        : 'control'
 
   const walletAddress = wallets.find(wallet => /^0x[a-fA-F0-9]{40}$/.test(wallet.address ?? ''))?.address ?? ''
   const identitySeed = walletAddress || user?.id || 'polydesk'
@@ -162,10 +153,10 @@ function PolyDeskWorkspace() {
   }
 
   const navItems = [
-    { id: 'pulse', label: 'Pulse', icon: PulseIcon, to: makeTo('pulse'), active: workspace === 'pulse' },
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'positions' }), active: workspace === 'overview' },
+    { id: 'control', label: 'Control', icon: LayoutDashboard, to: makeTo('portfolio', { portfolio: 'trading', wallet: 'positions' }), active: workspace === 'control' },
+    { id: 'markets', label: 'Markets', icon: MarketsIcon, to: makeTo('pulse'), active: workspace === 'markets' },
     { id: 'agent', label: 'Agent', icon: null, to: makeAgentTo(), active: workspace === 'agent' },
-    { id: 'scout', label: 'LP Scout', icon: Radar, to: makeTo('lp-scout'), active: workspace === 'scout' },
+    { id: 'receipts', label: 'Receipts', icon: FileText, to: makeTo('activity'), active: workspace === 'receipts' },
   ] as const
 
   if (!localPreview && (!ready || (authenticated && !walletsReady))) {
@@ -186,28 +177,28 @@ function PolyDeskWorkspace() {
     )} style={workspaceStyle} data-polydesk-keyboard-open={mobileKeyboardOpen ? 'true' : 'false'}>
       <header className="sticky top-0 z-50 shrink-0 border-b border-gray-200 bg-white dark:border-white/10 dark:bg-[#111113]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 pb-2 pt-3 sm:px-6">
-          <Link to={makeTo('pulse')} className="group flex items-center gap-2.5 focus:outline-none">
+          <Link to={makeTo('portfolio', { portfolio: 'trading', wallet: 'positions' })} className="group flex items-center gap-2.5 focus:outline-none">
             <span className="flex h-8 w-8 items-center justify-center text-gray-900 transition-transform group-hover:scale-105 dark:text-white">
               <PolymarketMark className="h-5 w-5" />
             </span>
-            <span className="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-white">PolyDesk</span>
+            <span>
+              <span className="block text-[15px] font-semibold leading-4 tracking-tight text-gray-900 dark:text-white">PolyDesk</span>
+              <span className="block text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-400">Operator console</span>
+            </span>
           </Link>
 
           <div className="flex items-center gap-1.5">
             <Link
-              to="/integrations"
+              to="/"
               className="inline-flex h-9 items-center rounded-full px-2 text-[11px] font-bold text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.08] dark:hover:text-white sm:px-3"
             >
-              Integrate
+              Foundation
             </Link>
             <Link
-              to="/rewards"
-              aria-label="Open PolyDesk rewards"
-              title="PolyDesk rewards"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11px] font-bold text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 dark:border-white/10 dark:bg-[#1c1c20] dark:text-gray-200 dark:hover:bg-white/[0.08]"
+              to="/docs"
+              className="inline-flex h-9 items-center rounded-full px-2 text-[11px] font-bold text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/[0.08] dark:hover:text-white sm:px-3"
             >
-              <Gift className="h-4 w-4" />
-              <span>Rewards</span>
+              Docs
             </Link>
             <button
               type="button"
@@ -246,26 +237,48 @@ function PolyDeskWorkspace() {
           </div>
         </div>
 
-        {workspace === 'overview' && (
-          <nav aria-label="Overview sections" className="mx-auto flex w-full max-w-2xl px-4 pb-2 sm:px-6">
-            <div className="grid w-full grid-cols-4 gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/[0.07]">
+        <nav aria-label="PolyDesk desktop workspace" className="mx-auto hidden w-full max-w-3xl grid-cols-4 gap-1 px-6 pb-2 md:grid">
+          {navItems.map(item => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.id}
+                to={item.to}
+                aria-current={item.active ? 'page' : undefined}
+                className={cn(
+                  'flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors',
+                  item.active
+                    ? 'bg-gray-950 text-white shadow-sm dark:bg-white dark:text-gray-950'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.07] dark:hover:text-white',
+                )}
+              >
+                {Icon
+                  ? <Icon className="h-4 w-4" strokeWidth={item.active ? 2.3 : 1.9} />
+                  : <PolyDeskAgentIcon header isStatic className="!h-4 !w-4" />}
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+
+        {workspace === 'control' && (
+          <nav aria-label="Control sections" className="mx-auto flex w-full max-w-md px-4 pb-2 sm:px-6">
+            <div className="grid w-full grid-cols-2 gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-white/[0.07]">
               {[
                 {
-                  id: 'portfolio',
-                  label: 'Portfolio',
+                  id: 'account',
+                  label: 'Account',
                   to: makeTo('portfolio', { portfolio: previewMode ? 'preview' : 'trading', wallet: 'positions' }),
                 },
-                { id: 'watch', label: 'Watch', to: makeTo('portfolio', { portfolio: 'watch' }) },
-                { id: 'tip', label: 'Tip', to: makeTo('portfolio', { portfolio: 'external' }) },
-                { id: 'activity', label: 'Activity', to: makeTo('activity') },
+                { id: 'monitors', label: 'Monitors', to: makeTo('portfolio', { portfolio: 'watch' }) },
               ].map(item => (
                 <Link
                   key={item.id}
                   to={item.to}
-                  aria-current={overviewSection === item.id ? 'page' : undefined}
+                  aria-current={controlSection === item.id ? 'page' : undefined}
                   className={cn(
                     'inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-semibold transition-colors',
-                    overviewSection === item.id
+                    controlSection === item.id
                       ? '!bg-white !text-gray-950 shadow-sm dark:!bg-white dark:!text-gray-950'
                       : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white',
                   )}
@@ -283,8 +296,8 @@ function PolyDeskWorkspace() {
         className={cn(
           'mx-auto w-full max-w-5xl flex-1',
           workspace === 'agent'
-            ? 'min-h-0 !max-w-2xl self-stretch overflow-hidden px-0 py-0 pb-[var(--polydesk-footer-height)]'
-            : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 sm:pb-28',
+            ? 'min-h-0 !max-w-2xl self-stretch overflow-hidden px-0 py-0 pb-[var(--polydesk-footer-height)] md:pb-0'
+            : 'px-4 py-8 pb-28 sm:px-6 sm:py-10 md:pb-10',
           workspace === 'agent' && mobileKeyboardOpen && '!pb-0',
         )}
       >
@@ -292,7 +305,7 @@ function PolyDeskWorkspace() {
       </main>
 
       <footer className={cn(
-        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white dark:border-white/10 dark:bg-[#17171b]',
+        'fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white dark:border-white/10 dark:bg-[#17171b] md:hidden',
         mobileKeyboardOpen && 'hidden',
       )}>
         <nav

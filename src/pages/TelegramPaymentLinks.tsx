@@ -1693,6 +1693,7 @@ export function TelegramHelperPanel({
   lpScoutAgentSlug,
   singlePolyDeskAgent = false,
   immersive = false,
+  hidePowerBadge = false,
   welcomeAction,
 }: {
   telegramName: string
@@ -1721,6 +1722,7 @@ export function TelegramHelperPanel({
   lpScoutAgentSlug?: string
   singlePolyDeskAgent?: boolean
   immersive?: boolean
+  hidePowerBadge?: boolean
   welcomeAction?: {
     prefix: string
     label: string
@@ -2726,14 +2728,14 @@ export function TelegramHelperPanel({
     }
     if (!polyDeskAuthenticated) {
       return {
-        answer: 'Open PolyDesk Portfolio and sign in to connect your Polymarket profile first.',
+        answer: 'Open Control and sign in to connect your Polymarket account first.',
         actionLink: { label: 'Portfolio', url: portfolioUrl },
       }
     }
     const token = await getPolyDeskAccessToken()
     if (!token) {
       return {
-        answer: 'Open PolyDesk Portfolio and sign in to continue.',
+        answer: 'Open Control and sign in to continue.',
         actionLink: { label: 'Portfolio', url: portfolioUrl },
       }
     }
@@ -2746,7 +2748,7 @@ export function TelegramHelperPanel({
     const portfolioAddress = profile?.depositWalletAddress || profile?.polymarketAddress
     if (!portfolioAddress) {
       return {
-        answer: 'Connect your Polymarket 0x profile in PolyDesk Portfolio first.',
+        answer: 'Connect your Polymarket account in Control first.',
         actionLink: { label: 'Portfolio', url: portfolioUrl },
       }
     }
@@ -3760,8 +3762,8 @@ export function TelegramHelperPanel({
       if (!memoryDraft.trim()) {
         const knownName = usableHelperName(helperName || payer)
         setMemoryDraft(knownName
-          ? `User is known as ${knownName}. They use PolyDesk Agent for Polymarket portfolio, football markets, LP Scout, and live market context.`
-          : 'Uses PolyDesk Agent for Polymarket portfolio, football markets, LP Scout, and live market context.')
+          ? `User is known as ${knownName}. They use the PolyDesk operator console for markets, portfolio state, funding readiness, governed actions, and receipts.`
+          : 'Uses the PolyDesk operator console for markets, portfolio state, funding readiness, governed actions, and receipts.')
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
@@ -3827,9 +3829,11 @@ export function TelegramHelperPanel({
                       {welcomeAction.suffix ? ` ${welcomeAction.suffix}` : ''}
                     </p>
                   )}
-                  <div className="mt-2">
-                    <ZeroScoutPowerBadge compact />
-                  </div>
+                  {!hidePowerBadge && (
+                    <div className="mt-2">
+                      <ZeroScoutPowerBadge compact />
+                    </div>
+                  )}
                 </div>
 
                 {!helperMode && !lockedHelperMode && (
@@ -5461,7 +5465,7 @@ export function PolyStreamPanel({
     setTradeNotice('')
     setTradeSuccess(null)
     if (!authenticated) {
-      setTradeNotice('Sign in with Privy, then open Main Wallet to activate your Polymarket wallet.')
+      setTradeNotice('Sign in, then activate your trading account.')
       return
     }
     if (profileLoading) {
@@ -5469,12 +5473,12 @@ export function PolyStreamPanel({
       return
     }
     if (!savedTradingAddress || !polymarketDepositWallet || !polymarketWalletReady) {
-      setTradeNotice('Open Portfolio > Main Wallet and activate your Polymarket wallet before trading.')
+      setTradeNotice('Open Control and activate your trading account before trading.')
       return
     }
     const signingWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
     if (!signingWallet || typeof signingWallet.getEthereumProvider !== 'function') {
-      setTradeNotice('Your connected Privy wallet does not match the saved Main Wallet. Open Portfolio > Main Wallet and choose Change or Use connected wallet.')
+      setTradeNotice('Your connected wallet does not match the saved trading account. Open Control and choose Change or Use connected wallet.')
       return
     }
     const amount = tradeAmount.trim()
@@ -8005,7 +8009,7 @@ export function PolyPortfolioPanel({
   async function activatePolymarketWallet(ownerAddress = savedTradingAddress || signingWalletAddress) {
     const owner = ownerAddress.trim()
     if (!/^0x[a-fA-F0-9]{40}$/.test(owner)) {
-      setDepositWalletError('Connect Main Wallet before activating Polymarket wallet.')
+      setDepositWalletError('Sign in before activating your trading account.')
       return null
     }
     setDepositWalletBusy(true)
@@ -8103,8 +8107,8 @@ export function PolyPortfolioPanel({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'disconnect-trading' }),
       })
-      const data = await readPolyDeskJson<{ ok?: boolean; error?: string } & PolymarketPortfolioBundle>(res, 'Could not change Main Wallet.')
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not change Main Wallet.')
+      const data = await readPolyDeskJson<{ ok?: boolean; error?: string } & PolymarketPortfolioBundle>(res, 'Could not change the trading account.')
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not change the trading account.')
       const nextBundle = {
         profile: data.profile,
         settings: data.settings,
@@ -8124,7 +8128,7 @@ export function PolyPortfolioPanel({
       setWithdrawError('')
       return nextBundle
     } catch (err) {
-      setProfileError(err instanceof Error ? err.message : 'Could not change Main Wallet.')
+      setProfileError(err instanceof Error ? err.message : 'Could not change the trading account.')
       return null
     } finally {
       setSavingProfile(false)
@@ -8133,7 +8137,7 @@ export function PolyPortfolioPanel({
 
   async function useConnectedTradingWallet() {
     if (!signingWalletAddress) {
-      setProfileError('Attach a Privy wallet before changing Main Wallet.')
+      setProfileError('Attach a wallet before changing the trading account.')
       return
     }
     const cleared = savedTradingAddress ? await disconnectTradingProfile() : true
@@ -8144,7 +8148,7 @@ export function PolyPortfolioPanel({
 
   async function startFund(marketUrlForCta = '') {
     if (!savedTradingAddress) {
-      setFundError('Open Main Wallet before funding.')
+      setFundError('Activate the trading account before funding.')
       return
     }
     if (!polymarketDepositWallet) {
@@ -8249,7 +8253,7 @@ export function PolyPortfolioPanel({
 
   async function startNairaFund() {
     if (!savedTradingAddress) {
-      setFundError('Open Main Wallet before funding.')
+      setFundError('Activate the trading account before funding.')
       return
     }
     if (!polymarketDepositWallet) {
@@ -8392,7 +8396,7 @@ export function PolyPortfolioPanel({
       return
     }
     if (!savedTradingAddress) {
-      setWithdrawError('Open Main Wallet before withdrawing.')
+      setWithdrawError('Activate the trading account before withdrawing.')
       return
     }
     const amount = withdrawAmount.trim()
@@ -8719,7 +8723,7 @@ export function PolyPortfolioPanel({
       return
     }
     if (!savedTradingAddress || !polymarketDepositWallet) {
-      setSellNotice('Open Main Wallet and activate the Polymarket wallet before selling.')
+      setSellNotice('Activate the trading account before selling.')
       return
     }
     const signingWallet = privyWallets.find(wallet => wallet.address?.toLowerCase() === savedTradingAddress.toLowerCase())
@@ -9196,8 +9200,8 @@ export function PolyPortfolioPanel({
 
   if (!PRIVY_AUTH_ENABLED && !sessionlessPublicMode) {
     const portfolioActions = [
-      ['watch', 'Watch Polymarket account', 'Track any public wallet with verified email alerts.'],
-      ['trading', 'Trading wallet', 'Sign-in required for Main Wallet readiness.'],
+      ['watch', 'Monitor account', 'Track a public Polymarket account with verified alerts.'],
+      ['trading', 'Trading account', 'Sign-in required for account controls.'],
       ['external', 'External funding', 'Check or fund another Polymarket wallet.'],
     ] as const
     const selectedAction = portfolioActions.find(([key]) => key === unsignedPortfolioAction)
@@ -9216,19 +9220,12 @@ export function PolyPortfolioPanel({
             <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
               <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
             </span>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk Portfolio</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Operator control</p>
           </div>
           <h2 className="mt-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{selectedAction[1]} needs sign-in</h2>
           <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            Trading wallet setup needs PolyDesk sign-in. Public portfolio watch and external funding remain available without it.
+            The trading account requires PolyDesk sign-in.
           </p>
-          <button
-            type="button"
-            onClick={() => setUnsignedPortfolioAction('external')}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
-          >
-            <ExternalLink className="h-4 w-4" /> Use external funding
-          </button>
         </div>
         )}
       </div>
@@ -9260,8 +9257,8 @@ export function PolyPortfolioPanel({
 
   if (!sessionlessPublicMode && !authenticated && !publicWatchToken && !publicWatchSetupReady) {
     const portfolioActions = [
-      ['watch', 'Watch account', 'Track a public Polymarket profile.'],
-      ['trading', 'Main Wallet', 'Add USDC, withdraw pUSD as USDC, and view active positions.'],
+      ['watch', 'Monitor account', 'Track a public Polymarket profile.'],
+      ['trading', 'Trading account', 'Review balances, positions, alerts, funding, and withdrawals.'],
       ['external', 'Fund external', 'Send funds to another Poly account.'],
     ] as const
     const selectedAction = portfolioActions.find(([key]) => key === unsignedPortfolioAction)
@@ -9287,7 +9284,7 @@ export function PolyPortfolioPanel({
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111216]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">PolyDesk Portfolio</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Operator control</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{selectedAction[1]}</h2>
                 </div>
               </div>
@@ -9295,7 +9292,7 @@ export function PolyPortfolioPanel({
               {unsignedPortfolioAction === 'watch' && (
                 <div className="mt-3 space-y-3">
                   <p className="text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                    Paste any public Polymarket 0x profile. Watching is read-only and never funds or controls that account.
+                    Enter a public Polymarket profile. Monitoring is read-only.
                   </p>
                   <InputBlock
                     label="Public profile address"
@@ -9311,7 +9308,7 @@ export function PolyPortfolioPanel({
                     disabled={!/^0x[a-fA-F0-9]{40}$/.test(unsignedWatchAddress.trim())}
                     className="polydesk-primary-cta w-full"
                   >
-                    Continue to watch setup
+                    Continue
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
@@ -9320,7 +9317,7 @@ export function PolyPortfolioPanel({
               {unsignedPortfolioAction === 'trading' && (
                 <div className="mt-3 space-y-3">
                   <p className="text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                    Add USDC, send it out, or use it across PolyDesk.
+                    Review balances, positions, alerts, funding, and withdrawals.
                   </p>
                   <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0f1014]">
                     <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">pUSD trading cash</p>
@@ -9332,9 +9329,8 @@ export function PolyPortfolioPanel({
                     onClick={() => openPolyDeskLogin()}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                   >
-                    <Wallet className="h-4 w-4" /> Connect wallet
+                    <Wallet className="h-4 w-4" /> Sign in
                   </button>
-                  <p className="text-center text-xs font-medium text-gray-400 dark:text-gray-500">Email or wallet</p>
                 </div>
               )}
 
@@ -9736,9 +9732,8 @@ export function PolyPortfolioPanel({
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                 >
                   <Wallet className="h-4 w-4" />
-                  Connect wallet
+                  Sign in
                 </PrivyConnectButton>
-                <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">Email or wallet</p>
               </>
             ) : signingWalletAddress ? (
               <button
@@ -9751,7 +9746,7 @@ export function PolyPortfolioPanel({
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
               >
                 {savingProfile || depositWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Open Main Wallet
+                Activate trading account
               </button>
             ) : (
               <>
@@ -9808,10 +9803,10 @@ export function PolyPortfolioPanel({
               <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-100 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
                 <img src={POLYMARKET_LOGO} alt="" className="h-4 w-4 invert dark:invert-0" />
               </span>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Watch wallet</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Monitored account</p>
             </div>
             <p className="mt-1.5 text-xs leading-snug text-gray-500 dark:text-gray-400">
-              Track any public Polymarket profile.
+              Read-only positions and alerts for a public Polymarket profile.
             </p>
             <button
               type="button"
@@ -9887,7 +9882,7 @@ export function PolyPortfolioPanel({
 
         {!savedTradingAddress && (
           <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">Open Main Wallet</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Activate trading account</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               Save the wallet that will fund and prepare PolyDesk trades.
             </p>
@@ -9897,7 +9892,7 @@ export function PolyPortfolioPanel({
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                 >
                   <Wallet className="h-4 w-4" />
-                  Connect wallet
+                  Sign in
                 </PrivyConnectButton>
               ) : signingWalletAddress ? (
                 <button
@@ -9910,7 +9905,7 @@ export function PolyPortfolioPanel({
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
                 >
                   {savingProfile || depositWalletBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Open Main Wallet
+                  Activate trading account
                 </button>
               ) : (
                 <>
@@ -10480,9 +10475,8 @@ export function PolyPortfolioPanel({
               className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-black active:scale-[0.98] disabled:opacity-60 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100"
             >
               <Wallet className="h-4 w-4" />
-              Connect wallet
+              Sign in
             </PrivyConnectButton>
-            <p className="mt-2 text-center text-xs font-medium text-gray-400 dark:text-gray-500">Email or wallet</p>
           </div>
         ) : !signingWalletAddress ? (
           <div className="mt-3">

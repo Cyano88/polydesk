@@ -288,7 +288,6 @@ export default function Pulse() {
   const [feed, setFeed] = useState<PulseFeed | null>(initialSnapshot)
   const [loading, setLoading] = useState(!initialSnapshot)
   const [error, setError] = useState('')
-  const [active, setActive] = useState(0)
   const [selected, setSelected] = useState<PulseOpportunity | null>(null)
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
   const requestedCapital = searchParams.get('capital')?.trim() || '50'
@@ -312,7 +311,7 @@ export default function Pulse() {
             : Promise.resolve(null),
         ])
         const data = await response.json().catch(() => null) as PulseFeed | null
-        if (!response.ok || !data?.ok) throw new Error('Pulse is unavailable.')
+        if (!response.ok || !data?.ok) throw new Error('Market intelligence is unavailable.')
         const measurementData = measurementResponse?.ok
           ? await measurementResponse.json().catch(() => null) as { summaries?: LpMeasuredSummary[] } | null
           : null
@@ -341,7 +340,7 @@ export default function Pulse() {
         setFeed(data)
         setError('')
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Pulse is unavailable.')
+        setError(cause instanceof Error ? cause.message : 'Market intelligence is unavailable.')
       } finally {
         if (requestRef.current?.key === requestKey) {
           setLoading(false)
@@ -371,26 +370,16 @@ export default function Pulse() {
 
   const highlights = feed?.highlights ?? []
   const markets = feed?.markets ?? []
-  const lead = highlights.length ? highlights[active % highlights.length] : undefined
+  const lead = highlights[0]
+  const otherMarkets = markets
+    .filter(market => !lead || opportunityKey(market) !== opportunityKey(lead.opportunity))
+    .slice(0, 4)
   useEffect(() => {
     const requested = searchParams.get('opportunity')?.trim().toLowerCase()
     if (!requested || !markets.length) return
     const match = markets.find(item => marketSlug(item).toLowerCase() === requested)
     if (match) setSelected(match)
   }, [markets, searchParams])
-
-  useEffect(() => {
-    if (!highlights.length) return
-    setActive(0)
-  }, [feed?.updatedAt, highlights.length])
-
-  useEffect(() => {
-    if (highlights.length <= 1) return
-    const timer = window.setInterval(() => {
-      setActive(value => (value + 1) % highlights.length)
-    }, 10_000)
-    return () => window.clearInterval(timer)
-  }, [highlights.length])
 
   const makerGuidance = useMemo(() => {
     if (!selected) return []
@@ -411,7 +400,7 @@ export default function Pulse() {
       <section className="mx-auto w-full max-w-2xl space-y-4">
         <button type="button" onClick={() => setSelected(null)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Pulse
+          Markets
         </button>
 
         <div className="polydesk-card overflow-hidden">
@@ -482,9 +471,9 @@ export default function Pulse() {
   return (
     <section className="mx-auto w-full max-w-2xl space-y-4">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Live intelligence</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Pulse</h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Lower-risk reward markets ranked for your capital and daily target. A stronger qualifying market replaces the weakest.</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Market intelligence</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-gray-950 dark:text-white">Markets</h1>
+        <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Ranked Polymarket opportunities for the capital and daily target you set.</p>
       </div>
 
       <form
@@ -511,11 +500,11 @@ export default function Pulse() {
             $<input value={targetInput} onChange={event => setTargetInput(event.target.value)} inputMode="decimal" aria-label="Daily LP reward target in USDC" className="min-w-0 flex-1 bg-transparent pl-1 outline-none" />
           </span>
         </label>
-        <button type="submit" className="h-9 rounded-lg bg-gray-950 px-3 text-xs font-semibold text-white dark:bg-white dark:text-gray-950">Find</button>
+        <button type="submit" className="h-9 rounded-lg bg-gray-950 px-3 text-xs font-semibold text-white dark:bg-white dark:text-gray-950">Update</button>
       </form>
 
       {loading ? (
-        <div className="min-h-[260px]"><PolyDeskLoadingState label="Loading Pulse" /></div>
+        <div className="min-h-[260px]"><PolyDeskLoadingState label="Loading markets" /></div>
       ) : lead ? (
         <PulseHeroCard
           lead={lead}
@@ -526,28 +515,22 @@ export default function Pulse() {
       ) : (
         <div className="polydesk-card p-5">
           <Radio className="h-5 w-5 text-gray-400" />
-          <p className="mt-3 text-sm font-semibold text-gray-950 dark:text-white">No verified Pulse signal</p>
-          <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{error || 'Pulse will publish only after live provider context and a qualifying Polymarket book both pass.'}</p>
+          <p className="mt-3 text-sm font-semibold text-gray-950 dark:text-white">No verified market opportunity</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{error || 'Markets appear only after live context and a qualifying Polymarket book both pass.'}</p>
         </div>
       )}
 
-      {!!highlights.length && (
-        <div className="flex justify-center gap-1.5" aria-label="Pulse rotation">
-          {highlights.map((item, index) => (
-            <button key={item.id} type="button" onClick={() => setActive(index)} aria-label={`Show ${item.eyebrow}`} className={`h-1.5 rounded-full transition-[width,background-color] duration-150 ${index === active % highlights.length ? 'w-6 bg-gray-950 dark:bg-white' : 'w-1.5 bg-gray-300 dark:bg-white/20'}`} />
-          ))}
-        </div>
-      )}
-
-      {!!markets.length && (
+      {!!otherMarkets.length && (
         <div className="polydesk-card divide-y divide-gray-100 overflow-hidden dark:divide-white/10">
-          {markets.slice(0, 5).map((market, index) => (
+          {otherMarkets.map(market => {
+            const rank = markets.findIndex(item => opportunityKey(item) === opportunityKey(market)) + 1
+            return (
             <button key={opportunityKey(market)} type="button" onClick={() => setSelected(market)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition hover:bg-gray-50 dark:hover:bg-white/[0.04]">
               <span
                 className="grid h-7 w-7 shrink-0 place-items-center text-base font-semibold text-gray-400"
-                aria-label={`${ordinal(index + 1)} ranked opportunity`}
+                aria-label={`${ordinal(rank)} ranked opportunity`}
               >
-                {rankMedal(index + 1)}
+                {rankMedal(rank)}
               </span>
               <div className="min-w-0 flex-1">
                 <span className="line-clamp-1 text-[13px] font-semibold leading-5 text-gray-950 dark:text-white">{market.title}</span>
@@ -557,7 +540,8 @@ export default function Pulse() {
               <span className="shrink-0 text-[10px] font-semibold text-gray-400">{riskText(market.lpExecutionRisk)}</span>
               <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" />
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
     </section>
