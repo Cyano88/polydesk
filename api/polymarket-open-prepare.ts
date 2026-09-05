@@ -249,7 +249,7 @@ function resolveToken(market: GammaMarket, requestedOutcome: string, explicitTok
   if (!outcomes.length || outcomes.length !== tokenIds.length) return null
   if (explicitTokenId) {
     const index = tokenIds.indexOf(explicitTokenId)
-    if (index < 0) return null
+    if (index < 0 || normalize(outcomes[index]) !== normalize(requestedOutcome)) return null
     return { outcome: outcomes[index], tokenId: tokenIds[index] }
   }
   const requested = normalize(requestedOutcome)
@@ -273,7 +273,13 @@ async function resolveMarket(input: PrepareOpenInput, fetchJson: PrepareOpenDepe
   if (!tradable.length) return { ok: false as const, status: 409, error: 'This event has no active order-book market accepting orders.' }
 
   let selected: GammaMarket | undefined
-  if (input.marketSlug) selected = tradable.find(market => clean(market.slug, 180) === input.marketSlug)
+  if (input.marketSlug) {
+    const matches = tradable.filter(market => clean(market.slug, 180) === input.marketSlug)
+    if (matches.length !== 1) {
+      return { ok: false as const, status: 409, error: 'The supplied marketSlug does not identify one tradable market in this event.' }
+    }
+    selected = matches[0]
+  }
   if (!selected && input.tokenId) {
     const tokenMatches = tradable.filter(market => parseStringArray(market.clobTokenIds).includes(input.tokenId as string))
     if (tokenMatches.length === 1) selected = tokenMatches[0]
@@ -406,6 +412,12 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   }
   if (clean(book.asset_id, 96) !== resolved.tokenId) {
     return { ok: false as const, status: 502, error: 'Polymarket order book did not match the resolved outcome token.' }
+  }
+  if (clean(book.market, 96).toLowerCase() !== resolved.conditionId.toLowerCase()) {
+    return { ok: false as const, status: 502, error: 'Polymarket order book did not match the resolved market condition.' }
+  }
+  if (typeof book.neg_risk !== 'boolean') {
+    return { ok: false as const, status: 502, error: 'Polymarket order book is missing verified exchange risk metadata.' }
   }
   const tickSize = clean(book.tick_size, 16)
   const minimumOrderSize = clean(book.min_order_size, 32)

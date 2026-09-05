@@ -6,6 +6,42 @@ const builderCode = `0x${'ab'.repeat(32)}`
 const conditionId = `0x${'12'.repeat(32)}`
 const wallet = '0x1111111111111111111111111111111111111111'
 
+test('rejects conflicting explicit selectors before reading a wallet', async () => {
+  for (const selectors of [{ tokenId: '222', outcome: 'Yes' }, { marketSlug: 'nonexistent' }]) {
+    let walletRead = false
+    const result = await preparePolymarketOpen(input(selectors), dependencies({
+      readWallet: async () => {
+        walletRead = true
+        throw new Error('must not read wallet')
+      },
+    }))
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.status, 409)
+    assert.equal(walletRead, false)
+  }
+})
+
+test('accepts consistent explicit market and outcome selectors', async () => {
+  const result = await preparePolymarketOpen(input({ marketSlug: 'will-team-a-win', tokenId: '222', outcome: 'No' }), dependencies({
+    fetchJson: async url => url.includes('/events/slug/') ? event() : book('222'),
+  }))
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.data.market.tokenId, '222')
+    assert.equal(result.data.market.outcome, 'No')
+  }
+})
+
+test('rejects mismatched condition and unknown exchange metadata', async () => {
+  for (const metadata of [{ market: `0x${'34'.repeat(32)}` }, { market: undefined }, { neg_risk: undefined }]) {
+    const result = await preparePolymarketOpen(input(), dependencies({
+      fetchJson: async url => url.includes('/events/slug/') ? event() : book('111', metadata),
+    }))
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.status, 502)
+  }
+})
+
 function input(overrides: Record<string, unknown> = {}) {
   return {
     externalOrderId: 'conviction:open:001',
