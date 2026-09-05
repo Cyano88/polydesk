@@ -24,6 +24,8 @@ test('general research sends full market rules to the structured ZeroScout endpo
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     assert.equal(body.schema, 'zeroscout.polydesk-general-research.request')
     assert.deepEqual(body.market, researchMarket)
+    assert.equal(body.requestedOutcome, 'Yes')
+    assert.equal(body.requestedSide, 'BUY')
     return new Response(JSON.stringify({
       schema: 'zeroscout.polydesk-general-research.result',
       schemaVersion: '1.0.0',
@@ -40,7 +42,10 @@ test('general research sends full market rules to the structured ZeroScout endpo
   }
 
   try {
-    const articles = await getZeroScoutGeneralResearch('proposal vote', researchMarket)
+    const articles = await getZeroScoutGeneralResearch('proposal vote', researchMarket, {
+      requestedOutcome: 'Yes',
+      requestedSide: 'BUY',
+    })
     assert.equal(articles.length, 1)
     assert.equal(articles[0].source, 'Example Publisher')
   } finally {

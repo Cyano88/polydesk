@@ -92,6 +92,11 @@ export type ZeroScoutGeneralResearchMarket = {
   resolutionSource?: string
 }
 
+export type ZeroScoutGeneralResearchTrade = {
+  requestedOutcome: string
+  requestedSide: 'BUY' | 'SELL'
+}
+
 type ZeroScoutReadinessRequest = Pick<ZeroScoutPayload, 'analysisType' | 'proofClass'>
 
 function sleep(ms: number) {
@@ -278,6 +283,7 @@ export async function callZeroScoutIntelligence(payload: ZeroScoutPayload, optio
 export async function getZeroScoutGeneralResearch(
   query: string,
   market: ZeroScoutGeneralResearchMarket,
+  trade?: ZeroScoutGeneralResearchTrade,
 ): Promise<ZeroScoutGeneralResearchArticle[]> {
   const endpoint = configuredEndpoint('/api/integrations/polydesk-general-research')
   const secret = (process.env.ZEROSCOUT_INTEGRATION_SECRET ?? '').trim()
@@ -291,6 +297,7 @@ export async function getZeroScoutGeneralResearch(
     schemaVersion: '1.0.0',
     query,
     market,
+    ...(trade || {}),
   })
   const controller = new AbortController()
   const researchTimeoutMs = Math.max(

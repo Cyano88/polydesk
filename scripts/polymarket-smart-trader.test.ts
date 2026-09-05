@@ -609,11 +609,13 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
 
 test('ANALYZE routes non-sports evidence through ZeroScout general research', async () => {
   let receivedMarket: Record<string, unknown> | undefined
+  let receivedTrade: Record<string, unknown> | undefined
   const deps = dependencies({
     resolveMarket: async () => [market({ category: 'politics', question: 'Will the proposal pass?' })],
     sportsNews: async () => { throw new Error('sports provider must not be used') },
-    generalNews: async (_query, selectedMarket) => {
+    generalNews: async (_query, selectedMarket, trade) => {
       receivedMarket = selectedMarket
+      receivedTrade = trade
       return [{
       title: 'Proposal enters final vote',
       description: 'The latest sourced update.',
@@ -636,6 +638,7 @@ test('ANALYZE routes non-sports evidence through ZeroScout general research', as
   assert.equal(result.data.evidence.news.length, 1)
   assert.equal(receivedMarket?.conditionId, conditionId)
   assert.match(String(receivedMarket?.description), /Resolves Yes/)
+  assert.deepEqual(receivedTrade, { requestedOutcome: 'Yes', requestedSide: 'BUY' })
 })
 
 test('PREPARE returns a preview-only official plugin handoff and performs no signing', async () => {

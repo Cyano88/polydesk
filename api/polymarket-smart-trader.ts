@@ -104,7 +104,11 @@ export type SmartTraderDependencies = {
   researchReady: () => Promise<void>
   research: (context: Record<string, unknown>) => Promise<ZeroScoutIntelligenceResult | null>
   sportsNews: (query: string) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
-  generalNews: (query: string, market: { conditionId: string; question?: string; title?: string; description?: string | null; resolutionSource?: string | null }) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
+  generalNews: (
+    query: string,
+    market: { conditionId: string; question?: string; title?: string; description?: string | null; resolutionSource?: string | null },
+    trade: { requestedOutcome: string; requestedSide: 'BUY' | 'SELL' },
+  ) => Promise<Array<{ title: string; description: string; source: string; url: string; publishedAt: string }>>
   now: () => number
   saveDecision: (decision: SmartTraderDecisionReceipt) => Promise<void>
   readDecision: (decisionId: string) => Promise<SmartTraderDecisionReceipt | null>
@@ -569,14 +573,14 @@ const liveDependencies: SmartTraderDependencies = {
       publishedAt: article.publishedAt,
     }))
   },
-  generalNews: async (query, market) => {
+  generalNews: async (query, market, trade) => {
     const articles = await getZeroScoutGeneralResearch(query, {
       conditionId: market.conditionId,
       question: market.question || market.title || query,
       description: market.description || undefined,
       resolutionRules: market.description || market.question || market.title || query,
       resolutionSource: market.resolutionSource || undefined,
-    })
+    }, trade)
     return articles.slice(0, 8).map(article => ({
       title: article.title,
       description: article.description,
@@ -1239,7 +1243,10 @@ export async function runPolymarketSmartTrader(
   const likelySports = input.category === 'sports' || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${selected.market.title} ${input.query}`)
   const researchNews = likelySports
     ? await dependencies.sportsNews(input.query || selected.market.title).catch(() => [])
-    : await dependencies.generalNews(input.query || selected.market.title, selected.market).catch(() => [])
+    : await dependencies.generalNews(input.query || selected.market.title, selected.market, {
+        requestedOutcome: selected.outcome.label,
+        requestedSide: input.side,
+      }).catch(() => [])
   const research = await dependencies.research({
     proofClass: 'polydesk_smart_market_research',
     observedAt: new Date(dependencies.now()).toISOString(),
