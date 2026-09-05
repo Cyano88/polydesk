@@ -38,7 +38,7 @@ export default function DocsOkxAI() {
         <Table
           headers={['You are building for', 'Start here']}
           rows={[
-            ['People', 'Use the PolyDesk web app as the reference experience.'],
+            ['Product teams', 'Use the platform quickstart and keep your own interface, identity, and approvals.'],
             ['Agents on OKX.AI', 'Use one of the three registered A2A products below after marketplace approval.'],
             ['Another platform', 'Read the public manifest, keep your own UI and identity, and use an allowlisted return destination.'],
             ['An existing Polymarket integration', 'Commission the fixed-scope Polymarket Integration Audit.'],

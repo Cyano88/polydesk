@@ -32,14 +32,12 @@ Expected server:
 - Health route: `/api/health`.
 - SPA fallback serves `dist/index.html`.
 
-## P0 Required For App Boot
+## P0 Required Server Capabilities
 
 These are required for a useful production deployment.
 
 ```env
 PORT=3000
-VITE_PRIVY_APP_ID=
-VITE_AUTH_BRIDGE=hybrid
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 DATABASE_URL=
@@ -63,7 +61,7 @@ Notes:
 - `POSTGRES_URL` can be used instead of `DATABASE_URL`, but production should standardize on one.
 - `POLYGON_RPC_URL` can be used instead of `POLYMARKET_RPC_URL`; both point the backend to Polygon.
 - Use a PolyDesk-owned database, not the Hash PayLink core database, once migration is complete.
-- Use a PolyDesk-owned Privy app after cutover. During transition, a shared Privy app is acceptable only if callback domains are explicitly configured.
+- `PRIVY_APP_ID` and `PRIVY_APP_SECRET` are server-only compatibility credentials for authenticated account APIs; the public foundation site does not boot Privy.
 
 ## P0 Football Market Feed
 
@@ -91,7 +89,7 @@ POLYMARKET_MARKET_LOOKUP=
 Validation:
 
 - `/api/poly-stream` returns current fixture data.
-- `/polydesk?service=worldcup` shows all available live/upcoming fixtures, not just one fallback market.
+- `/api/poly-stream` returns all available live/upcoming fixtures, not just one fallback market.
 - `/api/poly-worldcup-news` returns current news or an explicit empty feed, not a server error.
 
 ## P0 Trading And Portfolio
@@ -271,8 +269,10 @@ POLYDESK_SMOKE_URL=https://your-polydesk-domain.example npm run smoke
 Smoke routes:
 
 - `GET /api/health`
-- `GET /polydesk?service=portfolio`
-- `GET /polydesk?service=worldcup`
+- `GET /integrations`
+- `GET /docs/platforms`
+- `GET /.well-known/polydesk.json`
+- `GET /api/a2mcp/services`
 - `GET /api/poly-stream`
 - `GET /api/poly-worldcup-news`
 - `GET /api/agent-activity?id=<saved-scout-id>`
@@ -280,8 +280,7 @@ Smoke routes:
 
 Manual product checks:
 
-- Privy modal shows both email and wallet login.
-- Portfolio shows owner wallet, Polymarket wallet, pUSD cash, and positions.
-- Funding success routes back to the originating surface.
-- Buy and sell use PolyDesk confirmation UI.
-- World Cup tab shows all available live/upcoming markets.
+- Foundation, integrations, and documentation pages describe PolyDesk as agent infrastructure.
+- Funding and notification links return to the originating integration platform.
+- Trading APIs return explicit confirmation requirements, next actions, and verifiable evidence.
+- Legacy `/polydesk` and `/rewards` routes redirect to `/integrations`.

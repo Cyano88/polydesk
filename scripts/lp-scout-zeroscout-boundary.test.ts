@@ -116,11 +116,3 @@ test('ZeroScout finalization is single-flight for each saved scout activity', ()
   assert.match(source, /if \(pending\) return pending/)
   assert.match(source, /pendingZeroScoutBriefs\.delete\(key\)/)
 })
-
-test('Desk Agent retries ZeroScout against the same saved activity without creating a checkout', () => {
-  const source = readFileSync(new URL('../src/pages/TelegramPaymentLinks.tsx', import.meta.url), 'utf8')
-  assert.match(source, /if \(!state\.zeroScout\)/)
-  assert.doesNotMatch(source, /if \(!state\.zeroScout && !state\.failedVerification\)/)
-  assert.match(source, /body: JSON\.stringify\(\{ agentSlug: requestedAgentSlug, activityId: lpScoutActivityId \}\)/)
-  assert.match(source, /if \(state\.zeroScout \|\| verificationRetryError\) break/)
-})

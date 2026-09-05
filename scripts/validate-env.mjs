@@ -5,9 +5,8 @@ loadEnv({ path: '.env', override: false })
 
 const groups = [
   {
-    name: 'app boot',
+    name: 'server capabilities',
     required: [
-      'VITE_PRIVY_APP_ID',
       'PRIVY_APP_ID',
       'PRIVY_APP_SECRET',
       'POLYMARKET_CHAIN_ID',

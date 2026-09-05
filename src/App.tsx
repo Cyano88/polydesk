@@ -9,6 +9,7 @@ const LPScoutContinuation = lazy(() => import('./pages/LPScoutContinuation'))
 const Opportunity = lazy(() => import('./pages/Opportunity'))
 const DocsLayout = lazy(() => import('./pages/docs/DocsLayout'))
 const DocsOverview = lazy(() => import('./pages/docs/DocsOverview'))
+const DocsPlatforms = lazy(() => import('./pages/docs/DocsPlatforms'))
 const DocsOkxAI = lazy(() => import('./pages/docs/DocsOkxAI'))
 
 function RouteLoading() {
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/opportunity/:slug" element={<Opportunity />} />
         <Route path="/docs" element={<DocsLayout />}>
           <Route index element={<DocsOverview />} />
+          <Route path="platforms" element={<DocsPlatforms />} />
           <Route path="okx-ai" element={<DocsOkxAI />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

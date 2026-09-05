@@ -163,7 +163,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
       wellKnown: baseUrl + '/.well-known/polydesk.json',
       catalog: baseUrl + '/api/a2mcp/services',
       humanGuide: baseUrl + '/integrations',
-      technicalGuide: baseUrl + '/docs/okx-ai',
+      technicalGuide: baseUrl + '/docs/platforms',
     },
     integration: {
       requestContentType: 'application/json',
@@ -212,6 +212,6 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     deprecatedAliases: ['compatibilityServices'],
     rule: 'Products are the customer-facing marketplace offers. Capabilities are retained implementation routes and must not be presented as additional products.',
     services: polyDeskMarketplaceProducts,
-    docs: '/docs/okx-ai',
+    docs: '/docs/platforms',
   })
 }

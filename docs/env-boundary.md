@@ -11,7 +11,6 @@ Use `docs/deployment-env-checklist.md` as the live deployment checklist. This fi
 These belong in the new PolyDesk repo after the relevant APIs move:
 
 ```env
-VITE_PRIVY_APP_ID=
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
@@ -164,14 +163,13 @@ Token must not permit:
 - Treasury movement.
 - Admin receipt mutation.
 
-## Temporary Shared Env During Migration
+## Public Origin Boundary
 
-During Phase 2 frontend extraction, PolyDesk may only need:
+The platform-only public frontend needs no browser authentication secret or Privy app id. Public URLs may use:
 
 ```env
-VITE_PRIVY_APP_ID=
 VITE_PUBLIC_PAYLINK_ORIGIN=https://hashpaylink.com
 HASH_PAYLINK_BASE_URL=https://app.hashpaylink.com
 ```
 
-During Phase 3 API extraction, add only the PolyDesk-owned API envs actually moved in that phase.
+Server compatibility APIs that verify existing account sessions use `PRIVY_APP_ID` and `PRIVY_APP_SECRET` only.

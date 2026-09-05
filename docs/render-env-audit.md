@@ -16,9 +16,7 @@ These appear in the Hash PayLink `render.yaml` and should be recreated in the st
 
 | Key | Render status in Hash PayLink | PolyDesk use |
 | --- | --- | --- |
-| `VITE_AUTH_BRIDGE` | fixed value `hybrid` | Enables Privy-backed public sessions. |
-| `VITE_PRIVY_APP_ID` | `sync: false` | Browser Privy app id. |
-| `PRIVY_APP_ID` | `sync: false` | Server Privy app id for authenticated APIs. |
+| `PRIVY_APP_ID` | `sync: false` | Server Privy app id for compatibility authenticated APIs. |
 | `PRIVY_APP_SECRET` | `sync: false` | Server Privy verification secret. |
 | `DATABASE_URL` | `sync: false` | Durable portfolio/profile/agent state. Use a PolyDesk-owned DB for standalone production. |
 | `HASH_PAYLINK_BASE_URL` | fixed `https://app.hashpaylink.com` | Authoritative hosted checkout and payment API origin. |
@@ -63,8 +61,6 @@ The repo also contains `render.yaml` with these same deployment boundaries. Fixe
 
 ```env
 PORT=3000
-VITE_AUTH_BRIDGE=hybrid
-VITE_PRIVY_APP_ID=
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 DATABASE_URL=
@@ -133,11 +129,8 @@ POLYDESK_SMOKE_URL=https://<polydesk-render-domain> npm run smoke
 
 Then manually test:
 
-- Privy email and wallet login.
-- Portfolio profile.
-- Deposit wallet status.
-- pUSD balance.
-- World Cup full market list.
-- Funding from Portfolio and Desk Agent.
-- Buy/sell wallet signing.
+- Foundation page, integration catalog, and platform quickstart.
+- Public discovery manifest and machine-readable service catalog.
+- Platform-origin return routing for funding and alert links.
+- Portfolio, funding, and trade APIs return explicit next actions and evidence.
 - LP Scout unpaid 402 response and paid x402 flow.

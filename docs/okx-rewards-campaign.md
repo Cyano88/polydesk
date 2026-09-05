@@ -32,8 +32,8 @@ Failed, refunded, test, zero-price and undelivered calls do not count.
 
 ## User flow
 
-1. Open `/rewards`.
-2. Choose an exact PolyDesk service card on OKX.AI.
+1. Open PolyDesk Agent #5427 on OKX.AI.
+2. Choose an exact PolyDesk service card.
 3. Complete the paid call.
 4. Paste the returned X Layer transaction hash.
 5. PolyDesk verifies the internally recorded delivery.

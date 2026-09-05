@@ -1,82 +1,77 @@
 # PolyDesk
 
-Standalone agentic Polymarket desk extracted from Hash PayLink.
+PolyDesk is a non-custodial control layer for Polymarket agents and integration platforms.
 
-PolyDesk is being separated from the core Hash PayLink platform so Polymarket-specific trading, portfolio, and market-intelligence code can evolve independently without risking the payment-link, POS, x402, receipt, and settlement infrastructure that other products depend on.
+It exposes versioned, machine-readable services for bounded trading, managed portfolio operations, and external integration audits. PolyDesk does not operate a standalone consumer trading application.
 
-## Extraction Status
+## Products
 
-Current phase: Phase 2 - source-cloned frontend plus standalone PolyDesk backend shell.
+1. **One-Off Polymarket Trade** - one bounded mission from request and intelligence through buyer approval, execution handoff, and verified receipt.
+2. **Managed Polymarket Agent** - continuous portfolio and configured-address monitoring, verified email alerts, scheduled summaries, and optional separately authorized copy trading.
+3. **Polymarket Integration Audit** - an evidence-backed review of an external platform's wallet, payment, authorization, execution, recovery, and receipt controls.
 
-The operational PolyDesk frontend is source-cloned from Hash PayLink. The standalone Express server mounts the Polymarket portfolio, bridge, signed order, football market/news, Desk Agent, ZeroScout, LP Scout x402, and receipt APIs. Hash PayLink remains the checkout and payment-verification system of record.
+The direct A2MCP routes are implementation capabilities supporting these products, not additional product lines.
 
-## Local Development
+## Integration entry points
+
+- Public site: <https://polydesk.trade>
+- Integration overview: <https://polydesk.trade/integrations>
+- Platform quickstart: <https://polydesk.trade/docs/platforms>
+- OKX.AI guide: <https://polydesk.trade/docs/okx-ai>
+- Versioned manifest: <https://polydesk.trade/.well-known/polydesk.json>
+- Machine catalog: <https://polydesk.trade/api/a2mcp/services>
+
+Start by reading the manifest at runtime. It declares the current products, compatibility capabilities, request schemas, payment contract, and safety boundaries.
+
+## Responsibility boundary
+
+PolyDesk:
+
+- validates typed requests, market state, wallet readiness, and buyer-defined limits;
+- returns bounded decisions and explicit next actions;
+- monitors configured public addresses and portfolio state;
+- publishes machine-readable status and terminal evidence.
+
+The originating platform:
+
+- owns its interface, user identity, consent, and signer access;
+- presents every payment or financial authorization;
+- preserves request identifiers and follows declared status or receipt URLs;
+- uses an operator-approved return destination.
+
+Hash PayLink remains the funding checkout, payment verification, settlement-status, and payment-receipt boundary. Polymarket remains the market, order-book, position, and public execution boundary.
+
+PolyDesk never accepts private keys, seed phrases, or reusable Polymarket CLOB credentials. Paying for a service does not authorize a trade.
+
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Default local URL:
-
-```text
-http://127.0.0.1:5174
-```
-
-Standalone production-style server:
-
-```bash
-npm run build
-npm run start
-```
-
-Default server URL:
-
-```text
-http://127.0.0.1:3000
-```
-
-Verification commands:
+Production-style verification:
 
 ```bash
 npm run typecheck
 npm run typecheck:server
+npm run test:polydesk-shell
 npm run build
+npm run start
 ```
 
-## Render Deployment
+The local production server listens on `http://127.0.0.1:3000` by default.
 
-`render.yaml` defines the standalone PolyDesk web service. It includes only safe fixed defaults; secrets and deployment-specific URLs are marked `sync: false` and must be filled in the Render dashboard.
+## Deployment
 
-Before the first live smoke test, configure the required `sync: false` values from `docs/render-env-audit.md`, especially `DATABASE_URL`, `POLYMARKET_RELAYER_URL`, `POLYMARKET_RPC_URL`, Privy server/browser keys, Polymarket builder credentials, `POLYMARKET_MATCH_URLS`, and LP Scout x402 keys.
+`render.yaml` defines the production web service. Safe defaults are committed; secrets and deployment-specific values remain server-side. Use `docs/render-env-audit.md` and `docs/deployment-env-checklist.md` for environment and release verification.
 
-## Intended Scope
+The public browser surface is intentionally limited to the foundation site, integration catalog, technical documentation, narrow payment continuation, and verifiable report pages. Legacy `/polydesk` and `/rewards` URLs redirect to `/integrations`.
 
-PolyDesk owns:
+## Core documents
 
-- Polymarket wallet activation and portfolio UX
-- Polymarket buy/sell workflows
-- Verified football market discovery
-- LP Scout and ZeroScout Polymarket intelligence
-- Polymarket funding UX and status tracking
-- OKX.AI ASP positioning and agent-service interfaces
-
-Hash PayLink remains the system of record for:
-
-- Core USDC payment links
-- Circle/checkout/payment rails
-- POS and bank payouts
-- Receipts and 0G archive workflows
-- Agent wallet and x402 core infrastructure
-
-## Documents
-
-- `docs/extraction-audit.md` - current known-good state and audit checklist
-- `docs/dependency-map.md` - file/API/env classification before extraction
-- `docs/env-boundary.md` - environment variable ownership and secret boundaries
-- `docs/deployment-env-checklist.md` - production env and smoke-test checklist
-- `docs/render-env-audit.md` - Hash PayLink Render env audit and standalone PolyDesk env set
-- `docs/phased-plan.md` - extraction phases and acceptance gates
-- `docs/phase1-shell.md` - standalone shell verification notes
-- `docs/api-surface.md` - backend route, source file, env, and migration checklist
-- `docs/okx-ai-asp-profile.md` - prepared OKX.AI ASP listing, endpoint, and launch checks
+- `docs/api-surface.md` - public routes, machine contracts, return routing, and service boundaries.
+- `docs/POLYDESK_A2A_TRADING_AGENT.md` - bounded A2A mission and worker lifecycle.
+- `docs/POLYDESK_A2A_WORKER.md` - production worker operation.
+- `docs/POLYDESK_INTEGRATION_CONFORMANCE_AUDIT.md` - external platform audit contract.
+- `docs/polymarket-agent-ready-buy.md` - funding, readiness, authorization, and completion sequence.

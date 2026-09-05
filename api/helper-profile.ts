@@ -106,7 +106,7 @@ function bearerToken(req: Request) {
 }
 
 async function verifiedStorageKey(req: Request) {
-  const privyAppId = (process.env.PRIVY_APP_ID ?? process.env.VITE_PRIVY_APP_ID ?? '').trim()
+  const privyAppId = (process.env.PRIVY_APP_ID ?? '').trim()
   const privyAppSecret = (process.env.PRIVY_APP_SECRET ?? '').trim()
   if (!privyAppId || !privyAppSecret) {
     const error = new Error('PolyDesk identity verification is not configured.') as Error & { status?: number }

@@ -328,7 +328,7 @@ function linkedEmail(user: User) {
 }
 
 async function verifiedPrivySession(req: Request, includeEmail = false) {
-  const privyAppId = process.env.PRIVY_APP_ID ?? process.env.VITE_PRIVY_APP_ID
+  const privyAppId = process.env.PRIVY_APP_ID
   const privyAppSecret = process.env.PRIVY_APP_SECRET
   if (!privyAppId || !privyAppSecret) {
     const err = new Error('Privy is not configured. Set PRIVY_APP_ID and PRIVY_APP_SECRET on the server.')

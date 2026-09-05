@@ -8,6 +8,7 @@ const sections = [
     label: 'Start here',
     links: [
       { label: 'Integration overview', path: '/docs', end: true },
+      { label: 'Platform quickstart', path: '/docs/platforms' },
       { label: 'Integrations', path: '/integrations' },
     ],
   },

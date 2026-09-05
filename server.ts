@@ -71,18 +71,6 @@ function publicEnv(...names: string[]) {
   return ''
 }
 
-function runtimePublicConfig() {
-  const privyAppId = publicEnv('VITE_PRIVY_APP_ID', 'PRIVY_APP_ID')
-  const authBridge = publicEnv('VITE_AUTH_BRIDGE', 'AUTH_BRIDGE') || 'hybrid'
-  return JSON.stringify({
-    auth: {
-      authBridge,
-      privyAppId,
-      privyEnabled: Boolean(privyAppId && authBridge !== 'legacy'),
-    },
-  }).replace(/</g, '\\u003c')
-}
-
 function escapeMeta(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -110,7 +98,7 @@ function sendSpaIndex(res: Response, meta?: { title?: string; description?: stri
     : html
   res.setHeader('Cache-Control', 'no-store, max-age=0')
   res.setHeader('Pragma', 'no-cache')
-  res.type('html').send(titledHtml.replace('</head>', `${tags}<script src="/runtime-config.js"></script></head>`))
+  res.type('html').send(titledHtml.replace('</head>', `${tags}</head>`))
 }
 
 app.use((_req, res, next) => {
@@ -226,11 +214,6 @@ app.get('/api/health', (_req, res) => res.json({
 
 app.use('/api', (req, res) => {
   res.status(404).json({ ok: false, error: `API route not found: ${req.method} ${req.originalUrl}` })
-})
-
-app.get('/runtime-config.js', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store')
-  res.type('application/javascript').send(`window.__HASH_PAYLINK_CONFIG__=${runtimePublicConfig()};`)
 })
 
 app.use(express.static(join(__dirname, 'dist'), { index: false }))

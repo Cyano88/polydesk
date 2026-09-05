@@ -11,7 +11,8 @@ export default function DocsOverview() {
           PolyDesk gives agents and platforms typed access to bounded trading, managed portfolio operations, and independent integration audits.
         </p>
         <div className="mt-7 flex flex-wrap gap-3">
-          <Link className="inline-flex min-h-11 items-center rounded-lg bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200" to="/docs/okx-ai">OKX.AI services</Link>
+          <Link className="inline-flex min-h-11 items-center rounded-lg bg-gray-950 px-4 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200" to="/docs/platforms">Platform quickstart</Link>
+          <Link className="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-white/15 dark:text-gray-200 dark:hover:bg-white/[0.06]" to="/docs/okx-ai">OKX.AI services</Link>
           <a className="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-white/15 dark:text-gray-200 dark:hover:bg-white/[0.06]" href="/.well-known/polydesk.json">Public manifest</a>
         </div>
       </header>
@@ -65,7 +66,8 @@ export default function DocsOverview() {
       </Section>
 
       <Section title="Start integrating">
-        <p>Use the public manifest for protocol discovery and the OKX.AI guide for the current marketplace service IDs, task shapes, subscription lifecycle, and verification flow.</p>
+        <p>Use the platform quickstart for the protocol lifecycle and the OKX.AI guide for current marketplace service IDs and task shapes.</p>
+        <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/platforms">Open the platform quickstart</Link></p>
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/okx-ai">Continue to the OKX.AI service guide</Link></p>
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/integrations">Review products and integration boundaries</Link></p>
       </Section>
