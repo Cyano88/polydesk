@@ -1277,6 +1277,14 @@ export async function runPolymarketSmartTrader(
       requestedSide: input.side,
     }).catch(() => [])
   }
+  if (nonFootball) {
+    const genericTerms = new Set(['valorant', 'vlr', 'esports', 'counter', 'strike', 'dota', 'nba', 'nfl', 'tennis', 'basketball', 'baseball', 'cricket', 'hockey', 'vs', 'versus', 'will', 'win', 'winner', 'match', 'game', 'team', 'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'and', 'or', 'yes', 'no', '2026'])
+    const competitorTerms = normalizedSearchWords(researchQuery).filter(term => term.length > 1 && !genericTerms.has(term) && !/^\d+$/.test(term))
+    researchNews = competitorTerms.length ? researchNews.filter(article => {
+      const words = new Set(normalizedSearchWords(`${article.title} ${article.description}`))
+      return competitorTerms.some(term => words.has(term))
+    }) : []
+  }
   const research = await dependencies.research({
     proofClass: 'polydesk_smart_market_research',
     observedAt: new Date(dependencies.now()).toISOString(),

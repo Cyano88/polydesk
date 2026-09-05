@@ -396,6 +396,22 @@ test('ANALYZE routes Valorant to general research and cannot approve empty evide
   assert.ok(decision.blockers.some(value => value.includes('No cited market research')))
 })
 
+test('non-football research excludes unrelated retrieval results before assessment', async () => {
+  let seen: unknown
+  const source = { description: 'Current match information', source: 'Publisher', publishedAt: new Date(now).toISOString() }
+  const deps = dependencies({
+    resolveMarket: async () => [market({ question: 'Valorant: NRG vs LOUD' })],
+    generalNews: async () => [
+      { ...source, title: 'NRG vs LOUD fixture', url: 'https://example.com/nrg-loud' },
+      { ...source, title: 'Minnesota Lynx vs Golden State Valkyries', url: 'https://example.com/basketball' },
+    ],
+    research: async context => { seen = context.newsEvidence; return dependencies().research(context) },
+  })
+  const decision = await analyzeForBuy(deps, { category: 'sports' })
+  assert.equal(decision.evidence.newsCount, 1)
+  assert.deepEqual((seen as Array<{ title: string }>).map(item => item.title), ['NRG vs LOUD fixture'])
+})
+
 test('DISCOVER ranks eligible outcomes and only applies smart-money tag with observed wallet evidence', async () => {
   const result = await runPolymarketSmartTrader({
     action: 'DISCOVER',
