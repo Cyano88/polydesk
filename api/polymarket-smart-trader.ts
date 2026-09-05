@@ -87,12 +87,12 @@ export type SmartTraderDecisionReceipt = {
 }
 
 export type SmartTraderServicePayment = {
-  provider: 'OKX Agent Payments Protocol'
+  provider: 'OKX Agent Payments Protocol' | 'CDP x402'
   transaction: string
   payer: string
   amountAtomic: string
-  network: 'X Layer'
-  serviceUrl: '/api/a2mcp/polymarket-smart-trader'
+  network: 'X Layer' | 'Base'
+  serviceUrl: '/api/a2mcp/polymarket-smart-trader' | '/api/x402/base/polymarket-smart-trader'
 }
 
 export type SmartTraderDependencies = {
@@ -666,12 +666,29 @@ function validServicePayment(value: unknown): value is SmartTraderServicePayment
   if (!isRecord(value)) return false
   let amountAtomic = 0n
   try { amountAtomic = BigInt(clean(value.amountAtomic, 80)) } catch { return false }
-  return value.provider === 'OKX Agent Payments Protocol'
+  const okxLane = value.provider === 'OKX Agent Payments Protocol'
+    && value.network === 'X Layer'
+    && value.serviceUrl === '/api/a2mcp/polymarket-smart-trader'
+  const baseLane = value.provider === 'CDP x402'
+    && value.network === 'Base'
+    && value.serviceUrl === '/api/x402/base/polymarket-smart-trader'
+  return (okxLane || baseLane)
     && /^0x[a-fA-F0-9]{64}$/.test(clean(value.transaction, 200))
     && /^0x[a-fA-F0-9]{40}$/.test(clean(value.payer, 200))
     && amountAtomic === 300_000n
-    && value.network === 'X Layer'
-    && value.serviceUrl === '/api/a2mcp/polymarket-smart-trader'
+}
+
+export function smartTraderServicePaymentFromContext(value: unknown): SmartTraderServicePayment | null {
+  if (!isRecord(value)) return null
+  const candidate = {
+    provider: clean(value.provider, 80),
+    transaction: clean(value.transaction, 200),
+    payer: clean(value.payer, 200),
+    amountAtomic: clean(value.amount, 80),
+    network: clean(value.network, 40),
+    serviceUrl: clean(value.serviceUrl, 200),
+  }
+  return validServicePayment(candidate) ? candidate : null
 }
 
 function paidAnalysisKey(transaction: string) {
@@ -1535,15 +1552,8 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
     return res.status(405).json({ ok: false, error: 'Use POST for PolyDesk Smart Market Trader.' })
   }
   const payment = (req as Request & { payment?: Record<string, unknown> }).payment
-  const servicePayment: SmartTraderServicePayment | null = isRecord(payment) ? {
-    provider: 'OKX Agent Payments Protocol',
-    transaction: clean(payment.transaction, 200),
-    payer: clean(payment.payer, 200),
-    amountAtomic: clean(payment.amount, 80),
-    network: 'X Layer',
-    serviceUrl: '/api/a2mcp/polymarket-smart-trader',
-  } : null
-  if (servicePayment && validServicePayment(servicePayment)) {
+  const servicePayment = smartTraderServicePaymentFromContext(payment)
+  if (servicePayment) {
     const bound = await bindSettledSmartTraderAnalysis(req.body, servicePayment)
     if (bound.status === 'completed' && !isRemediableMissingZeroScoutProof(bound) && bound.response) {
       return res.status(200).json(bound.response)

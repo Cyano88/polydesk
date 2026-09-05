@@ -143,6 +143,12 @@ services:
         value: "0.1"
       - key: OKX_X402_SMART_TRADER_PRICE
         value: "0.3"
+      - key: CDP_API_KEY_ID
+        sync: false
+      - key: CDP_API_KEY_SECRET
+        sync: false
+      - key: BASE_X402_PAY_TO
+        sync: false
       - key: OKX_PAYMENT_API_KEY
         sync: false
       - key: OKX_PAYMENT_SECRET_KEY

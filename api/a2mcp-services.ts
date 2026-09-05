@@ -20,6 +20,7 @@ type Service = {
 const AGENT_ID = 5427
 const AGENT_PROFILE_URL = 'https://www.okx.ai/agents/' + AGENT_ID
 const XLAYER_USDT = '0x779ded0c9e1022225f8e0630b35a9b54be713736'
+const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 
 const services: Service[] = [
   {
@@ -164,6 +165,27 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
       catalog: baseUrl + '/api/a2mcp/services',
       humanGuide: baseUrl + '/integrations',
       technicalGuide: baseUrl + '/docs/platforms',
+    },
+    distribution: {
+      okxAi: {
+        status: 'registered',
+        agentId: AGENT_ID,
+        profileUrl: AGENT_PROFILE_URL,
+        payment: { network: 'X Layer', asset: 'USDT' },
+      },
+      baseAgenticMarket: {
+        status: 'awaiting-live-settlement',
+        discovery: 'CDP Bazaar',
+        endpoint: baseUrl + '/api/x402/base/polymarket-smart-trader',
+        method: 'POST',
+        payment: {
+          protocol: 'x402 v2',
+          network: { name: 'Base', caip2: 'eip155:8453' },
+          asset: { symbol: 'USDC', address: BASE_USDC, decimals: 6 },
+          amount: '0.30',
+        },
+        execution: 'A service payment returns intelligence and a bounded handoff. It never authorizes a Polymarket trade.',
+      },
     },
     integration: {
       requestContentType: 'application/json',
