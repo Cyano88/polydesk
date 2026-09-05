@@ -2,14 +2,10 @@ const baseUrl = String(process.env.POLYDESK_SMOKE_URL ?? process.argv[2] ?? 'htt
 
 const checks = [
   { path: '/api/health', expect: [200], label: 'health' },
-  { path: '/polydesk?preview=1&service=pulse', expect: [200], label: 'pulse spa' },
-  { path: '/polydesk?preview=1&service=portfolio', expect: [200], label: 'overview spa' },
-  { path: '/polydesk?preview=1&service=agent', expect: [200], label: 'agent spa' },
-  { path: '/polydesk?preview=1&service=lp-scout', expect: [200], label: 'lp scout spa' },
-  { path: '/polydesk?preview=1&service=activity', expect: [200], label: 'activity spa' },
+  { path: '/', expect: [200], label: 'foundation site' },
+  { path: '/integrations', expect: [200], label: 'integration catalog' },
   { path: '/docs', expect: [200], label: 'documentation overview' },
   { path: '/docs/okx-ai', expect: [200], label: 'OKX AI documentation' },
-  { path: '/polydesk?service=worldcup', expect: [200], label: 'worldcup spa' },
   { path: '/api/pulse', expect: [200], label: 'pulse intelligence' },
   { path: '/api/poly-stream', expect: [200], label: 'poly stream' },
   { path: '/api/poly-worldcup-news', expect: [200], label: 'world cup news' },

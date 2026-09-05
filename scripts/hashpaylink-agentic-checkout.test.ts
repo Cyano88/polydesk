@@ -54,6 +54,10 @@ test('relays the Hash PayLink payment challenge without signing', async () => {
   assert.equal(calls.length, 2)
   assert.equal((calls[0].init?.headers as Record<string, string>)['X-API-Key'], 'hpl_test_private')
   assert.equal(JSON.parse(String(calls[0].init?.body)).network, 'arc')
+  assert.equal(
+    JSON.parse(String(calls[0].init?.body)).returnUrl,
+    'https://polydesk.trade/continue/lp-scout?requestId=lps_1111111111111111&network=arc&maxAmount=0.01',
+  )
   assert.equal((calls[1].init?.headers as Record<string, string>)['PAYMENT-SIGNATURE'], undefined)
 })
 

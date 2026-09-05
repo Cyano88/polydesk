@@ -134,12 +134,17 @@ test('portfolio email destinations preserve only allowlisted integration channel
     url: 'https://circle.example/marketplace/polydesk',
   })
   assert.deepEqual(polymarketPortfolioDestination('circle-marketplace', {
-    polydeskUrl: 'https://polydesk.trade/polydesk?service=portfolio',
+    polydeskUrl: 'https://polydesk.trade/integrations',
     circleMarketplaceUrl: 'http://attacker.example',
   }), {
     source: 'polydesk',
-    label: 'Open portfolio',
-    url: 'https://polydesk.trade/polydesk?service=portfolio',
+    label: 'View PolyDesk services',
+    url: 'https://polydesk.trade/integrations',
+  })
+  assert.deepEqual(polymarketPortfolioDestination('polydesk'), {
+    source: 'polydesk',
+    label: 'View PolyDesk services',
+    url: 'https://polydesk.trade/integrations',
   })
 })
 

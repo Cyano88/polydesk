@@ -38,6 +38,22 @@ function polydeskOrigin() {
   return (process.env.PUBLIC_APP_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'https://polydesk.trade').trim().replace(/\/+$/, '')
 }
 
+function safeHttpsUrl(value: unknown) {
+  try {
+    const url = new URL(String(value ?? '').trim())
+    return url.protocol === 'https:' ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
+function fundingReturnUrl(buyerAgent: string) {
+  if (/okx/i.test(buyerAgent)) {
+    return safeHttpsUrl(process.env.POLYDESK_OKX_AI_RETURN_URL) || 'https://www.okx.ai/agents/5427'
+  }
+  return `${polydeskOrigin()}/integrations?notice=polymarket-funding-complete`
+}
+
 function cleanAmount(value: unknown) {
   const raw = String(value ?? '').trim()
   if (!/^\d+(?:\.\d{1,6})?$/.test(raw)) return ''
@@ -181,7 +197,7 @@ export function createA2mcpPolymarketFundingLinkHandler(dependencies: FundingDep
       const funding = readiness.data.funding
 
       const requestId = `a2mcp-${randomUUID()}`
-      const returnUrl = `${polydeskOrigin()}/polydesk?service=portfolio&notice=polymarket-funding-complete&portfolio=external`
+      const returnUrl = fundingReturnUrl(buyerAgent)
       const checkout = await dependencies.createCheckout({
         polymarketWallet: account.wallet,
         amount: checkoutAmount,

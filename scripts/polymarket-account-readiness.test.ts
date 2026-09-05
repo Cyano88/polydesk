@@ -141,6 +141,7 @@ test('funding handoff targets only the derived deployed wallet', async () => {
   assert.equal(res.statusCode, 200)
   assert.equal(checkoutInput.polymarketWallet, depositWallet)
   assert.equal(checkoutInput.amount, '4')
+  assert.equal(checkoutInput.returnUrl, 'https://polydesk.trade/integrations?notice=polymarket-funding-complete')
   assert.equal(res.body.polymarket.derivedFromOwner, true)
   assert.equal(res.body.nextAction, 'PAY_CHECKOUT_THEN_POLL_STATUS')
 })

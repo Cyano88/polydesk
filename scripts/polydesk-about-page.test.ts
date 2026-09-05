@@ -14,7 +14,9 @@ test('public root is a foundation site rather than the product application', asy
   assert.ok(source.includes('Governed prediction-market infrastructure'))
   assert.ok(source.includes('Foundation principle'))
   assert.match(app, /<Route path="\/" element=\{<About \/>\}/)
-  assert.match(app, /<Route path="\/polydesk" element=\{<PolyDesk \/>\}/)
+  assert.match(app, /<Route path="\/polydesk" element=\{<Navigate to="\/integrations" replace \/>\}/)
+  assert.match(app, /<Route path="\/continue\/lp-scout" element=\{<LPScoutContinuation \/>\}/)
+  assert.doesNotMatch(app, /import\('\.\/pages\/PolyDesk'\)/)
   assert.match(app, /<Route path="\/about" element=\{<Navigate to="\/" replace \/>\}/)
 })
 
@@ -23,7 +25,6 @@ test('foundation page presents product boundaries without app or marketplace clu
 
   assert.ok(source.includes('polydeskMarketplaceProducts.map'))
   assert.ok(source.includes('Three clear ways to use the network.'))
-  assert.ok(source.includes('One standard, three entry points'))
   assert.ok(source.includes('Non-custodial by design'))
   assert.ok(source.includes('Versioned machine contracts'))
   for (const removed of ['Direct APIs', 'Agent #5427', 'Sportmonks', 'ZeroScout', 'X Layer', '/about/pulse.png', '/about/okx-marketplace.png']) {
@@ -31,17 +32,18 @@ test('foundation page presents product boundaries without app or marketplace clu
   }
 })
 
-test('public navigation separates foundation, integrations, docs, and reference app', async () => {
+test('public navigation exposes foundation, integrations and docs without the legacy app', async () => {
   const [source, docsLayout, productApp] = await Promise.all([
     readFile(aboutPath, 'utf8'),
     readFile(docsLayoutPath, 'utf8'),
     readFile(productAppPath, 'utf8'),
   ])
 
-  for (const path of ['to="/integrations"', 'to="/docs"', 'href="/polydesk"', 'href="/.well-known/polydesk.json"']) {
+  for (const path of ['to="/integrations"', 'to="/docs"', 'href="/.well-known/polydesk.json"']) {
     assert.ok(source.includes(path))
   }
-  assert.ok(docsLayout.includes('<a href="/polydesk"'))
-  assert.ok(productApp.includes('const requiresPrivy ='))
-  assert.ok(productApp.includes('!PRIVY_AUTH_ENABLED || !requiresPrivy'))
+  assert.ok(!source.includes('href="/polydesk"'))
+  assert.ok(!docsLayout.includes('href="/polydesk"'))
+  assert.ok(!productApp.includes('PrivyProvider'))
+  assert.ok(productApp.includes('<BrowserRouter>'))
 })

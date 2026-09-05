@@ -85,10 +85,10 @@ export default function Opportunity() {
   const makerPlan = useMemo(() => {
     if (!opportunity) return []
     return [
-      'Choose Buy now or Earn market rewards.',
-      'Choose YES or NO.',
-      'Enter how much USDC you want to use.',
-      'Review the action in plain language, then sign with your wallet.',
+      'Send this market to a connected PolyDesk integration.',
+      'Specify the outcome, budget and execution limits.',
+      'Review the agent mandate and evidence.',
+      'Authorize execution through the originating platform.',
     ]
   }, [opportunity])
 
@@ -156,8 +156,8 @@ export default function Opportunity() {
           <Radar className="mx-auto h-7 w-7 text-blue-600" />
           <h1 className="mt-4 text-xl font-semibold tracking-tight">Opportunity unavailable</h1>
           <p className="mt-2 text-sm leading-6 text-gray-500">{data.error || 'The live market no longer meets the reward filter.'}</p>
-          <Link to="/polydesk?service=pulse" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-            Open Pulse <ArrowRight className="h-4 w-4" />
+          <Link to="/integrations" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
+            View integrations <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
       </main>
@@ -172,7 +172,7 @@ export default function Opportunity() {
   return (
     <main className="min-h-screen bg-[#2f5bff] text-gray-950">
       <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-5 text-white sm:px-6">
-        <Link to="/polydesk?service=pulse" className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
+        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold tracking-tight">
           <span className="grid h-7 w-7 place-items-center rounded-lg !bg-white text-blue-600"><Radar className="h-4 w-4" /></span>
           PolyDesk
         </Link>
@@ -262,8 +262,8 @@ export default function Opportunity() {
               </div>
             </div>
 
-            <Link to={`/polydesk?service=pulse&opportunity=${encodeURIComponent(slug)}`} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3.5 text-sm font-semibold text-white">
-              Open trading choices <ArrowRight className="h-4 w-4" />
+            <Link to="/integrations" className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3.5 text-sm font-semibold text-white">
+              Use through an integration <ArrowRight className="h-4 w-4" />
             </Link>
             {shareNotice && <p className="mt-2 text-center text-[10px] font-medium text-gray-500">{shareNotice}</p>}
 

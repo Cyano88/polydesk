@@ -207,7 +207,7 @@ function lifecycleDestination(source: unknown) {
   const configuredOrigin = String(process.env.POLYDESK_PUBLIC_ORIGIN ?? process.env.PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '')
   const polydeskOrigin = /^https:\/\/[^/]+$/i.test(configuredOrigin) ? configuredOrigin : 'https://polydesk.trade'
   return polymarketPortfolioDestination(source, {
-    polydeskUrl: `${polydeskOrigin}/polydesk?service=portfolio`,
+    polydeskUrl: `${polydeskOrigin}/integrations`,
     okxAiUrl: process.env.POLYDESK_OKX_AI_RETURN_URL,
     circleMarketplaceUrl: process.env.POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL,
   })

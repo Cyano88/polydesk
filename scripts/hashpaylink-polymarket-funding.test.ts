@@ -43,7 +43,7 @@ test('creates a Polymarket funding checkout using the ordinary developer API key
   assert.equal((upstreamInit?.headers as Record<string, string>)['X-API-Key'], 'hpl_live_portal-issued-key')
   assert.equal((upstreamInit?.headers as Record<string, string>)['Idempotency-Key'], 'polydesk:funding:request_1234567890')
   const body = JSON.parse(String(upstreamInit?.body))
-  assert.equal(body.returnUrl, 'https://polydesk.trade/polydesk?service=portfolio&notice=polymarket-funding-complete&portfolio=external')
+  assert.equal(body.returnUrl, 'https://polydesk.trade/integrations?notice=polymarket-funding-complete&flow=external')
   assert.equal(JSON.stringify(body).includes('depositAddress'), false)
 })
 

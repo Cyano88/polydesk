@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Download, ExternalLink, FileText, Loader2, Share2, ShieldCheck, TriangleAlert } from '../components/icons'
 import { PolyDeskLoadingState } from '../components/PolyDeskLoadState'
-import { PolymarketLimitOrderTicket } from '../components/PolymarketLimitOrderTicket'
 import { downloadLpOpportunityPng, renderLpOpportunityPng } from '../lib/lpOpportunityShareImage'
 
 type ReportResponse = {
@@ -109,7 +108,6 @@ export default function LPScoutReport() {
   const [busy, setBusy] = useState(true)
   const [shareBusy, setShareBusy] = useState(false)
   const [shareNotice, setShareNotice] = useState('')
-  const [orderMarketIndex, setOrderMarketIndex] = useState<number | null>(null)
   const [showAllMarkets, setShowAllMarkets] = useState(false)
 
   useEffect(() => {
@@ -313,25 +311,6 @@ export default function LPScoutReport() {
                           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                             {yesQuote && <div className="rounded-lg bg-emerald-50 px-3 py-2 font-semibold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">YES quote near {yesQuote}</div>}
                             {noQuote && <div className="rounded-lg bg-gray-100 px-3 py-2 font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">NO quote near {noQuote}</div>}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setOrderMarketIndex(value => value === index ? null : index)}
-                          className="mt-3 w-full rounded-lg bg-gray-950 px-3 py-2 text-xs font-semibold text-white dark:bg-white dark:text-gray-950"
-                        >
-                          {orderMarketIndex === index ? 'Close order ticket' : 'Place limit order'}
-                        </button>
-                        {orderMarketIndex === index && (
-                          <div className="mt-3">
-                            <PolymarketLimitOrderTicket
-                              marketTitle={market.label}
-                              marketUrl={market.url}
-                              yesQuote={market.yesQuote}
-                              noQuote={market.noQuote}
-                              rewardMinShares={market.rewardMinShares}
-                              estimatedRewardCapitalUsdc={market.estimatedRewardCapitalUsdc}
-                            />
                           </div>
                         )}
                       </div>

@@ -137,7 +137,7 @@ export async function protectLpScoutWithHashPayLink(input: {
   if (!apiKey || !/^https:\/\//i.test(apiOrigin)) {
     throw Object.assign(new Error('Hash PayLink Arc Testnet agentic checkout is not configured.'), { status: 503 })
   }
-  const returnUrl = `${dependencies.publicOrigin(input.req).replace(/\/+$/, '')}/polydesk?service=lp-scout&run=polymarket-scout&requestId=${encodeURIComponent(id)}&network=${encodeURIComponent(network)}&maxAmount=${encodeURIComponent(amount)}`
+  const returnUrl = `${dependencies.publicOrigin(input.req).replace(/\/+$/, '')}/continue/lp-scout?requestId=${encodeURIComponent(id)}&network=${encodeURIComponent(network)}&maxAmount=${encodeURIComponent(amount)}`
   const created = await dependencies.fetch(`${apiOrigin}/api/v2/checkouts`, {
     method: 'POST',
     headers: {

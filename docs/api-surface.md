@@ -80,19 +80,15 @@ submits directly to Polymarket for final cryptographic verification.
 
 ## Portfolio email return routing
 
-An integration that opens the managed portfolio UI should include one
-allowlisted channel key:
+Portfolio alerts return users to the platform that originated the managed-agent
+relationship. OKX.AI resolves to Agent #5427 by default. Circle uses
+`POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL` when configured. Direct or unknown
+channels link to `https://polydesk.trade/integrations`; the retired PolyDesk
+consumer application is not used as a portfolio destination.
 
-- OKX.AI: `https://polydesk.trade/polydesk?service=portfolio&portfolio=trading&wallet=monitor&integration=okx-ai`
-- Circle marketplace: `https://polydesk.trade/polydesk?service=portfolio&portfolio=trading&wallet=monitor&integration=circle-marketplace`
-- Direct PolyDesk: omit `integration` or use `integration=polydesk`
-
-After an authenticated user enters through one of these URLs, PolyDesk persists
-only the allowlisted channel key; no arbitrary return URL is accepted. Digest
-and funding-ready portfolio buttons are resolved server-side from that key.
-OKX.AI resolves to Agent #5427 by default. Circle routing remains on PolyDesk
-until the server operator sets `POLYDESK_CIRCLE_MARKETPLACE_RETURN_URL` to the
-canonical HTTPS listing.
+The legacy browser routes `/polydesk` and `/rewards` redirect to
+`/integrations`. The narrow `/continue/lp-scout` callback exists only to
+verify a completed Hash PayLink checkout and open its immutable report.
 
 ## Retired PolyDesk routes
 

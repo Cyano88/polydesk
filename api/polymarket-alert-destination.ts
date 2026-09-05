@@ -6,7 +6,7 @@ type PortfolioDestinationConfig = {
   circleMarketplaceUrl?: unknown
 }
 
-const DEFAULT_POLYDESK_PORTFOLIO_URL = 'https://polydesk.trade/polydesk?service=portfolio'
+const DEFAULT_POLYDESK_INTEGRATIONS_URL = 'https://polydesk.trade/integrations'
 const DEFAULT_OKX_AI_URL = 'https://www.okx.ai/agents/5427'
 
 function safeHttpsUrl(value: unknown) {
@@ -33,7 +33,7 @@ export function polymarketPortfolioDestination(
   config: PortfolioDestinationConfig = {},
 ) {
   const source = polymarketIntegrationSource(value) ?? 'polydesk'
-  const polydeskUrl = safeHttpsUrl(config.polydeskUrl) || DEFAULT_POLYDESK_PORTFOLIO_URL
+  const polydeskUrl = safeHttpsUrl(config.polydeskUrl) || DEFAULT_POLYDESK_INTEGRATIONS_URL
   if (source === 'okx-ai') {
     return {
       source,
@@ -45,7 +45,7 @@ export function polymarketPortfolioDestination(
     const circleUrl = safeHttpsUrl(config.circleMarketplaceUrl)
     return circleUrl
       ? { source, label: 'Open in Circle', url: circleUrl }
-      : { source: 'polydesk' as const, label: 'Open portfolio', url: polydeskUrl }
+      : { source: 'polydesk' as const, label: 'View PolyDesk services', url: polydeskUrl }
   }
-  return { source, label: 'Open portfolio', url: polydeskUrl }
+  return { source, label: 'View PolyDesk services', url: polydeskUrl }
 }

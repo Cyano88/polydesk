@@ -123,9 +123,8 @@ export function createHashPayLinkPolymarketFundingHandler(dependencies: Dependen
       if (!/^[a-zA-Z0-9_-]{12,64}$/.test(requestId)) return res.status(400).json({ ok: false, error: 'Invalid funding request id.' })
       if (!networks.length) return res.status(400).json({ ok: false, error: 'Choose Base or Arbitrum.' })
 
-      const returnParams = new URLSearchParams({ service: 'portfolio', notice: 'polymarket-funding-complete', portfolio: flow === 'external' ? 'external' : 'trading' })
-      if (flow === 'portfolio') returnParams.set('wallet', 'balance')
-      const returnUrl = `${dependencies.publicOrigin(req)}/polydesk?${returnParams.toString()}`
+      const returnParams = new URLSearchParams({ notice: 'polymarket-funding-complete', flow })
+      const returnUrl = `${dependencies.publicOrigin(req)}/integrations?${returnParams.toString()}`
       const result = await createHashPayLinkPolymarketFundingCheckout({ polymarketWallet: wallet, amount, networks, requestId, returnUrl }, dependencies)
       return res.status(result.statusCode).json(result.data)
     } catch (error) {
