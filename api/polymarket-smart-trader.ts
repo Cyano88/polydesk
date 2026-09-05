@@ -170,7 +170,7 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 export const SMART_TRADER_MAX_DELIVERY_ATTEMPTS = 6
-export const SMART_TRADER_ANALYSIS_ENGINE_VERSION = 'zeroscout-resilient-routing-v1'
+export const SMART_TRADER_ANALYSIS_ENGINE_VERSION = 'zeroscout-proof-budget-v2'
 
 export function hasMissingZeroScoutProofDelivery(response: unknown): boolean {
   if (!isRecord(response)) return false
