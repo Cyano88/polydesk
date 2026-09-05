@@ -157,7 +157,7 @@ test('smart-trader challenge declares its OKX AI action contract', async () => {
     body?: { inputSchema?: { properties?: Record<string, { enum?: string[] }>; required?: string[] } }
   }
   assert.ok(unpaid.body?.inputSchema?.properties?.action)
-  assert.deepEqual(unpaid.body?.inputSchema?.properties?.action?.enum, ['ANALYZE', 'PREPARE'])
+  assert.deepEqual(unpaid.body?.inputSchema?.properties?.action?.enum, ['ANALYZE', 'PREPARE', 'INDEPENDENT_PREPARE'])
   assert.ok(unpaid.body?.inputSchema?.properties?.marketId)
   assert.ok(unpaid.body?.inputSchema?.properties?.mandate)
   assert.deepEqual(unpaid.body?.inputSchema?.required, ['action'])

@@ -19,6 +19,7 @@ import a2mcpPolymarketGovernedOpenHandler, {
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
+import { prepareIndependentPolymarketTrade } from './polymarket-independent-prepare.js'
 import polymarketSmartTraderHandler, {
   bindSettledSmartTraderAnalysis,
   checkPolymarketSmartTraderOperational,
@@ -175,9 +176,10 @@ const portfolioWatchBodyProperties = {
 const smartTraderBodyProperties = {
   action: {
     type: 'string',
-    enum: ['ANALYZE', 'PREPARE'],
-    description: 'ANALYZE is the single paid workflow gate and may discover by query before issuing a durable decision. PREPARE is included when authorized by that receipt.',
+    enum: ['ANALYZE', 'PREPARE', 'INDEPENDENT_PREPARE'],
+    description: 'Choose ANALYZE for paid research, PREPARE for its approved receipt, or INDEPENDENT_PREPARE for your own acknowledged exact-market decision without research payment.',
   },
+  independentOrder: { type: 'object', description: 'For INDEPENDENT_PREPARE only: the acknowledged exact-market request described by GET /api/polymarket-independent/prepare. No research payment or decisionId is required.' },
   query: { type: 'string', maxLength: 180 },
   marketId: {
     type: 'string',
@@ -437,13 +439,14 @@ async function deliverSmartTraderAnalysis(req: Request, res: Response) {
   return polymarketSmartTraderHandler(req, res)
 }
 
-type SmartTraderPreparedResult = Extract<Awaited<ReturnType<typeof runPolymarketSmartTrader>>, { ok: true }>
+type SmartTraderPreparedResult = { ok: true; status: number; data: Record<string, unknown> }
 
 type SmartTraderPaymentPreflightDependencies = {
   validate: typeof preflightPolymarketSmartTraderRequest
   operational: typeof checkPolymarketSmartTraderOperational
   providers: typeof preflightPolymarketSmartTraderProviders
   prepare: typeof runPolymarketSmartTrader
+  independentPrepare?: (raw: unknown) => Promise<SmartTraderPreparedResult | { ok: false; status: number; error: string }>
 }
 
 const smartTraderPaymentPreflightDependencies: SmartTraderPaymentPreflightDependencies = {
@@ -460,6 +463,17 @@ export async function preflightSmartTraderBeforeSettlement(
   | { ok: true; prepared?: SmartTraderPreparedResult }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
+  if (clean(body.action).toUpperCase() === 'INDEPENDENT_PREPARE') {
+    if (Object.keys(body).some(key => key !== 'action' && key !== 'independentOrder')) {
+      return { ok: false, status: 400, body: { ok: false, error: 'Put exact market, acknowledgement, and limits inside independentOrder. Do not mix research inputs with independent preparation.' } }
+    }
+    const prepared = await (dependencies.independentPrepare || prepareIndependentPolymarketTrade)(body.independentOrder || {}).catch(() => ({ ok: false as const, status: 502, error: 'Independent preparation could not verify execution readiness. No payment was settled.' }))
+    if (!prepared.ok) {
+      const { status, ...errorBody } = prepared
+      return { ok: false, status, body: { ...errorBody, independentExecution: independentExecutionDescriptor() } }
+    }
+    return { ok: true, prepared }
+  }
   if (clean(body.action).toUpperCase() === 'DISCOVER') {
     return {
       ok: false,
@@ -1006,7 +1020,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
         // A valid paid ANALYZE receipt is the capability for this continuation.
         // Return the freshly revalidated preview without issuing or settling a
         // second payment challenge.
-        res.setHeader('X-PolyDesk-Workflow-Included', 'PREPARE')
+        res.setHeader('X-PolyDesk-Workflow-Included', clean(body.action).toUpperCase() === 'INDEPENDENT_PREPARE' ? 'INDEPENDENT_PREPARE' : 'PREPARE')
         return res.status(result.prepared.status).json(result.prepared.data)
       }
     }

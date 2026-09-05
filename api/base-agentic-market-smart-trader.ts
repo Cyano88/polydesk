@@ -29,9 +29,10 @@ const description = 'Evidence-backed Polymarket market analysis with a durable b
 const inputProperties = {
   action: {
     type: 'string',
-    enum: ['ANALYZE', 'PREPARE'],
-    description: 'ANALYZE is paid once. PREPARE is included with an unexpired paid decision receipt.',
+    enum: ['ANALYZE', 'PREPARE', 'INDEPENDENT_PREPARE'],
+    description: 'ANALYZE buys research. PREPARE uses its approved receipt. INDEPENDENT_PREPARE uses your own acknowledged exact-market decision without research payment.',
   },
+  independentOrder: { type: 'object', description: 'For INDEPENDENT_PREPARE: acknowledged exact-market request from GET /api/polymarket-independent/prepare. No analysis payment required.' },
   query: { type: 'string', maxLength: 180 },
   marketId: { type: 'string', minLength: 1, maxLength: 320 },
   outcome: { type: 'string', minLength: 1, maxLength: 100 },
@@ -190,7 +191,7 @@ export default async function baseAgenticMarketSmartTraderHandler(req: Request, 
     const preflight = await preflightSmartTraderBeforeSettlement(body)
     if (!preflight.ok) return res.status(preflight.status).json(preflight.body)
     if (preflight.prepared) {
-      res.setHeader('X-PolyDesk-Workflow-Included', 'PREPARE')
+      res.setHeader('X-PolyDesk-Workflow-Included', clean(body.action).toUpperCase() === 'INDEPENDENT_PREPARE' ? 'INDEPENDENT_PREPARE' : 'PREPARE')
       return res.status(preflight.prepared.status).json(preflight.prepared.data)
     }
   }

@@ -38,3 +38,10 @@ require existing Polygon and public-fill verification.
 Smart Trader provider failures and ESCALATE responses expose an
 `independentExecution` descriptor. Following it is an explicit new buyer
 decision; ZeroScout approval is never implied.
+# Base and Onchain OS-facing entry points
+
+Agents choosing their own market can POST to either `/api/x402/base/polymarket-smart-trader` or `/api/a2mcp/polymarket-smart-trader` with `action: INDEPENDENT_PREPARE` and `independentOrder` containing the same request accepted by `/api/polymarket-independent/prepare`.
+
+This explicit action runs before research availability and service settlement. It requires acknowledgement, exact market/outcome, owner wallet, maximum spend, and maximum price. It prepares only: no signing, payment, funding, or order submission occurs. Current support is immediate FAK/FOK BUY orders. The separately disclosed governed execution handoff remains unchanged.
+
+Use ANALYZE to ask for a recommendation. A provider outage is labelled `evidence.researchStatus: UNAVAILABLE`; its non-authorizing ESCALATE receipt is not a market rejection. Independent preparation never converts that receipt to APPROVE or silently selects a market.

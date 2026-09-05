@@ -5,6 +5,9 @@ export function independentExecutionDescriptor() {
   return {
     mode: INDEPENDENT_RESEARCH_POLICY,
     automatic: false,
+    entryPoints: ['/api/x402/base/polymarket-smart-trader', '/api/a2mcp/polymarket-smart-trader'],
+    entryAction: 'INDEPENDENT_PREPARE',
+    entryInput: 'Put the acknowledged independent preparation request inside independentOrder. No market is chosen automatically.',
     endpoint: '/api/polymarket-independent/prepare',
     method: 'POST',
     supportedSides: ['BUY'],

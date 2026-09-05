@@ -412,6 +412,17 @@ test('non-football research excludes unrelated retrieval results before assessme
   assert.deepEqual((seen as Array<{ title: string }>).map(item => item.title), ['NRG vs LOUD fixture'])
 })
 
+test('degraded provider output is unavailable research, never a market rejection or approval', async () => {
+  const deps = dependencies({ research: async context => ({ ...await dependencies().research(context), proofMetadata: { degraded: true } }) })
+  const decision = await analyzeForBuy(deps)
+  assert.equal(decision.decision, 'ESCALATE')
+  assert.equal(decision.evidence.researchStatus, 'UNAVAILABLE')
+  assert.equal(decision.evidence.tradeStance, null)
+  assert.equal(decision.evidence.evidenceQuality, null)
+  assert.ok(decision.blockers.some(value => value.includes('independent execution available')))
+  assert.ok(!decision.blockers.some(value => /rated.*LOW|confidence is below|found insufficient/.test(value)))
+})
+
 test('DISCOVER ranks eligible outcomes and only applies smart-money tag with observed wallet evidence', async () => {
   const result = await runPolymarketSmartTrader({
     action: 'DISCOVER',
@@ -645,7 +656,7 @@ test('ANALYZE withholds a directional opinion when ZeroScout is unavailable', as
   }, dependencies({ research: async () => null }))
   assert.equal(result.ok, true)
   if (!result.ok) return
-  assert.match(result.data.opinion, /does not yet have enough configured research evidence/i)
+  assert.match(result.data.opinion, /Research unavailable - independent execution available/i)
   assert.match(result.data.riskFlags.join(' '), /directional opinion is withheld/i)
   assert.equal(result.data.decision.decision, 'ESCALATE')
 })
