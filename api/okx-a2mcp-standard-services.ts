@@ -18,6 +18,7 @@ import a2mcpPolymarketGovernedOpenHandler, {
 } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
+import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
 import polymarketSmartTraderHandler, {
   bindSettledSmartTraderAnalysis,
   checkPolymarketSmartTraderOperational,
@@ -474,7 +475,7 @@ export async function preflightSmartTraderBeforeSettlement(
     return {
       ok: false,
       status: 503,
-      body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.' },
+      body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.', independentExecution: independentExecutionDescriptor() },
     }
   }
   if (clean(body.action).toUpperCase() === 'ANALYZE') {
@@ -483,7 +484,7 @@ export async function preflightSmartTraderBeforeSettlement(
       return {
         ok: false,
         status: providers.status,
-        body: { ok: false, error: `${providers.error} No payment challenge was issued.` },
+        body: { ok: false, error: `${providers.error} No payment challenge was issued.`, independentExecution: independentExecutionDescriptor() },
       }
     }
   }

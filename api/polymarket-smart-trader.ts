@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
+import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import { hasRenderDurableStore, listDurableJsonByPrefix, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
@@ -1163,7 +1164,7 @@ export async function runPolymarketSmartTrader(
     if (!validatedDecision.ok) return validatedDecision
     boundDecision = validatedDecision.value
     if (boundDecision.decision !== 'APPROVE') {
-      return { ok: false as const, status: 409, error: 'The analysis decision requires escalation and cannot prepare a trade.', blockers: boundDecision.blockers, riskFlags: boundDecision.riskFlags }
+      return { ok: false as const, status: 409, error: 'The analysis decision requires escalation and cannot prepare a trade.', blockers: boundDecision.blockers, riskFlags: boundDecision.riskFlags, independentExecution: independentExecutionDescriptor() }
     }
     input.mandate = boundDecision.mandate
   }
@@ -1258,10 +1259,10 @@ export async function runPolymarketSmartTrader(
   const likelySports = input.category === 'sports' || /\b(football|soccer|nba|nfl|tennis|match|league|cup)\b/i.test(`${selected.market.title} ${input.query}`)
   const researchNews = likelySports
     ? await dependencies.sportsNews(input.query || selected.market.title).catch(() => [])
-    : await dependencies.generalNews(input.query || selected.market.title, selected.market, {
+    : input.side ? await dependencies.generalNews(input.query || selected.market.title, selected.market, {
         requestedOutcome: selected.outcome.label,
         requestedSide: input.side,
-      }).catch(() => [])
+      }).catch(() => []) : []
   const research = await dependencies.research({
     proofClass: 'polydesk_smart_market_research',
     observedAt: new Date(dependencies.now()).toISOString(),
@@ -1386,6 +1387,7 @@ export async function runPolymarketSmartTrader(
         ? 'Call PREPARE with this decisionId, exact market, outcome, and side before the receipt expires.'
         : 'Resolve the decision blockers and run ANALYZE again. PREPARE will reject this receipt.',
       boundary: 'This analysis is decision support, not a guarantee of outcome or profit.',
+      ...(decision.decision === 'ESCALATE' ? { independentExecution: independentExecutionDescriptor() } : {}),
     },
   }
 }
@@ -1608,6 +1610,7 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
       price: { amount: '0.3', asset: 'USDT', network: 'X Layer', chargedAt: 'ANALYZE' },
       scoreLabel: SCORE_LABEL,
       executionBoundary: 'The official Polymarket plugin owns wallet access, signing, live-mode confirmation, authorization checks, and submission.',
+      independentExecution: independentExecutionDescriptor(),
     })
   }
   if (req.method !== 'POST') {

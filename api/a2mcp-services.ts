@@ -112,6 +112,7 @@ const services: Service[] = [
       { endpoint: '/api/a2mcp/polymarket-smart-trader/decision/:decisionId', purpose: 'Verify a persisted OKX AI service decision receipt and expiry.' },
       { endpoint: '/api/a2mcp/polymarket-smart-trader/payment/:transaction', purpose: 'Recover paid analysis delivery status and its decision ID after a client disconnect.' },
       { endpoint: '/api/polymarket-account/readiness', purpose: 'Verify the owner-derived Deposit Wallet and pUSD balance before a BUY preview.' },
+      { endpoint: '/api/polymarket-independent/prepare', purpose: 'Explicitly prepare an independent immediate BUY under buyer-signed limits without requiring ZeroScout approval. GET describes the acknowledgement and inputs; POST checks live execution readiness.' },
     ],
     boundary: 'ANALYZE is the single 0.3 USDT analysis payment gate. Its unexpired paid receipt includes PREPARE. A verified pUSD shortfall routes to the separate funding service and must settle before preview; it never overrides ESCALATE. The official OnchainOS Polymarket plugin owns wallet access, typed live confirmation, signing, and submission.',
   },

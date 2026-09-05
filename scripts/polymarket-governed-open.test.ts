@@ -182,6 +182,25 @@ test('rejects a mandate altered after its authority signature', () => {
   if (!result.ok) assert.match(result.error, /authority signature/)
 })
 
+test('independent research policy is bound to the authority signature and retains trade limits', () => {
+  const body = validBody()
+  const mandate = body.mandate as Record<string, unknown>
+  mandate.researchPolicy = 'agent-independent-v1'
+  assert.equal(evaluateGovernedOpenInput(body, now).ok, false, 'An unsigned change of policy must fail')
+  resignMandate(body)
+  const result = evaluateGovernedOpenInput(body, now)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.decision, 'APPROVE')
+  assert.equal(result.mandate.researchPolicy, 'agent-independent-v1')
+  updateOrder(body, 'makerAmount', '6000000')
+  const excessive = evaluateGovernedOpenInput(body, now)
+  assert.equal(excessive.ok, true)
+  if (excessive.ok) assert.equal(excessive.decision, 'BLOCK')
+  delete mandate.researchPolicy
+  assert.equal(evaluateGovernedOpenInput(body, now).ok, false, 'Removing the signed policy must fail')
+})
+
 test('OKX route advertises non-zero exact USDT payment on X Layer', () => {
   const req = { headers: { host: 'polydesk.trade' }, protocol: 'https' } as Request
   const route = buildStandardServiceRouteConfig(

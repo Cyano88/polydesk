@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { verifyMessage } from 'ethers'
+import { INDEPENDENT_RESEARCH_POLICY, INDEPENDENT_RESEARCH_DISCLAIMER } from './polymarket-independent-policy.js'
 import {
   hasRenderDurableStore,
   mutateDurableJson,
@@ -40,6 +41,7 @@ const MANDATE_KEYS = [
   'authoritySignature',
   'validUntil',
   'approvalRequiredAboveUsdc',
+  'researchPolicy',
 ] as const
 
 type GovernedOpenRecord = {
@@ -54,6 +56,7 @@ type GovernedOpenRecord = {
   payer: string
   paymentTransaction?: string
   authoritySigner: string
+  researchPolicy?: typeof INDEPENDENT_RESEARCH_POLICY
   market: {
     title: string
     url: string
@@ -93,6 +96,7 @@ type GovernedTradeReceipt = {
     mandateHash: string
   }
   proofs: {
+    // Independent research policy is also bound by the mandate hash.
     polygonReceiptVerified: true
     allowedExchangeVerified: true
     orderIdInReceipt: true
@@ -142,6 +146,7 @@ export function governedMandateAuthorizationMessage(externalOrderId: string, can
     'Network: X Layer (eip155:196)',
     `External order: ${externalOrderId}`,
     `Mandate SHA-256: ${mandateHash}`,
+    ...(canonicalMandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? [INDEPENDENT_RESEARCH_DISCLAIMER] : []),
   ].join('\n')
 }
 
@@ -233,6 +238,9 @@ export function buildGovernedMandateAuthorization(
     return { ok: false, status: 400, error: 'A strict governed OPEN mandate is required.' }
   }
   const mandate = mandateValue
+  if (mandate.researchPolicy !== undefined && mandate.researchPolicy !== INDEPENDENT_RESEARCH_POLICY) {
+    return { ok: false, status: 400, error: 'Unsupported mandate.researchPolicy.' }
+  }
   const maximumAmount = decimalToAtomic(mandate.maximumAmountUsdc, 'mandate.maximumAmountUsdc')
   if (!maximumAmount.ok || maximumAmount.atomic <= 0n) {
     return { ok: false, status: 400, error: maximumAmount.ok ? 'mandate.maximumAmountUsdc must be greater than zero.' : maximumAmount.error }
@@ -282,6 +290,7 @@ export function buildGovernedMandateAuthorization(
     allowedSigner,
     authoritySigner,
     validUntil: new Date(validUntilMs).toISOString(),
+    ...(mandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { researchPolicy: INDEPENDENT_RESEARCH_POLICY } : {}),
     ...(approvalThreshold?.ok ? { approvalRequiredAboveUsdc: approvalThreshold.text } : {}),
   }
   const mandateHash = sha256(stableJson(canonicalMandate))
@@ -472,6 +481,7 @@ export function polymarketGovernedOpenAuthorizationHandler(req: Request, res: Re
     policyVersion: 'polydesk-market-mandate-v1',
     externalOrderId: clean(body.externalOrderId, 80),
     authoritySigner: authorization.authoritySigner,
+    ...(authorization.canonicalMandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { disclaimer: INDEPENDENT_RESEARCH_DISCLAIMER } : {}),
     canonicalMandate: authorization.canonicalMandate,
     mandateHash: authorization.mandateHash,
     authorizationMessage: authorization.authorizationMessage,
@@ -553,6 +563,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
         decidedAt: new Date().toISOString(),
         payer: clean(paidReq.payment?.payer, 96) || evaluation.signedOpen.signer.toLowerCase(),
         authoritySigner: clean(evaluation.mandate.authoritySigner, 80).toLowerCase(),
+        ...(evaluation.mandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { researchPolicy: INDEPENDENT_RESEARCH_POLICY } : {}),
         market: {
           title: evaluation.signedOpen.marketTitle,
           url: evaluation.signedOpen.marketUrl,
@@ -624,6 +635,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     reasons: evaluation.reasons,
     checks: evaluation.checks,
     mandate: evaluation.mandate,
+    ...(record.researchPolicy ? { researchPolicy: record.researchPolicy, disclaimer: INDEPENDENT_RESEARCH_DISCLAIMER } : {}),
     hashes: {
       order: record.orderHash,
       mandate: record.mandateHash,
