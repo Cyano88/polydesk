@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { verifyMessage } from 'ethers'
+import { bindPolymarketOrder, verifyOrderFillLogs, type OrderProofBinding } from './polymarket-order-proof.js'
 import { INDEPENDENT_RESEARCH_POLICY, INDEPENDENT_RESEARCH_DISCLAIMER } from './polymarket-independent-policy.js'
 import {
   hasRenderDurableStore,
@@ -45,6 +46,7 @@ const MANDATE_KEYS = [
 ] as const
 
 type GovernedOpenRecord = {
+  orderProof?: OrderProofBinding
   fingerprint: string
   externalOrderId: string
   executionId: string
@@ -102,6 +104,7 @@ type GovernedTradeReceipt = {
     orderIdInReceipt: true
     publicTradeMatched: true
     buyerAuthoritySignatureVerified: true
+    exactSignedOrderVerified?: true
   }
 }
 
@@ -123,10 +126,6 @@ export function mergeGovernedExecution(current: GovernedOpenRecord | undefined, 
   return current.receipt || !incoming.receipt ? current : { ...current, receipt: incoming.receipt }
 }
 
-const POLYGON_EXCHANGES = new Set([
-  '0xe111180000d2663c0091e4f400237545b87b996b',
-  '0xe2222d279d744050d28e00520010520000310f59',
-])
 const DATA_API_ORIGIN = 'https://data-api.polymarket.com'
 
 function clean(value: unknown, max = 280) {
@@ -343,6 +342,7 @@ export type GovernedOpenEvaluation =
       reasons: string[]
       checks: DecisionCheck[]
       signedOpen: Extract<ReturnType<typeof validateSignedOpenInput>, { ok: true }>
+      orderProof: OrderProofBinding
       mandate: RecordValue
     }
   | { ok: false; status: number; error: string }
@@ -356,6 +356,10 @@ export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now()): Go
   for (const key of SIGNED_OPEN_KEYS) signedBody[key] = body[key]
   const signedOpen = validateSignedOpenInput(signedBody, nowMs)
   if (!signedOpen.ok) return signedOpen
+  let orderProof: OrderProofBinding
+  try { orderProof = bindPolymarketOrder(signedOpen.order) } catch {
+    return { ok: false, status: 400, error: 'Signed order cannot be encoded as a V2 EIP-712 order.' }
+  }
 
   const authorization = buildGovernedMandateAuthorization(signedOpen.externalOrderId, body.mandate, nowMs)
   if (!authorization.ok) return authorization
@@ -476,6 +480,7 @@ export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now()): Go
         : ['Every deterministic mandate check passed.'],
     checks,
     signedOpen,
+    orderProof,
     mandate: canonicalMandate,
   }
 }
@@ -570,6 +575,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
       }
       return {
         fingerprint: evaluation.fingerprint,
+        orderProof: evaluation.orderProof,
         externalOrderId: evaluation.externalOrderId,
         executionId: evaluation.executionId,
         decisionHash: evaluation.decisionHash,
@@ -766,7 +772,11 @@ export async function verifyGovernedTradeCompletion(
   input: RecordValue,
   dependencies: CompletionDependencies = completionDependencies,
 ) {
+  if (!record.orderProof || record.orderProof.version !== 'ctf-v2-eip712') {
+    return { ok: false as const, status: 409, error: 'Execution lacks an exact signed-order proof binding; legacy records cannot be completed through this verifier.' }
+  }
   if (record.receipt) {
+    if (!record.receipt.proofs.exactSignedOrderVerified) return { ok: false as const, status: 409, error: 'Legacy receipt has not passed exact signed-order verification.' }
     if (exactHash(input.orderId) !== record.receipt.execution.orderId || exactHash(input.transactionHash) !== record.receipt.execution.transactionHash) {
       return { ok: false as const, status: 409, error: 'Execution already has a different verified completion.' }
     }
@@ -780,6 +790,9 @@ export async function verifyGovernedTradeCompletion(
   const completionSignature = clean(input.completionSignature, 180)
   if (!orderId || !transactionHash) {
     return { ok: false as const, status: 400, error: 'orderId and transactionHash must be 32-byte hex values.' }
+  }
+  if (!Object.values(record.orderProof.hashes).includes(orderId)) {
+    return { ok: false as const, status: 409, error: 'orderId does not match the stored signed order on either allowlisted V2 exchange.' }
   }
   const completionMessage = governedTradeCompletionMessage(
     record.executionId,
@@ -812,13 +825,13 @@ export async function verifyGovernedTradeCompletion(
   if (!chainReceipt || clean(chainReceipt.status, 16).toLowerCase() !== '0x1') {
     return { ok: false as const, status: 409, error: 'Polygon transaction is missing or did not succeed.' }
   }
-  const exchange = clean(chainReceipt.to, 80).toLowerCase()
-  if (!POLYGON_EXCHANGES.has(exchange)) {
-    return { ok: false as const, status: 409, error: 'Polygon transaction did not execute through an allowlisted Polymarket CTF Exchange V2 contract.' }
+  let chainFill: ReturnType<typeof verifyOrderFillLogs>
+  try {
+    chainFill = verifyOrderFillLogs(record.orderProof, orderId, transactionHash, chainReceipt, record.order.maximumPrice, record.order.maximumAmountUsdc)
+  } catch (error) {
+    return { ok: false as const, status: 409, error: error instanceof Error ? error.message : 'Exact order fill verification failed.' }
   }
-  if (!JSON.stringify(chainReceipt).toLowerCase().includes(orderId.slice(2))) {
-    return { ok: false as const, status: 409, error: 'The supplied Polymarket order ID was not found in the Polygon receipt.' }
-  }
+  const exchange = chainFill.exchange
   let matchedTrades: RecordValue[] = []
   for (let attempt = 0; attempt < 4 && !matchedTrades.length; attempt += 1) {
     const trades = await dependencies.fetchTrades(record.order.maker)
@@ -832,10 +845,8 @@ export async function verifyGovernedTradeCompletion(
   if (!matchedTrades.length) {
     return { ok: false as const, status: 409, error: 'No exact public Polymarket BUY trade matched this transaction, wallet, and outcome token.' }
   }
-  const fills = matchedTrades.map(trade => ({
-    size: Number(trade.size),
-    price: Number(trade.price),
-  }))
+  // Public trades corroborate indexing only. Exact-order amounts come from logs.
+  const fills = [{ size: Number(chainFill.shares) / 1e6, price: Number(chainFill.spent) / Number(chainFill.shares) }]
   const fillSize = fills.reduce((total, fill) => total + fill.size, 0)
   const fillAmountUsdc = Number(fills.reduce((total, fill) => total + fill.size * fill.price, 0).toFixed(6))
   const fillPrice = Number((fillAmountUsdc / fillSize).toFixed(6))
@@ -877,6 +888,7 @@ export async function verifyGovernedTradeCompletion(
       orderIdInReceipt: true,
       publicTradeMatched: true,
       buyerAuthoritySignatureVerified: true,
+      exactSignedOrderVerified: true,
     },
   }
   return { ok: true as const, duplicate: false, receipt }

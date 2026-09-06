@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { keccak256, concat } from 'ethers'
+import { bindPolymarketOrder, EXCHANGES_V2 } from '../api/polymarket-order-proof.js'
 import { Wallet } from '@ethersproject/wallet'
 import { OrderBuilder, OrderType, Side, SignatureTypeV2, orderToJsonV2 } from '@polymarket/clob-client-v2'
 import { validateSignedOpenInput } from '../api/a2mcp-polymarket-signed-open.js'
@@ -30,6 +32,10 @@ for (const orderType of [OrderType.FAK, OrderType.FOK]) {
       assert.equal(signed.signer.toLowerCase(), depositWallet)
       assert.equal(signed.maker.toLowerCase(), depositWallet)
       assert.equal(signed.signatureType, 3)
+      // SDK POLY_1271 wrapper contains innerSignature(65), domain(32), contentsHash(32).
+      const sdkHash = keccak256(concat(['0x1901', '0x' + signed.signature.slice(132, 196), '0x' + signed.signature.slice(196, 260)]))
+      const proof = bindPolymarketOrder(signed as unknown as Record<string, unknown>)
+      assert.equal(proof.hashes[EXCHANGES_V2[negRisk ? 1 : 0]], sdkHash, 'Independent hashing must match the official SDK signature wrapper')
       const mandate = {
         maximumAmountUsdc: '5', maximumPrice: '0.5', allowedTokenIds: ['123456789'],
         allowedMarketUrls: [marketUrl], allowedSigner: depositWallet,

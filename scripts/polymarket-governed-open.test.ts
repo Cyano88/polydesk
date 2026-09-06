@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { bindPolymarketOrder, EXCHANGES_V2, FILL_INTERFACE } from '../api/polymarket-order-proof.js'
 import type { Request } from 'express'
 import { hashMessage, Signature, SigningKey, Wallet } from 'ethers'
 import {
@@ -227,11 +228,13 @@ test('OKX route advertises non-zero exact USDT payment on X Layer', () => {
 test('verifies a terminal trade receipt against Polygon and the public Polymarket trade feed', async () => {
   const executionId = 'pex_' + '12'.repeat(12)
   const externalOrderId = 'copy:verified:001'
-  const orderId = `0x${'ab'.repeat(32)}`
+  const orderProof = bindPolymarketOrder(validBody().order)
+  const orderId = orderProof.hashes[EXCHANGES_V2[0]]
   const transactionHash = `0x${'cd'.repeat(32)}`
   const completionMessage = governedTradeCompletionMessage(executionId, externalOrderId, orderId, transactionHash)
   const completionSignature = await new Wallet(authorityKey).signMessage(completionMessage)
   const record = {
+    orderProof,
     fingerprint: '1'.repeat(64),
     externalOrderId,
     executionId,
@@ -262,8 +265,11 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
     {
       fetchReceipt: async () => ({
         status: '0x1',
+        transactionHash,
         to: '0xE111180000d2663C0091e4f400237545B87B996B',
-        logs: [{ topics: [orderId] }],
+        logs: [{ address: EXCHANGES_V2[0], logIndex: '0x0', ...FILL_INTERFACE.encodeEventLog(FILL_INTERFACE.getEvent('OrderFilled')!, [
+          orderId, signer, EXCHANGES_V2[0], 0, '123456789', 2500000, 5000000, 0, validBody().order.builder, validBody().order.metadata,
+        ]) }],
       }),
       fetchTrades: async () => [{
         transactionHash,
@@ -280,6 +286,13 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
   assert.equal(result.receipt.status, 'VERIFIED_FILLED')
   assert.equal(result.receipt.execution.fillAmountUsdc, 2.5)
   assert.equal(result.receipt.proofs.publicTradeMatched, true)
+  assert.equal(result.receipt.proofs.exactSignedOrderVerified, true)
+  const legacy = await verifyGovernedTradeCompletion({ ...record, orderProof: undefined }, { orderId, transactionHash })
+  assert.equal(legacy.ok, false)
+  if (!legacy.ok) assert.match(legacy.error, /lacks an exact/)
+  const unrelated = await verifyGovernedTradeCompletion(record, { orderId: `0x${'99'.repeat(32)}`, transactionHash })
+  assert.equal(unrelated.ok, false)
+  if (!unrelated.ok) assert.match(unrelated.error, /does not match the stored signed order/)
   const completed = mergeGovernedExecution(record, { ...record, receipt: result.receipt })
   assert.equal(mergeGovernedExecution(completed, record), completed, 'Handoff replay must preserve the receipt')
   assert.equal(mergeGovernedExecution(completed, { ...record, receipt: result.receipt }), completed, 'Duplicate completion keeps first receipt')
@@ -302,7 +315,8 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
 test('completion proof fails closed for a non-Polymarket exchange', async () => {
   const executionId = 'pex_' + '34'.repeat(12)
   const externalOrderId = 'copy:verified:002'
-  const orderId = `0x${'ef'.repeat(32)}`
+  const orderProof = bindPolymarketOrder(validBody().order)
+  const orderId = orderProof.hashes[EXCHANGES_V2[0]]
   const transactionHash = `0x${'01'.repeat(32)}`
   const completionSignature = await new Wallet(authorityKey).signMessage(
     governedTradeCompletionMessage(executionId, externalOrderId, orderId, transactionHash),
@@ -310,6 +324,7 @@ test('completion proof fails closed for a non-Polymarket exchange', async () => 
   const result = await verifyGovernedTradeCompletion(
     {
       fingerprint: '1'.repeat(64),
+      orderProof,
       externalOrderId,
       executionId,
       decisionHash: '2'.repeat(64),
@@ -324,12 +339,12 @@ test('completion proof fails closed for a non-Polymarket exchange', async () => 
     },
     { orderId, transactionHash, completionSignature },
     {
-      fetchReceipt: async () => ({ status: '0x1', to: '0x1111111111111111111111111111111111111111', logs: [{ topics: [orderId] }] }),
+      fetchReceipt: async () => ({ status: '0x1', transactionHash, to: '0x1111111111111111111111111111111111111111', logs: [{ topics: [orderId] }] }),
       fetchTrades: async () => [],
       now: () => now,
     },
   )
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.match(result.error, /allowlisted Polymarket/i)
+  assert.match(result.error, /allowlisted exchange/i)
 })
