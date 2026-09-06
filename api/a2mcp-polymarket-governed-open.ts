@@ -107,6 +107,22 @@ type GovernedTradeReceipt = {
 
 class ExternalOrderConflict extends Error {}
 
+// Use only inside the durable execution-key mutation. Completion is monotonic:
+// neither a handoff replay nor a racing completion may erase or replace a receipt.
+export function mergeGovernedExecution(current: GovernedOpenRecord | undefined, incoming: GovernedOpenRecord): GovernedOpenRecord {
+  if (!current) return incoming
+  if (current.fingerprint !== incoming.fingerprint || current.executionId !== incoming.executionId) {
+    throw new ExternalOrderConflict('Execution is already bound to a different order or mandate.')
+  }
+  if (current.receipt && incoming.receipt && (
+    current.receipt.execution.orderId !== incoming.receipt.execution.orderId
+    || current.receipt.execution.transactionHash !== incoming.receipt.execution.transactionHash
+  )) {
+    throw new ExternalOrderConflict('Execution already has a different verified completion.')
+  }
+  return current.receipt || !incoming.receipt ? current : { ...current, receipt: incoming.receipt }
+}
+
 const POLYGON_EXCHANGES = new Set([
   '0xe111180000d2663c0091e4f400237545b87b996b',
   '0xe2222d279d744050d28e00520010520000310f59',
@@ -591,8 +607,11 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     }
     throw error
   }
-  await writeDurableJson(`polymarket-governed-execution:${record.executionId}`, record)
-  if (evaluation.decision === 'APPROVE') {
+  record = await mutateDurableJson<GovernedOpenRecord>(
+    `polymarket-governed-execution:${record.executionId}`,
+    current => mergeGovernedExecution(current, record),
+  )
+  if (evaluation.decision === 'APPROVE' && !record.receipt) {
     await appendTradeSignalEvent(buildGovernedTradeSignal({
       executionId: record.executionId,
       externalOrderId: record.externalOrderId,
@@ -641,7 +660,8 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
       mandate: record.mandateHash,
       decision: record.decisionHash,
     },
-    nextAction: evaluation.decision === 'APPROVE'
+    ...(record.receipt ? { receipt: record.receipt } : {}),
+    nextAction: evaluation.decision === 'APPROVE' && !record.receipt
       ? {
           type: 'SUBMIT_EXACT_ORDER_LOCALLY',
           host: 'https://clob.polymarket.com',
@@ -746,7 +766,12 @@ export async function verifyGovernedTradeCompletion(
   input: RecordValue,
   dependencies: CompletionDependencies = completionDependencies,
 ) {
-  if (record.receipt) return { ok: true as const, duplicate: true, receipt: record.receipt }
+  if (record.receipt) {
+    if (exactHash(input.orderId) !== record.receipt.execution.orderId || exactHash(input.transactionHash) !== record.receipt.execution.transactionHash) {
+      return { ok: false as const, status: 409, error: 'Execution already has a different verified completion.' }
+    }
+    return { ok: true as const, duplicate: true, receipt: record.receipt }
+  }
   if (record.decision !== 'APPROVE') {
     return { ok: false as const, status: 409, error: `Only an APPROVE execution can be completed; this execution is ${record.decision}.` }
   }
@@ -871,16 +896,25 @@ export async function polymarketGovernedTradeCompleteHandler(req: Request, res: 
   const key = `polymarket-governed-execution:${executionId}`
   const record = await readDurableJson<GovernedOpenRecord>(key)
   if (!record) return res.status(404).json({ ok: false, error: 'Governed execution was not found.' })
-  const result = await verifyGovernedTradeCompletion(record, body)
+  let result = await verifyGovernedTradeCompletion(record, body)
   if (!result.ok) {
     const { status, ...responseBody } = result
     return res.status(status).json(responseBody)
   }
-  if (!result.duplicate) {
-    record.receipt = result.receipt
-    await writeDurableJson(key, record)
-    await writeDurableJson(`polymarket-governed-receipt:${executionId}`, result.receipt)
+  const verifiedReceipt = result.receipt
+  let duplicate = result.duplicate
+  try {
+    const saved = await mutateDurableJson<GovernedOpenRecord>(key, current => {
+      duplicate = Boolean(current?.receipt)
+      return mergeGovernedExecution(current, { ...record, receipt: verifiedReceipt })
+    })
+    result = { ok: true, duplicate, receipt: saved.receipt! }
+  } catch (error) {
+    if (error instanceof ExternalOrderConflict) return res.status(409).json({ ok: false, error: error.message })
+    throw error
   }
+  // Always repair the receipt index on replay after an interrupted second write.
+  await writeDurableJson(`polymarket-governed-receipt:${executionId}`, result.receipt)
   await appendTradeSignalEvent(buildVerifiedExecutionSignal({
     executionId: record.executionId,
     externalOrderId: record.externalOrderId,
@@ -924,7 +958,8 @@ export async function polymarketGovernedTradeReceiptHandler(req: Request, res: R
   }
   if (!governedOpenReady()) return res.status(503).json({ ok: false, error: 'Durable execution storage is not configured.' })
   const executionId = clean(req.params.executionId, 80)
-  const receipt = await readDurableJson<GovernedTradeReceipt>(`polymarket-governed-receipt:${executionId}`)
+  const execution = await readDurableJson<GovernedOpenRecord>(`polymarket-governed-execution:${executionId}`)
+  const receipt = execution?.receipt ?? await readDurableJson<GovernedTradeReceipt>(`polymarket-governed-receipt:${executionId}`)
   if (!receipt) return res.status(404).json({ ok: false, error: 'Verified trade receipt was not found.' })
   res.setHeader('Cache-Control', 'public, max-age=60')
   return res.status(200).json({ ok: true, receipt })

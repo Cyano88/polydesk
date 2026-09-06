@@ -8,6 +8,7 @@ import {
   governedMandateAuthorizationMessage,
   governedTradeCompletionMessage,
   verifyGovernedTradeCompletion,
+  mergeGovernedExecution,
 } from '../api/a2mcp-polymarket-governed-open.js'
 import { buildStandardServiceRouteConfig } from '../api/okx-a2mcp-standard-services.js'
 
@@ -279,6 +280,23 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
   assert.equal(result.receipt.status, 'VERIFIED_FILLED')
   assert.equal(result.receipt.execution.fillAmountUsdc, 2.5)
   assert.equal(result.receipt.proofs.publicTradeMatched, true)
+  const completed = mergeGovernedExecution(record, { ...record, receipt: result.receipt })
+  assert.equal(mergeGovernedExecution(completed, record), completed, 'Handoff replay must preserve the receipt')
+  assert.equal(mergeGovernedExecution(completed, { ...record, receipt: result.receipt }), completed, 'Duplicate completion keeps first receipt')
+  assert.equal(mergeGovernedExecution(undefined, completed), completed, 'Persisted receipt survives reconstruction')
+  assert.throws(() => mergeGovernedExecution(completed, { ...record, fingerprint: 'other' }), /different order/)
+  const conflictingReceipt = { ...result.receipt, execution: { ...result.receipt.execution, transactionHash: `0x${'ef'.repeat(32)}` } }
+  assert.throws(() => mergeGovernedExecution(completed, { ...record, receipt: conflictingReceipt }), /different verified completion/)
+  const noNetwork = {
+    fetchReceipt: async () => { throw new Error('Replay must not fetch') },
+    fetchTrades: async () => { throw new Error('Replay must not fetch') },
+    now: () => now,
+  }
+  const replay = await verifyGovernedTradeCompletion(completed, { orderId, transactionHash }, noNetwork)
+  assert.equal(replay.ok && replay.duplicate, true)
+  const conflict = await verifyGovernedTradeCompletion(completed, { orderId, transactionHash: conflictingReceipt.execution.transactionHash }, noNetwork)
+  assert.equal(conflict.ok, false)
+  if (!conflict.ok) assert.equal(conflict.status, 409)
 })
 
 test('completion proof fails closed for a non-Polymarket exchange', async () => {
