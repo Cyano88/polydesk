@@ -162,6 +162,8 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     baseUrl,
     summary: 'PolyDesk offers one bounded Polymarket trade, continuous non-custodial agent management, and a fixed-scope external integration audit.',
     discovery: {
+      skill: baseUrl + '/skills/polydesk/SKILL.md',
+      marketSearch: { method: 'GET', url: baseUrl + '/api/polymarket/discover', paymentRequired: false, queryParameters: ['q', 'intent'] },
       wellKnown: baseUrl + '/.well-known/polydesk.json',
       catalog: baseUrl + '/api/a2mcp/services',
       humanGuide: baseUrl + '/integrations',

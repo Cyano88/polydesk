@@ -34,6 +34,7 @@ import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
 import independentPolymarketPrepareHandler from './api/polymarket-independent-prepare.js'
 import { polymarketSmartTraderDecisionHandler, polymarketSmartTraderPaymentStatusHandler, startSmartTraderDeliveryWorker } from './api/polymarket-smart-trader.js'
 import polymarketCopyPrepareHandler from './api/polymarket-copy-prepare.js'
+import polymarketDiscoverHandler from './api/polymarket-discover.js'
 import polymarketAgentFlowHandler from './api/polymarket-agent-flow.js'
 import polymarketAccountReadinessHandler from './api/polymarket-account-readiness.js'
 import polymarketPortfolioHandler from './api/polymarket-portfolio.js'
@@ -178,6 +179,7 @@ app.all('/api/okx-rewards', strictLimiter, okxRewardsHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/a2mcp/polymarket-smart-trader', strictLimiter, okxA2mcpStandardServiceHandler)
+app.get('/api/polymarket/discover', readLimiter, polymarketDiscoverHandler)
 app.post('/api/x402/base/polymarket-smart-trader', strictLimiter, baseAgenticMarketSmartTraderHandler)
 app.post('/api/x402/base/polymarket-smart-trader/recover', strictLimiter, basePaymentRecoveryHandler)
 app.get('/api/a2mcp/polymarket-smart-trader/decision/:decisionId', readLimiter, polymarketSmartTraderDecisionHandler)
