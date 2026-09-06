@@ -14,7 +14,23 @@ trade was approved. Read `deliveryStatus` and `researchStatus` as well:
 `additionalPaymentRequired: false` applies to delivery of this existing settlement.
 Never start another payment to recover it. A degraded receipt does not currently
 advertise automatic retry: existing proof-bearing decisions remain immutable and
-need an explicit recovery workflow before they can be replaced.
+can be recovered only by the operator tool below.
+
+## Operator recovery
+
+After verifying provider readiness, run on the configured application server:
+
+```sh
+node --import tsx scripts/recover-degraded-research.ts <settlement-transaction> <payer> --execute
+```
+
+The tool accepts no replacement market or mandate. It verifies the stored request
+hash and payer, requires an ESCALATE receipt with UNAVAILABLE research, preserves
+the previous decision reference, and retains the six-attempt lifetime budget.
+Concurrent calls are rejected while a fresh delivery is running. It creates no
+new service payment and performs no trade; research and proof storage may consume
+the service's existing provider resources. Poll the original settlement status
+afterward. Do not rerun blindly after an interrupted command.
 
 Older responses may omit the new fields. Always retrieve the decision before
 treating research as available or proceeding to a separately authorized preview.

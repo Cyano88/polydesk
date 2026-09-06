@@ -160,7 +160,7 @@ export type SmartTraderPaidAnalysisRecord = {
   error?: string
   analysisEngineVersion?: string
   remediationCount?: number
-  remediationReason?: 'missing-zeroscout-proof' | 'analysis-engine-upgrade'
+  remediationReason?: 'missing-zeroscout-proof' | 'analysis-engine-upgrade' | 'degraded-research'
   previousDecisionId?: string
   previousAnalysisHash?: string
   deliveryAttemptCount?: number
@@ -200,6 +200,16 @@ export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysi
   return (record.status === 'completed' || record.status === 'failed')
     && smartTraderDeliveryAttemptCount(record) < smartTraderMaxDeliveryAttempts(record)
     && hasMissingZeroScoutProofDelivery(record.response)
+}
+
+export function isRemediableDegradedResearch(record: SmartTraderPaidAnalysisRecord): boolean {
+  const decision = record.response && isRecord(record.response.decision) ? record.response.decision : null
+  const evidence = decision && isRecord(decision.evidence) ? decision.evidence : null
+  return record.status === 'completed'
+    && smartTraderDeliveryAttemptCount(record) < SMART_TRADER_MAX_DELIVERY_ATTEMPTS
+    && decision?.decision === 'ESCALATE'
+    && evidence?.researchStatus === 'UNAVAILABLE'
+    && Boolean(record.decisionId && record.analysisHash)
 }
 
 export function isRemediableAfterAnalysisEngineUpgrade(record: SmartTraderPaidAnalysisRecord): boolean {
@@ -1477,7 +1487,7 @@ export async function executeSettledSmartTraderDelivery(
   transaction: string,
   payer: string,
   dependencies: SmartTraderDependencies = liveDependencies,
-  options: { allowEngineUpgradeRemediation?: boolean } = {},
+  options: { allowEngineUpgradeRemediation?: boolean; allowDegradedResearchRemediation?: boolean } = {},
 ) {
   const analysisKey = paidAnalysisKey(transaction)
   const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
@@ -1495,7 +1505,15 @@ export async function executeSettledSmartTraderDelivery(
       && isRemediableAfterAnalysisEngineUpgrade(current)
     if (attemptCount >= maximumAttempts && !engineUpgradeRemediation) throw new Error('The bounded delivery-attempt budget has been exhausted.')
     const remediatingMissingProof = isRemediableMissingZeroScoutProof(current)
-    if (current.status === 'completed' && !remediatingMissingProof && !engineUpgradeRemediation) {
+    const remediatingDegradedResearch = options.allowDegradedResearchRemediation === true
+      && isRemediableDegradedResearch(current)
+    if (options.allowDegradedResearchRemediation && !remediatingDegradedResearch) {
+      throw new Error('This settlement is not eligible for explicit degraded-research recovery.')
+    }
+    if (remediatingDegradedResearch && stableHash(current.request) !== current.requestHash) {
+      throw new Error('The persisted research request binding is invalid. Recovery is refused.')
+    }
+    if (current.status === 'completed' && !remediatingMissingProof && !engineUpgradeRemediation && !remediatingDegradedResearch) {
       throw new Error('This settlement transaction has already been delivered and is not eligible for remediation.')
     }
     const updatedAt = Date.parse(current.updatedAt)
@@ -1510,8 +1528,8 @@ export async function executeSettledSmartTraderDelivery(
       maxDeliveryAttempts: maximumAttempts,
       updatedAt: new Date().toISOString(),
       error: undefined,
-      ...(remediatingMissingProof || engineUpgradeRemediation ? {
-        remediationReason: engineUpgradeRemediation ? 'analysis-engine-upgrade' as const : 'missing-zeroscout-proof' as const,
+      ...(remediatingMissingProof || engineUpgradeRemediation || remediatingDegradedResearch ? {
+        remediationReason: remediatingDegradedResearch ? 'degraded-research' as const : engineUpgradeRemediation ? 'analysis-engine-upgrade' as const : 'missing-zeroscout-proof' as const,
         previousDecisionId: current.previousDecisionId || current.decisionId,
         previousAnalysisHash: current.previousAnalysisHash || current.analysisHash,
       } : {}),
