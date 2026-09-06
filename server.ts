@@ -11,6 +11,7 @@ import agentVerifyHandler from './api/agent-verify.js'
 import agentActivityReadHandler from './api/agent-activity-read.js'
 import a2mcpServicesHandler from './api/a2mcp-services.js'
 import baseAgenticMarketSmartTraderHandler from './api/base-agentic-market-smart-trader.js'
+import basePaymentRecoveryHandler from './api/base-payment-recovery.js'
 import evmBalanceHandler from './api/evm-balance.js'
 import helperProfileHandler from './api/helper-profile.js'
 import lpScoutReportHandler from './api/lp-scout-report.js'
@@ -178,6 +179,7 @@ app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardSer
 app.all('/api/a2mcp/polymarket-portfolio-watch', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/a2mcp/polymarket-smart-trader', strictLimiter, okxA2mcpStandardServiceHandler)
 app.post('/api/x402/base/polymarket-smart-trader', strictLimiter, baseAgenticMarketSmartTraderHandler)
+app.post('/api/x402/base/polymarket-smart-trader/recover', strictLimiter, basePaymentRecoveryHandler)
 app.get('/api/a2mcp/polymarket-smart-trader/decision/:decisionId', readLimiter, polymarketSmartTraderDecisionHandler)
 app.get('/api/a2mcp/polymarket-smart-trader/payment/:transaction', readLimiter, polymarketSmartTraderPaymentStatusHandler)
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)

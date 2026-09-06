@@ -759,16 +759,33 @@ function paidAnalysisKey(transaction: string) {
   return `${PAID_ANALYSIS_PREFIX}${transaction.toLowerCase()}`
 }
 
+function sameServicePayment(left: SmartTraderServicePayment, right: SmartTraderServicePayment) {
+  return validServicePayment(left) && validServicePayment(right)
+    && left.transaction.toLowerCase() === right.transaction.toLowerCase()
+    && left.payer.toLowerCase() === right.payer.toLowerCase()
+    && left.provider === right.provider && left.network === right.network
+    && left.serviceUrl === right.serviceUrl && left.amountAtomic === right.amountAtomic
+}
+
+export function reuseSettledSmartTraderAnalysis(
+  current: SmartTraderPaidAnalysisRecord | null | undefined,
+  candidate: SmartTraderPaidAnalysisRecord,
+): SmartTraderPaidAnalysisRecord {
+  if (!current) return candidate
+  if (current.schema !== candidate.schema || !sameServicePayment(current.payment, candidate.payment)
+    || current.requestHash !== candidate.requestHash || stableHash(current.request) !== current.requestHash) {
+    throw new Error('This settlement is already bound to a different buyer, payment lane, or analysis request.')
+  }
+  return current
+}
+
 export async function bindSettledSmartTraderAnalysis(
   raw: unknown,
   payment: SmartTraderServicePayment,
 ): Promise<SmartTraderPaidAnalysisRecord> {
   const record = buildSettledSmartTraderAnalysisRecord(raw, payment)
   return mutateDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(payment.transaction), current => {
-    if (current?.requestHash && current.requestHash !== record.requestHash) {
-      throw new Error('This settlement transaction is already bound to a different analysis request.')
-    }
-    return current || record
+    return reuseSettledSmartTraderAnalysis(current, record)
   })
 }
 
@@ -777,12 +794,8 @@ export function buildSettledSmartTraderAnalysisRecord(
   payment: SmartTraderServicePayment,
   now = Date.now(),
 ): SmartTraderPaidAnalysisRecord {
-  const parsed = parseRequest(raw)
-  if (!parsed.ok) throw new Error(parsed.error)
-  if (parsed.value.action !== 'ANALYZE') throw new Error('Only ANALYZE can be bound to a settled analysis payment.')
   if (!validServicePayment(payment)) throw new Error('The settled analysis payment metadata is invalid.')
-  const request = JSON.parse(JSON.stringify(parsed.value)) as ParsedRequest
-  const requestHash = stableHash(request)
+  const { request, requestHash } = smartTraderAnalysisRequestBinding(raw)
   const settledAt = new Date(now).toISOString()
   return {
     schema: 'polydesk-smart-trader-paid-analysis-v1',
@@ -798,6 +811,14 @@ export function buildSettledSmartTraderAnalysisRecord(
   }
 }
 
+export function smartTraderAnalysisRequestBinding(raw: unknown) {
+  const parsed = parseRequest(raw)
+  if (!parsed.ok) throw new Error(parsed.error)
+  if (parsed.value.action !== 'ANALYZE') throw new Error('Only ANALYZE can be bound to an analysis payment.')
+  const request = JSON.parse(JSON.stringify(parsed.value)) as ParsedRequest
+  return { request, requestHash: stableHash(request) }
+}
+
 export async function completeSettledSmartTraderAnalysis(
   payment: SmartTraderServicePayment,
   decision: SmartTraderDecisionReceipt,
@@ -805,8 +826,8 @@ export async function completeSettledSmartTraderAnalysis(
 ) {
   await mutateDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(payment.transaction), current => {
     if (!current) throw new Error('The settled analysis request was not persisted before delivery.')
-    if (current.payment.payer.toLowerCase() !== payment.payer.toLowerCase()) {
-      throw new Error('The settled analysis payer does not match the persisted request.')
+    if (!sameServicePayment(current.payment, payment)) {
+      throw new Error('The settled analysis payment does not match the persisted request.')
     }
     const missingZeroScoutProof = hasMissingZeroScoutProofDelivery(response)
     const attemptCount = smartTraderDeliveryAttemptCount(current) + 1
