@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { publicDeliveryStatus } from './smart-trader-delivery-status.js'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
@@ -1751,7 +1752,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
   return res.status(200).json({
     ok: true,
     transaction: transaction.toLowerCase(),
-    status: record.status,
+    ...publicDeliveryStatus(record.status, record.response),
     decisionId: record.decisionId || null,
     analysisHash: record.analysisHash || null,
     decisionUrl: record.decisionId
