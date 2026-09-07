@@ -13,6 +13,8 @@ import {
   polymarketSearchQuery,
   runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
+  runPolymarketReview,
+  isRemediableDegradedResearch,
   shouldRecoverSmartTraderDelivery,
   SMART_TRADER_ANALYSIS_ENGINE_VERSION,
   type SmartTraderDependencies,
@@ -32,6 +34,74 @@ const servicePayment: SmartTraderServicePayment = {
   network: 'X Layer',
   serviceUrl: '/api/a2mcp/polymarket-smart-trader',
 }
+
+test('free REVIEW resolves exact outcome evidence without AI, news, proof storage or payment', async () => {
+  const forbidden = async (): Promise<never> => { throw new Error('Forbidden dependency called') }
+  const result = await runPolymarketReview({ action: 'REVIEW', marketId: conditionId, outcome: 'Yes', side: 'BUY' }, dependencies({ research: forbidden, researchReady: forbidden, sportsNews: forbidden, generalNews: forbidden, saveDecision: forbidden }))
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.selected.market.conditionId, conditionId)
+  assert.equal(result.data.selected.outcome.tokenId, '111')
+  assert.equal(result.data.researchStatus, 'NOT_REQUESTED')
+  assert.equal(result.data.evidence.zeroScout, null)
+  assert.equal(result.data.paymentRequired, false)
+  assert.equal(result.data.orderSubmitted, false)
+  const handoff = result.data.agentHandoff
+  assert.equal(handoff.nextAction, 'REVIEW_EVIDENCE')
+  assert.equal(handoff.orderAuthorized, false)
+  assert.equal(handoff.continuation.requestTemplate?.acknowledgeIndependentDecision, false)
+  assert.equal(handoff.continuation.requestTemplate?.maxSpendUsdc, null)
+})
+
+test('REVIEW never chooses an ambiguous, missing or conflicting outcome', async () => {
+  for (const raw of [{ action: 'REVIEW', query: 'pick for me' }, { action: 'REVIEW', marketId: conditionId, outcome: 'Draw', side: 'BUY' }, { action: 'REVIEW', marketId: conditionId, outcome: 'Yes', side: 'BUY', privateKey: 'must-not-accept' }]) {
+    assert.equal((await runPolymarketReview(raw, dependencies())).ok, false)
+  }
+  const result = await runPolymarketReview({ action: 'REVIEW', marketId: 'event-with-many-markets', outcome: 'Yes', side: 'BUY' }, dependencies({ resolveMarket: async () => [market(), market({ conditionId: `0x${'34'.repeat(32)}` })] }))
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.equal(result.status, 409)
+})
+
+test('REVIEW preserves execution blockers and does not invent independent SELL support', async () => {
+  const result = await runPolymarketReview({ action: 'REVIEW', marketId: conditionId, outcome: 'Yes', side: 'SELL' }, dependencies({ fetchBook: async () => ({ asset_id: 'wrong', market: conditionId, timestamp: String(now + 60_000), bids: [{ price: '0.5', size: '2000' }], asks: [{ price: '0.51', size: '2000' }] }) }))
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.match(result.data.selected.blockers.join(' '), /identity|future/)
+  assert.equal(result.data.agentHandoff.continuation.action, 'MANUAL_REVIEW_ONLY')
+  assert.equal(result.data.agentHandoff.continuation.requestTemplate, null)
+})
+
+test('unavailable AI delivers one review handoff, stops automatic retries, and keeps explicit paid recovery', async () => {
+  const request = { action: 'ANALYZE', marketId: conditionId, outcome: 'Yes', side: 'BUY' }
+  let calls = 0
+  const result = await runPolymarketSmartTrader(request, dependencies({ research: async () => { calls++; return null } }), servicePayment)
+  assert.equal(result.ok, true)
+  if (!result.ok || result.data.action !== 'ANALYZE') return
+  assert.equal(result.data.agentHandoff.researchStatus, 'UNAVAILABLE')
+  assert.equal(result.data.decision.decision, 'ESCALATE')
+  assert.equal(result.data.agentHandoff.orderAuthorized, false)
+  const delivery = await runBoundedSmartTraderDelivery({ initialAttemptCount: 0, maximumAttempts: 6, run: async () => result, onAttempt: async () => {}, sleep: async () => { throw new Error('Must not retry unavailable AI') } })
+  assert.equal(delivery.attemptCount, 1)
+  assert.equal(calls, 1)
+  const record = { ...buildSettledSmartTraderAnalysisRecord(request, servicePayment, now), status: 'completed' as const, deliveryAttemptCount: 1, decisionId: result.data.decision.decisionId, analysisHash: result.data.decision.analysisHash, response: result.data }
+  assert.equal(shouldRecoverSmartTraderDelivery(record, now + 60_000), false)
+  assert.equal(isRemediableMissingZeroScoutProof(record), false)
+  assert.equal(isRemediableDegradedResearch(record), true)
+})
+
+test('AVAILABLE analysis and approved preparation remain separate from order authority', async () => {
+  const result = await runPolymarketSmartTrader({ action: 'ANALYZE', marketId: conditionId, outcome: 'Yes', side: 'BUY' }, dependencies(), servicePayment)
+  assert.equal(result.ok, true)
+  if (!result.ok || result.data.action !== 'ANALYZE') return
+  assert.equal(result.data.agentHandoff.researchStatus, 'AVAILABLE')
+  assert.equal(result.data.agentHandoff.nextAction, 'PREPARE')
+  assert.equal(result.data.agentHandoff.orderAuthorized, false)
+  assert.equal(result.data.agentHandoff.decisionId, result.data.decision.decisionId)
+})
+
+test('ANALYZE never falls back to the highest-ranked outcome when selection is missing', async () => {
+  assert.equal((await runPolymarketSmartTrader({ action: 'ANALYZE', marketId: conditionId, side: 'BUY' }, dependencies(), servicePayment)).ok, false)
+})
 
 test('settled ANALYZE recovery record preserves the exact normalized mandate', () => {
   const paid = buildSettledSmartTraderAnalysisRecord({
@@ -526,6 +596,7 @@ test('ANALYZE provider preflight rejects unrelated search results before payment
   const result = await preflightPolymarketSmartTraderProviders({
     action: 'ANALYZE',
     query: 'Find active liquid Polymarket markets about football',
+    outcome: 'Yes',
     side: 'BUY',
   }, dependencies({
     searchMarkets: async () => [market({
@@ -545,6 +616,7 @@ test('ANALYZE provider preflight rejects an empty exact lookup before payment', 
   const result = await preflightPolymarketSmartTraderProviders({
     action: 'ANALYZE',
     marketId: 'missing-market',
+    outcome: 'Yes', side: 'BUY',
   }, dependencies({ resolveMarket: async () => [] }))
   assert.equal(result.ok, false)
   if (result.ok) return
@@ -581,6 +653,7 @@ test('ANALYZE provider preflight rejects unavailable ZeroScout authorization bef
   const result = await preflightPolymarketSmartTraderProviders({
     action: 'ANALYZE',
     marketId: 'will-team-a-win-the-final',
+    outcome: 'Yes', side: 'BUY',
   }, dependencies({
     researchReady: async () => {
       const error = new Error('Unauthorized integration request.') as Error & { status?: number }
@@ -653,6 +726,7 @@ test('ANALYZE withholds a directional opinion when ZeroScout is unavailable', as
     action: 'ANALYZE',
     marketId: 'will-team-a-win-the-final',
     outcome: 'Yes',
+    side: 'BUY',
   }, dependencies({ research: async () => null }))
   assert.equal(result.ok, true)
   if (!result.ok) return

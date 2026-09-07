@@ -19,6 +19,7 @@ import a2mcpPolymarketGovernedOpenHandler, {
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import polymarketAgentFlowHandler, { flowDescriptor } from './polymarket-agent-flow.js'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
+import { reviewEvidenceDescriptor } from './polymarket-agent-review.js'
 import { prepareIndependentPolymarketTrade } from './polymarket-independent-prepare.js'
 import polymarketSmartTraderHandler, {
   bindSettledSmartTraderAnalysis,
@@ -27,6 +28,7 @@ import polymarketSmartTraderHandler, {
   preflightPolymarketSmartTraderProviders,
   preflightPolymarketSmartTraderRequest,
   runPolymarketSmartTrader,
+  runPolymarketReview,
 } from './polymarket-smart-trader.js'
 import polyWorldcupNewsHandler, { getPolyWorldcupNewsFeed, requestFootballNewsQuery } from './poly-worldcup-news.js'
 import polyStreamHandler, { getPolyStreamFeed, requestTeam } from './poly-stream.js'
@@ -176,8 +178,8 @@ const portfolioWatchBodyProperties = {
 const smartTraderBodyProperties = {
   action: {
     type: 'string',
-    enum: ['ANALYZE', 'PREPARE', 'INDEPENDENT_PREPARE'],
-    description: 'Choose ANALYZE for paid research, PREPARE for its approved receipt, or INDEPENDENT_PREPARE for your own acknowledged exact-market decision without research payment.',
+    enum: ['ANALYZE', 'REVIEW', 'PREPARE', 'INDEPENDENT_PREPARE'],
+    description: 'ANALYZE requests paid AI research. REVIEW returns free exact-market evidence without AI. PREPARE uses an approved receipt. INDEPENDENT_PREPARE requires your own explicitly acknowledged decision.',
   },
   independentOrder: { type: 'object', description: 'For INDEPENDENT_PREPARE only: the acknowledged exact-market request described by GET /api/polymarket-independent/prepare. No research payment or decisionId is required.' },
   query: { type: 'string', maxLength: 180 },
@@ -446,6 +448,7 @@ type SmartTraderPaymentPreflightDependencies = {
   operational: typeof checkPolymarketSmartTraderOperational
   providers: typeof preflightPolymarketSmartTraderProviders
   prepare: typeof runPolymarketSmartTrader
+  review?: typeof runPolymarketReview
   independentPrepare?: (raw: unknown) => Promise<SmartTraderPreparedResult | { ok: false; status: number; error: string }>
 }
 
@@ -463,6 +466,11 @@ export async function preflightSmartTraderBeforeSettlement(
   | { ok: true; prepared?: SmartTraderPreparedResult }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
+  if (clean(body.action).toUpperCase() === 'REVIEW') {
+    const result = await (dependencies.review || runPolymarketReview)(body).catch(() => ({ ok: false as const, status: 502, error: 'Review evidence is unavailable. No payment or trade was made.' }))
+    if (!result.ok) { const { status, ...errorBody } = result; return { ok: false, status, body: errorBody } }
+    return { ok: true, prepared: result }
+  }
   if (clean(body.action).toUpperCase() === 'INDEPENDENT_PREPARE') {
     if (Object.keys(body).some(key => key !== 'action' && key !== 'independentOrder')) {
       return { ok: false, status: 400, body: { ok: false, error: 'Put exact market, acknowledgement, and limits inside independentOrder. Do not mix research inputs with independent preparation.' } }
@@ -478,7 +486,7 @@ export async function preflightSmartTraderBeforeSettlement(
     return {
       ok: false,
       status: 400,
-      body: { ok: false, error: 'DISCOVER is included inside the paid ANALYZE workflow. Submit ANALYZE with query, category, marketId, or marketUrl. No payment challenge was issued.' },
+      body: { ok: false, error: 'Use the free GET /api/polymarket/discover endpoint for discovery. Confirm an exact market and outcome before ANALYZE or REVIEW. No payment challenge was issued.', nextAction: 'DISCOVER_MARKETS', discoveryEndpoint: '/api/polymarket/discover' },
     }
   }
   const preflight = await dependencies.validate(body)
@@ -489,7 +497,7 @@ export async function preflightSmartTraderBeforeSettlement(
     return {
       ok: false,
       status: 503,
-      body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.', independentExecution: independentExecutionDescriptor() },
+      body: { ok: false, error: 'Smart Market Trader dependencies are unavailable. No payment challenge was issued.', ...reviewEvidenceDescriptor(body) },
     }
   }
   if (clean(body.action).toUpperCase() === 'ANALYZE') {
@@ -498,7 +506,7 @@ export async function preflightSmartTraderBeforeSettlement(
       return {
         ok: false,
         status: providers.status,
-        body: { ok: false, error: `${providers.error} No payment challenge was issued.`, independentExecution: independentExecutionDescriptor() },
+        body: { ok: false, error: `${providers.error} No payment challenge was issued.`, ...reviewEvidenceDescriptor(body) },
       }
     }
   }
@@ -1020,7 +1028,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
         // A valid paid ANALYZE receipt is the capability for this continuation.
         // Return the freshly revalidated preview without issuing or settling a
         // second payment challenge.
-        res.setHeader('X-PolyDesk-Workflow-Included', clean(body.action).toUpperCase() === 'INDEPENDENT_PREPARE' ? 'INDEPENDENT_PREPARE' : 'PREPARE')
+        res.setHeader('X-PolyDesk-Workflow-Included', clean(body.action).toUpperCase())
         return res.status(result.prepared.status).json(result.prepared.data)
       }
     }

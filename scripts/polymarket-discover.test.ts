@@ -72,3 +72,10 @@ test('invalid input never calls upstream', async () => {
     assert.equal(result.status, 400)
   }
 })
+
+test('duplicate tokens or duplicate outcome labels cannot create false exact selections', async () => {
+  for (const change of [{ clobTokenIds: ['123', '123'] }, { outcomes: ['Yes', 'YES'] }]) {
+    const result = await discoverPolymarket({ q: 'United' }, async () => payload([{ ...market, ...change }]), now)
+    assert.deepEqual(result.body.candidates, [])
+  }
+})

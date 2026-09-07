@@ -157,7 +157,7 @@ test('smart-trader challenge declares its OKX AI action contract', async () => {
     body?: { inputSchema?: { properties?: Record<string, { enum?: string[] }>; required?: string[] } }
   }
   assert.ok(unpaid.body?.inputSchema?.properties?.action)
-  assert.deepEqual(unpaid.body?.inputSchema?.properties?.action?.enum, ['ANALYZE', 'PREPARE', 'INDEPENDENT_PREPARE'])
+  assert.deepEqual(unpaid.body?.inputSchema?.properties?.action?.enum, ['ANALYZE', 'REVIEW', 'PREPARE', 'INDEPENDENT_PREPARE'])
   assert.ok(unpaid.body?.inputSchema?.properties?.marketId)
   assert.ok(unpaid.body?.inputSchema?.properties?.mandate)
   assert.deepEqual(unpaid.body?.inputSchema?.required, ['action'])
@@ -227,7 +227,7 @@ test('public DISCOVER is rejected before any smart-trader payment challenge', as
   assert.equal(result.ok, false)
   if (result.ok) assert.fail('expected DISCOVER to remain inside ANALYZE')
   assert.equal(result.status, 400)
-  assert.match(String(result.body.error), /included inside the paid ANALYZE workflow/i)
+  assert.match(String(result.body.error), /free GET \/api\/polymarket\/discover/i)
   assert.match(String(result.body.error), /No payment challenge was issued/i)
 })
 

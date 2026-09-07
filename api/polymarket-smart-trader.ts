@@ -3,6 +3,7 @@ import { publicDeliveryStatus } from './smart-trader-delivery-status.js'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
+import { agentReviewHandoff, hasUnavailableReviewHandoff } from './polymarket-agent-review.js'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import { hasRenderDurableStore, listDurableJsonByPrefix, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
@@ -198,6 +199,7 @@ export function smartTraderMaxDeliveryAttempts(record: SmartTraderPaidAnalysisRe
 
 export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
   return (record.status === 'completed' || record.status === 'failed')
+    && !hasUnavailableReviewHandoff(record.response)
     && smartTraderDeliveryAttemptCount(record) < smartTraderMaxDeliveryAttempts(record)
     && hasMissingZeroScoutProofDelivery(record.response)
 }
@@ -214,6 +216,7 @@ export function isRemediableDegradedResearch(record: SmartTraderPaidAnalysisReco
 
 export function isRemediableAfterAnalysisEngineUpgrade(record: SmartTraderPaidAnalysisRecord): boolean {
   return (record.status === 'completed' || record.status === 'failed')
+    && !hasUnavailableReviewHandoff(record.response)
     && record.analysisEngineVersion !== SMART_TRADER_ANALYSIS_ENGINE_VERSION
     && hasMissingZeroScoutProofDelivery(record.response)
 }
@@ -424,6 +427,7 @@ export function normalizeMarket(raw: JsonRecord, event: JsonRecord): SmartTrader
   const conditionId = clean(raw.conditionId || raw.condition_id, 96)
   const outcomes = stringArray(raw.outcomes)
   const tokenIds = stringArray(raw.clobTokenIds || raw.clob_token_ids)
+  if (new Set(tokenIds).size !== tokenIds.length || new Set(outcomes.map(label => label.toLowerCase())).size !== outcomes.length) return null
   if (!question || !/^0x[a-fA-F0-9]{64}$/.test(conditionId) || outcomes.length < 2 || outcomes.length !== tokenIds.length || tokenIds.some(tokenId => !/^\d+$/.test(tokenId))) return null
   const eventSlug = clean(event.slug || raw.eventSlug || raw.event_slug, 180)
   const marketSlug = clean(raw.slug, 180)
@@ -647,6 +651,7 @@ export async function preflightPolymarketSmartTraderProviders(
   if (!parsed.ok) return parsed
   const input = parsed.value
   if (input.action !== 'ANALYZE') return { ok: true as const }
+  if (!input.outcome || !input.side) return { ok: false as const, status: 400, error: 'ANALYZE requires the requested outcome and BUY or SELL side. Use free discovery to resolve the exact selection before payment.' }
   try {
     const marketLookup = input.marketId
       ? dependencies.resolveMarket(input.marketId)
@@ -841,21 +846,22 @@ export async function completeSettledSmartTraderAnalysis(
       throw new Error('The settled analysis payment does not match the persisted request.')
     }
     const missingZeroScoutProof = hasMissingZeroScoutProofDelivery(response)
+    const reviewReady = hasUnavailableReviewHandoff(response)
     const attemptCount = smartTraderDeliveryAttemptCount(current) + 1
     const maximumAttempts = smartTraderMaxDeliveryAttempts(current)
     return {
       ...current,
-      status: missingZeroScoutProof ? 'failed' : 'completed',
+      status: missingZeroScoutProof && !reviewReady ? 'failed' : 'completed',
       decisionId: decision.decisionId,
       analysisHash: decision.analysisHash,
       response,
       deliveryAttemptCount: attemptCount,
       maxDeliveryAttempts: maximumAttempts,
-      nextRetryAt: missingZeroScoutProof && attemptCount < maximumAttempts
+      nextRetryAt: missingZeroScoutProof && !reviewReady && attemptCount < maximumAttempts
         ? new Date(Date.now() + 15_000).toISOString()
         : undefined,
       updatedAt: new Date().toISOString(),
-      error: missingZeroScoutProof
+      error: missingZeroScoutProof && !reviewReady
         ? 'ZeroScout proof delivery was temporarily unavailable; the settled request remains recoverable without another payment.'
         : undefined,
     }
@@ -997,7 +1003,8 @@ async function rankMarketOutcomes(markets: SmartTraderMarket[], input: ParsedReq
     const spread = bestBid !== null && bestAsk !== null ? Math.max(0, bestAsk - bestBid) : null
     const depthUsdc = asks.filter(level => bestAsk !== null && level.price <= bestAsk + 0.03).reduce((sum, level) => sum + level.price * level.size, 0)
     const bookAt = timestampMs(book?.timestamp)
-    const bookAgeSeconds = bookAt === null ? null : Math.max(0, Math.floor((now - bookAt) / 1_000))
+    const bookObservedNow = dependencies.now()
+    const bookAgeSeconds = bookAt === null ? null : Math.max(0, Math.floor((bookObservedNow - bookAt) / 1_000))
     const endAt = Date.parse(market.endDate || '')
     const hoursToResolution = Number.isFinite(endAt) ? (endAt - now) / 3_600_000 : null
     const matchingSignals = signals.filter(signal => signal.conditionId.toLowerCase() === market.conditionId.toLowerCase() && signal.tokenId === tokenId)
@@ -1015,6 +1022,9 @@ async function rankMarketOutcomes(markets: SmartTraderMarket[], input: ParsedReq
     if (market.liquidityUsd < input.mandate.minimumLiquidityUsd) blockers.push(`Liquidity is below minimumLiquidityUsd ${input.mandate.minimumLiquidityUsd}.`)
     if (bookAgeSeconds === null || bookAgeSeconds > input.mandate.maximumBookAgeSeconds) blockers.push('Order-book timestamp is missing or stale.')
     if (hoursToResolution !== null && hoursToResolution < input.mandate.minimumHoursToResolution) blockers.push('Market is too close to its stated end time for this mandate.')
+    if (book && (book.asset_id !== tokenId || typeof book.market !== 'string' || book.market.toLowerCase() !== market.conditionId.toLowerCase())) blockers.push('Order-book identity does not match the requested market and token.')
+    if (bookAt !== null && bookAt > bookObservedNow + 5_000) blockers.push('Order-book timestamp is in the future.')
+    if (hoursToResolution === null) blockers.push('Market end time is missing or invalid.')
     if (!market.resolutionSource) riskFlags.push('Resolution source was not supplied by the market payload.')
     if (!wallets.length) riskFlags.push('No smart-money wallet set is configured; no smart-money tag was assigned.')
     if (wallets.length && !matchingSignals.length) riskFlags.push('No recent matching activity was observed from the selected public wallets.')
@@ -1182,6 +1192,37 @@ function executionHandoff(
   }
 }
 
+export async function runPolymarketReview(raw: unknown, dependencies: SmartTraderDependencies = liveDependencies) {
+  if (!isRecord(raw) || Object.keys(raw).some(key => !['action', 'marketId', 'marketUrl', 'outcome', 'side', 'mandate'].includes(key))) {
+    return { ok: false as const, status: 400, error: 'REVIEW accepts only action, exact marketId or marketUrl, outcome, side, and optional mandate. Never send credentials.' }
+  }
+  const parsed = parseRequest({ ...raw, action: 'ANALYZE' })
+  if (!parsed.ok) return parsed
+  const input = parsed.value
+  if (!input.marketId || !input.outcome || !input.side) return { ok: false as const, status: 400, error: 'REVIEW requires an exact marketId or marketUrl, outcome, and BUY or SELL side. Use free discovery first.' }
+  let markets: SmartTraderMarket[]
+  try { markets = await dependencies.resolveMarket(input.marketId) } catch {
+    return { ok: false as const, status: 502, error: 'Market lookup unavailable. No selection, payment, or trade was made.' }
+  }
+  const matches = markets.filter(market => market.active && !market.closed && market.acceptingOrders && market.enableOrderBook
+    && (!/^0x[a-fA-F0-9]{64}$/.test(input.marketId!) || market.conditionId.toLowerCase() === input.marketId!.toLowerCase()))
+    .flatMap(market => market.outcomes.map((label, index) => ({ market, label, tokenId: market.tokenIds[index] })))
+    .filter(row => row.label.toLowerCase().trim() === input.outcome!.toLowerCase().trim() && /^\d+$/.test(row.tokenId || ''))
+  if (matches.length !== 1) return { ok: false as const, status: 409, error: 'REVIEW requires one unambiguous active market and outcome. No market was selected.', nextAction: 'RESOLVE_MARKET_AND_OUTCOME' }
+  const { ranked } = await rankMarketOutcomes([matches[0].market], input, dependencies)
+  const selected = ranked.find(row => row.outcome.tokenId === matches[0].tokenId)!
+  return { ok: true as const, status: 200, data: {
+    ok: true, schema: 'polydesk-market-review-v1', action: 'REVIEW',
+    generatedAt: new Date(dependencies.now()).toISOString(), selected,
+    screeningMandate: input.mandate,
+    evidence: { marketData: 'Polymarket Gamma and CLOB public APIs', smartMoney: selected.smartMoney, news: [], zeroScout: null },
+    researchStatus: 'NOT_REQUESTED',
+    opinion: 'Public market evidence only. No AI assessment or independent prediction was produced. The requesting agent or human must review before making an independent decision.',
+    agentHandoff: agentReviewHandoff({ selected, side: input.side, researchStatus: 'NOT_REQUESTED' }),
+    paymentRequired: false, orderAuthorized: false, orderSubmitted: false,
+  } }
+}
+
 export async function runPolymarketSmartTrader(
   raw: unknown,
   dependencies: SmartTraderDependencies = liveDependencies,
@@ -1221,6 +1262,10 @@ export async function runPolymarketSmartTrader(
   if (!input.marketId) markets = filterMarketsByQuery(markets, input.query)
   markets = markets.filter(market => market.active && !market.closed && market.enableOrderBook && market.acceptingOrders)
   if (!markets.length) return { ok: false as const, status: 404, error: 'No active Polymarket market accepting orders matched the request.' }
+  if (input.action === 'ANALYZE') {
+    const matches = markets.flatMap(market => market.outcomes).filter(label => label.toLowerCase().trim() === input.outcome?.toLowerCase().trim())
+    if (!input.side || matches.length !== 1) return { ok: false as const, status: 409, error: 'ANALYZE requires one unambiguous market outcome and an explicit side. No ranked outcome was selected automatically.', nextAction: 'RESOLVE_MARKET_AND_OUTCOME' }
+  }
   const { ranked, smartMoneySources } = await rankMarketOutcomes(markets, input, dependencies)
   const limited = ranked.slice(0, input.action === 'DISCOVER' ? input.limit : 30)
   if (input.action === 'DISCOVER') {
@@ -1429,22 +1474,25 @@ export async function runPolymarketSmartTrader(
         newsLane,
         zeroScout: research ? {
           id: research.id,
-          summary: research.summary,
-          reasoningSummary: research.reasoningSummary,
-          signals: research.signals || [],
+          researchStatus: researchUnavailable ? 'UNAVAILABLE' : 'AVAILABLE',
+          modelBacked: !researchUnavailable,
+          summary: researchUnavailable ? null : research.summary,
+          reasoningSummary: researchUnavailable ? null : research.reasoningSummary,
+          signals: researchUnavailable ? [] : research.signals || [],
           riskFlags: research.riskFlags || [],
           dataGaps: research.dataGaps || [],
-          confidence: research.confidence ?? null,
-          tradeAssessment: research.tradeAssessment || null,
+          confidence: researchUnavailable ? null : research.confidence ?? null,
+          tradeAssessment: researchUnavailable ? null : research.tradeAssessment || null,
           proof: research.proof || null,
           createdAt: research.createdAt || null,
         } : null,
       },
       opinion: researchUnavailable ? 'Research unavailable - independent execution available. Choose your own exact market and signed limits; no market recommendation was produced.' : research!.summary,
+      agentHandoff: agentReviewHandoff({ selected, side: input.side || null, researchStatus: researchUnavailable ? 'UNAVAILABLE' : 'AVAILABLE', decision }),
       riskFlags,
       next: decision.decision === 'APPROVE'
         ? 'Call PREPARE with this decisionId, exact market, outcome, and side before the receipt expires.'
-        : 'Resolve the decision blockers and run ANALYZE again. PREPARE will reject this receipt.',
+        : 'Follow agentHandoff to review the available evidence. If separately authorized, explicitly choose independent preparation. PREPARE will reject this ESCALATE receipt; do not automatically buy another analysis.',
       boundary: 'This analysis is decision support, not a guarantee of outcome or profit.',
       ...(decision.decision === 'ESCALATE' ? { independentExecution: independentExecutionDescriptor() } : {}),
     },
@@ -1476,7 +1524,7 @@ export async function runBoundedSmartTraderDelivery(options: {
     const missingZeroScoutProof = result.ok && hasMissingZeroScoutProofDelivery(result.data)
     const exhausted = attemptCount >= maximumAttempts
     await options.onAttempt({ attemptCount, maximumAttempts, result, missingZeroScoutProof, exhausted })
-    if (!missingZeroScoutProof || exhausted) break
+    if (!missingZeroScoutProof || exhausted || (result.ok && hasUnavailableReviewHandoff(result.data))) break
     await sleep(options.retryDelayMs ?? 5_000)
   }
 
@@ -1555,18 +1603,19 @@ export async function executeSettledSmartTraderDelivery(
       },
       onAttempt: async ({ attemptCount, missingZeroScoutProof, exhausted, result }) => {
         const analysisData = result.ok && result.data.action === 'ANALYZE' ? result.data : null
+        const reviewReady = hasUnavailableReviewHandoff(analysisData)
         await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
           ...(current || claimed),
-          status: analysisData && !missingZeroScoutProof ? 'completed' : exhausted ? 'failed' : 'running',
+          status: analysisData && (!missingZeroScoutProof || reviewReady) ? 'completed' : exhausted ? 'failed' : 'running',
           deliveryAttemptCount: attemptCount,
           maxDeliveryAttempts: maximumAttempts,
-          nextRetryAt: missingZeroScoutProof && !exhausted ? new Date(Date.now() + 5_000).toISOString() : undefined,
+          nextRetryAt: missingZeroScoutProof && !reviewReady && !exhausted ? new Date(Date.now() + 5_000).toISOString() : undefined,
           updatedAt: new Date().toISOString(),
           ...(analysisData ? {
             decisionId: analysisData.decision.decisionId,
             analysisHash: analysisData.decision.analysisHash,
             response: analysisData,
-            error: missingZeroScoutProof
+            error: missingZeroScoutProof && !reviewReady
               ? exhausted
                 ? 'ZeroScout proof delivery remained unavailable after all bounded attempts.'
                 : 'ZeroScout proof delivery is temporarily unavailable; retrying the settled request.'
@@ -1580,7 +1629,7 @@ export async function executeSettledSmartTraderDelivery(
           attempt: attemptCount,
           maximumAttempts,
           durationMs: Date.now() - attemptStartedAt,
-          outcome: analysisData && !missingZeroScoutProof
+          outcome: reviewReady ? 'review_handoff_delivered' : analysisData && !missingZeroScoutProof
             ? 'proof_delivered'
             : missingZeroScoutProof
               ? exhausted ? 'proof_missing_exhausted' : 'proof_missing_retryable'
@@ -1671,6 +1720,7 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
       endpoint: '/api/a2mcp/polymarket-smart-trader',
       method: 'POST',
       actions: {
+        REVIEW: 'Free public market and order-book evidence with a requesting-agent review handoff. Requires exact market, outcome, and side. No AI, analysis payment, signing, or submission.',
         ANALYZE: 'The single paid gate: discover by query/category or resolve one market, then combine execution state with ZeroScout and category-relevant news evidence. Exact outcome and side are required for an APPROVE receipt.',
         PREPARE: 'Included with an unexpired paid APPROVE decisionId. Returns a preview-first invocation for the official OnchainOS Polymarket plugin with no second charge, server-side signing, or submission.',
       },
@@ -1776,6 +1826,9 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     decisionUrl: record.decisionId
       ? `/api/a2mcp/polymarket-smart-trader/decision/${record.decisionId}`
       : null,
+    // Expose the actual evidence package, not only a receipt ID. Never start a
+    // second payment or mutate the immutable decision while serving a result.
+    result: (record.status === 'completed' || record.status === 'failed') && record.response?.action === 'ANALYZE' ? record.response : null,
     settledAt: record.settledAt,
     updatedAt: record.updatedAt,
     error: record.status === 'failed' ? clean(record.error, 300) : null,
