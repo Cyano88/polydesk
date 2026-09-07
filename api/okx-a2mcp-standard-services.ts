@@ -13,7 +13,7 @@ import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import { recordDeliveredOkxCall } from './okx-rewards.js'
 import a2mcpPolymarketFundingLinkHandler from './a2mcp-polymarket-funding-link.js'
 import a2mcpPolymarketGovernedOpenHandler, {
-  evaluateGovernedOpenInput,
+  evaluateGovernedOpenWithResearch,
   governedOpenReady,
 } from './a2mcp-polymarket-governed-open.js'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
@@ -997,7 +997,7 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
     // non-empty requests still receive the free deterministic preflight before
     // any payment can be accepted.
     if (Object.keys(body).length > 0) {
-      const evaluation = evaluateGovernedOpenInput(body)
+      const evaluation = await evaluateGovernedOpenWithResearch(body)
       if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
       if (evaluation.decision !== 'APPROVE') {
         return res.status(409).json({

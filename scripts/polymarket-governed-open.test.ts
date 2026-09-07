@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import test from 'node:test'
 import { bindPolymarketOrder, EXCHANGES_V2, FILL_INTERFACE } from '../api/polymarket-order-proof.js'
 import type { Request } from 'express'
@@ -6,14 +7,18 @@ import { hashMessage, Signature, SigningKey, Wallet } from 'ethers'
 import {
   buildGovernedMandateAuthorization,
   evaluateGovernedOpenInput,
+  evaluateGovernedOpenWithResearch,
+  APPROVED_RESEARCH_POLICY,
   governedMandateAuthorizationMessage,
   governedTradeCompletionMessage,
+  governedReceiptReadResponse,
   verifyGovernedTradeCompletion,
   mergeGovernedExecution,
 } from '../api/a2mcp-polymarket-governed-open.js'
 import { buildStandardServiceRouteConfig } from '../api/okx-a2mcp-standard-services.js'
 
 const now = 1_800_000_000_000
+const finality = { chainId: 'eip155:137' as const, blockNumber: '0x10', blockHash: '0x' + 'aa'.repeat(32), finalizedBlockNumber: '0x11', finalizedBlockHash: '0x' + 'bb'.repeat(32) }
 const signer = '0x1111111111111111111111111111111111111111'
 const marketUrl = 'https://polymarket.com/event/example-market'
 const authorityKey = '0x' + '42'.repeat(32)
@@ -82,6 +87,125 @@ function updateOrder(body: ReturnType<typeof validBody>, field: string, value: s
   ;(body.order as Record<string, unknown>)[field] = value
   ;((body.orderPayload as { order: Record<string, unknown> }).order)[field] = value
 }
+
+function researchReceipt(overrides: Record<string, unknown> = {}) {
+  const receipt = {
+    schema: 'polydesk-smart-trader-decision-v2', decisionId: `pstd_${'a'.repeat(32)}`,
+    decision: 'APPROVE', createdAt: new Date(now - 1_000).toISOString(),
+    expiresAt: new Date(now + 60_000).toISOString(),
+    market: { conditionId: `0x${'12'.repeat(32)}`, tokenId: '123456789', outcome: 'Yes', url: marketUrl },
+    side: 'BUY', mandate: { maximumPrice: 0.55, maximumSpread: 0.1, minimumLiquidityUsd: 100,
+      minimumHoursToResolution: 1, maximumBookAgeSeconds: 60, maximumPriceDrift: 0.05,
+      maximumSpendUsdc: 5, maximumShares: 100 },
+    executionSnapshot: { bestBid: 0.49, bestAsk: 0.5, bookAgeSeconds: 1 },
+    evidence: { zeroScoutId: 'synthetic-research', zeroScoutProof: { contentHash: 'synthetic-proof' },
+      newsCount: 1, smartMoneyStatus: 'unconfigured', tradeStance: 'SUPPORT',
+      evidenceQuality: 'MEDIUM', researchStatus: 'AVAILABLE' },
+    servicePayment: { provider: 'CDP x402', network: 'Base',
+      serviceUrl: '/api/x402/base/polymarket-smart-trader', payer: signer,
+      amountAtomic: '300000', transaction: `0x${'ab'.repeat(32)}` },
+    blockers: [], riskFlags: [], ...overrides,
+  }
+  const canonical = (v: any): string => Array.isArray(v) ? `[${v.map(canonical).join(',')}]`
+    : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`
+    : JSON.stringify(v)
+  return { ...receipt, analysisHash: createHash('sha256').update(canonical(receipt)).digest('hex') }
+}
+
+function researchBody(receipt = researchReceipt()) {
+  const body = validBody()
+  Object.assign(body.mandate, { researchPolicy: APPROVED_RESEARCH_POLICY,
+    researchDecisionId: receipt.decisionId, researchAnalysisHash: receipt.analysisHash })
+  resignMandate(body)
+  return body
+}
+
+test('governed research binds the exact durable receipt to the signed mandate', async () => {
+  const receipt = researchReceipt()
+  const body = researchBody(receipt)
+  assert.equal(evaluateGovernedOpenInput(body, now).ok, false, 'No trusted receipt means no approval')
+  const evaluated = await evaluateGovernedOpenWithResearch(body, {
+    now: () => now, readDecision: async id => { assert.equal(id, receipt.decisionId); return receipt },
+  })
+  assert.equal(evaluated.ok && evaluated.decision, 'APPROVE')
+  if (evaluated.ok) assert.equal(evaluated.mandate.researchAnalysisHash, receipt.analysisHash)
+  Object.assign(body.mandate, { researchAnalysisHash: 'b'.repeat(64) })
+  assert.equal(evaluateGovernedOpenInput(body, now, receipt).ok, false, 'Hash substitution breaks authority signature')
+  resignMandate(body)
+  const mismatch = evaluateGovernedOpenInput(body, now, receipt)
+  assert.equal(mismatch.ok && mismatch.decision, 'BLOCK')
+})
+
+test('governed research rejects stale, escalated, mismatched and overbroad decisions', () => {
+  const fixture = researchReceipt()
+  const cases = [
+    researchReceipt({ decision: 'ESCALATE' }),
+    researchReceipt({ expiresAt: new Date(now).toISOString() }),
+    researchReceipt({ market: { ...fixture.market, tokenId: '999' } }),
+    researchReceipt({ market: { ...fixture.market, outcome: 'No' } }),
+    researchReceipt({ market: { ...fixture.market, url: 'https://polymarket.com/event/other' } }),
+    researchReceipt({ side: 'SELL' }),
+    researchReceipt({ mandate: { ...fixture.mandate, maximumSpendUsdc: 4 } }),
+    researchReceipt({ mandate: { ...fixture.mandate, maximumPrice: 0.54 } }),
+    researchReceipt({ mandate: { ...fixture.mandate, maximumPriceDrift: 0.01 } }),
+    researchReceipt({ evidence: { ...fixture.evidence, researchStatus: 'UNAVAILABLE' } }),
+    researchReceipt({ evidence: { ...fixture.evidence, zeroScoutProof: null } }),
+    researchReceipt({ blockers: ['Unresolved research concern'] }),
+  ]
+  for (const receipt of cases) {
+    const result = evaluateGovernedOpenInput(researchBody(receipt), now, receipt)
+    assert.notEqual(result.ok && result.decision, 'APPROVE')
+  }
+  const corrupt = { ...fixture, analysisHash: 'f'.repeat(64) }
+  assert.equal(evaluateGovernedOpenInput(researchBody(corrupt), now, corrupt).ok, false)
+})
+
+test('research approval fails closed on storage failure and expiry during lookup', async () => {
+  const receipt = researchReceipt()
+  const body = researchBody(receipt)
+  const unavailable = await evaluateGovernedOpenWithResearch(body, {
+    now: () => now, readDecision: async () => { throw new Error('offline') },
+  })
+  assert.equal(!unavailable.ok && unavailable.status, 503)
+  let clock = now
+  const expired = await evaluateGovernedOpenWithResearch(body, {
+    now: () => clock, readDecision: async () => { clock += 60_000; return receipt },
+  })
+  assert.equal(expired.ok, false)
+  const mixed = researchBody(receipt)
+  Object.assign(mixed.mandate, { researchPolicy: 'agent-independent-v1' })
+  assert.equal(buildGovernedMandateAuthorization(mixed.externalOrderId, mixed.mandate, now).ok, false)
+})
+
+test('research share limits and future-dated approvals cannot be bypassed', () => {
+  const fixture = researchReceipt()
+  for (const maximumShares of [0, -1, 9, 9.999999]) {
+    const receipt = researchReceipt({ mandate: { ...fixture.mandate, maximumShares } })
+    const result = evaluateGovernedOpenInput(researchBody(receipt), now, receipt)
+    assert.notEqual(result.ok && result.decision, 'APPROVE')
+  }
+  const exact = researchReceipt({ mandate: { ...fixture.mandate, maximumShares: 10 } })
+  const result = evaluateGovernedOpenInput(researchBody(exact), now, exact)
+  assert.equal(result.ok && result.decision, 'APPROVE')
+  const future = researchReceipt({ createdAt: new Date(now + 1_000).toISOString() })
+  const blocked = evaluateGovernedOpenInput(researchBody(future), now, future)
+  assert.equal(blocked.ok && blocked.decision, 'BLOCK')
+})
+
+test('HTTP research adapter rejects caller receipts and never reads research for independent decisions', async () => {
+  const receipt = researchReceipt()
+  const forged = { ...researchBody(receipt), storedResearch: receipt }
+  assert.equal((await evaluateGovernedOpenWithResearch(forged, { now: () => now, readDecision: async () => receipt })).ok, false)
+  const independent = validBody()
+  Object.assign(independent.mandate, { researchPolicy: 'agent-independent-v1' })
+  resignMandate(independent)
+  let reads = 0
+  const result = await evaluateGovernedOpenWithResearch(independent, {
+    now: () => now, readDecision: async () => { reads++; throw new Error('Must not call AI or research storage') },
+  })
+  assert.equal(reads, 0)
+  assert.equal(result.ok && result.decision, 'APPROVE')
+})
 
 test('approves an exact signed order inside every deterministic mandate bound', () => {
   const result = evaluateGovernedOpenInput(validBody(), now)
@@ -259,10 +383,8 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
       maximumPrice: '0.55',
     },
   }
-  const result = await verifyGovernedTradeCompletion(
-    record,
-    { orderId, transactionHash, completionSignature },
-    {
+  const verificationDependencies = {
+      fetchFinality: async () => finality,
       fetchReceipt: async () => ({
         status: '0x1',
         transactionHash,
@@ -279,14 +401,55 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
         price: 0.5,
       }],
       now: () => now,
-    },
-  )
+  }
+  const result = await verifyGovernedTradeCompletion(record, { orderId, transactionHash, completionSignature }, verificationDependencies)
+  const pending = await verifyGovernedTradeCompletion(record, { orderId, transactionHash, completionSignature }, {
+    ...verificationDependencies,
+    fetchFinality: async () => { throw new Error('pending finality') },
+    fetchTrades: async () => { throw new Error('Trade feed must not be read before finality') },
+  })
+  assert.equal(pending.ok, false)
+  if (!pending.ok) assert.match(pending.error, /finality/)
   assert.equal(result.ok, true)
   if (!result.ok) return
   assert.equal(result.receipt.status, 'VERIFIED_FILLED')
   assert.equal(result.receipt.execution.fillAmountUsdc, 2.5)
   assert.equal(result.receipt.proofs.publicTradeMatched, true)
   assert.equal(result.receipt.proofs.exactSignedOrderVerified, true)
+  assert.equal(result.receipt.proofs.polygonFinalityVerified, true)
+  assert.deepEqual(result.receipt.finality, finality)
+  const historical = { ...result.receipt, finality: undefined }
+  const preserved = governedReceiptReadResponse(historical)
+  assert.equal(preserved.ok, true)
+  assert.equal(preserved.receipt, historical, 'Historical evidence is returned unchanged')
+  assert.equal(preserved.verificationStatus, 'LEGACY_REQUIRES_REVERIFICATION')
+  assert.equal(preserved.tradeReceiptVerified, false)
+  assert.equal(preserved.signingAuthorized, false)
+  assert.equal(preserved.requiresReverification, true)
+  const noExactProof = { ...result.receipt, proofs: { ...result.receipt.proofs, exactSignedOrderVerified: undefined } }
+  assert.equal(governedReceiptReadResponse(noExactProof).requiresReverification, true)
+  assert.deepEqual(governedReceiptReadResponse(result.receipt), { ok: true, receipt: result.receipt })
+  const researched = await verifyGovernedTradeCompletion({ ...record,
+    researchPolicy: APPROVED_RESEARCH_POLICY, researchDecisionId: researchReceipt().decisionId,
+    researchAnalysisHash: researchReceipt().analysisHash,
+  }, { orderId, transactionHash, completionSignature }, verificationDependencies)
+  assert.equal(researched.ok, true)
+  if (researched.ok) {
+    assert.equal(researched.receipt.policy.researchPolicy, APPROVED_RESEARCH_POLICY)
+    assert.equal(researched.receipt.policy.researchDecisionId, researchReceipt().decisionId)
+    assert.equal(researched.receipt.policy.researchAnalysisHash, researchReceipt().analysisHash)
+    assert.equal(researched.receipt.proofs.polygonFinalityVerified, true)
+  }
+  const independent = await verifyGovernedTradeCompletion({ ...record, researchPolicy: 'agent-independent-v1' }, { orderId, transactionHash, completionSignature }, verificationDependencies)
+  assert.equal(independent.ok, true)
+  if (independent.ok) {
+    assert.equal(independent.receipt.policy.researchPolicy, 'agent-independent-v1')
+    assert.equal('researchDecisionId' in independent.receipt.policy, false)
+    assert.equal('researchAnalysisHash' in independent.receipt.policy, false)
+  }
+  const noFinality = await verifyGovernedTradeCompletion({ ...record, receipt: { ...result.receipt, finality: undefined } }, { orderId, transactionHash })
+  assert.equal(noFinality.ok, false)
+  if (!noFinality.ok) assert.match(noFinality.error, /Legacy receipt lacks Polygon finality/)
   const legacy = await verifyGovernedTradeCompletion({ ...record, orderProof: undefined }, { orderId, transactionHash })
   assert.equal(legacy.ok, false)
   if (!legacy.ok) assert.match(legacy.error, /lacks an exact/)
@@ -301,6 +464,7 @@ test('verifies a terminal trade receipt against Polygon and the public Polymarke
   const conflictingReceipt = { ...result.receipt, execution: { ...result.receipt.execution, transactionHash: `0x${'ef'.repeat(32)}` } }
   assert.throws(() => mergeGovernedExecution(completed, { ...record, receipt: conflictingReceipt }), /different verified completion/)
   const noNetwork = {
+    fetchFinality: async () => { throw new Error('Replay must not fetch') },
     fetchReceipt: async () => { throw new Error('Replay must not fetch') },
     fetchTrades: async () => { throw new Error('Replay must not fetch') },
     now: () => now,
@@ -339,6 +503,7 @@ test('completion proof fails closed for a non-Polymarket exchange', async () => 
     },
     { orderId, transactionHash, completionSignature },
     {
+      fetchFinality: async () => { throw new Error('Wrong exchange must stop before finality') },
       fetchReceipt: async () => ({ status: '0x1', transactionHash, to: '0x1111111111111111111111111111111111111111', logs: [{ topics: [orderId] }] }),
       fetchTrades: async () => [],
       now: () => now,

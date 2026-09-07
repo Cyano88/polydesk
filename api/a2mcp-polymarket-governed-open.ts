@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { verifyMessage } from 'ethers'
+import { fetchPolygonFinality, type PolygonFinalityProof } from './polymarket-receipt-finality.js'
 import { bindPolymarketOrder, verifyOrderFillLogs, type OrderProofBinding } from './polymarket-order-proof.js'
 import { INDEPENDENT_RESEARCH_POLICY, INDEPENDENT_RESEARCH_DISCLAIMER } from './polymarket-independent-policy.js'
+import { validateSmartTraderDecisionReceipt } from './polymarket-smart-trader.js'
+
+export const APPROVED_RESEARCH_POLICY = 'zeroscout-approved-v1' as const
 import {
   hasRenderDurableStore,
   mutateDurableJson,
@@ -43,6 +47,8 @@ const MANDATE_KEYS = [
   'validUntil',
   'approvalRequiredAboveUsdc',
   'researchPolicy',
+  'researchDecisionId',
+  'researchAnalysisHash',
 ] as const
 
 type GovernedOpenRecord = {
@@ -59,6 +65,9 @@ type GovernedOpenRecord = {
   paymentTransaction?: string
   authoritySigner: string
   researchPolicy?: typeof INDEPENDENT_RESEARCH_POLICY
+    | typeof APPROVED_RESEARCH_POLICY
+  researchDecisionId?: string
+  researchAnalysisHash?: string
   market: {
     title: string
     url: string
@@ -76,6 +85,7 @@ type GovernedOpenRecord = {
 }
 
 type GovernedTradeReceipt = {
+  finality?: PolygonFinalityProof
   receiptVersion: 'polydesk-governed-trade-receipt-v1'
   executionId: string
   externalOrderId: string
@@ -96,10 +106,15 @@ type GovernedTradeReceipt = {
     decisionHash: string
     orderHash: string
     mandateHash: string
+    researchPolicy?: typeof INDEPENDENT_RESEARCH_POLICY
+      | typeof APPROVED_RESEARCH_POLICY
+    researchDecisionId?: string
+    researchAnalysisHash?: string
   }
   proofs: {
     // Independent research policy is also bound by the mandate hash.
     polygonReceiptVerified: true
+    polygonFinalityVerified?: true
     allowedExchangeVerified: true
     orderIdInReceipt: true
     publicTradeMatched: true
@@ -253,8 +268,15 @@ export function buildGovernedMandateAuthorization(
     return { ok: false, status: 400, error: 'A strict governed OPEN mandate is required.' }
   }
   const mandate = mandateValue
-  if (mandate.researchPolicy !== undefined && mandate.researchPolicy !== INDEPENDENT_RESEARCH_POLICY) {
+  if (mandate.researchPolicy !== undefined && mandate.researchPolicy !== INDEPENDENT_RESEARCH_POLICY && mandate.researchPolicy !== APPROVED_RESEARCH_POLICY) {
     return { ok: false, status: 400, error: 'Unsupported mandate.researchPolicy.' }
+  }
+  const researched = mandate.researchPolicy === APPROVED_RESEARCH_POLICY
+  if (researched ? (
+    typeof mandate.researchDecisionId !== 'string' || !/^pstd_[a-f0-9]{24,64}$/.test(mandate.researchDecisionId)
+    || typeof mandate.researchAnalysisHash !== 'string' || !/^[a-f0-9]{64}$/.test(mandate.researchAnalysisHash)
+  ) : mandate.researchDecisionId !== undefined || mandate.researchAnalysisHash !== undefined) {
+    return { ok: false, status: 400, error: 'Research decision ID and analysis hash require the explicit approved research policy.' }
   }
   const maximumAmount = decimalToAtomic(mandate.maximumAmountUsdc, 'mandate.maximumAmountUsdc')
   if (!maximumAmount.ok || maximumAmount.atomic <= 0n) {
@@ -306,6 +328,7 @@ export function buildGovernedMandateAuthorization(
     authoritySigner,
     validUntil: new Date(validUntilMs).toISOString(),
     ...(mandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { researchPolicy: INDEPENDENT_RESEARCH_POLICY } : {}),
+    ...(researched ? { researchPolicy: APPROVED_RESEARCH_POLICY, researchDecisionId: mandate.researchDecisionId as string, researchAnalysisHash: mandate.researchAnalysisHash as string } : {}),
     ...(approvalThreshold?.ok ? { approvalRequiredAboveUsdc: approvalThreshold.text } : {}),
   }
   const mandateHash = sha256(stableJson(canonicalMandate))
@@ -347,7 +370,7 @@ export type GovernedOpenEvaluation =
     }
   | { ok: false; status: number; error: string }
 
-export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now()): GovernedOpenEvaluation {
+export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now(), storedResearch?: unknown): GovernedOpenEvaluation {
   if (!isRecord(body)) return { ok: false, status: 400, error: 'Governed OPEN request must be a JSON object.' }
   if (!hasOnlyKeys(body, [...SIGNED_OPEN_KEYS, 'mandate'])) {
     return { ok: false, status: 400, error: 'Governed OPEN request contains unsupported fields.' }
@@ -404,6 +427,36 @@ export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now()): Go
   }
 
   addCheck('authority', 'PASS', 'The mandate authority signature is valid and bound to this external order ID.')
+  if (canonicalMandate.researchPolicy === APPROVED_RESEARCH_POLICY) {
+    const research = validateSmartTraderDecisionReceipt(storedResearch, String(canonicalMandate.researchDecisionId), nowMs)
+    if (!research.ok) return research
+    const receipt = research.value
+    const researchSpend = decimalToAtomic(receipt.mandate.maximumSpendUsdc, 'research maximum spend')
+    const researchPrice = decimalToAtomic(receipt.mandate.maximumPrice, 'research maximum price')
+    const researchShares = decimalToAtomic(receipt.mandate.maximumShares, 'research maximum shares')
+    const askBound = receipt.executionSnapshot.bestAsk === null ? null : decimalToAtomic(receipt.executionSnapshot.bestAsk, 'research ask')
+    const driftBound = decimalToAtomic(receipt.mandate.maximumPriceDrift, 'research price drift')
+    const matches = receipt.decision === 'APPROVE'
+      && Date.parse(receipt.createdAt) <= nowMs
+      && receipt.analysisHash === canonicalMandate.researchAnalysisHash
+      && receipt.side === 'BUY'
+      && receipt.market.tokenId === signedOpen.tokenId
+      && receipt.market.url === signedOpen.marketUrl
+      && receipt.market.outcome.trim().toLowerCase() === signedOpen.outcome.trim().toLowerCase()
+      && receipt.blockers.length === 0
+      && receipt.evidence.tradeStance === 'SUPPORT'
+      && receipt.evidence.researchStatus !== 'UNAVAILABLE'
+      && ['HIGH', 'MEDIUM'].includes(receipt.evidence.evidenceQuality || '')
+      && receipt.evidence.newsCount > 0
+      && researchSpend.ok && maximumAmount.atomic <= researchSpend.atomic
+      && researchPrice.ok && maximumPrice.atomic <= researchPrice.atomic
+      && researchShares.ok && researchShares.atomic > 0n && takerAmount <= researchShares.atomic
+      && askBound?.ok && driftBound.ok && maximumPrice.atomic <= askBound.atomic + driftBound.atomic
+      && validUntilMs <= Date.parse(receipt.expiresAt)
+    addCheck('research', matches ? 'PASS' : 'BLOCK', matches
+      ? 'The exact stored ZeroScout approval and its limits are bound to this signed mandate.'
+      : 'The signed mandate does not match the approved research decision or exceeds its limits.')
+  }
   addCheck(
     'amount',
     makerAmount <= maximumAmount.atomic ? 'PASS' : 'BLOCK',
@@ -485,6 +538,28 @@ export function evaluateGovernedOpenInput(body: unknown, nowMs = Date.now()): Go
   }
 }
 
+// HTTP callers cannot provide their own receipt. Refresh the clock after storage IO.
+export async function evaluateGovernedOpenWithResearch(
+  body: unknown,
+  dependencies = {
+    readDecision: (id: string): Promise<unknown> => readDurableJson(`polydesk:smart-trader:decision:${id}`),
+    now: () => Date.now(),
+  },
+): Promise<GovernedOpenEvaluation> {
+  if (!isRecord(body)) return evaluateGovernedOpenInput(body, dependencies.now())
+  const authorization = buildGovernedMandateAuthorization(body.externalOrderId, body.mandate, dependencies.now())
+  if (!authorization.ok) return authorization
+  let receipt: unknown
+  if (authorization.canonicalMandate.researchPolicy === APPROVED_RESEARCH_POLICY) {
+    try {
+      receipt = await dependencies.readDecision(String(authorization.canonicalMandate.researchDecisionId))
+    } catch {
+      return { ok: false, status: 503, error: 'Research decision storage is unavailable; approval is disabled.' }
+    }
+  }
+  return evaluateGovernedOpenInput(body, dependencies.now(), receipt)
+}
+
 export function governedOpenReady() {
   return hasRenderDurableStore()
 }
@@ -511,12 +586,12 @@ export function polymarketGovernedOpenAuthorizationHandler(req: Request, res: Re
   })
 }
 
-export function polymarketGovernedOpenValidationHandler(req: Request, res: Response) {
+export async function polymarketGovernedOpenValidationHandler(req: Request, res: Response) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ ok: false, error: 'Method not allowed.' })
   }
-  const evaluation = evaluateGovernedOpenInput(req.body)
+  const evaluation = await evaluateGovernedOpenWithResearch(req.body)
   if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
   return res.status(200).json({
     ok: true,
@@ -558,7 +633,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     return res.status(503).json({ ok: false, error: 'PolyDesk governed OPEN durable storage is not configured.' })
   }
 
-  const evaluation = evaluateGovernedOpenInput(req.body)
+  const evaluation = await evaluateGovernedOpenWithResearch(req.body)
   if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
 
   const storeKey = `polymarket-governed-open:${sha256(evaluation.externalOrderId).slice(0, 32)}`
@@ -586,6 +661,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
         payer: clean(paidReq.payment?.payer, 96) || evaluation.signedOpen.signer.toLowerCase(),
         authoritySigner: clean(evaluation.mandate.authoritySigner, 80).toLowerCase(),
         ...(evaluation.mandate.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { researchPolicy: INDEPENDENT_RESEARCH_POLICY } : {}),
+        ...(evaluation.mandate.researchPolicy === APPROVED_RESEARCH_POLICY ? { researchPolicy: APPROVED_RESEARCH_POLICY, researchDecisionId: String(evaluation.mandate.researchDecisionId), researchAnalysisHash: String(evaluation.mandate.researchAnalysisHash) } : {}),
         market: {
           title: evaluation.signedOpen.marketTitle,
           url: evaluation.signedOpen.marketUrl,
@@ -660,7 +736,9 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
     reasons: evaluation.reasons,
     checks: evaluation.checks,
     mandate: evaluation.mandate,
-    ...(record.researchPolicy ? { researchPolicy: record.researchPolicy, disclaimer: INDEPENDENT_RESEARCH_DISCLAIMER } : {}),
+    ...(record.researchPolicy ? { researchPolicy: record.researchPolicy } : {}),
+    ...(record.researchPolicy === INDEPENDENT_RESEARCH_POLICY ? { disclaimer: INDEPENDENT_RESEARCH_DISCLAIMER } : {}),
+    ...(record.researchDecisionId ? { researchDecisionId: record.researchDecisionId, researchAnalysisHash: record.researchAnalysisHash } : {}),
     hashes: {
       order: record.orderHash,
       mandate: record.mandateHash,
@@ -713,6 +791,7 @@ export default async function a2mcpPolymarketGovernedOpenHandler(req: Request, r
 }
 
 type CompletionDependencies = {
+  fetchFinality: (receipt: RecordValue) => Promise<PolygonFinalityProof>
   fetchReceipt: (transactionHash: string) => Promise<RecordValue | null>
   fetchTrades: (maker: string) => Promise<RecordValue[]>
   now: () => number
@@ -740,6 +819,18 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 const completionDependencies: CompletionDependencies = {
+  fetchFinality: receipt => fetchPolygonFinality(receipt, async (method, params) => {
+    const rpcUrl = env('POLYMARKET_RPC_URL', 'POLYGON_RPC_URL')
+    if (!rpcUrl) throw new Error('Polygon completion RPC is required.')
+    const body = await fetchJson(rpcUrl, {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    })
+    if (!isRecord(body) || body.jsonrpc !== '2.0' || body.id !== 1 || body.error || !('result' in body)) {
+      throw new Error('Polygon finality RPC response is invalid.')
+    }
+    return body.result
+  }),
   fetchReceipt: async transactionHash => {
     const rpcUrl = env('POLYMARKET_RPC_URL', 'POLYGON_RPC_URL')
     if (!rpcUrl) throw new Error('POLYMARKET_RPC_URL or POLYGON_RPC_URL is required for completion proof.')
@@ -776,6 +867,7 @@ export async function verifyGovernedTradeCompletion(
     return { ok: false as const, status: 409, error: 'Execution lacks an exact signed-order proof binding; legacy records cannot be completed through this verifier.' }
   }
   if (record.receipt) {
+    if (!record.receipt.proofs.polygonFinalityVerified || !record.receipt.finality) return { ok: false as const, status: 409, error: 'Legacy receipt lacks Polygon finality proof; explicit re-verification is required.' }
     if (!record.receipt.proofs.exactSignedOrderVerified) return { ok: false as const, status: 409, error: 'Legacy receipt has not passed exact signed-order verification.' }
     if (exactHash(input.orderId) !== record.receipt.execution.orderId || exactHash(input.transactionHash) !== record.receipt.execution.transactionHash) {
       return { ok: false as const, status: 409, error: 'Execution already has a different verified completion.' }
@@ -832,6 +924,12 @@ export async function verifyGovernedTradeCompletion(
     return { ok: false as const, status: 409, error: error instanceof Error ? error.message : 'Exact order fill verification failed.' }
   }
   const exchange = chainFill.exchange
+  let finality: PolygonFinalityProof
+  try {
+    finality = await dependencies.fetchFinality(chainReceipt)
+  } catch {
+    return { ok: false as const, status: 409, error: 'Polygon finality is unavailable, pending, or inconsistent. No verified receipt was issued.' }
+  }
   let matchedTrades: RecordValue[] = []
   for (let attempt = 0; attempt < 4 && !matchedTrades.length; attempt += 1) {
     const trades = await dependencies.fetchTrades(record.order.maker)
@@ -861,6 +959,7 @@ export async function verifyGovernedTradeCompletion(
   }
 
   const receipt: GovernedTradeReceipt = {
+    finality,
     receiptVersion: 'polydesk-governed-trade-receipt-v1',
     executionId: record.executionId,
     externalOrderId: record.externalOrderId,
@@ -881,9 +980,13 @@ export async function verifyGovernedTradeCompletion(
       decisionHash: record.decisionHash,
       orderHash: record.orderHash,
       mandateHash: record.mandateHash,
+      ...(record.researchPolicy ? { researchPolicy: record.researchPolicy } : {}),
+      ...(record.researchPolicy === APPROVED_RESEARCH_POLICY ? { researchDecisionId: record.researchDecisionId, researchAnalysisHash: record.researchAnalysisHash } : {}),
     },
     proofs: {
+      // Finality is separate from transaction success.
       polygonReceiptVerified: true,
+      polygonFinalityVerified: true,
       allowedExchangeVerified: true,
       orderIdInReceipt: true,
       publicTradeMatched: true,
@@ -963,6 +1066,17 @@ export async function polymarketGovernedTradeCompleteHandler(req: Request, res: 
   return res.status(200).json({ ok: true, duplicate: result.duplicate, receipt: result.receipt })
 }
 
+export function governedReceiptReadResponse(receipt: GovernedTradeReceipt) {
+  if (receipt.proofs?.polygonFinalityVerified !== true || !receipt.finality
+      || receipt.proofs?.exactSignedOrderVerified !== true) {
+    // Preserve historical evidence for existing consumers without upgrading its
+    // assurance level. Strict buyer verification still rejects these receipts.
+    return { ok: true, receipt, verificationStatus: 'LEGACY_REQUIRES_REVERIFICATION',
+      requiresReverification: true, tradeReceiptVerified: false, signingAuthorized: false }
+  }
+  return { ok: true, receipt }
+}
+
 export async function polymarketGovernedTradeReceiptHandler(req: Request, res: Response) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
@@ -973,6 +1087,6 @@ export async function polymarketGovernedTradeReceiptHandler(req: Request, res: R
   const execution = await readDurableJson<GovernedOpenRecord>(`polymarket-governed-execution:${executionId}`)
   const receipt = execution?.receipt ?? await readDurableJson<GovernedTradeReceipt>(`polymarket-governed-receipt:${executionId}`)
   if (!receipt) return res.status(404).json({ ok: false, error: 'Verified trade receipt was not found.' })
-  res.setHeader('Cache-Control', 'public, max-age=60')
-  return res.status(200).json({ ok: true, receipt })
+  res.setHeader('Cache-Control', 'no-store')
+  return res.status(200).json(governedReceiptReadResponse(receipt))
 }
