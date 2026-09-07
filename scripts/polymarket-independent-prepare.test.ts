@@ -61,6 +61,20 @@ test('rejects an unrelated wallet instead of preparing for it', async () => {
   assert.equal(result.ok, false)
   assert.equal(result.status, 409)
 })
+test('freshness failures have a non-authorizing handoff and preserve time boundaries', async () => {
+  for (const timestamp of ['', 'not-a-time', String(now - 30_001), String(now + 5_001)]) {
+    const result = await prepareIndependentPolymarketTrade(input(), dependencies({ timestamp }))
+    assert.equal(result.status, 409)
+    assert.equal((result as any).code, 'ORDER_BOOK_FRESHNESS_REQUIRED')
+    assert.equal((result as any).nextAction, 'WAIT_FOR_FRESH_MARKET_DATA_AND_REPREPARE')
+    for (const field of ['readyForLocalSigning', 'signingAuthorized', 'orderSubmitted', 'automaticRetryAllowed', 'manualReviewCanOverride']) assert.equal((result as any)[field], false)
+    for (const field of ['data', 'mandate', 'authorizationMessage', 'signingPlan']) assert.equal(field in result, false)
+  }
+  for (const timestamp of [String(now - 30_000), String(now + 5_000)]) {
+    assert.equal((await prepareIndependentPolymarketTrade(input(), dependencies({ timestamp }))).ok, true)
+  }
+})
+
 test('price, freshness, funding, allowance, deployment and market checks still block', async () => {
   for (const options of [
     { price: '0.60' }, { timestamp: String(now - 31_000) }, { timestamp: String(now + 10_000) },

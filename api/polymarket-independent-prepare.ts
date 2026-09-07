@@ -47,7 +47,13 @@ export async function prepareIndependentPolymarketTrade(raw: unknown, deps: Depe
     ? (numericTimestamp < 1_000_000_000_000 ? numericTimestamp * 1000 : numericTimestamp)
     : Date.parse(rawTimestamp || '')
   const now = deps.now()
-  if (!Number.isFinite(bookTimestamp) || now - bookTimestamp > 30_000 || bookTimestamp - now > 5_000) return { ok: false as const, status: 409, error: 'A verified order book timestamp within 30 seconds is required.' }
+  if (!Number.isFinite(bookTimestamp) || now - bookTimestamp > 30_000 || bookTimestamp - now > 5_000) return {
+    ok: false as const, status: 409, error: 'A verified order book timestamp within 30 seconds is required.',
+    code: 'ORDER_BOOK_FRESHNESS_REQUIRED', state: 'EXECUTION_BLOCKED',
+    nextAction: 'WAIT_FOR_FRESH_MARKET_DATA_AND_REPREPARE',
+    readyForLocalSigning: false, signingAuthorized: false, orderSubmitted: false,
+    automaticRetryAllowed: false, manualReviewCanOverride: false,
+  }
   if (Date.parse(plan.expiresAt) <= now) return { ok: false as const, status: 409, error: 'The preparation plan expired. Request a fresh plan.' }
   const authorization = buildGovernedMandateAuthorization(plan.externalOrderId, {
     maximumAmountUsdc: maxSpendUsdc, maximumPrice,
