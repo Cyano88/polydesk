@@ -13,7 +13,8 @@ function input(overrides: Record<string, unknown> = {}) {
     wallet, marketUrl: 'https://polymarket.com/event/example-market', outcome: 'Yes', side: 'BUY',
     maxSpendUsdc: '5', maximumPrice: '0.55', orderType: 'FOK', ...overrides }
 }
-function dependencies(options: { price?: string; timestamp?: string; balance?: bigint; allowance?: bigint; deployed?: boolean; active?: boolean } = {}) {
+function dependencies(options: { price?: string; timestamp?: string; balance?: bigint; allowance?: bigint; deployed?: boolean; active?: boolean; walletDelayMs?: number; observeTiming?: PrepareOpenDependencies['observeTiming'] } = {}) {
+  let clock = now
   const execution: PrepareOpenDependencies = {
     fetchJson: async url => url.includes('/events/slug/') ? { slug: 'example-market', markets: [{
       id: '501', slug: 'example-market', question: 'Example market?', conditionId,
@@ -22,14 +23,42 @@ function dependencies(options: { price?: string; timestamp?: string; balance?: b
     }] } : { market: conditionId, asset_id: '111', timestamp: options.timestamp ?? String(now), hash: 'book-hash',
       bids: [{ price: '0.49', size: '100' }], asks: [{ price: options.price ?? '0.50', size: '100' }],
       min_order_size: '1', tick_size: '0.01', neg_risk: false },
-    readWallet: async () => ({ deployed: options.deployed !== false, balanceRaw: options.balance ?? 20_000_000n, allowanceRaw: options.allowance ?? 20_000_000n }),
-    now: () => now, builderCode: () => `0x${'ab'.repeat(32)}`,
+    readWallet: async () => {
+      clock += options.walletDelayMs ?? 0
+      return { deployed: options.deployed !== false, balanceRaw: options.balance ?? 20_000_000n, allowanceRaw: options.allowance ?? 20_000_000n }
+    },
+    now: () => clock, builderCode: () => `0x${'ab'.repeat(32)}`, observeTiming: options.observeTiming,
   }
   return {
     inspectWallet: async () => ({ ownerAddress: owner as `0x${string}`, depositWalletAddress: wallet as `0x${string}`, deployed: options.deployed !== false }),
-    prepare: (raw: unknown) => preparePolymarketOpen(raw, execution), now: () => now,
+    prepare: (raw: unknown) => preparePolymarketOpen(raw, execution), now: () => clock,
   }
 }
+test('timing distinguishes an initially stale book from one aged during wallet checks', async () => {
+  for (const [initialAge, delay, expectedStatus] of [[29000, 2000, 409], [31000, 0, 409], [28000, 2000, 200]]) {
+    const samples: unknown[] = []
+    const result = await prepareIndependentPolymarketTrade(input(), dependencies({ timestamp: String(now - initialAge),
+      walletDelayMs: delay, observeTiming: timing => samples.push(timing) }))
+    assert.equal(result.status, expectedStatus)
+    assert.deepEqual(samples, [{ schema: 'polydesk-preparation-timing-v1', bookFetchMs: 0,
+      walletCheckMs: delay, bookAgeAtReceiptMs: initialAge, bookAgeAfterWalletMs: initialAge + delay,
+      walletCheckSucceeded: true }])
+    if (expectedStatus === 409) {
+      assert.equal((result as any).code, 'ORDER_BOOK_FRESHNESS_REQUIRED')
+      assert.equal((result as any).signingAuthorized, false)
+      assert.equal('data' in result, false)
+    }
+  }
+})
+
+test('timing observer failures cannot change preparation safety', async () => {
+  for (const age of [0, 31000]) {
+    const result = await prepareIndependentPolymarketTrade(input(), dependencies({ timestamp: String(now - age),
+      observeTiming: () => { throw new Error('synthetic observer failure') } }))
+    assert.equal(result.status, age === 0 ? 200 : 409)
+  }
+})
+
 test('prepares an exact independent BUY without a research service or analysis receipt', async () => {
   const result = await prepareIndependentPolymarketTrade(input(), dependencies())
   assert.equal(result.ok, true)

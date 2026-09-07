@@ -85,6 +85,15 @@ type ResolvedMarket = {
   tokenId: string
 }
 
+export type PreparationTiming = {
+  schema: 'polydesk-preparation-timing-v1'
+  bookFetchMs: number | null
+  walletCheckMs: number | null
+  bookAgeAtReceiptMs: number | null
+  bookAgeAfterWalletMs: number | null
+  walletCheckSucceeded: boolean
+}
+
 export type PrepareOpenDependencies = {
   fetchJson: (url: string) => Promise<unknown>
   readWallet: (wallet: `0x${string}`, spender: `0x${string}`) => Promise<{
@@ -94,6 +103,7 @@ export type PrepareOpenDependencies = {
   }>
   now: () => number
   builderCode: () => string
+  observeTiming?: (timing: PreparationTiming) => void
 }
 
 function clean(value: unknown, max = 280) {
@@ -231,6 +241,7 @@ const defaultDependencies: PrepareOpenDependencies = {
   readWallet: defaultReadWallet,
   now: () => Date.now(),
   builderCode: () => clean(process.env.POLYMARKET_BUILDER_CODE, 80),
+  observeTiming: timing => console.info('[polymarket] preparation timing', JSON.stringify(timing)),
 }
 
 function marketCandidates(markets: GammaMarket[]) {
@@ -402,6 +413,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   if (!resolvedResult.ok) return resolvedResult
   const resolved = resolvedResult.value
 
+  const bookFetchStartedAt = dependencies.now()
   let book: OrderBook
   try {
     const value = await dependencies.fetchJson(`${CLOB_ORIGIN}/book?token_id=${encodeURIComponent(resolved.tokenId)}`)
@@ -410,6 +422,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   } catch (error) {
     return { ok: false as const, status: 502, error: `Polymarket order-book lookup failed: ${error instanceof Error ? error.message : 'unknown error'}` }
   }
+  const bookReceivedAt = dependencies.now()
   if (clean(book.asset_id, 96) !== resolved.tokenId) {
     return { ok: false as const, status: 502, error: 'Polymarket order book did not match the resolved outcome token.' }
   }
@@ -448,10 +461,28 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   const spender = negRisk ? NEG_RISK_CTF_EXCHANGE_V2 : CTF_EXCHANGE_V2
 
   let walletState: Awaited<ReturnType<PrepareOpenDependencies['readWallet']>>
+  const walletCheckStartedAt = dependencies.now()
+  let walletCheckSucceeded = false
   try {
     walletState = await dependencies.readWallet(input.wallet as `0x${string}`, spender)
+    walletCheckSucceeded = true
   } catch (error) {
     return { ok: false as const, status: 502, error: `Polygon wallet-readiness check failed: ${error instanceof Error ? error.message : 'unknown error'}` }
+  } finally {
+    const finishedAt = dependencies.now()
+    const raw = clean(book.timestamp, 64), numeric = Number(raw)
+    const timestamp = raw && Number.isFinite(numeric)
+      ? (numeric < 1_000_000_000_000 ? numeric * 1000 : numeric) : Date.parse(raw)
+    const finite = (value: number) => Number.isSafeInteger(value) ? value : null
+    const duration = (value: number) => value >= 0 ? finite(value) : null
+    // Diagnostic-only fixed fields. Never include request identifiers, balances or provider errors.
+    try {
+      dependencies.observeTiming?.({ schema: 'polydesk-preparation-timing-v1',
+        bookFetchMs: duration(bookReceivedAt - bookFetchStartedAt),
+        walletCheckMs: duration(finishedAt - walletCheckStartedAt),
+        bookAgeAtReceiptMs: finite(bookReceivedAt - timestamp),
+        bookAgeAfterWalletMs: finite(finishedAt - timestamp), walletCheckSucceeded })
+    } catch { /* Observability must not alter readiness or grant authority. */ }
   }
   const amountRaw = usdcAtomic(input.maxSpendUsdc)
   const issues: string[] = []
