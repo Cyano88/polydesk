@@ -423,6 +423,12 @@ export function deriveResolutionSource(resolutionRules: string) {
 }
 
 export function normalizeMarket(raw: JsonRecord, event: JsonRecord): SmartTraderMarket | null {
+  // /markets returns child markets, not event envelopes. Keep the parent URL.
+  if (raw === event) {
+    const parents = Array.isArray(raw.events) ? raw.events.filter(isRecord) : []
+    const parentSlugs = new Set(parents.map(parent => clean(parent.slug, 180)).filter(Boolean))
+    event = parentSlugs.size === 1 ? parents.find(parent => clean(parent.slug, 180))! : {}
+  }
   const question = clean(raw.question || raw.title, 280)
   const conditionId = clean(raw.conditionId || raw.condition_id, 96)
   const outcomes = stringArray(raw.outcomes)

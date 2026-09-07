@@ -295,6 +295,18 @@ test('bounded paid delivery retries missing proof and stops on proof-bearing suc
   assert.equal(delivery.result, complete)
 })
 
+test('Gamma child-market payload keeps its parent event URL and exact child slug', () => {
+  const raw = { question: 'Will Team A win?', conditionId, slug: 'fixture-team-a', outcomes: ['Yes', 'No'], clobTokenIds: ['111', '222'], events: [{ slug: 'fixture' }] }
+  const result = normalizeMarket(raw, raw)
+  assert.equal(result?.eventSlug, 'fixture')
+  assert.equal(result?.marketSlug, 'fixture-team-a')
+  const missing = { ...raw, events: [] }
+  assert.equal(normalizeMarket(missing, missing)?.eventSlug, '')
+  const ambiguous = { ...raw, events: [{ slug: 'fixture' }, { slug: 'other-fixture' }] }
+  assert.equal(normalizeMarket(ambiguous, ambiguous)?.eventSlug, '')
+  assert.equal(normalizeMarket(raw, { slug: 'explicit-parent' })?.eventSlug, 'explicit-parent')
+})
+
 test('Gamma market normalization preserves complete rules and derives the named resolution authority', () => {
   const rules = `${'Rule context. '.repeat(110)}The resolution source for this market is the FOMC statement at https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm. Final fallback rules remain authoritative.`
   const normalized = normalizeMarket({
