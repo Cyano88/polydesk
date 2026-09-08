@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { prepareResearchedPolymarketTrade } from '../api/polymarket-researched-prepare.js'
+import { preparePolymarketOpen } from '../api/polymarket-open-prepare.js'
 import {
   buildSettledSmartTraderAnalysisRecord,
   deriveResolutionSource,
@@ -879,6 +881,63 @@ test('PREPARE returns a preview-only official plugin handoff and performs no sig
   assert.match(result.data.next, /No trade has been signed or submitted/i)
 })
 
+test('researched exact preparation binds real validated approval and never downgrades policy', async () => {
+  for (const scenario of ['FAK', 'FOK', 'hash', 'token', 'condition', 'outcome', 'spend', 'price', 'receipt-body', 'mixed-policy', 'expired-storage', 'expired-wallet', 'stale-book', 'unfunded', 'wallet', 'unavailable', 'market-blocked'] as const) {
+    let clock = now
+    const deps = dependencies({ now: () => clock, ...(scenario === 'unavailable' ? { research: async () => null } : {}) })
+    const receipt = await analyzeForBuy(deps)
+    if (scenario === 'market-blocked') deps.resolveMarket = async () => [market({ closed: true })]
+    const owner = smartWallet, wallet = '0x2222222222222222222222222222222222222222'
+    const input: Record<string, unknown> = { researchDecisionId: receipt.decisionId, researchAnalysisHash: receipt.analysisHash,
+      externalOrderId: 'research:synthetic:001', ownerAddress: owner, wallet, marketUrl: receipt.market.url,
+      conditionId, tokenId: '111', outcome: 'Yes', side: 'BUY', maxSpendUsdc: '5', maximumPrice: '0.52', orderType: scenario === 'FAK' ? 'FAK' : 'FOK' }
+    if (scenario === 'hash') input.researchAnalysisHash = 'a'.repeat(64)
+    if (scenario === 'token') input.tokenId = '222'
+    if (scenario === 'condition') input.conditionId = '0x' + 'ef'.repeat(32)
+    if (scenario === 'outcome') input.outcome = 'No'
+    if (scenario === 'spend') input.maxSpendUsdc = '99999'
+    if (scenario === 'price') input.maximumPrice = '0.99'
+    if (scenario === 'receipt-body') input.receipt = receipt
+    if (scenario === 'mixed-policy') input.acknowledgeIndependentDecision = true
+    if (scenario === 'wallet') input.wallet = owner
+    const result = await prepareResearchedPolymarketTrade(input, {
+      now: () => clock,
+      readDecision: async id => { if (scenario === 'expired-storage') clock = Date.parse(receipt.expiresAt); return deps.readDecision(id) },
+      approve: raw => runPolymarketSmartTrader(raw, deps),
+      inspectWallet: async () => {
+        if (scenario === 'expired-wallet') clock = Date.parse(receipt.expiresAt)
+        return { ownerAddress: owner as `0x${string}`, depositWalletAddress: wallet as `0x${string}`, deployed: true }
+      },
+      prepare: raw => preparePolymarketOpen(raw, {
+        now: () => clock, builderCode: () => '0x' + 'ab'.repeat(32),
+        readWallet: async () => ({ deployed: true, balanceRaw: scenario === 'unfunded' ? 0n : 20_000_000n, allowanceRaw: 20_000_000n }),
+        fetchJson: async url => url.includes('/events/slug/') ? { slug: market().eventSlug, markets: [{
+          id: '501', slug: market().marketSlug, question: market().question, conditionId, outcomes: '["Yes","No"]',
+          clobTokenIds: '["111","222"]', active: true, closed: false, enableOrderBook: true, acceptingOrders: true,
+        }] } : { market: conditionId, asset_id: '111', timestamp: String(clock - (scenario === 'stale-book' ? 31000 : 1000)),
+          hash: 'synthetic-book', bids: [{ price: '0.50', size: '100' }], asks: [{ price: '0.51', size: '100' }],
+          min_order_size: '1', tick_size: '0.01', neg_risk: false },
+      }),
+    })
+    assert.equal(result.ok, scenario === 'FAK' || scenario === 'FOK', scenario)
+    if (result.ok) {
+      assert.equal(result.data.mode, 'zeroscout-approved-v1')
+      assert.equal(result.data.mandate.researchDecisionId, receipt.decisionId)
+      assert.equal(result.data.mandate.researchAnalysisHash, receipt.analysisHash)
+      assert.equal(result.data.mandate.maximumAmountUsdc, '5')
+      assert.equal(result.data.mandate.maximumPrice, '0.52')
+      assert.equal(result.data.signingAuthorized, false)
+      assert.equal(result.data.orderSubmitted, false)
+      assert.equal(result.data.authoritySignatureRequired, true)
+      assert(Date.parse(result.data.expiresAt) <= Date.parse(receipt.expiresAt))
+    } else {
+      assert.equal('data' in result, false, scenario)
+      assert.equal(result.signingAuthorized, false)
+      assert.equal(result.automaticRetryAllowed, false)
+    }
+  }
+})
+
 test('PREPARE rejects an outcome that does not map exactly', async () => {
   const deps = dependencies()
   const decision = await analyzeForBuy(deps)
@@ -947,6 +1006,44 @@ test('PREPARE rejects an expired analysis receipt', async () => {
   if (result.ok) return
   assert.equal(result.status, 410)
   assert.match(result.error, /expired/i)
+})
+
+test('PREPARE rechecks receipt expiry after asynchronous storage and market work', async () => {
+  for (const stage of ['preflight-storage', 'storage', 'market', 'book'] as const) {
+    let clock = now
+    const deps = dependencies({ now: () => clock })
+    const decision = await analyzeForBuy(deps)
+    const expires = Date.parse(decision.expiresAt)
+    clock = expires - 1
+    let marketCalls = 0
+    const read = deps.readDecision
+    const resolve = deps.resolveMarket
+    const book = deps.fetchBook
+    deps.readDecision = async id => {
+      const stored = await read(id)
+      if (stage === 'storage' || stage === 'preflight-storage') clock = expires
+      return stored
+    }
+    deps.resolveMarket = async id => {
+      marketCalls++
+      if (stage === 'market') clock = expires
+      return resolve(id)
+    }
+    deps.fetchBook = async id => {
+      if (stage === 'book') clock = expires
+      return book(id)
+    }
+    const request = { action: 'PREPARE', marketId: conditionId, outcome: 'Yes', side: 'BUY', amountUsdc: 5, decisionId: decision.decisionId }
+    const result = stage === 'preflight-storage'
+      ? await preflightPolymarketSmartTraderRequest(request, deps)
+      : await runPolymarketSmartTrader(request, deps)
+    assert.equal(result.ok, false, stage)
+    if (result.ok) continue
+    assert.equal(result.status, 410, stage)
+    assert.match(result.error, /expired/i)
+    assert.equal('data' in result, false, 'Expired approval must not return a handoff')
+    if (stage === 'storage' || stage === 'preflight-storage') assert.equal(marketCalls, 0)
+  }
 })
 
 test('PREPARE rejects a BUY limit above the analyzed mandate', async () => {

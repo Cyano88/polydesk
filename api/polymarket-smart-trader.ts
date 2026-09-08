@@ -950,7 +950,7 @@ export async function preflightPolymarketSmartTraderRequest(
     return { ok: false as const, status: 503, error: 'Durable decision storage is unavailable; PREPARE is disabled.' }
   }
   if (!stored) return { ok: false as const, status: 404, error: 'The supplied decisionId was not found.' }
-  const validated = validateSmartTraderDecisionReceipt(stored, input.decisionId, now)
+  const validated = validateSmartTraderDecisionReceipt(stored, input.decisionId, dependencies.now())
   if (!validated.ok) return validated
   const decision = validated.value
   if (decision.decision !== 'APPROVE') {
@@ -1249,7 +1249,7 @@ export async function runPolymarketSmartTrader(
       return { ok: false as const, status: 503, error: 'Durable decision storage is unavailable; PREPARE is disabled.' }
     }
     if (!boundDecision) return { ok: false as const, status: 404, error: 'The supplied decisionId was not found.' }
-    const validatedDecision = validateSmartTraderDecisionReceipt(boundDecision, input.decisionId, now)
+    const validatedDecision = validateSmartTraderDecisionReceipt(boundDecision, input.decisionId, dependencies.now())
     if (!validatedDecision.ok) return validatedDecision
     boundDecision = validatedDecision.value
     if (boundDecision.decision !== 'APPROVE') {
@@ -1299,6 +1299,10 @@ export async function runPolymarketSmartTrader(
   if (input.outcome && !exact) return { ok: false as const, status: 409, error: 'The requested outcome did not map uniquely to this market.', outcomes: [...new Set(ranked.map(row => row.outcome.label))] }
   if (input.action === 'PREPARE') {
     if (!boundDecision) return { ok: false as const, status: 500, error: 'Decision binding failed.' }
+    // Storage, market resolution and order-book reads may outlive the approval.
+    // Never issue a preparation handoff using only the request-start clock.
+    const currentDecision = validateSmartTraderDecisionReceipt(boundDecision, input.decisionId, dependencies.now())
+    if (!currentDecision.ok) return currentDecision
     if (selected.market.conditionId.toLowerCase() !== boundDecision.market.conditionId.toLowerCase()
       || selected.outcome.tokenId !== boundDecision.market.tokenId
       || selected.outcome.label.toLowerCase().trim() !== boundDecision.market.outcome.toLowerCase().trim()

@@ -32,6 +32,7 @@ import polymarketBuilderSignerHandler from './api/polymarket-builder-signer.js'
 import polymarketOrderHandler from './api/polymarket-order.js'
 import polymarketOpenPrepareHandler from './api/polymarket-open-prepare.js'
 import independentPolymarketPrepareHandler from './api/polymarket-independent-prepare.js'
+import researchedPolymarketPrepareHandler from './api/polymarket-researched-prepare.js'
 import { polymarketSmartTraderDecisionHandler, polymarketSmartTraderPaymentStatusHandler, startSmartTraderDeliveryWorker } from './api/polymarket-smart-trader.js'
 import polymarketCopyPrepareHandler from './api/polymarket-copy-prepare.js'
 import polymarketDiscoverHandler from './api/polymarket-discover.js'
@@ -148,6 +149,7 @@ app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
 app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
 app.get('/api/polymarket-independent/prepare', readLimiter, independentPolymarketPrepareHandler)
 app.post('/api/polymarket-independent/prepare', strictLimiter, independentPolymarketPrepareHandler)
+app.post('/api/polymarket-researched/prepare', strictLimiter, researchedPolymarketPrepareHandler)
 app.post('/api/polymarket-copy/prepare', strictLimiter, polymarketCopyPrepareHandler)
 app.all('/api/polymarket-agent-flow', strictLimiter, polymarketAgentFlowHandler)
 app.post('/api/polymarket-account/readiness', strictLimiter, polymarketAccountReadinessHandler)
