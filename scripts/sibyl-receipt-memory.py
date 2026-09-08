@@ -18,12 +18,24 @@ def require(value):
         raise ValueError('Invalid memory projection or storage')
 
 
+def trusted_render_mount(path, metadata):
+    # Render owns the mounted volume root; only its service group may write it.
+    # This exception never applies to owner directories or arbitrary ancestors.
+    if (path != Path('/var/sibyl') or metadata.st_uid != 0
+            or metadata.st_gid != os.getegid() or metadata.st_mode & 0o002):
+        return False
+    mounts = Path('/proc/self/mountinfo').read_text()
+    return any(len(parts := line.split()) > 4 and parts[4] == '/var/sibyl'
+               for line in mounts.splitlines())
+
+
 def private_directory(path):
     require(path.is_absolute() and '..' not in path.parts)
     for parent in (path, *path.parents):
         metadata = parent.lstat()
         require(stat.S_ISDIR(metadata.st_mode))
-        require(not metadata.st_mode & 0o022 or bool(metadata.st_mode & stat.S_ISVTX))
+        require(not metadata.st_mode & 0o022 or bool(metadata.st_mode & stat.S_ISVTX)
+                or trusted_render_mount(parent, metadata))
     metadata = path.stat()
     require(metadata.st_uid == os.geteuid() and not metadata.st_mode & 0o077)
 

@@ -105,7 +105,13 @@ and replay. The test relay is not the production process launcher.
 Operator CLI acceptance also passed: enqueue preserves completed delivery,
 ordinary retry rejects a delivered job, and explicit rebuild replays only the
 same memory projection. Adapter source SHA256 at this checkpoint:
-58ae37be1da74f6d0dc9d38d264612232664677656f9c3c0719447fb2d4dec18.
+e8a5e95999b4a1f4cd7b3f8ad6982fabc2cc8fb26fa7202cd2bf4c2acc29d2c0.
+
+Render mounts its volume root with mode 2775. The adapter allows group write only
+for the exact /var/sibyl mount, owned by root with the current service group,
+without world write, and confirmed in /proc/self/mountinfo. All per-owner
+directories still require service ownership and mode 0700. Security regression
+tests reject another path/group, world write, and an unmounted directory.
 
 The older dedicated test cluster reported a corrupt control file and was not
 repaired or overwritten. Production database contents and deployment were not

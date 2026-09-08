@@ -23,7 +23,7 @@ async function prepare() {
   await privateDirectory('/var/sibyl/receipt-memory-canary')
   process.env.SIBYL_MEMORY_PYTHON = resolve('.sibyl-runtime/bin/python')
   process.env.SIBYL_MEMORY_BRIDGE = resolve('scripts/sibyl-receipt-memory.py')
-  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = '58ae37be1da74f6d0dc9d38d264612232664677656f9c3c0719447fb2d4dec18'
+  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = 'e8a5e95999b4a1f4cd7b3f8ad6982fabc2cc8fb26fa7202cd2bf4c2acc29d2c0'
   process.env.SIBYL_MEMORY_ROOT = '/var/sibyl/receipt-memory-canary'
   const scope = createHash('sha256').update('polydesk-buyer-v1:0x'+'22'.repeat(20)).digest('hex')
   const previous = await lstat('/var/sibyl/receipt-memory-canary/'+scope+'/memory.db')
@@ -55,6 +55,7 @@ if (enabled) {
     const mount = await lstat('/var/sibyl').catch(() => null)
     console.error('[receipt-memory-startup]', JSON.stringify({state:'OPERATOR_CONFIGURATION_REQUIRED',stage,reason,
       mountMode:mount ? (mount.mode & 0o7777).toString(8) : null,mountOwned:mount?.uid === process.getuid?.(),
+      mountRootOwned:mount?.uid === 0,mountGroupMatches:mount?.gid === process.getgid?.(),
       workerEnabled:false,signingAttempted:false,orderSubmitted:false}))
   }
 }

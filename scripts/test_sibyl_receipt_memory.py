@@ -5,11 +5,27 @@ from pathlib import Path
 import runpy
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 bridge = runpy.run_path(str(Path(__file__).with_name('sibyl-receipt-memory.py')))
 
 
 class ReceiptMemoryTests(unittest.TestCase):
+    def test_render_mount_exception_is_exact_and_group_scoped(self):
+        meta = SimpleNamespace(st_uid=0, st_gid=os.getegid(), st_mode=0o42775)
+        with patch.object(Path, 'read_text', return_value='1 2 0:1 / /var/sibyl rw - ext4 disk rw'):
+            self.assertTrue(bridge['trusted_render_mount'](Path('/var/sibyl'), meta))
+            self.assertFalse(bridge['trusted_render_mount'](Path('/var/other'), meta))
+            meta.st_gid += 1
+            self.assertFalse(bridge['trusted_render_mount'](Path('/var/sibyl'), meta))
+            meta.st_gid = os.getegid()
+            meta.st_mode = 0o42777
+            self.assertFalse(bridge['trusted_render_mount'](Path('/var/sibyl'), meta))
+        meta.st_mode = 0o42775
+        with patch.object(Path, 'read_text', return_value='1 2 0:1 / /var/other rw - ext4 disk rw'):
+            self.assertFalse(bridge['trusted_render_mount'](Path('/var/sibyl'), meta))
+
     def setUp(self):
         self.previous_umask = os.umask(0o077)
         self.addCleanup(os.umask, self.previous_umask)
