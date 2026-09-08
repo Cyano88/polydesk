@@ -1,0 +1,1 @@
+sibyl-memory-client==0.8.0 --hash=sha256:391c3a3a27d7101bba8441083949c77717e660edde6a3c08ded14f3f81da149f

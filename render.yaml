@@ -3,14 +3,16 @@ services:
     name: polydesk
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    buildCommand: npm install && npm run build && sh scripts/build-sibyl-runtime.sh
+    startCommand: node --import tsx scripts/start-with-receipt-memory.ts
     healthCheckPath: /api/health
     disk:
-      name: polydesk-data
-      mountPath: /var/data
+      name: polydesk-sibyl-memory
+      mountPath: /var/sibyl
       sizeGB: 1
     envVars:
+      - key: SIBYL_MEMORY_WORKER_ENABLED
+        value: 'true'
       - key: NODE_VERSION
         value: "20"
       - key: PORT

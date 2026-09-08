@@ -1,6 +1,7 @@
 # Postgres authority and Sibyl receipt projection
 
-Implemented locally, not yet deployed or enabled on Render.
+Postgres outbox and authenticated recall deployed in fd05459 on September 8.
+Persistent runtime activation must be confirmed from the startup audit log.
 
 ## Contract
 
@@ -63,13 +64,22 @@ the verified sibyl-memory-client 0.8.0 wheel installed. Its pinned wheel SHA256:
 Set SIBYL_MEMORY_BRIDGE to the absolute scripts/sibyl-receipt-memory.py path and
 SIBYL_MEMORY_BRIDGE_SHA256 to its independently reviewed deployed-byte digest.
 The September 8 rollout audit found no attached disk on the live web service.
-Attaching a paid persistent disk requires operator approval before activation.
+The operator approved a 1 GB disk; polydesk-sibyl-memory was created at /var/sibyl.
 Create a private service-owned SIBYL_MEMORY_ROOT on an approved persistent disk;
 this is derived memory, not wallet or journal storage. Do not reuse an unreviewed
 directory or rely on the ephemeral source checkout. Enable
 SIBYL_MEMORY_WORKER_ENABLED=true only after a synthetic capture/readback check.
 No runtime installer, credentials, signature prompt or trading process runs from
 an agent recall request. Missing configuration leaves jobs pending.
+
+The build installs the hash-pinned wheel in .sibyl-runtime and runs SDK tests.
+The Render start command is scripts/start-with-receipt-memory.ts. With worker
+activation requested it verifies the actual /var/sibyl mount, uses private
+receipt-memory and separate receipt-memory-canary directories, and performs two
+capture/readback subprocess runs before enabling delivery. Failed startup checks
+leave the web service running with the memory worker disabled. Canary data never
+enters the receipt outbox or the production owner projections. A later restart
+must repeat the check against the same persistent canary to verify retention.
 
 Operator-only commands (no wallet operation):
 
