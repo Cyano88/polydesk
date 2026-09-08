@@ -1,4 +1,5 @@
 import pg from 'pg'
+import type { PoolClient } from 'pg'
 
 const { Pool } = pg
 const DATABASE_URL = (process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? '').trim()
@@ -27,6 +28,29 @@ async function ensureSchema() {
     );
   `).then(() => undefined)
   await schemaReady
+}
+
+let memorySchemaReady: Promise<void> | null = null
+async function ensureMemorySchema() {
+  await ensureSchema()
+  memorySchemaReady ??= requirePool().query(`
+    create table if not exists polydesk_receipt_memory_outbox (
+      execution_id text primary key,
+      owner text not null,
+      payload text not null,
+      payload_hash text not null,
+      state text not null default 'pending' check (state in ('pending','delivering','delivered','failed')),
+      attempts integer not null default 0,
+      next_at timestamptz not null default now(),
+      lease_token uuid,
+      lease_until timestamptz,
+      error_code text,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists polydesk_receipt_memory_owner_idx
+      on polydesk_receipt_memory_outbox(owner, execution_id);
+  `).then(() => undefined).catch(error => { memorySchemaReady = null; throw error })
+  await memorySchemaReady
 }
 
 export function hasRenderDurableStore() {
@@ -64,8 +88,10 @@ export async function writeDurableJson(key: string, value: unknown): Promise<voi
   )
 }
 
-export async function mutateDurableJson<T>(key: string, mutate: (current: T | undefined) => T | Promise<T>): Promise<T> {
+export async function mutateDurableJson<T>(key: string, mutate: (current: T | undefined) => T | Promise<T>,
+  effects?: (next: T, client: PoolClient) => Promise<void>): Promise<T> {
   await ensureSchema()
+  if (effects) await ensureMemorySchema()
   const client = await requirePool().connect()
   try {
     await client.query('begin')
@@ -82,6 +108,7 @@ export async function mutateDurableJson<T>(key: string, mutate: (current: T | un
         on conflict (store_key) do update set value = excluded.value, updated_at = now()`,
       [key, JSON.stringify(next)],
     )
+    if (effects) await effects(next, client)
     await client.query('commit')
     return next
   } catch (error) {
@@ -90,4 +117,9 @@ export async function mutateDurableJson<T>(key: string, mutate: (current: T | un
   } finally {
     client.release()
   }
+}
+
+export async function memoryDatabaseQuery(sql: string, values: unknown[] = []) {
+  await ensureMemorySchema()
+  return requirePool().query(sql, values)
 }

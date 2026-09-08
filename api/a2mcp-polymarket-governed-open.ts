@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { enqueueReceiptMemory } from './receipt-memory-outbox.js'
 import type { Request, Response } from 'express'
 import { verifyMessage } from 'ethers'
 import { fetchPolygonFinality, type PolygonFinalityProof } from './polymarket-receipt-finality.js'
@@ -11,7 +12,6 @@ import {
   hasRenderDurableStore,
   mutateDurableJson,
   readDurableJson,
-  writeDurableJson,
 } from './render-durable-store.js'
 import { validateSignedOpenInput } from './a2mcp-polymarket-signed-open.js'
 import {
@@ -1022,14 +1022,15 @@ export async function polymarketGovernedTradeCompleteHandler(req: Request, res: 
     const saved = await mutateDurableJson<GovernedOpenRecord>(key, current => {
       duplicate = Boolean(current?.receipt)
       return mergeGovernedExecution(current, { ...record, receipt: verifiedReceipt })
+    }, async (saved, client) => {
+      await enqueueReceiptMemory(client, saved.authoritySigner, saved.receipt!)
     })
     result = { ok: true, duplicate, receipt: saved.receipt! }
   } catch (error) {
     if (error instanceof ExternalOrderConflict) return res.status(409).json({ ok: false, error: error.message })
     throw error
   }
-  // Always repair the receipt index on replay after an interrupted second write.
-  await writeDurableJson(`polymarket-governed-receipt:${executionId}`, result.receipt)
+  // Execution, receipt index and memory delivery job committed atomically above.
   await appendTradeSignalEvent(buildVerifiedExecutionSignal({
     executionId: record.executionId,
     externalOrderId: record.externalOrderId,
