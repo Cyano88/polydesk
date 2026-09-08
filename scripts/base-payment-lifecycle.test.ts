@@ -5,7 +5,9 @@ import { BasePaymentAttempts, ExistingBasePaymentAttempt, type BasePaymentAttemp
 import { BASE_NATIVE_USDC, BASE_MAINNET_CAIP2, BASE_AGENTIC_MARKET_SMART_TRADER_PATH,
   createBaseAgenticMarketSmartTraderHandler } from '../api/base-agentic-market-smart-trader.js'
 import { buildSettledSmartTraderAnalysisRecord, reuseSettledSmartTraderAnalysis,
+  preflightPolymarketSmartTraderRequest,
   type SmartTraderServicePayment } from '../api/polymarket-smart-trader.js'
+import { preflightSmartTraderBeforeSettlement } from '../api/okx-a2mcp-standard-services.js'
 
 const seller = `0x${'11'.repeat(20)}`
 const payer = `0x${'22'.repeat(20)}`
@@ -32,7 +34,7 @@ test('an attempted failed settlement returns reconciliation instead of another p
   assert.equal(h.events.filter(event => event === 'settle').length, 1)
 })
 
-function harness() {
+function harness(realRequestValidation = false) {
   const events: string[] = []
   const requirements = { scheme: 'exact', network: BASE_MAINNET_CAIP2, asset: BASE_NATIVE_USDC,
     amount: '300000', payTo: seller, maxTimeoutSeconds: 600, extra: {} }
@@ -56,7 +58,16 @@ function harness() {
   const handler = createBaseAgenticMarketSmartTraderHandler({
     attempts,
     ready: () => config.ready, operational: async () => true, seller: () => seller,
-    preflight: async () => { events.push('preflight'); return config.preflight },
+    preflight: async body => {
+      events.push('preflight')
+      if (!realRequestValidation) return config.preflight
+      return preflightSmartTraderBeforeSettlement(body, {
+        validate: preflightPolymarketSmartTraderRequest,
+        operational: async () => true,
+        providers: async () => ({ ok: true }),
+        prepare: async () => { throw new Error('Research replay must not prepare a trade') },
+      })
+    },
     server: async () => ({
       processHTTPRequest: async () => { events.push('verify'); return config.paymentType === 'payment-error'
         ? { type: 'payment-error', response: { status: 402, headers: config.paymentHeaders, body: { ok: false } } }
@@ -87,8 +98,8 @@ test('Base challenge exposes body replay fields without changing payment terms o
   assert.deepEqual(decoded.resource, challenge.resource)
   assert.deepEqual(decoded.extensions, challenge.extensions)
   assert.equal(h.output.headers['Cache-Control'], 'no-store')
-  // The compatibility field map is what the quote client uses to retain known
-  // parameters on replay; examples from Bazaar must not replace caller values.
+  // This field map declares carriers, not values. Clients must forward values;
+  // quote recognition alone does not prove paid replay.
   const replay: Record<string, unknown> = {}
   for (const [name, value] of Object.entries(request)) {
     assert.equal(decoded.outputSchema.input[name].carrier, 'body')
@@ -99,6 +110,28 @@ test('Base challenge exposes body replay fields without changing payment terms o
   assert.deepEqual(h.req.body, request)
   assert.equal(h.events.includes('settle'), false)
   assert.equal(h.events.includes('deliver'), false)
+  assert.equal(h.records.size, 0)
+})
+
+test('missing HTTP replay values reproduce the live rejection before payment verification', async () => {
+  const h = harness(true)
+  // Reproduce the resulting server input, not execution of the upstream binary.
+  h.req.body = {}
+  await h.run()
+  assert.equal(h.output.status, 400)
+  assert.equal(h.output.body.error, 'DISCOVER requires a query or category. No payment challenge was issued.')
+  assert.deepEqual(h.events, ['preflight'])
+  assert.equal(h.records.size, 0)
+})
+
+test('explicit HTTP replay values pass real validation without settlement', async () => {
+  const h = harness(true)
+  h.config.paymentType = 'payment-error'
+  h.req.body = Object.fromEntries(Object.entries(request).map(([key, value]) => [key, String(value)]))
+  await h.run()
+  assert.equal(h.output.status, 402)
+  assert.deepEqual(h.req.body, request)
+  assert.deepEqual(h.events, ['preflight', 'verify'])
   assert.equal(h.records.size, 0)
 })
 

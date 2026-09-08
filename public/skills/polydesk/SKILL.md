@@ -29,6 +29,22 @@ Once an exact market and outcome are confirmed, use the existing PolyDesk ANALYZ
 
 Research approval, independent preparation, and execution are distinct. Failed AI/research is not approval: report failure and use the existing explicitly acknowledged independent-preparation route only after the requesting agent chooses it within its existing user authority, or the user explicitly confirms. Preserve exact outcome, spend/price limits, eligibility checks and buyer authorization. Discovery never bypasses regional restrictions, signs, transfers funds, or submits orders.
 
+### OnchainOS HTTP payment replay
+
+OnchainOS 4.5.2 and 4.5.3 HTTP payment replay does not reuse the quote's saved business values. Pass the identical caller-supplied `action`, `marketId`, `outcome`, and `side` explicitly to both commands. Preserve any additional supplied research fields too. A populated `knownParams` or `paramPlan` in the quote is not proof that values will be replayed.
+
+```text
+onchainos payment quote https://polydesk.trade/api/x402/base/polymarket-smart-trader --method POST --chain base --param action=ANALYZE --param marketId=<exact-condition-id> --param outcome=<exact-label> --param side=<BUY-or-SELL>
+```
+
+Only after reviewing the live terms and obtaining payment authorization:
+
+```text
+onchainos payment pay --payment-id <approved-payment-id> --selected-index <approved-accepts-index> --yes --param action=ANALYZE --param marketId=<same-condition-id> --param outcome=<same-label> --param side=<same-side>
+```
+
+Quote or escape arguments with spaces for the caller's shell; do not execute placeholders. Do not use these commands to retry a failed or ambiguous payment automatically. Reconcile the existing attempt first; any new payment needs its own authorization. For other clients, preserve the exact request body when attaching the payment proof. This compatibility rule is not permission to sign or pay.
+
 ## Agent review and continuation
 
 Both agent entry points accept `REVIEW` before payment or AI-readiness checks:
