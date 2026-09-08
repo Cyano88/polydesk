@@ -1,0 +1,10 @@
+{
+  "schema": "polydesk-temporal-v1",
+  "timestampUnit": "milliseconds",
+  "maximumPreparationAgeMs": 30000,
+  "maximumPreparationLifetimeMs": 60000,
+  "maximumBookAgeMs": 30000,
+  "maximumBookFutureMs": 5000,
+  "preparationHeadroomAgeMs": 5000,
+  "maximumClockWaitMs": 5000
+}

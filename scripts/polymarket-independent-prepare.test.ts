@@ -76,6 +76,41 @@ test('prepares an exact independent BUY without a research service or analysis r
   assert.match(result.data.disclaimer, /independent decision/)
   assert.match(result.data.authorizationMessage, /Mandate SHA-256/)
 })
+test('quiet book requires server-owned verification and preserves exact mandate limits', async () => {
+  for (const verified of [false, true]) {
+    const deps = dependencies({ timestamp: String(now - 240000) })
+    let calls = 0
+    const result = await prepareIndependentPolymarketTrade(input(), { ...deps, verifyFeed: async plan => {
+      calls++; assert.equal(plan.market.bookTimestamp, String(now - 240000))
+      assert.equal(plan.market.tokenId, '111')
+      return verified
+    } })
+    assert.equal(calls, 1); assert.equal(result.ok, verified)
+    if (result.ok) {
+      assert.equal(result.data.market.bookTimestamp, String(now - 240000))
+      assert.equal(result.data.mandate.maximumAmountUsdc, '5')
+      assert.equal(result.data.mandate.maximumPrice, '0.55')
+      assert.equal(result.data.orderSubmitted, false)
+    }
+  }
+})
+test('caller feed evidence is rejected before verification', async () => {
+  let calls = 0
+  const result = await prepareIndependentPolymarketTrade(input({feedObservation:{heartbeatVerified:true}}),
+    {...dependencies(), verifyFeed: async () => { calls++; return true }})
+  assert.equal(result.status, 400); assert.equal(calls, 0)
+})
+test('verification cannot refresh an expired preparation or accept future snapshot', async () => {
+  const deps = dependencies({timestamp:String(now-240000)})
+  let clock=now
+  const result=await prepareIndependentPolymarketTrade(input(), {...deps, now:()=>clock,
+    verifyFeed:async()=>{clock+=60001;return true}})
+  assert.equal(result.ok,false); assert.equal(result.status,409)
+  let calls=0
+  const future=await prepareIndependentPolymarketTrade(input(), {...dependencies({timestamp:String(now+6000)}),
+    verifyFeed:async()=>{calls++;return true}})
+  assert.equal(future.ok,false); assert.equal(calls,0)
+})
 test('requires explicit acknowledgement and rejects unsupported side, order type, and credentials', async () => {
   for (const changes of [{ acknowledgeIndependentDecision: false }, { acknowledgeIndependentDecision: 'true' }, { side: 'SELL' }, { orderType: 'GTC' }, { privateKey: 'never-accepted' }, { maximumPrice: '1' }, { maxSpendUsdc: '-5' }]) {
     const deps = dependencies()
