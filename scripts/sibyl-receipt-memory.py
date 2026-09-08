@@ -111,13 +111,66 @@ def capture(root, payload):
             'executionId': body['executionId'], 'payloadHash': digest}
 
 
+def recall(root, payload):
+    """Read existing projections only; never repair a missing store or entity."""
+    import sibyl_memory_client as sdk
+    require(sdk.__version__ == '0.8.0' and len(payload) <= 32768)
+    request = json.loads(payload)
+    require(set(request) == {'owner', 'records'})
+    owner, records = request['owner'], request['records']
+    require(isinstance(owner, str) and re.fullmatch(r'0x[a-f0-9]{40}', owner))
+    require(isinstance(records, list) and len(records) <= 100)
+    identifiers = set()
+    for record in records:
+        require(set(record) == {'executionId', 'payloadHash'})
+        require(re.fullmatch(r'pex_[a-f0-9]{24}', record['executionId']))
+        require(re.fullmatch(r'[a-f0-9]{64}', record['payloadHash']))
+        require(record['executionId'] not in identifiers)
+        identifiers.add(record['executionId'])
+    private_directory(root)
+    result = []
+    if records:
+        scope = hashlib.sha256(('polydesk-buyer-v1:' + owner).encode()).hexdigest()
+        directory = root / scope
+        private_directory(directory)
+        fd = os.open(directory / 'delivery.lock', os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            metadata = os.fstat(fd)
+            require(stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+                    and metadata.st_uid == os.geteuid() and not metadata.st_mode & 0o077)
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            database = directory / 'memory.db'
+            metadata = database.lstat()
+            require(stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+                    and metadata.st_uid == os.geteuid() and not metadata.st_mode & 0o077)
+            storage = sdk.Storage(database)
+            try:
+                client = sdk.MemoryClient(storage, tenant_id=scope, tier='free', account_id=None, session_token=None)
+                for record in records:
+                    row = client.get_entity(CATEGORY, record['executionId'])
+                    value = row['body']
+                    require(row['tenant_id'] == scope and row['status'] == 'server_verified_fill')
+                    require(value['schema'] == 'polydesk-postgres-projection-v1'
+                            and value['payloadHash'] == record['payloadHash'])
+                    require(value['receipt']['owner'] == owner
+                            and value['receipt']['executionId'] == record['executionId'])
+                    result.append(value)
+            finally:
+                storage.close()
+        finally:
+            os.close(fd)
+    return {'ok': True, 'state': 'SIBYL_RECALLED', 'owner': owner, 'records': result}
+
+
 if __name__ == '__main__':
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, required=True)
+    parser.add_argument('--recall', action='store_true')
     args = parser.parse_args()
     try:
-        print(json.dumps(capture(args.root, sys.stdin.buffer.read(16385))))
+        action = recall if args.recall else capture
+        print(json.dumps(action(args.root, sys.stdin.buffer.read(32769 if args.recall else 16385))))
     except Exception:
         print(json.dumps({'ok': False, 'state': 'SIBYL_DELIVERY_UNAVAILABLE'}), file=sys.stderr)
         raise SystemExit(1)

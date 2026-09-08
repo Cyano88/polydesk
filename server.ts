@@ -1,6 +1,6 @@
 import express from 'express'
 import { startReceiptMemoryWorker } from './api/receipt-memory-worker.js'
-import { createReceiptMemoryRecallHandler } from './api/receipt-memory-api.js'
+import { createReceiptMemoryRecallHandler, createSibylMemoryRecallHandler } from './api/receipt-memory-api.js'
 import type { Response } from 'express'
 import { config as loadEnv } from 'dotenv'
 import { readFileSync } from 'node:fs'
@@ -219,6 +219,7 @@ app.get('/api/lp-scout-report', readLimiter, lpScoutReportHandler)
 app.get('/api/x402-polymarket-scout', strictLimiter, x402PolymarketScoutHandler)
 app.post('/api/zeroscout-polymarket-brief', zeroScoutLimiter, zeroScoutPolymarketBriefHandler)
 app.post('/api/polymarket-agent-memory/recall', strictLimiter, createReceiptMemoryRecallHandler())
+app.post('/api/polymarket-agent-memory/recall-sibyl', strictLimiter, createSibylMemoryRecallHandler())
 app.get('/api/health', (_req, res) => res.json({
   ok: true,
   service: 'polydesk',

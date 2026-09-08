@@ -2,7 +2,7 @@
 import { mkdir, lstat, readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import { deliverToSibyl } from '../api/receipt-memory-worker.js'
+import { deliverToSibyl, recallFromSibyl } from '../api/receipt-memory-worker.js'
 
 const enabled = process.env.SIBYL_MEMORY_WORKER_ENABLED === 'true'
 let stage = 'mount'
@@ -23,7 +23,7 @@ async function prepare() {
   await privateDirectory('/var/sibyl/receipt-memory-canary')
   process.env.SIBYL_MEMORY_PYTHON = resolve('.sibyl-runtime/bin/python')
   process.env.SIBYL_MEMORY_BRIDGE = resolve('scripts/sibyl-receipt-memory.py')
-  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = 'e8a5e95999b4a1f4cd7b3f8ad6982fabc2cc8fb26fa7202cd2bf4c2acc29d2c0'
+  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = '2161a37a77d5d02214e7a37826370302ccb9db31a08b80422b0b87ea2e5c82c3'
   process.env.SIBYL_MEMORY_ROOT = '/var/sibyl/receipt-memory-canary'
   const scope = createHash('sha256').update('polydesk-buyer-v1:0x'+'22'.repeat(20)).digest('hex')
   const previous = await lstat('/var/sibyl/receipt-memory-canary/'+scope+'/memory.db')
@@ -40,10 +40,13 @@ async function prepare() {
   await deliverToSibyl(job)
   stage = 'repeat-readback'
   await deliverToSibyl(job)
-  process.env.SIBYL_MEMORY_ROOT = '/var/sibyl/receipt-memory'
   process.env.SIBYL_MEMORY_WORKER_ENABLED = 'true'
+  stage = 'read-only-recall'
+  try { await recallFromSibyl(job.owner, [job]) }
+  catch (error) { process.env.SIBYL_MEMORY_WORKER_ENABLED = 'false'; throw error }
+  process.env.SIBYL_MEMORY_ROOT = '/var/sibyl/receipt-memory'
   console.log('[receipt-memory-startup]', JSON.stringify({state:'PERSISTENT_CAPTURE_READBACK_VERIFIED',
-    workerEnabled:true,priorCanaryPresent:Boolean(previous),syntheticOnly:true,signingAttempted:false,orderSubmitted:false}))
+    workerEnabled:true,readOnlyRecallVerified:true,priorCanaryPresent:Boolean(previous),syntheticOnly:true,signingAttempted:false,orderSubmitted:false}))
 }
 if (enabled) {
   try { await prepare() }

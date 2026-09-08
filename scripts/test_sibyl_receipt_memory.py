@@ -54,6 +54,34 @@ class ReceiptMemoryTests(unittest.TestCase):
         self.body['fillSize'] = 5
         self.assertTrue(self.capture()['ok'])
 
+    def recall(self, owner=None, digest=None):
+        request = {'owner': owner or self.body['owner'], 'records': [{
+            'executionId': self.body['executionId'],
+            'payloadHash': digest or hashlib.sha256(json.dumps(self.body).encode()).hexdigest()}]}
+        return bridge['recall'](self.root, json.dumps(request).encode())
+
+    def test_fresh_recall_returns_actual_entity_and_never_recaptures(self):
+        self.capture()
+        recalled = self.recall()
+        self.assertEqual(recalled['records'][0]['receipt'], self.body)
+        scope = hashlib.sha256(('polydesk-buyer-v1:' + self.body['owner']).encode()).hexdigest()
+        database = self.root / scope / 'memory.db'
+        database.rename(database.with_suffix('.removed'))
+        with self.assertRaises(FileNotFoundError): self.recall()
+        self.assertFalse(database.exists())
+
+    def test_recall_rejects_cross_owner_and_hash_mismatch(self):
+        self.capture()
+        with self.assertRaises(FileNotFoundError): self.recall(owner='0x'+'33'*20)
+        with self.assertRaises(ValueError): self.recall(digest='0'*64)
+        self.assertEqual(len(list(self.root.iterdir())), 1)
+
+    def test_empty_recall_validates_root_without_creating_owner_store(self):
+        request = json.dumps({'owner': self.body['owner'], 'records': []}).encode()
+        self.assertEqual(bridge['recall'](self.root, request)['records'], [])
+        self.assertEqual(list(self.root.iterdir()), [])
+        with self.assertRaises(FileNotFoundError): bridge['recall'](self.root/'missing', request)
+
     def test_owner_scopes_do_not_share_records(self):
         self.capture()
         self.body['owner'] = '0x'+'33'*20

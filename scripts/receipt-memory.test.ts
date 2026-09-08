@@ -71,6 +71,51 @@ test('expired exhausted lease stops delivery and an empty queue does nothing', a
 function response() {
   return { code: 0, body: null as any, setHeader(){}, status(code:number){this.code=code;return this},json(body:any){this.body=body;return this} }
 }
+
+test('Sibyl recall uses a distinct signature and returns only live-read matching entities', async () => {
+  const event = memoryEnvelope(owner, receipt())
+  const row = {execution_id:event.executionId, payload:event.payload, payload_hash:event.payloadHash, state:'delivered'}
+  const body:any = {owner, expiresAt:Date.now()+60000, limit:20}
+  body.signature = await wallet.signMessage(memoryRecallAuthorization(body, Date.now(), true).message)
+  let reads = 0
+  const query:any = async () => ({rows:[row]})
+  const recall = async (actualOwner:string) => { assert.equal(actualOwner,owner); reads++; return [JSON.parse(event.payload)] }
+  const res = response()
+  await createReceiptMemoryRecallHandler(query,recall)({body} as any,res as any)
+  assert.equal(res.code,200); assert.equal(reads,1)
+  assert.equal(res.body.source,'SIBYL_VERIFIED_RECEIPTS')
+  assert.equal(res.body.records[0].memoryStatus,'RECALLED_VERIFIED')
+  assert.equal(res.body.signingAuthorized,false)
+  const wrongRoute = response()
+  await createReceiptMemoryRecallHandler(query)({body} as any,wrongRoute as any)
+  assert.equal(wrongRoute.code,401)
+  body.signature = await wallet.signMessage(memoryRecallAuthorization(body).message)
+  const oldSignature = response()
+  await createReceiptMemoryRecallHandler(query,recall)({body} as any,oldSignature as any)
+  assert.equal(oldSignature.code,401); assert.equal(reads,1)
+})
+
+test('missing, corrupt or unsynchronized Sibyl memory never falls back to Postgres history', async () => {
+  const event = memoryEnvelope(owner, receipt())
+  const body:any = {owner,expiresAt:Date.now()+60000,limit:20}
+  body.signature = await wallet.signMessage(memoryRecallAuthorization(body, Date.now(), true).message)
+  for (const state of ['pending','failed','delivered']) {
+    let reads = 0
+    const res = response()
+    await createReceiptMemoryRecallHandler((async()=>({rows:[{execution_id:event.executionId,
+      payload:event.payload,payload_hash:event.payloadHash,state}]})) as any,
+      async()=>{reads++;throw Error('Sibyl missing')})({body} as any,res as any)
+    assert.equal(res.code,503); assert.equal(res.body.records,undefined)
+    assert.equal(reads,state==='delivered'?1:0)
+  }
+  for (const records of [[],[{...JSON.parse(event.payload),owner:'0x'+'11'.repeat(20)}]]) {
+    const res=response()
+    await createReceiptMemoryRecallHandler((async()=>({rows:[{execution_id:event.executionId,
+      payload:event.payload,payload_hash:event.payloadHash,state:'delivered'}]})) as any,
+      async()=>records)({body} as any,res as any)
+    assert.equal(res.code,503)
+  }
+})
 test('recall signature binds owner, route, pagination and expiry before database access', async () => {
   const body: any = {owner,expiresAt:Date.now()+60000,limit:20}
   body.signature = await wallet.signMessage(memoryRecallAuthorization(body).message)
