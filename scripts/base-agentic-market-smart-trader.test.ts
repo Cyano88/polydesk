@@ -9,10 +9,28 @@ import {
   buildBaseSmartTraderRouteConfig,
 } from '../api/base-agentic-market-smart-trader.js'
 import { smartTraderServicePaymentFromContext } from '../api/polymarket-smart-trader.js'
+import { addSmartTraderReplaySchema } from '../api/okx-a2mcp-standard-services.js'
 
 const payTo = '0x1111111111111111111111111111111111111111'
 const transaction = `0x${'a'.repeat(64)}`
 const payer = '0x2222222222222222222222222222222222222222'
+
+test('Base and X Layer publish identical replay field carriers', () => {
+  const response = { status: 402, headers: { 'PAYMENT-REQUIRED': Buffer.from(JSON.stringify({ x402Version: 2, accepts: [] })).toString('base64') } }
+  const decode = (path: typeof BASE_AGENTIC_MARKET_SMART_TRADER_PATH | '/api/a2mcp/polymarket-smart-trader') =>
+    JSON.parse(Buffer.from(addSmartTraderReplaySchema(response, path).headers['PAYMENT-REQUIRED'], 'base64url').toString()).outputSchema
+  assert.deepEqual(decode(BASE_AGENTIC_MARKET_SMART_TRADER_PATH), decode('/api/a2mcp/polymarket-smart-trader'))
+  const fields = decode(BASE_AGENTIC_MARKET_SMART_TRADER_PATH).input
+  for (const name of ['action', 'marketId', 'outcome', 'side', 'mandate', 'amountUsdc']) assert.equal(fields[name].carrier, 'body')
+})
+
+test('Base enrichment does not turn errors or malformed headers into payment offers', () => {
+  for (const response of [
+    { status: 503, headers: { 'PAYMENT-REQUIRED': 'invalid' } },
+    { status: 402, headers: { 'PAYMENT-REQUIRED': 'invalid' } },
+    { status: 402, headers: {} },
+  ]) assert.strictEqual(addSmartTraderReplaySchema(response, BASE_AGENTIC_MARKET_SMART_TRADER_PATH), response)
+})
 
 test('Base route advertises exact payment without changing the OKX lane', () => {
   const config = buildBaseSmartTraderRouteConfig('https://polydesk.trade', payTo)

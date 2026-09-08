@@ -906,9 +906,9 @@ export function addPortfolioWatchReplaySchema(
 
 export function addSmartTraderReplaySchema(
   response: { status: number; headers: Record<string, string>; body?: unknown },
-  path: StandardServicePath,
+  path: StandardServicePath | '/api/x402/base/polymarket-smart-trader',
 ) {
-  if (path !== '/api/a2mcp/polymarket-smart-trader' || response.status !== 402) return response
+  if (!['/api/a2mcp/polymarket-smart-trader', '/api/x402/base/polymarket-smart-trader'].includes(path) || response.status !== 402) return response
   const paymentHeaderKey = Object.keys(response.headers).find(key => key.toLowerCase() === 'payment-required')
   if (!paymentHeaderKey) return response
   try {

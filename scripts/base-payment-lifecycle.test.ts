@@ -39,7 +39,7 @@ function harness() {
   const payload = { x402Version: 2, payload: { authorization: { from: payer, to: seller, value: '300000', nonce: `0x${'ef'.repeat(32)}` } }, accepted: requirements }
   const settlement: Record<string, unknown> = { success: true, network: BASE_MAINNET_CAIP2, transaction, payer, amount: '300000', headers: {} }
   const config = { ready: true, preflight: { ok: true } as any, paymentType: 'payment-verified', throwSettle: false, throwDelivery: false,
-    failClaim: false, ambiguousCommit: false, failSettledWrite: false }
+    failClaim: false, ambiguousCommit: false, failSettledWrite: false, paymentHeaders: {} as Record<string, string> }
   const records = new Map<string, BasePaymentAttempt>()
   const attempts = new BasePaymentAttempts(async (key, update) => {
     const next = update(records.has(key) ? structuredClone(records.get(key)!) : undefined)
@@ -59,7 +59,7 @@ function harness() {
     preflight: async () => { events.push('preflight'); return config.preflight },
     server: async () => ({
       processHTTPRequest: async () => { events.push('verify'); return config.paymentType === 'payment-error'
-        ? { type: 'payment-error', response: { status: 402, headers: {}, body: { ok: false } } }
+        ? { type: 'payment-error', response: { status: 402, headers: config.paymentHeaders, body: { ok: false } } }
         : { type: config.paymentType, paymentPayload: payload, paymentRequirements: requirements } },
       processSettlement: async () => { events.push('settle'); if (config.throwSettle) throw new Error('synthetic private provider detail'); return settlement },
     }) as never,
@@ -71,6 +71,36 @@ function harness() {
   })
   return { events, requirements, settlement, config, req, output, records, payload, run: () => handler(req, res) }
 }
+
+test('Base challenge exposes body replay fields without changing payment terms or settling', async () => {
+  const h = harness()
+  h.config.paymentType = 'payment-error'
+  const challenge = { x402Version: 2, accepts: [h.requirements],
+    resource: { url: `https://polydesk.trade${BASE_AGENTIC_MARKET_SMART_TRADER_PATH}`, mimeType: 'application/json' },
+    extensions: { bazaar: { preserved: true } } }
+  h.config.paymentHeaders['Payment-Required'] = Buffer.from(JSON.stringify(challenge)).toString('base64url')
+  h.config.paymentHeaders['Cache-Control'] = 'no-store'
+  await h.run()
+  assert.equal(h.output.status, 402)
+  const decoded = JSON.parse(Buffer.from(String(h.output.headers['Payment-Required']), 'base64url').toString())
+  assert.deepEqual(decoded.accepts, challenge.accepts)
+  assert.deepEqual(decoded.resource, challenge.resource)
+  assert.deepEqual(decoded.extensions, challenge.extensions)
+  assert.equal(h.output.headers['Cache-Control'], 'no-store')
+  // The compatibility field map is what the quote client uses to retain known
+  // parameters on replay; examples from Bazaar must not replace caller values.
+  const replay: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(request)) {
+    assert.equal(decoded.outputSchema.input[name].carrier, 'body')
+    replay[name] = value
+  }
+  assert.deepEqual(replay, request)
+  assert.equal(decoded.outputSchema.input.action.required, true)
+  assert.deepEqual(h.req.body, request)
+  assert.equal(h.events.includes('settle'), false)
+  assert.equal(h.events.includes('deliver'), false)
+  assert.equal(h.records.size, 0)
+})
 
 test('a durable claim must commit before settlement; uncertain commit is never retried', async () => {
   for (const mode of ['failure', 'ambiguous']) {

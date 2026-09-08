@@ -17,6 +17,7 @@ import polymarketSmartTraderHandler, {
   polymarketSmartTraderReady,
 } from './polymarket-smart-trader.js'
 import {
+  addSmartTraderReplaySchema,
   preflightSmartTraderBeforeSettlement,
   smartTraderRequestInput,
 } from './okx-a2mcp-standard-services.js'
@@ -216,8 +217,12 @@ type BaseHandlerDependencies = {
 }
 
 function sendInstructions(res: Response, response: { status: number; headers: Record<string, string>; body?: unknown }) {
-  for (const [key, value] of Object.entries(response.headers)) res.setHeader(key, value)
-  return res.status(response.status).send(response.body)
+  // Keep the modern Bazaar extension and also expose the body-carrier schema
+  // consumed by quote/replay clients. Otherwise known ANALYZE fields can be
+  // dropped on paid replay. This changes metadata, never payment requirements.
+  const prepared = addSmartTraderReplaySchema(response, BASE_AGENTIC_MARKET_SMART_TRADER_PATH)
+  for (const [key, value] of Object.entries(prepared.headers)) res.setHeader(key, value)
+  return res.status(prepared.status).send(prepared.body)
 }
 
 export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<BaseHandlerDependencies> = {}) {
