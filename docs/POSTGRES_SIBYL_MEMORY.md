@@ -1,7 +1,10 @@
 # Postgres authority and Sibyl receipt projection
 
 Postgres outbox and authenticated recall deployed in fd05459 on September 8.
-Persistent runtime activation must be confirmed from the startup audit log.
+Persistent runtime activation was confirmed on Render at 2026-09-08 13:23:45 UTC:
+PERSISTENT_CAPTURE_READBACK_VERIFIED, workerEnabled=true. This used a separate
+synthetic canary, not a live trade. Subsequent restarts must show the same result
+with priorCanaryPresent=true to confirm retention across instance replacement.
 
 ## Contract
 
@@ -113,7 +116,8 @@ without world write, and confirmed in /proc/self/mountinfo. All per-owner
 directories still require service ownership and mode 0700. Security regression
 tests reject another path/group, world write, and an unmounted directory.
 
-The older dedicated test cluster reported a corrupt control file and was not
-repaired or overwritten. Production database contents and deployment were not
-modified. Historical receipt reindexing, production SDK provisioning, migration,
-rollout and the buyer's signed remote-memory integration remain deployment work.
+The older dedicated local test cluster reported a corrupt control file and was
+not repaired or overwritten. The production schema and runtime are deployed;
+historical receipts were not reindexed and no trades were executed by this rollout.
+The buyer's signed remote-memory integration remains separate work: do not claim
+the existing local-buyer signing gates now use this new server projection.
