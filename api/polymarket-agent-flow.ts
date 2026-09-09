@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import a2mcpPolymarketPortfolioWatchHandler from './a2mcp-polymarket-portfolio-watch.js'
 import { preparePolymarketCopy } from './polymarket-copy-prepare.js'
+import { receiptMemoryDescriptor } from './receipt-memory-api.js'
 
 type JsonRecord = Record<string, unknown>
 
@@ -30,6 +31,7 @@ export function flowDescriptor(req: Request) {
     version: '2026-07-27',
     promise: 'Turn a public Polymarket signal or an explicit market choice into a bounded, buyer-signed trade and a verifiable receipt.',
     custody: 'PolyDesk never receives the buyer private key or reusable CLOB credentials.',
+    receiptMemory: receiptMemoryDescriptor(origin),
     steps: [
       {
         step: 1,

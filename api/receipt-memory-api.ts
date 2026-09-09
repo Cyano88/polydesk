@@ -5,6 +5,29 @@ import { memoryDatabaseQuery } from './render-durable-store.js'
 import { recallFromSibyl } from './receipt-memory-worker.js'
 import { isDeepStrictEqual } from 'node:util'
 
+/** Shared discovery contract for both marketplace entry points; never authorizes a read or trade. */
+export function receiptMemoryDescriptor(origin: string) {
+  return {
+    scope: 'OWNER_VERIFIED_EXECUTION_RECEIPTS',
+    postgres: { method: 'POST', endpoint: `${origin}/api/polymarket-agent-memory/recall` },
+    sibyl: { method: 'POST', endpoint: `${origin}/api/polymarket-agent-memory/recall-sibyl` },
+    authorization: {
+      type: 'OWNER_PERSONAL_SIGN', domain: 'https://polydesk.trade',
+      fields: ['owner', 'expiresAt', 'after', 'limit', 'signature'],
+      ownerFormat: 'lowercase EVM address', expiresAtUnit: 'milliseconds', maximumLifetimeMs: 300000,
+      afterDefault: '', limitDefault: 20, limitMaximum: 100,
+      messageLines: ['PolyDesk Sibyl memory read v1 OR PolyDesk receipt memory read v1',
+        'https://polydesk.trade', 'POST followed by a space and the exact recall route',
+        'owner', 'expiresAt as decimal integer', 'after (empty string for first page)', 'limit as decimal integer'],
+      separator: '\n', rule: 'Use the Sibyl title only for recall-sibyl. Each page requires a proof bound to its exact cursor and limit. Read authorization is not trading authorization.',
+    },
+    capture: 'Verified execution receipts are retained in Postgres and projected into Sibyl through the durable outbox.',
+    coverage: 'OUTBOX_SINCE_ENABLEMENT', historyComplete: false,
+    failureRule: 'Missing, unavailable or unsynchronized memory is not approval. Reconcile uncertain execution by its exact ID; never retrade to repair memory delivery.',
+    signingAuthorized: false, orderSubmitted: false,
+  }
+}
+
 export function memoryRecallAuthorization(body: Record<string, unknown>, now = Date.now(), sibyl = false) {
   const { owner, expiresAt, after = '', limit = 20 } = body
   if (typeof owner !== 'string' || !/^0x[a-f0-9]{40}$/.test(owner)

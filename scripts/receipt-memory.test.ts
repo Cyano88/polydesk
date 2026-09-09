@@ -2,7 +2,32 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Wallet } from 'ethers'
 import { enqueueReceiptMemory, memoryEnvelope, runMemoryDeliveryOnce } from '../api/receipt-memory-outbox.js'
-import { createReceiptMemoryRecallHandler, memoryRecallAuthorization } from '../api/receipt-memory-api.js'
+import { createReceiptMemoryRecallHandler, memoryRecallAuthorization, receiptMemoryDescriptor } from '../api/receipt-memory-api.js'
+
+test('shared catalog and flow expose the same non-authorizing Postgres and Sibyl contract', async () => {
+  const { default: catalog } = await import('../api/a2mcp-services.js')
+  const { flowDescriptor } = await import('../api/polymarket-agent-flow.js')
+  let body: any
+  catalog({} as any, { setHeader() {}, json(value: any) { body = value } } as any)
+  const expected = receiptMemoryDescriptor(body.baseUrl)
+  assert.deepEqual(body.integration.receiptMemory, expected)
+  const flow = flowDescriptor({ protocol: 'https', headers: { host: 'polydesk.trade' } } as any)
+  assert.equal(new URL(flow.receiptMemory.sibyl.endpoint).pathname, '/api/polymarket-agent-memory/recall-sibyl')
+  assert.deepEqual(flow.receiptMemory.authorization, expected.authorization)
+  assert.equal(expected.historyComplete, false)
+  assert.equal(expected.signingAuthorized, false)
+  assert.equal(expected.orderSubmitted, false)
+  assert.match(expected.failureRule, /never retrade/)
+  const expiresAt = Date.now() + 60000
+  for (const sibyl of [true, false]) {
+    const auth = memoryRecallAuthorization({ owner: '0x' + 'a'.repeat(40), expiresAt }, Date.now(), sibyl)
+    const lines = auth.message.split(expected.authorization.separator)
+    assert.equal(lines[1], expected.authorization.domain)
+    assert.equal(lines[2], 'POST ' + new URL(sibyl ? expected.sibyl.endpoint : expected.postgres.endpoint).pathname)
+    assert.equal(lines[5], expected.authorization.afterDefault)
+    assert.equal(Number(lines[6]), expected.authorization.limitDefault)
+  }
+})
 
 const wallet = new Wallet('0x' + '42'.repeat(32)) // synthetic test key only
 const owner = wallet.address.toLowerCase()

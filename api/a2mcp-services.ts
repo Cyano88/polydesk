@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { standardServiceInputSchema, type StandardServicePath } from './okx-a2mcp-standard-services.js'
 import { polydeskMarketplaceProducts } from '../src/lib/polydeskMarketplaceProducts.js'
+import { receiptMemoryDescriptor } from './receipt-memory-api.js'
 
 type Service = {
   id: string
@@ -191,6 +192,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
       },
     },
     integration: {
+      receiptMemory: receiptMemoryDescriptor(baseUrl),
       requestContentType: 'application/json',
       responseContentType: 'application/json',
       payment: {
