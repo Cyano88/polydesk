@@ -234,7 +234,7 @@ export function a2aTradingDescriptor(req: Request) {
       action: 'RESEARCH',
       serviceId: '38484',
       access: 'Authenticated private operator after authoritative OKX job acceptance.',
-      inputs: ['agentId', 'serviceId', 'jobId', 'buyerAgentId', 'taskStatus', 'research: exact marketId, outcome, side, screening mandate'],
+      inputs: ['agentId', 'serviceId', 'jobId', 'buyerAgentId', 'taskStatus', 'research: exact marketId, outcome, side; optional buyer-supplied screening mandate'],
       boundary: 'Research-only evidence and requesting-agent review. No separate buyer payment or order authorization. The bounded BUY worker remains a separate action.',
     },
     receiptPattern: `${origin}/api/a2a/polydesk-trading-agent/receipt/{missionId}`,

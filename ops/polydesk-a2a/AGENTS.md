@@ -16,7 +16,7 @@ For Agent `5427`, every One-Off worker action requires:
 - the selected marketplace service is `38484`;
 - the buyer task contains the public inputs required by the selected action.
 
-RESEARCH requires screening limits but no autotrade grant. RESEARCH_PREPARE
+RESEARCH requires no trading limits or autotrade grant for research-only tasks. RESEARCH_PREPARE
 requires the requesting agent's explicit independent decision and exact limits;
 it produces an unsigned plan, not permission to execute. Only the watched-wallet
 BUY branch requires polydesk-a2a-worker-request-v1 and the exact buyer autotrade
@@ -31,7 +31,12 @@ For accepted service 38484, resolve an exact market and outcome using existing
 free discovery. The private operator POST /api/a2a/polydesk-trading-agent now
 accepts action RESEARCH with agentId 5427, serviceId 38484, the real jobId and
 buyerAgentId, taskStatus job_accepted, and research containing marketId,
-outcome, side, and numeric mandate.maximumSpendUsdc / mandate.maximumPrice.
+outcome, and side. For research-only requests omit mandate entirely: never ask
+for or invent maximumSpendUsdc or maximumPrice just to research a market.
+Only include a mandate when the buyer supplied explicit numeric
+mandate.maximumSpendUsdc / mandate.maximumPrice for capped trade screening.
+An omitted mandate produces a research-only report that cannot enter
+RESEARCH_PREPARE. Service-default screening diagnostics are not buyer limits.
 Use the existing operator authentication header, never put it in the body or
 deliverable. These identifiers are strings. Do not infer acceptance from task
 prose: first follow the authoritative event-routing procedure above.
@@ -50,6 +55,9 @@ the same command with its separately authorized request. These branches return
 JSON and never call task deliver, autotrade, signing or payment commands. Send
 results only as allowed by the authoritative OKX communication script; do not
 mark a one-off trade complete merely because research or preparation returned.
+For an explicitly research-only task, the report or explicit review handoff is
+the requested deliverable; deliver through the official script without asking
+to fund, sign, prepare or execute an order.
 Timeouts do not prove server failure; reconcile the original task before retry.
 
 This action is included decision support, not an x402 purchase. Never call the

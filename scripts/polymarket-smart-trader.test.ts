@@ -57,6 +57,32 @@ test('A2A research reuses AI evidence without creating an x402 approval or extra
   assert.equal('decision' in result.data, false)
 })
 
+test('research-only accepts no mandate, does not invent AI limits, and returns review on outage', async () => {
+  for (const outage of [false, true]) {
+    const base = dependencies()
+    let calls = 0
+    const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY' }, dependencies({
+      research: async context => {
+        calls++
+        assert.equal(context.mandate, null)
+        assert.match(String(context.analysisScope), /Research only/)
+        if (outage) throw new Error('fixture outage')
+        return base.research(context)
+      },
+      saveDecision: async () => { assert.fail('must not save approval') },
+    }))
+    assert.equal(result.ok, true)
+    if (!result.ok) continue
+    assert.equal(calls, 1)
+    assert.equal(result.data.screeningMandate, null)
+    assert.equal(result.data.researchOnly, true)
+    assert.equal(result.data.researchStatus, outage ? 'UNAVAILABLE' : 'AVAILABLE')
+    assert.equal(result.data.orderAuthorized, false)
+    assert.equal(result.data.orderSubmitted, false)
+    assert.equal(result.data.agentHandoff.nextAction, 'REVIEW_EVIDENCE')
+  }
+})
+
 test('A2A research outage delivers blockers and an explicitly unapproved continuation', async () => {
   const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }, dependencies({ research: async () => { throw new Error('provider unavailable') } }))
   assert.equal(result.ok, true)

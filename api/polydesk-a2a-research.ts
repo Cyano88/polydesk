@@ -96,6 +96,7 @@ export async function prepareA2aResearchedTask(raw: unknown, deps: PreparationDe
   try { record = await deps.read(key) } catch { return bad(503, 'Research storage unavailable.') }
   if (!record || record.buyerAgentId !== i.buyerAgentId || !validResult(record) || `pdar_${record.resultHash}` !== i.reportId || !record.result?.ok) return bad(409, 'Research report does not match this task and buyer.')
   const report = record.result.data
+  if (!report.screeningMandate) return bad(409, 'Research-only reports cannot prepare orders. A separately authorized capped trade review is required.')
   const expiry = Date.parse(report.validUntil)
   if (!Number.isFinite(expiry) || expiry <= deps.now()) return bad(409, 'Research report expired. Review fresh evidence before preparation.')
   if (report.agentHandoff.market.side !== 'BUY' || !report.selected.market.url) return bad(409, 'Independent preparation supports an exact BUY market only.')

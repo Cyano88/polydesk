@@ -189,6 +189,24 @@ test('tampered research, wrong buyer, missing consent, SELL and widened limits c
   assert.equal(sell.calls(), 0)
 })
 
+test('research-only request passes the operator and durable boundary without limits', async () => {
+  const raw = { ...request(), research: { marketId: 'exact-market', outcome: 'Yes', side: 'BUY' } }
+  assert.equal((await runResearchOperator(raw, { execute: false })).dryRun, true)
+  const f = fixture()
+  await researchA2aTask(raw, f.deps)
+  assert.equal(f.calls(), 1)
+})
+
+test('research-only report cannot prepare even with subsequently supplied caps', async () => {
+  const f = preparationFixture()
+  f.state().result.data.screeningMandate = null
+  f.state().result.data.researchOnly = true
+  f.state().resultHash = a2aResearchResultHash(f.state().result)
+  f.input.reportId = 'pdar_' + f.state().resultHash
+  assert.equal((await prepareA2aResearchedTask(f.input, f.deps)).status, 409)
+  assert.equal(f.calls(), 0)
+})
+
 test('research expiry is checked before and after asynchronous preparation', async () => {
   const f = preparationFixture(); f.expire()
   assert.equal((await prepareA2aResearchedTask(f.input, f.deps)).status, 409)

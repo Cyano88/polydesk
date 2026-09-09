@@ -10,7 +10,9 @@ research, governed execution, and receipt APIs when retiring legacy listings.
   signals, replay protection, and public PnL. The production operator currently
   calls copy preparation. A separate authenticated RESEARCH action now reuses
   Smart Market analysis for an accepted task, with exact market/outcome and
-  written screening limits. It returns decision support only, with no x402
+  optional written screening limits. Research-only requests omit the mandate,
+  expose no buyer caps, and cannot enter RESEARCH_PREPARE. Service-default
+  screening diagnostics are labeled separately. It returns decision support only, with no x402
   approval receipt, extra buyer payment, or automatic execution. The old BUY
   worker is not yet bound to that research result.
 - Managed 38496: subscription identity, email confirmation, pause/cancel/expiry,

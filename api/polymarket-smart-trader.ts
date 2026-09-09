@@ -1205,6 +1205,8 @@ export function taskResearchInputError(raw: unknown): string | null {
     return 'Task research accepts exact marketId, outcome, side, and mandate only.'
   }
   if (typeof raw.marketId !== 'string' || !raw.marketId.trim() || raw.marketId.length > 320 || typeof raw.outcome !== 'string' || !raw.outcome.trim() || raw.outcome.length > 100 || !['BUY', 'SELL'].includes(String(raw.side))) return 'Resolve an exact market, outcome, and side before task research.'
+  // Omission means research only, never permission to invent buyer limits.
+  if (!Object.prototype.hasOwnProperty.call(raw, 'mandate')) return null
   if (!isRecord(raw.mandate) || Object.keys(raw.mandate).some(key => !['maximumPrice', 'maximumSpread', 'minimumLiquidityUsd', 'minimumHoursToResolution', 'maximumBookAgeSeconds', 'maximumPriceDrift', 'maximumSpendUsdc', 'maximumShares'].includes(key))) return 'A numeric screening mandate without unknown fields is required.'
   if (Object.values(raw.mandate).some(value => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) return 'Screening limits must be finite non-negative numbers.'
   const ranges: Record<string, [number, number]> = { maximumSpread: [0.005, 0.5], minimumLiquidityUsd: [0, 10000000], minimumHoursToResolution: [0, 8760], maximumBookAgeSeconds: [5, 3600], maximumPriceDrift: [0.001, 0.5] }
@@ -1220,8 +1222,12 @@ export async function runPolymarketTaskResearch(raw: unknown, dependencies: Smar
   const invalid = taskResearchInputError(raw)
   if (invalid) return { ok: false as const, status: 400, error: invalid }
   const input = raw as JsonRecord
+  const researchOnly = !Object.prototype.hasOwnProperty.call(input, 'mandate')
   const result = await runPolymarketSmartTrader({ ...input, action: 'ANALYZE' }, {
     ...dependencies,
+    research: context => dependencies.research(researchOnly ? { ...context, mandate: null,
+      analysisScope: 'Research only. No buyer spend or price limits were supplied. Assess the exact outcome using cited evidence; do not request trading limits or treat their absence as an evidence gap. No trade is authorized.',
+    } : context),
     saveDecision: async () => {},
   }, null)
   if (!result.ok) return result
@@ -1238,7 +1244,9 @@ export async function runPolymarketTaskResearch(raw: unknown, dependencies: Smar
     researchStatus: result.data.decision.evidence.researchStatus,
     // No payment blocker belongs in the A2A report: this result cannot grant
     // PREPARE authority regardless of the research outcome.
-    screeningMandate: result.data.decision.mandate,
+    researchOnly,
+    screeningMandate: researchOnly ? null : result.data.decision.mandate,
+    screeningPolicy: { source: researchOnly ? 'service-defaults-not-buyer-authorization' : 'buyer-screening-limits', limits: result.data.decision.mandate },
     blockers,
     agentHandoff: agentReviewHandoff({ selected: { ...result.data.selected, blockers, riskFlags: result.data.riskFlags }, side: input.side as 'BUY' | 'SELL', researchStatus: result.data.decision.evidence.researchStatus || 'UNAVAILABLE' }),
     additionalPaymentRequired: false,
