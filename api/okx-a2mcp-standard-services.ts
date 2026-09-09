@@ -936,6 +936,22 @@ function sendInstructions(
   return res.status(prepared.status).send(prepared.body)
 }
 
+// The official payment CLI transports REST --param values as strings. Decode
+// only the three declared object fields, once; ordinary validation stays authoritative.
+export function governedPaymentInput(input: unknown): Record<string, unknown> {
+  if (!isRecord(input)) return {}
+  const body = { ...input }
+  for (const key of ['order', 'orderPayload', 'mandate']) {
+    if (typeof body[key] !== 'string') continue
+    if ((body[key] as string).length > 131072) throw new Error('Governed payment field exceeds limit.')
+    let value: unknown
+    try { value = JSON.parse(body[key] as string) } catch { throw new Error('Invalid governed payment object.') }
+    if (!isRecord(value)) throw new Error('Governed payment field must be an object.')
+    body[key] = value
+  }
+  return body
+}
+
 export default async function okxA2mcpStandardServiceHandler(req: Request, res: Response) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST')
@@ -989,14 +1005,19 @@ export default async function okxA2mcpStandardServiceHandler(req: Request, res: 
     ;(req as Request & { footballNewsPreflightFeed?: typeof feed }).footballNewsPreflightFeed = feed
   }
   if (path === '/api/a2mcp/polymarket-agent-flow') {
-    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
-      ? req.body as Record<string, unknown>
-      : {}
+    let body: Record<string, unknown>
+    try { body = governedPaymentInput(req.body) } catch {
+      return res.status(400).json({ ok: false, error: 'Invalid governed payment input. No payment was settled.' })
+    }
+    req.body = body
     // OKX marketplace discovery probes this POST route with an empty body. Let
     // the payment layer return its 402 plus the declared input schema. Real
     // non-empty requests still receive the free deterministic preflight before
     // any payment can be accepted.
-    if (Object.keys(body).length > 0) {
+    const hasPaymentProof = Boolean(req.headers['payment-signature'] || req.headers['x-payment'])
+    // Discovery is unpaid only. Even an empty/malformed paid replay must pass
+    // validation before settlement; a discovery payment is not reusable access.
+    if (Object.keys(body).length > 0 || hasPaymentProof) {
       const evaluation = await evaluateGovernedOpenWithResearch(body)
       if (!evaluation.ok) return res.status(evaluation.status).json({ ok: false, error: evaluation.error })
       if (evaluation.decision !== 'APPROVE') {

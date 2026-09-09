@@ -9,6 +9,7 @@ import okxA2mcpStandardServiceHandler, {
   buildStandardServiceRouteConfig,
   preflightSmartTraderBeforeSettlement,
   smartTraderRequestInput,
+  governedPaymentInput,
 } from '../api/okx-a2mcp-standard-services.js'
 import a2mcpServicesHandler, {
   polyDeskAgentServices,
@@ -191,6 +192,43 @@ test('smart-trader 402 header exposes its paid replay contract', () => {
   }
   assert.match(String(decoded.outputSchema?.output?.description), /verified-shortfall funding routing/i)
   assert.match(String(decoded.outputSchema?.output?.description), /never signs or submits/i)
+})
+
+test('wallet payment parameters preserve exact nested objects without coercing scalar fields', () => {
+  const body = { externalOrderId: '123', order: { salt: '9007199254740993' }, orderPayload: { order: { salt: '9007199254740993' } }, mandate: { maximumAmountUsdc: '5' } }
+  const encoded = Object.fromEntries(Object.entries(body).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]))
+  assert.deepEqual(governedPaymentInput(encoded), body)
+  assert.deepEqual(governedPaymentInput(body), body)
+  for (const invalid of ['null', '[]', '5', '"nested string"', '{', ' '.repeat(131073)]) {
+    assert.throws(() => governedPaymentInput({ order: invalid }))
+  }
+  assert.deepEqual(governedPaymentInput({ extra: 'kept for strict validator' }), { extra: 'kept for strict validator' })
+})
+
+test('empty or malformed governed paid replays fail before settlement setup', async () => {
+  for (const header of ['payment-signature', 'x-payment']) {
+    for (const body of [{}, null, [], 'invalid']) {
+      let statusCode = 0
+      let responseBody: Record<string, unknown> = {}
+      const req = {
+        method: 'POST', protocol: 'https',
+        headers: { host: 'polydesk.trade', [header]: 'synthetic-payment-proof' },
+        originalUrl: '/api/a2mcp/polymarket-agent-flow',
+        url: '/api/a2mcp/polymarket-agent-flow', body, query: {},
+      } as unknown as Request
+      // No payment-layer response methods: entering settlement setup instead
+      // of rejecting the input cannot produce the expected validation result.
+      const res = {
+        status(code: number) { statusCode = code; return this },
+        json(value: Record<string, unknown>) { responseBody = value; return this },
+      } as unknown as Response
+      await okxA2mcpStandardServiceHandler(req, res)
+      assert.equal(statusCode, 400, `${header}: ${JSON.stringify(body)}`)
+      assert.equal(responseBody.ok, false)
+      assert.ok(responseBody.error)
+      assert.doesNotMatch(JSON.stringify(responseBody), /synthetic-payment-proof/)
+    }
+  }
 })
 
 test('a signed empty smart-trader replay is rejected before settlement setup', async () => {
