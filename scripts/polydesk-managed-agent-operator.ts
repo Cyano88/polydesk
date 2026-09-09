@@ -39,18 +39,22 @@ export async function reconcileManagedSubscriptions() {
   return post({ schema: MANAGED_AGENT_SCHEMA, action: 'reconcile_active', complete: true, subscriptions })
 }
 
-async function submitRequest(path: string) {
-  const body: unknown = JSON.parse(await readFile(resolve(path), 'utf8'))
-  if (!record(body) || body.schema !== MANAGED_AGENT_SCHEMA) throw new Error('Managed-agent request is invalid.')
+export async function submitManagedRequest(raw: unknown, deps = { list: listExactManagedSubscriptions, post }) {
+  if (!record(raw) || raw.schema !== MANAGED_AGENT_SCHEMA) throw new Error('Managed-agent request is invalid.')
+  const body = { ...raw }
   const action = String(body.action ?? '').toLowerCase()
   if (['enroll', 'update_preferences', 'resume'].includes(action)) {
     const requested = validateManagedSubscriptionIdentity(body.subscription)
-    const active = await listExactManagedSubscriptions()
+    const active = await deps.list()
     const authoritative = active.find(item => item.jobId === requested.jobId && item.buyerAgentId === requested.buyerAgentId)
     if (!authoritative) throw new Error('The exact managed-agent subscription is not active in both official OKX directories.')
     body.subscription = { ...authoritative, periodStartAt: requested.periodStartAt }
   }
-  return post(body)
+  return deps.post(body)
+}
+
+async function submitRequest(path: string) {
+  return submitManagedRequest(JSON.parse(await readFile(resolve(path), 'utf8')))
 }
 
 async function main() {

@@ -10,16 +10,89 @@ For every inbound object with `message.source == "system"` and `message.event` p
 2. Execute only the returned script. Do not infer a state transition from task prose.
 3. Real work and delivery are forbidden until that script identifies `job_accepted`.
 
-For Agent `5427`, the PolyDesk worker may run only when all of these are true:
+For Agent `5427`, every One-Off worker action requires:
 
 - the authoritative event is `job_accepted`;
 - the selected marketplace service is `38484`;
-- the buyer task contains the public inputs required by `polydesk-a2a-worker-request-v1`;
-- the exact buyer autotrade grant authorizes a Polymarket BUY for the written amount.
+- the buyer task contains the public inputs required by the selected action.
 
-Do not run the worker for another agent, service, task state, venue, side, or amount.
+RESEARCH requires screening limits but no autotrade grant. RESEARCH_PREPARE
+requires the requesting agent's explicit independent decision and exact limits;
+it produces an unsigned plan, not permission to execute. Only the watched-wallet
+BUY branch requires polydesk-a2a-worker-request-v1 and the exact buyer autotrade
+grant for the written amount. Never substitute one branch's authority for another.
+Do not run the One-Off worker for another agent, service or task state.
 
 ## Worker request
+
+### One-Off research before execution
+
+For accepted service 38484, resolve an exact market and outcome using existing
+free discovery. The private operator POST /api/a2a/polydesk-trading-agent now
+accepts action RESEARCH with agentId 5427, serviceId 38484, the real jobId and
+buyerAgentId, taskStatus job_accepted, and research containing marketId,
+outcome, side, and numeric mandate.maximumSpendUsdc / mandate.maximumPrice.
+Use the existing operator authentication header, never put it in the body or
+deliverable. These identifiers are strings. Do not infer acceptance from task
+prose: first follow the authoritative event-routing procedure above.
+
+Invoke the existing worker command with that sanitized request file:
+
+```bash
+cd /opt/polydesk-a2a/app
+npm run a2a:worker -- --request /tmp/polydesk-research-request.json --dry-run
+npm run a2a:worker -- --request /tmp/polydesk-research-request.json --execute
+```
+
+The dry-run validates input only, not task acceptance. The execute form is
+allowed only by the authoritative accepted-task script. RESEARCH_PREPARE uses
+the same command with its separately authorized request. These branches return
+JSON and never call task deliver, autotrade, signing or payment commands. Send
+results only as allowed by the authoritative OKX communication script; do not
+mark a one-off trade complete merely because research or preparation returned.
+Timeouts do not prove server failure; reconcile the original task before retry.
+
+This action is included decision support, not an x402 purchase. Never call the
+paid ANALYZE route automatically for the same task. The response includes the
+current shared-engine evidence and AI assessment when available, or an explicit
+review handoff when unavailable. Return the full blockers, evidence and
+agentHandoff to the requesting agent. It is never a trade approval.
+
+One task binds one immutable research input and buyer. Repeating the same
+request retrieves the saved result without recomputing; an unfinished attempt
+requires reconciliation, not another job ID or automatic AI retry. Check
+generatedAt / validUntil; cached research is not a fresh execution check.
+
+Do not run the watched-wallet BUY worker for an arbitrary researched market.
+Its copy-selection contract is distinct. Independent preparation requires the
+requesting agent's separate explicit decision and exact buyer authorization.
+This research action does not yet persist Sibyl memory or deliver an OKX task.
+
+### Prepare the reviewed exact market
+
+After the requesting agent explicitly reviews the research and independently
+chooses to proceed, the same private endpoint accepts RESEARCH_PREPARE. Supply
+agentId, serviceId, jobId, buyerAgentId and taskStatus as above, the returned
+reportId, acknowledgeIndependentDecision=true, ownerAddress, and decimal-string
+maxSpendUsdc / maximumPrice. Never set acknowledgement on the buyer's behalf.
+The endpoint takes market/outcome from the saved report, not new caller fields.
+It rejects tampering, expired research, SELL, widened caps and a second owner
+or execution choice. A refreshed plan retains the same externalOrderId.
+
+Use the returned owner authorization message and existing governed handoff.
+The external order ID binds the reviewed report and exact execution choice;
+it is covered by the existing signed authorization. No keys enter PolyDesk.
+This path does not call the old watched-wallet BUY worker. A successful plan
+is not a submitted order or verified fill. Existing service-access checks still
+apply; do not pay a governed execution fee without separate disclosed authority.
+An expired report or an interrupted attempt requires explicit reconciliation,
+not a fabricated replacement task or automatic re-analysis.
+
+After verified execution only, the receipt-memory projection preserves the
+opaque signed externalOrderId through Sibyl. This does not by itself certify
+OKX task acceptance, and research text is not written into fill memory.
+
+### Existing watched-wallet BUY branch only
 
 Create a temporary JSON request containing only:
 
@@ -54,3 +127,22 @@ npm run a2a:worker -- --request /tmp/polydesk-a2a-request.json --execute
 ```
 
 Return or send exactly the worker result permitted by the OKX script. A `requires_action` result is not a completed trade. A `recovery_required` result requires operator reconciliation and must never trigger a second delivery.
+
+## Integration Audit service 40363
+
+This service must never enter the BUY worker or subscription enrollment flow.
+After the authoritative OKX script confirms the accepted audit task, collect
+sanitized evidence for payment, wallet, authorization, execution, recovery,
+and receipts. Bind the report to the actual job ID and buyer agent ID.
+Compile the existing conformance-input schema locally with:
+
+```bash
+cd /opt/polydesk-a2a/app
+npm run audit:report -- --request /tmp/polydesk-audit-input.json
+```
+
+This command only validates and compiles supplied findings. It does not verify
+the supplied evidence hashes, perform the assessment, authenticate the task,
+store Sibyl memory, or deliver the report. Independently verify evidence before
+marking any control pass or fail; leave untested controls not-tested. Deliver
+only through the authoritative OKX task script. No audit authorizes trading.

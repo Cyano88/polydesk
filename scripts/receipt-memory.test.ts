@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+
+test('startup pin matches the LF bridge bytes deployed by Git', () => {
+  const source = readFileSync(new URL('./start-with-receipt-memory.ts', import.meta.url), 'utf8')
+  const bridge = readFileSync(new URL('./sibyl-receipt-memory.py', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const pin = source.match(/SIBYL_MEMORY_BRIDGE_SHA256 = '([a-f0-9]{64})'/)?.[1]
+  assert.equal(pin, createHash('sha256').update(bridge).digest('hex'))
+})
 import { Wallet } from 'ethers'
 import { enqueueReceiptMemory, memoryEnvelope, runMemoryDeliveryOnce } from '../api/receipt-memory-outbox.js'
 import { createReceiptMemoryRecallHandler, memoryRecallAuthorization, receiptMemoryDescriptor } from '../api/receipt-memory-api.js'
@@ -52,6 +61,13 @@ test('only verified receipts produce sanitized stable memory envelopes', () => {
   }
   const changed = receipt(); changed.execution.fillSize = NaN
   assert.throws(() => memoryEnvelope(owner, changed))
+})
+
+test('verified memory preserves only bounded signed A2A order correlation', () => {
+  const input = { ...receipt(), externalOrderId: 'a2a_' + 'ab'.repeat(32) }
+  assert.equal(JSON.parse(memoryEnvelope(owner, input).payload).externalOrderId, input.externalOrderId)
+  assert.equal(JSON.parse(memoryEnvelope(owner, { ...input, externalOrderId: 'untrusted prose' }).payload).externalOrderId, undefined)
+  assert.throws(() => memoryEnvelope(owner, { ...input, status: 'PREPARED' }))
 })
 test('research-bound memory requires exact IDs and never fabricates approval', () => {
   const input: any = receipt(); input.policy.researchPolicy = 'zeroscout-approved-v1'

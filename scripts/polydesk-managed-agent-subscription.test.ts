@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
+import { submitManagedRequest } from './polydesk-managed-agent-operator.js'
 import {
   MANAGED_AGENT_LISTING_ID,
   MANAGED_AGENT_SCHEMA,
@@ -26,6 +27,31 @@ test('locks enrollment to the immutable PolyDesk managed service identity', () =
   assert.equal(validateManagedSubscriptionIdentity(subscription).serviceId, MANAGED_AGENT_SERVICE_ID)
   assert.throws(() => validateManagedSubscriptionIdentity({ ...subscription, serviceId: 'c387e35b-2a5c-44de-ac80-c1521385e93c' }), /registered managed-agent service/)
   assert.throws(() => validateManagedSubscriptionIdentity({ ...subscription, serviceListingId: '38484' }), /managed-agent listing/)
+})
+
+test('managed operator replaces caller entitlement with exact official directory data without mutating input', async () => {
+  const authoritative = validateManagedSubscriptionIdentity(subscription)
+  const request = { schema: MANAGED_AGENT_SCHEMA, action: 'enroll', subscription: { ...subscription, periodEndAt: '2030-10-01T00:00:00Z' } }
+  let posted: any
+  await submitManagedRequest(request, { list: async () => [authoritative], post: async body => { posted = body; return { ok: true } } })
+  assert.equal(posted.subscription.periodEndAt, authoritative.periodEndAt)
+  assert.equal(request.subscription.periodEndAt, '2030-10-01T00:00:00Z')
+})
+
+test('managed operator cannot enroll or resume another buyer or a missing subscription', async () => {
+  for (const action of ['enroll', 'update_preferences', 'resume']) {
+    for (const entries of [[], [validateManagedSubscriptionIdentity({ ...subscription, buyerAgentId: '9002' })]]) {
+      await assert.rejects(submitManagedRequest({ schema: MANAGED_AGENT_SCHEMA, action, subscription }, {
+        list: async () => entries, post: async () => { assert.fail('must not post') },
+      }), /not active/)
+    }
+  }
+})
+
+test('managed operator rejects wrong service before any directory or HTTP access', async () => {
+  await assert.rejects(submitManagedRequest({ schema: MANAGED_AGENT_SCHEMA, action: 'enroll', subscription: { ...subscription, serviceListingId: '38484' } }, {
+    list: async () => { assert.fail('must not query') }, post: async () => { assert.fail('must not post') },
+  }), /managed-agent listing/)
 })
 
 test('normalizes safe portfolio preferences and rejects secrets', () => {

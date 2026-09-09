@@ -2,6 +2,7 @@ import { closeSync, existsSync, openSync } from 'node:fs'
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
+import { runResearchOperator } from '../api/polydesk-a2a-research-operator.js'
 import {
   runA2aTradingWorker,
   validateA2aWorkerRequest,
@@ -199,6 +200,17 @@ function dependencies(): A2aWorkerDependencies {
 if (!requestPath) fail('Usage: npm run a2a:worker -- --request <request.json> [--dry-run|--execute]')
 
 const raw = parseJson(await readFile(resolve(requestPath), 'utf8'), 'Worker request file')
+if (raw?.action === 'RESEARCH' || raw?.action === 'RESEARCH_PREPARE') {
+  // This branch never invokes grant/sign/deliver commands or the copy worker.
+  try {
+    const result = await runResearchOperator(raw, { execute: !dryRun, operatorKey, url: baseUrl })
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+  } catch {
+    process.stderr.write('Research operator failed. Reconcile the same task; no automatic payment, execution or retry was performed.\n')
+    process.exitCode = 1
+  }
+  process.exit(process.exitCode || 0)
+}
 const request = validateA2aWorkerRequest(raw)
 
 if (dryRun) {

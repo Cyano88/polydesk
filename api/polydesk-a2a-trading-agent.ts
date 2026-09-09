@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { getAddress, isAddress } from 'viem'
 import { preparePolymarketCopy } from './polymarket-copy-prepare.js'
+import { researchA2aTask, prepareA2aResearchedTask } from './polydesk-a2a-research.js'
 import { hasRenderDurableStore, mutateDurableJson, readDurableJson } from './render-durable-store.js'
 
 type JsonRecord = Record<string, unknown>
@@ -229,6 +230,13 @@ export function a2aTradingDescriptor(req: Request) {
       'Return a public, recomputable open or realized PnL receipt.',
     ],
     operatorEndpoint: `${origin}/api/a2a/polydesk-trading-agent`,
+    research: {
+      action: 'RESEARCH',
+      serviceId: '38484',
+      access: 'Authenticated private operator after authoritative OKX job acceptance.',
+      inputs: ['agentId', 'serviceId', 'jobId', 'buyerAgentId', 'taskStatus', 'research: exact marketId, outcome, side, screening mandate'],
+      boundary: 'Research-only evidence and requesting-agent review. No separate buyer payment or order authorization. The bounded BUY worker remains a separate action.',
+    },
     receiptPattern: `${origin}/api/a2a/polydesk-trading-agent/receipt/{missionId}`,
     requiredTaskTerms: ['venue=polymarket', 'action=buy', 'maximum USDC amount', 'expiry', 'accepted task state'],
     selectionModes: ['TRADE', 'POSITION', 'AUTO_BEST_FIT'],
@@ -541,11 +549,21 @@ export function createA2aTradingHandler(dependencies: A2aTradingDependencies = d
     const auth = requireOperator(req)
     if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error })
     const action = clean(isRecord(req.body) ? req.body.action : '', 32).toUpperCase()
+    if (action === 'RESEARCH_PREPARE') {
+      try {
+        const prepared = await prepareA2aResearchedTask(req.body)
+        return res.status(prepared.status).json(prepared.ok ? { ...prepared.data, ok: true } : { ok: false, error: prepared.error })
+      } catch { return res.status(502).json({ ok: false, error: 'Research preparation unavailable. No order submitted.' }) }
+    }
+    if (action === 'RESEARCH') {
+      const research = await researchA2aTask(req.body)
+      return res.status(research.status).json(research.ok ? { ok: true, ...research.data } : { ok: false, error: research.error })
+    }
     const result = action === 'PREPARE_SIGNAL'
       ? await prepareA2aTradingSignal(req.body, dependencies)
       : action === 'PNL_SNAPSHOT'
         ? await snapshotA2aTradingPnl(req.body, dependencies)
-        : { ok: false as const, status: 400, error: 'action must be PREPARE_SIGNAL or PNL_SNAPSHOT.' }
+        : { ok: false as const, status: 400, error: 'action must be RESEARCH, RESEARCH_PREPARE, PREPARE_SIGNAL or PNL_SNAPSHOT.' }
     if (!result.ok) return res.status(result.status).json({ ok: false, error: result.error, ...('missionId' in result ? { missionId: result.missionId } : {}) })
     return res.status(result.status).json({ ok: true, ...result.data, ...('idempotentReplay' in result ? { idempotentReplay: result.idempotentReplay } : {}) })
   }

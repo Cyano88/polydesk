@@ -47,6 +47,15 @@ class ReceiptMemoryTests(unittest.TestCase):
         self.assertEqual(first['state'], 'SIBYL_CAPTURED_AND_RECALLED')
         self.assertEqual(first['payloadHash'], hashlib.sha256(json.dumps(self.body).encode()).hexdigest())
 
+    def test_signed_a2a_order_correlation_survives_capture_and_recall(self):
+        self.body['externalOrderId'] = 'a2a_' + 'ab' * 32
+        self.capture()
+        self.assertEqual(self.recall()['records'][0]['receipt']['externalOrderId'], self.body['externalOrderId'])
+
+    def test_unstructured_a2a_correlation_is_rejected(self):
+        self.body['externalOrderId'] = 'untrusted task prose'
+        with self.assertRaises(ValueError): self.capture()
+
     def test_conflicting_receipt_cannot_overwrite(self):
         self.capture()
         self.body['fillSize'] = 10

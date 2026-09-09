@@ -23,6 +23,7 @@ export function memoryEnvelope(owner: string, receipt: Row) {
   if (policy === 'zeroscout-approved-v1' && (!/^pstd_[a-f0-9]{32}$/.test(receipt.policy.researchDecisionId)
       || !/^[a-f0-9]{64}$/.test(receipt.policy.researchAnalysisHash))) throw new Error('Missing research binding')
   const body = { schema: 'polydesk-receipt-memory-v1', owner, executionId: receipt.executionId,
+    ...(/^a2a_[a-f0-9]{64}$/.test(receipt.externalOrderId || '') ? { externalOrderId: receipt.externalOrderId } : {}),
     verifiedAt: receipt.verifiedAt, tokenId: receipt.market.tokenId,
     orderId: receipt.execution.orderId, transactionHash: receipt.execution.transactionHash,
     fillSize: receipt.execution.fillSize, fillPrice: receipt.execution.fillPrice,

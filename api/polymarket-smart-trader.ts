@@ -1198,6 +1198,56 @@ function executionHandoff(
   }
 }
 
+// Private A2A decision support: reuses the current engine, but never creates an
+// x402 entitlement or persists a decision that PREPARE could consume.
+export function taskResearchInputError(raw: unknown): string | null {
+  if (!isRecord(raw) || Object.keys(raw).some(key => !['marketId', 'outcome', 'side', 'mandate'].includes(key))) {
+    return 'Task research accepts exact marketId, outcome, side, and mandate only.'
+  }
+  if (typeof raw.marketId !== 'string' || !raw.marketId.trim() || raw.marketId.length > 320 || typeof raw.outcome !== 'string' || !raw.outcome.trim() || raw.outcome.length > 100 || !['BUY', 'SELL'].includes(String(raw.side))) return 'Resolve an exact market, outcome, and side before task research.'
+  if (!isRecord(raw.mandate) || Object.keys(raw.mandate).some(key => !['maximumPrice', 'maximumSpread', 'minimumLiquidityUsd', 'minimumHoursToResolution', 'maximumBookAgeSeconds', 'maximumPriceDrift', 'maximumSpendUsdc', 'maximumShares'].includes(key))) return 'A numeric screening mandate without unknown fields is required.'
+  if (Object.values(raw.mandate).some(value => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) return 'Screening limits must be finite non-negative numbers.'
+  const ranges: Record<string, [number, number]> = { maximumSpread: [0.005, 0.5], minimumLiquidityUsd: [0, 10000000], minimumHoursToResolution: [0, 8760], maximumBookAgeSeconds: [5, 3600], maximumPriceDrift: [0.001, 0.5] }
+  for (const [key, [minimum, maximum]] of Object.entries(ranges)) {
+    const value = raw.mandate[key]
+    if (typeof value === 'number' && (value < minimum || value > maximum)) return 'A screening limit is outside its supported range; limits are never silently widened.'
+  }
+  if (typeof raw.mandate.maximumSpendUsdc !== 'number' || raw.mandate.maximumSpendUsdc < 0.01 || raw.mandate.maximumSpendUsdc > 10000 || typeof raw.mandate.maximumPrice !== 'number' || raw.mandate.maximumPrice < 0.01 || raw.mandate.maximumPrice > 0.99) return 'Explicit maximumSpendUsdc and maximumPrice screening limits are required.'
+  return null
+}
+
+export async function runPolymarketTaskResearch(raw: unknown, dependencies: SmartTraderDependencies = liveDependencies) {
+  const invalid = taskResearchInputError(raw)
+  if (invalid) return { ok: false as const, status: 400, error: invalid }
+  const input = raw as JsonRecord
+  const result = await runPolymarketSmartTrader({ ...input, action: 'ANALYZE' }, {
+    ...dependencies,
+    saveDecision: async () => {},
+  }, null)
+  if (!result.ok) return result
+  if (result.data.action !== 'ANALYZE') return { ok: false as const, status: 500, error: 'Unexpected research result.' }
+  const blockers = result.data.decision.blockers.filter(blocker => blocker !== 'A settled 0.3 USDT ANALYZE payment is required before this receipt can authorize PREPARE.')
+  return { ok: true as const, status: 200, data: {
+    schema: 'polydesk-a2a-market-research-v1',
+    generatedAt: result.data.generatedAt,
+    validUntil: result.data.decision.expiresAt,
+    selected: result.data.selected,
+    evidence: result.data.evidence,
+    opinion: result.data.opinion,
+    riskFlags: result.data.riskFlags,
+    researchStatus: result.data.decision.evidence.researchStatus,
+    // No payment blocker belongs in the A2A report: this result cannot grant
+    // PREPARE authority regardless of the research outcome.
+    screeningMandate: result.data.decision.mandate,
+    blockers,
+    agentHandoff: agentReviewHandoff({ selected: { ...result.data.selected, blockers, riskFlags: result.data.riskFlags }, side: input.side as 'BUY' | 'SELL', researchStatus: result.data.decision.evidence.researchStatus || 'UNAVAILABLE' }),
+    additionalPaymentRequired: false,
+    orderAuthorized: false,
+    orderSubmitted: false,
+    next: 'Review this evidence in the accepted A2A task. Execution requires a separate exact buyer authorization; this report is not an x402 APPROVE receipt.',
+  } }
+}
+
 export async function runPolymarketReview(raw: unknown, dependencies: SmartTraderDependencies = liveDependencies) {
   if (!isRecord(raw) || Object.keys(raw).some(key => !['action', 'marketId', 'marketUrl', 'outcome', 'side', 'mandate'].includes(key))) {
     return { ok: false as const, status: 400, error: 'REVIEW accepts only action, exact marketId or marketUrl, outcome, side, and optional mandate. Never send credentials.' }

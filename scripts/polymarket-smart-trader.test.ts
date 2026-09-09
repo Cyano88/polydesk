@@ -16,6 +16,7 @@ import {
   runBoundedSmartTraderDelivery,
   runPolymarketSmartTrader,
   runPolymarketReview,
+  runPolymarketTaskResearch,
   isRemediableDegradedResearch,
   shouldRecoverSmartTraderDelivery,
   SMART_TRADER_ANALYSIS_ENGINE_VERSION,
@@ -36,6 +37,45 @@ const servicePayment: SmartTraderServicePayment = {
   network: 'X Layer',
   serviceUrl: '/api/a2mcp/polymarket-smart-trader',
 }
+
+test('A2A research reuses AI evidence without creating an x402 approval or extra payment', async () => {
+  let calls = 0
+  const base = dependencies()
+  const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }, dependencies({
+    research: async context => { calls++; assert.equal((context.mandate as any).maximumSpendUsdc, 5); return base.research(context) },
+    saveDecision: async () => { assert.fail('must not save an x402 decision') },
+  }))
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(calls, 1)
+  assert.equal(result.data.researchStatus, 'AVAILABLE')
+  assert.equal(result.data.evidence.zeroScout?.tradeAssessment?.stance, 'SUPPORT')
+  assert.equal(result.data.orderAuthorized, false)
+  assert.equal(result.data.additionalPaymentRequired, false)
+  assert.equal(result.data.agentHandoff.nextAction, 'REVIEW_EVIDENCE')
+  assert.equal(result.data.agentHandoff.decisionId, null)
+  assert.equal('decision' in result.data, false)
+})
+
+test('A2A research outage delivers blockers and an explicitly unapproved continuation', async () => {
+  const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }, dependencies({ research: async () => { throw new Error('provider unavailable') } }))
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.data.researchStatus, 'UNAVAILABLE')
+  assert.equal(result.data.agentHandoff.automaticResearchRetry, false)
+  assert.match(result.data.agentHandoff.review.blockers.join(' '), /Research unavailable/)
+  assert.equal(result.data.agentHandoff.continuation.requestTemplate?.acknowledgeIndependentDecision, false)
+  assert.equal(result.data.additionalPaymentRequired, false)
+})
+
+test('A2A research rejects ambiguous outcomes and injected payment or execution fields', async () => {
+  const input = { marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }
+  for (const raw of [{ ...input, servicePayment }, { ...input, action: 'PREPARE' }, { ...input, mandate: { ...input.mandate, privateKey: 'fixture' } }, { ...input, mandate: {} }]) {
+    assert.equal((await runPolymarketTaskResearch(raw, dependencies({ research: async () => { assert.fail('must not call AI') } }))).ok, false)
+  }
+  const result = await runPolymarketTaskResearch(input, dependencies({ resolveMarket: async () => [market(), market({ conditionId: `0x${'34'.repeat(32)}` })] }))
+  assert.equal(result.ok, false)
+})
 
 test('free REVIEW resolves exact outcome evidence without AI, news, proof storage or payment', async () => {
   const forbidden = async (): Promise<never> => { throw new Error('Forbidden dependency called') }

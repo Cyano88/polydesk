@@ -50,6 +50,9 @@ def capture(root, payload):
     policy = body.get('researchPolicy')
     require(policy in ('agent-independent-v1','zeroscout-approved-v1'))
     fields = base | ({'researchDecisionId','researchAnalysisHash'} if policy == 'zeroscout-approved-v1' else set())
+    if 'externalOrderId' in body:
+        require(isinstance(body['externalOrderId'], str) and re.fullmatch(r'a2a_[a-f0-9]{64}', body['externalOrderId']))
+        fields |= {'externalOrderId'}
     require(set(body) == fields and body['schema'] == 'polydesk-receipt-memory-v1')
     require(re.fullmatch(r'0x[a-f0-9]{40}', body['owner']))
     require(re.fullmatch(r'pex_[a-f0-9]{24}', body['executionId']))

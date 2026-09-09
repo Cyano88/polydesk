@@ -23,7 +23,7 @@ async function prepare() {
   await privateDirectory('/var/sibyl/receipt-memory-canary')
   process.env.SIBYL_MEMORY_PYTHON = resolve('.sibyl-runtime/bin/python')
   process.env.SIBYL_MEMORY_BRIDGE = resolve('scripts/sibyl-receipt-memory.py')
-  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = '2161a37a77d5d02214e7a37826370302ccb9db31a08b80422b0b87ea2e5c82c3'
+  process.env.SIBYL_MEMORY_BRIDGE_SHA256 = '9081bc79b4ba3334717d5e7e487c4d5a250b134fe209f64adca4c57af266f8f1'
   process.env.SIBYL_MEMORY_ROOT = '/var/sibyl/receipt-memory-canary'
   const scope = createHash('sha256').update('polydesk-buyer-v1:0x'+'22'.repeat(20)).digest('hex')
   const previous = await lstat('/var/sibyl/receipt-memory-canary/'+scope+'/memory.db')
