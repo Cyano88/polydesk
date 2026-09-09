@@ -65,6 +65,7 @@ test('research-only accepts no mandate, does not invent AI limits, and returns r
       research: async context => {
         calls++
         assert.equal(context.mandate, null)
+        assert.equal(context.researchOnly, true)
         assert.match(String(context.analysisScope), /Research only/)
         if (outage) throw new Error('fixture outage')
         return base.research(context)

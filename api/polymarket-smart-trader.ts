@@ -1225,7 +1225,7 @@ export async function runPolymarketTaskResearch(raw: unknown, dependencies: Smar
   const researchOnly = !Object.prototype.hasOwnProperty.call(input, 'mandate')
   const result = await runPolymarketSmartTrader({ ...input, action: 'ANALYZE' }, {
     ...dependencies,
-    research: context => dependencies.research(researchOnly ? { ...context, mandate: null,
+    research: context => dependencies.research(researchOnly ? { ...context, researchOnly: true, mandate: null,
       analysisScope: 'Research only. No buyer spend or price limits were supplied. Assess the exact outcome using cited evidence; do not request trading limits or treat their absence as an evidence gap. No trade is authorized.',
     } : context),
     saveDecision: async () => {},
