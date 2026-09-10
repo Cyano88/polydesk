@@ -43,7 +43,8 @@ test('fails closed on missing fees, stale book, mismatched token and RPC errors'
  const d = deps(), original = d.fetchJson
  d.fetchJson = async url => { const value = await original(url); if (url.includes('fee-rate') && mode === 'fee') return {}; if (url.includes('/book?') && mode === 'stale') value.timestamp = String(now - 61_000); if (url.includes('/book?') && mode === 'token') value.asset_id = '999'; return value }
  if (mode === 'rpc') d.readWallet = async () => { throw new Error('RPC unavailable') }
- await assert.rejects(preflightPolymarketTrade(input, d)) }
+ if (mode === 'stale') { const result = await preflightPolymarketTrade(input, d); assert.equal(result.publicChecksPassed, false); assert.ok(result.issues.includes('STALE_ORDER_BOOK')); assert.equal(result.balance, '5.02501') }
+ else await assert.rejects(preflightPolymarketTrade(input, d)) }
 })
 
 test('preserves order policy and blocks crossing post-only or insufficient FOK depth', async () => {

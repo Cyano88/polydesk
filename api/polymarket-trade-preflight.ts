@@ -61,7 +61,7 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
     deps.fetchJson(`https://clob.polymarket.com/fee-rate?token_id=${token}`),
   ])
   const timestamp = Number(book.timestamp)
-  if (book.asset_id !== token || book.market !== market.conditionId || typeof book.neg_risk !== 'boolean' || !Number.isFinite(timestamp) || timestamp > deps.now() + 5_000 || deps.now() - timestamp > 60_000) throw new Error('Unverified or stale order book.')
+  if (book.asset_id !== token || book.market !== market.conditionId || typeof book.neg_risk !== 'boolean' || !Number.isFinite(timestamp) || timestamp > deps.now() + 5_000) throw new Error('Unverified order book.')
   if (market.feesEnabled !== false && (market.feesEnabled !== true || market.feeSchedule?.exponent !== 1 || typeof market.feeSchedule?.rate !== 'number')) throw new Error('Live fee schedule is missing or unsupported.')
   if (typeof fee.base_fee !== 'number') throw new Error('Executor fee reserve unavailable.')
   const budget = tradeBudget({ maxTotal: cap, price, reserveBps: fee.base_fee, feeRate: market.feesEnabled === false ? 0 : market.feeSchedule.rate })
@@ -72,6 +72,7 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
   const state = wallet.deployed ? await deps.readWallet(wallet.depositWalletAddress as `0x${string}`, spender) : { balance: 0n, allowance: 0n }
   const required = parseUnits(budget.requiredBalance, 6)
   const issues: string[] = []
+  if (deps.now() - timestamp > 60_000) issues.push('STALE_ORDER_BOOK')
   if (!wallet.deployed) issues.push('DEPOSIT_WALLET_NOT_DEPLOYED')
   if (state.balance < required) issues.push('INSUFFICIENT_COLLATERAL_INCLUDING_RESERVE')
   if (state.allowance < required) issues.push('DEPOSIT_WALLET_EXCHANGE_APPROVAL_REQUIRED')
@@ -81,6 +82,7 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
   if (orderType === 'GTC' && (!(Number(book.min_order_size) > 0) || Number(budget.shares) < Number(book.min_order_size))) issues.push('RESTING_ORDER_MINIMUM_NOT_MET')
   if (deps.now() - started > 30_000) issues.push('PREFLIGHT_EXPIRED_DURING_CHECKS')
   return { ok: true, publicChecksPassed: issues.length === 0, issues, checkedAt: new Date(deps.now()).toISOString(), validUntil: new Date(deps.now() + 30_000).toISOString(),
+    bookTimestamp: String(book.timestamp), bookAgeMs: deps.now() - timestamp,
     owner: wallet.ownerAddress, wallet: wallet.depositWalletAddress, walletType: 'DEPOSIT_WALLET', collateral: 'pUSD',
     balance: formatUnits(state.balance, 6), allowance: formatUnits(state.allowance, 6), spender,
     shortfall: formatUnits(required > state.balance ? required - state.balance : 0n, 6),

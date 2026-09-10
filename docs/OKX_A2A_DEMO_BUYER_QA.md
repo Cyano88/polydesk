@@ -684,3 +684,52 @@ signer/relayer readiness. Estimates and actual fees must be distinguished.
 Read-only checks cannot guarantee a later network call will succeed. The latest
 position query returned zero positions and balance still displayed $5.03 pUSD.
 No code fix or deployment of this complete preflight is claimed in this audit.
+
+## Trade-blocker corrections: implementation and validation
+
+PolyDesk 4a3f887 deployed on Render (dep-dah736k9v7es73b7u660) and the VPS
+runtime instructions were synchronized, daemon active. Added the read-only
+/api/polymarket-account/trade-preflight endpoint and shared integer budget math.
+It resolves the exact token and owner-derived wallet, reads live fees and the
+executor reserve, rounds order size within the total buyer cap, checks correct
+exchange allowance, balance, price tick, depth and freshness. Funding readiness
+now explicitly says wallet-funding-only/tradeReady=false. The smart-trader handoff
+requires preflight outputs instead of funding against order notional alone.
+publicChecksPassed is not authentication, signing or order authorization.
+
+The installed official plugin 0.7.1 source had two separate defects relevant to
+this failed buy: dry-run omitted its execution-time reserve; deposit-wallet buys
+shared a legacy proxy approval branch and checked pUSD allowance to the Neg Risk
+Adapter. Deposit-wallet setup instead approves pUSD to the V2 exchanges and CTF
+operator access to the adapter. The isolated patch exposes the reserve, checks
+the selected exchange for deposit-wallet buys, fails closed on allowance RPC
+errors and never routes deposit-wallet approvals through the proxy factory.
+Missing real exchange approval requires supported relayer setup, not that legacy
+path. The patch does not replace the reserve with the lower estimated market fee.
+
+Patch stored at ops/patches/polymarket-plugin-0.7.1-preflight.patch. Built locally
+from the installed official 0.7.1 source; original Windows binary retained.
+Patched Linux operator binary SHA-256:
+6dcd10b35b37759ccd0cbca6e3bb0f68b6b3e49d5b1beea2d0af4dad609d9ff2.
+The optional config-directory override reads the existing local configuration
+without copying wallet credentials. scripts/polymarket-wsl.ps1 supplies those
+paths to the local Linux build; it is not a geographic workaround and leaves
+region checks and TLS verification enabled.
+
+Existing Linux OnchainOS 4.5.3 was verified against the published release hash:
+0d66c2135e5c91592ff06c6bc3632fd21c89c5966068e44bd973b8384cfd9493.
+With ONCHAINOS_HOME pointing to the same existing local account, it resolved the
+same Polygon owner without the Windows BadRecordMac error. Public Linux probes
+also reached the OKX endpoint with both TLS 1.2 and TLS 1.3. This narrows the
+transport issue but does not prove its root cause or guarantee later signing.
+Patched preview for the authorized $4 cap: 11 shares, $3.41 order, $0.341 reserve,
+$3.751 required. Patched balance read returned the same deposit wallet and $5.03.
+
+Validation: 65 relevant PolyDesk tests passed before the added order-policy test;
+the final seven focused preflight tests and account-readiness tests passed, and
+both TypeScript checks passed. Patched plugin: 24 library tests passed, including
+the real $5.115 rejection and reserve ceiling regression. Live preflight detected
+an old book snapshot even after a cache-busting request. The guard remains; return
+the full wallet/budget checks with STALE_ORDER_BOOK so the buyer sees the actual
+blocker. No live order was submitted by these audit checks. A read-only success
+must not be presented as proof of a filled trade or universal network reliability.
