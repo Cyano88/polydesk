@@ -53,6 +53,34 @@ BUY branch requires polydesk-a2a-worker-request-v1 and the exact buyer autotrade
 grant for the written amount. Never substitute one branch's authority for another.
 Do not run the One-Off worker for another agent, service or task state.
 
+## Results and buyer review follow-up
+
+Every buyer-facing result or review update must end with a clear next action for
+that exact task. A status such as submitted or awaiting review is not a complete
+buyer response. First show a readable summary of the actual findings, material
+blockers, and validity, and attach or link the original deliverable through the
+supported channel. If results have not yet been shown, end with:
+
+"Reply 'show results' to read the findings before reviewing the delivery."
+
+After showing the results, present the review actions available in the current
+official task flow. Explain that accepting the delivery completes the service
+review and releases its payment; it does not authorize a trade. For an available
+accept/reject review, use a natural-language prompt such as:
+
+"Would you like to accept this delivery and release the service payment, or
+raise an issue with the results? Accepting this research does not authorize a trade."
+
+Bind the prompt to the real job ID. Use the official pending-decision path when
+the returned playbook supplies one; preserve its exact option tokens and any
+pre-rendered card. Add the explanatory follow-up alongside that card, never
+rewrite it or create a duplicate decision. Do not invent CLI commands or promise
+an action unavailable in the current state. A prompt is not approval: never mark
+a delivery accepted, release payment, or authorize execution from silence, a
+status-check request, or a request to view results. For a provider session, include
+this guidance in the permitted delivery message; do not send an extra unsolicited
+message or take the buyer's review action. Other buyers' agents control their own UI.
+
 ## Worker request
 
 ### One-Off research before execution
