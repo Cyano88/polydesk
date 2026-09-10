@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-09-10T19:38:40.163Z",
+  "commit": "27a29740d632d36555bf13242c0f81bfcf907611",
+  "deployId": "dep-dahgdb2jnfac738o2ur0",
+  "deployStatus": "live",
+  "httpStatus": 200,
+  "deliveryStatus": "completed",
+  "researchStatus": "AVAILABLE",
+  "resultAvailable": true,
+  "originalJsonSha256": "1b5cfcb091899998fcb1a4f94d27ec67d7c00fd6f3eac96ab37b2d1001bc8de7",
+  "buyerGuidance": {
+    "paymentStatus": "settled",
+    "retryPayment": false,
+    "tradeAuthorized": false,
+    "reviewMeaning": "Review acknowledges research only. Payment is already settled; review does not release escrow or authorize trading.",
+    "resultLocation": "result",
+    "scoreMeaning": "Risk-adjusted opportunity screening, not a win probability or profit forecast. Review evidence and unresolved gaps.",
+    "followUpPrompts": [
+      "Show results",
+      "Show evidence",
+      "Show original JSON",
+      "Review this research",
+      "Analyze another market"
+    ],
+    "nextStep": "Review findings before requesting a preview. Fresh account, balance, fee and price checks and separate exact buyer approval are required for execution. New research may require a separately approved fee."
+  }
+}

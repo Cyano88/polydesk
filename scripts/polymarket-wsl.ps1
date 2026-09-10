@@ -1,6 +1,16 @@
-param([switch]$Recover,[Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
+param([switch]$Recover,[switch]$ReviewMemory,[switch]$CaptureMemory,[string]$MemoryExecutionId,[string]$MemoryOwner,[string]$MemoryToken,[Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
 $taskOwnerRoot = [Environment]::GetFolderPath('UserProfile')
 $taskLedger = Join-Path $taskOwnerRoot '.config\polymarket\polydesk-executions'
+if (!$env:POLYDESK_LOCAL_MEMORY_PYTHON) { $env:POLYDESK_LOCAL_MEMORY_PYTHON = '/root/polydesk-buyer-candidate.hXrameVt/runtime/bin/python' }
+if (!$env:POLYDESK_LOCAL_MEMORY_ROOT) { $env:POLYDESK_LOCAL_MEMORY_ROOT = '/root/.local/share/polydesk-local-finalized-memory' }
+if ($CaptureMemory) {
+  & node (Join-Path $PSScriptRoot 'polymarket-local-memory.mjs') capture $taskLedger $MemoryExecutionId
+  exit $LASTEXITCODE
+}
+if ($ReviewMemory) {
+  & node (Join-Path $PSScriptRoot 'polymarket-local-memory.mjs') review $taskLedger $MemoryOwner $MemoryToken
+  exit $LASTEXITCODE
+}
 if ($Recover) {
   & node (Join-Path $PSScriptRoot 'polymarket-execution-recovery.mjs') $taskLedger
   exit $LASTEXITCODE
@@ -51,6 +61,14 @@ if ($taskLiveOrder) {
     if ($LASTEXITCODE -ne 0) { throw 'Fresh sell preflight failed; no order attempted.' }
   }
   & node (Join-Path $PSScriptRoot 'polymarket-execution-guard.mjs') $taskLedger $env:POLYDESK_EXECUTION_ID wsl.exe @taskWslArgs
+  $taskSubmissionExit = $LASTEXITCODE
+  if ($taskSubmissionExit -eq 0) {
+    # Separate read-only settlement/memory work; never replay the executor on failure.
+    # Preserve stdout's existing order response for callers that parse its last JSON line.
+    $taskMemoryResult = & node (Join-Path $PSScriptRoot 'polymarket-local-memory.mjs') capture $taskLedger $env:POLYDESK_EXECUTION_ID
+    [Console]::Error.WriteLine(($taskMemoryResult -join [Environment]::NewLine))
+  }
+  exit $taskSubmissionExit
 } else {
   & wsl.exe @taskWslArgs
 }

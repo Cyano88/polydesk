@@ -69,3 +69,13 @@ Direct read-only production inspection found zero polymarket-governed-execution 
 No receipt was invented, upgraded or enqueued, and no new trade was placed. The real remaining integration gap is between the supported local executor and the server's governed memory receipt contract. A future adapter must preserve honest provenance and authenticate the buyer; it must not set missing proof flags to true. Alternatively, a fresh separately authorized governed execution can produce an eligible receipt. Current synthetic fresh-process proof remains correctly labelled.
 
 Evidence: SIBYL_EXISTING_RECEIPT_ELIGIBILITY_20260910.json. The observed absence is scoped to this production database and these record prefixes; it does not claim there were no historical trades.
+
+
+## Buyer guidance release verified
+
+Commit 27a29740d632d36555bf13242c0f81bfcf907611 deployed live as dep-dahgdb2jnfac738o2ur0. Existing paid Base analysis returned HTTP 200 with completed delivery, AVAILABLE research, original result JSON and buyerGuidance. Prompts include results, evidence, original JSON, research review and another-market analysis. Trading authority remains false and repayment is disabled. Verified at 2026-09-10T19:38:40Z; evidence: BASE_BUYER_GUIDANCE_LIVE_20260910.json. Production build and 57 shared research tests passed. This supersedes the earlier local-only prompt status; production execution-to-memory acceptance remains open.
+
+
+## Local executor integration added
+
+See LOCAL_EXECUTOR_SIBYL_INTEGRATION_20260910.md. The working guarded launcher now attempts local finalized-fill capture after submission and recovery, with an explicit memory-only retry and fresh-session review command. Real SDK fresh-process tests passed using synthetic fills. This uses separate local provenance and does not populate the governed server outbox. Historical trades remain ineligible; no live fill was created for this change.

@@ -581,3 +581,17 @@ The adapter verifies the original owner signature, active exact subscription, cu
 After a submission, continue with `npm run managed-agent:local -- --request ORDER_FILE --receipt`. This is read-only except recovery of an existing uncertain local guard. It verifies authenticated exact-order data and canonical finalized settlement logs, actual fees and the buyer total cap. It works after subscription or order-authority expiry because it cannot submit a new order. Relay the returned receipt and follow-up prompts. This native path uses pml IDs; never fabricate a governed pex ID or route it through CHECK_TRADE. Native receipts are not yet synchronized to Sibyl.
 
 Unattended copying remains disabled. This adapter authorizes one owner-signed FOK BUY at a time. Native SELL orchestration and automatic source-signal scheduling are outside this adapter. Terminal prompts should offer Check receipt, Check position, Analyze another market, or Keep funds as appropriate. An uncertain outcome must offer reconciliation, never another submission.
+
+## Local executor Sibyl memory (September 10, 2026)
+
+The buyer-local scripts/polymarket-wsl.ps1 launcher now attempts verified local-memory capture after a successful guarded submission. It rechecks authenticated order/trade history and exact canonical finalized Polygon fill evidence. A submitted order may not yet be finalized: memory failure never retries execution. The original stdout order response stays intact; separate memory status is emitted on stderr. Recovery of an existing fully filled guarded order also attempts capture.
+
+This is local owner-scoped memory with provenance LOCAL_BOUND_ORDER_AND_FINALIZED_CHAIN, separate from server governed receipts. It does not prove a governed mandate signature, authorize a trade, or verify current positions. Never insert it into the governed receipt outbox or describe it as SIBYL_VERIFIED_RECEIPTS from the hosted owner-signed route.
+
+Buyer-local continuation commands:
+- Capture an existing eligible receipt: scripts/polymarket-wsl.ps1 -CaptureMemory -MemoryExecutionId <existing-execution-id>.
+- In a fresh buyer-local session: scripts/polymarket-wsl.ps1 -ReviewMemory -MemoryOwner <verified-local-buyer-owner> -MemoryToken <exact-outcome-token>.
+
+Use recalled local fills before proposing another trade in that token. LOCAL_MEMORY_RECONCILIATION_REQUIRED means show prior buys/sells and refresh current position; a prior BUY followed by SELL must not be called an open position. Missing/corrupt inventory or failed SDK recall requires memory review, not an empty-history claim. These commands run on the buyer host, never with provider wallet credentials. Local filesystem/credential ownership is the boundary; this is not a new remote owner-signature API.
+
+Follow-ups: Show receipt; Review remembered fills; Check current position. On failure: Check existing settlement; Retry memory capture for the same execution. Retrying capture is not permission to retry a trade. Historical trades without the saved local execution/binding remain ineligible. Current validation uses synthetic fills with real SDK capture and fresh-process recall, not a newly executed live trade.
