@@ -1029,3 +1029,26 @@ ops/polydesk-a2a/AGENTS.md, covering research, review, quote, position, approval
 stale data, rejection, pending settlement, confirmed buy/sell and unfilled FOK.
 Suggested choices are never themselves paid-service or transaction consent.
 Final sell receipt and realized figures must be added after actual verification.
+
+## Sell completed; full round trip verified (2026-09-10)
+
+After fresh book age 32.8 seconds and bid depth 140.53 shares at 0.30, submitted
+one explicitly authorized FOK SELL: 11 United Yes shares, minimum 0.30.
+Order: 0x818ba33b560d8a79a86322465a3ab0b8e07f036e7089056b58c97ce07e3b4ba6
+Settlement: 0x3b707d7ae42f7812adc7fa8609ce1689d77a50db4dd219ca35b18a417bd84918
+Receipt status 0x1. Decoded Neg Risk V2 OrderFilled event matched returned order
+hash, buyer wallet, SELL side and exact token. Verified 11 shares and minimum
+price constraint. Gross proceeds 3.300000 pUSD; fee 0.115500; net 3.184500.
+Position API returned position_count=0. CLOB collateral balance 4.681870 pUSD,
+matching previous 1.497370 plus net proceeds 3.184500. Full-round-trip realized
+loss including both trading fees: 3.527640 - 3.184500 = 0.343140 pUSD.
+Research service fee is separate and excluded from this trading PnL figure.
+Unlimited adapter permission remains active; closing the position did not revoke it.
+
+Runtime buyer follow-up table committed in 799fb9c, copied into the active VPS
+workspace and verified byte-for-byte; daemon active. These are integrated agent
+instructions, not a claim that a deterministic UI button system was built or
+that every future model response is guaranteed. Demo should show post-sale:
+"Position closed. Net proceeds 3.18450 pUSD; round-trip loss 0.34314; balance
+4.68187. Show receipt, analyze another market, or keep funds."
+No new paid research or trade is implied by those choices.
