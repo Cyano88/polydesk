@@ -887,3 +887,30 @@ market incident block. Do not promise that an adapter approval would fix it or
 that all negative-risk markets fail. Provider clarification must explain which
 TOKEN, OWNER and SPENDER its allowance check uses for this V2 POLY_1271 order.
 No report was sent and no new trade or approval was attempted.
+
+## Local bounded repair prepared (2026-09-10)
+
+Buyer requested continuing locally without contacting support. Authenticated
+CLOB allowance reads with signature_type=3 returned the correct deposit wallet
+balance (5025010 raw), ample V2 exchange approvals and zero legacy-adapter
+allowance. The documented cache refresh returned HTTP 200; the subsequent
+allowance response was unchanged. This rules out a stale cache as the simple
+cause. Diagnostic scripts keep API secrets and HMAC headers private.
+
+Implemented an explicit opt-in local plugin extension:
+setup-deposit-wallet --adapter-allowance 3.751 --dry-run
+It previews ONE pUSD approve call to the exact adapter CLOB demanded, via the
+existing supported deposit-wallet signed WALLET batch. It does not use the
+legacy proxy factory, deploy a wallet, or change general setup approvals.
+It verifies the active owner's deployed wallet, rejects arbitrary/nonzero
+allowance replacement and bounds any requested amount to at most 4 pUSD.
+The approval is a spending permission, not a fee or transfer. It remains until
+consumed or revoked; it is not an expiring order authorization. Its ability to
+resolve CLOB's rejection is unproven until post-approval verification and a
+separately gated order attempt. The market incident guard remains active.
+
+All 26 Rust library tests passed, including exact calldata and amount bounds.
+Built and installed locally; live dry-run returned ok=true, allowance_pusd=3.751,
+call_count=1, native_value=0 and gas=relayer-funded. No approval or order was
+signed or broadcast. The concrete approval preview awaits buyer confirmation.
+No support report sent.

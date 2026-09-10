@@ -31,3 +31,4 @@ ownerAddress, exact marketSlug, outcome, maxTotalUsdc and limitPrice. Optional
 orderType and postOnly preserve buyer policy (GTD is not supported by this
 preflight). The response is read-only; publicChecksPassed is not signing or
 trading authorization. Use its rounded orderAmount, and refresh before signing.
+`setup-deposit-wallet --adapter-allowance 3.751 --dry-run` previews the opt-in bounded local repair. Never remove dry-run without review of this new spending permission. This does not remove the market incident guard or establish that CLOB will accept an order.

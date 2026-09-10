@@ -96,3 +96,108 @@
      // Always use ~/.config/polymarket/creds.json per spec, regardless of platform.
      // dirs::config_dir() returns ~/Library/Application Support on macOS which diverges from spec.
      let base = dirs::home_dir()
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -228,6 +228,9 @@
+     /// Existing EOA/proxy users are unaffected — run this only on a fresh install.
+     #[command(name = "setup-deposit-wallet")]
+     SetupDepositWallet {
++        /// Local repair: set only the adapter pUSD allowance, at most 4 pUSD
++        #[arg(long)]
++        adapter_allowance: Option<String>,
+         /// Preview the deployment without submitting any transaction
+         #[arg(long)]
+         dry_run: bool,
+@@ -450,8 +453,10 @@
+         Commands::SetupProxy { dry_run } => {
+             commands::setup_proxy::run(dry_run).await
+         }
+-        Commands::SetupDepositWallet { dry_run } => {
+-            commands::setup_deposit_wallet::run(dry_run).await
++        Commands::SetupDepositWallet { dry_run, adapter_allowance } => {
++            if let Some(amount) = adapter_allowance {
++                commands::setup_deposit_wallet::repair_adapter_allowance(&amount, dry_run).await
++            } else { commands::setup_deposit_wallet::run(dry_run).await }
+         }
+         Commands::Deposit { amount, chain, token, list, dry_run } => {
+             commands::deposit::run(amount.as_deref(), &chain, &token, list, dry_run).await
+--- a/src/commands/setup_deposit_wallet.rs
++++ b/src/commands/setup_deposit_wallet.rs
+@@ -274,3 +274,77 @@
+     format!("{:0>64}", stripped)
+ }
+ 
++
++
++// Opt-in, bounded workaround for the observed CLOB allowance requirement.
++// This never runs during normal setup or a buy and never deploys a wallet.
++fn bounded_adapter_amount(amount: &str) -> Result<u128> {
++    let parts: Vec<&str> = amount.split('.').collect();
++    anyhow::ensure!(parts.len() <= 2 && !parts[0].is_empty() && parts[0].bytes().all(|b| b.is_ascii_digit()), "Invalid allowance amount");
++    let frac = parts.get(1).copied().unwrap_or("");
++    anyhow::ensure!(frac.len() <= 6 && (parts.len() == 1 || !frac.is_empty()) && frac.bytes().all(|b| b.is_ascii_digit()), "Allowance requires at most six decimals");
++    let whole: u128 = parts[0].parse()?;
++    anyhow::ensure!(whole <= 4, "Allowance exceeds the approved 4 pUSD cap");
++    let raw = whole * 1_000_000 + format!("{0:0<6}", frac).parse::<u128>()?;
++    anyhow::ensure!(raw > 0 && raw <= 4_000_000, "Allowance must be positive and at most 4 pUSD");
++    Ok(raw)
++}
++
++fn bounded_adapter_call(raw: u128) -> WalletCall {
++    WalletCall { target: Contracts::PUSD.to_string(), value: 0,
++        data: format!("0x095ea7b3{}{:064x}", pad_address_hex(Contracts::NEG_RISK_ADAPTER), raw) }
++}
++
++pub async fn repair_adapter_allowance(amount: &str, dry_run: bool) -> Result<()> {
++    let raw = bounded_adapter_amount(amount)?;
++    let owner = get_wallet_address().await?;
++    let stored = crate::config::load_credentials_for(&owner)?.ok_or_else(|| anyhow::anyhow!("Existing deposit-wallet credentials required"))?;
++    anyhow::ensure!(stored.mode == TradingMode::DepositWallet, "Deposit-wallet mode required");
++    let wallet = crate::onchainos::get_existing_deposit_wallet(&owner).await.ok_or_else(|| anyhow::anyhow!("Existing wallet ownership could not be verified"))?;
++    anyhow::ensure!(stored.deposit_wallet.as_deref().map(|v| v.eq_ignore_ascii_case(&wallet)).unwrap_or(false), "Stored wallet differs from verified owner wallet");
++    let allowance = crate::onchainos::get_pusd_allowance(&wallet, Contracts::NEG_RISK_ADAPTER).await?;
++    anyhow::ensure!(allowance == 0 || allowance == raw, "Existing nonzero allowance differs; explicit replacement review required");
++    if dry_run || allowance == raw {
++        println!("{}", serde_json::json!({"ok":true,"dry_run":dry_run,"data":{
++            "owner":owner,"wallet":wallet,"token":Contracts::PUSD,"spender":Contracts::NEG_RISK_ADAPTER,
++            "allowance_pusd":amount,"allowance_atomic":raw.to_string(),"call_count":1,"native_value":"0",
++            "already_approved":allowance==raw,"route":"deposit-wallet-relayer","gas":"relayer-funded",
++            "note":"Bounded approval only; no trade, token transfer, wallet deployment or unlimited allowance. Existing market incident guard remains."}}));
++        return Ok(());
++    }
++    let client=Client::new();
++    let builder=get_builder_api_key(&client,&stored,&owner).await?;
++    let nonce=get_wallet_nonce(&client,&owner).await?;
++    let deadline=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs()+300;
++    let call=bounded_adapter_call(raw);
++    let calls_json=vec![serde_json::json!({"target":call.target,"value":"0","data":call.data})];
++    let params=BatchParams {wallet:wallet.clone(),nonce,deadline,calls:vec![call]};
++    let signature=sign_batch_via_onchainos(&params).await?;
++    let tx=relayer_wallet_batch(&client,&owner,&wallet,nonce,deadline,calls_json,&signature,&builder).await?;
++    crate::onchainos::wait_for_tx_receipt(&tx,120).await?;
++    let verified=crate::onchainos::get_pusd_allowance(&wallet,Contracts::NEG_RISK_ADAPTER).await?;
++    anyhow::ensure!(verified == raw, "Approval receipt confirmed but exact allowance verification failed");
++    sync_balance_allowance_deposit_wallet(&client,&wallet,&owner,&stored).await?;
++    println!("{}",serde_json::json!({"ok":true,"approval_tx":tx,"allowance_atomic":verified.to_string(),"trade_submitted":false}));
++    Ok(())
++}
++
++#[cfg(test)]
++mod bounded_adapter_tests {
++    use super::*;
++    #[test]
++    fn refuses_excess_or_ambiguous_allowances() {
++        for bad in ["0","4.000001","5","-1","1e0","1.0000001","1.",".1","1.2.3", "999999999999999999999999999999999999999999"] { assert!(bounded_adapter_amount(bad).is_err(), "{}", bad); }
++        assert_eq!(bounded_adapter_amount("3.751").unwrap(),3_751_000);
++        assert_eq!(bounded_adapter_amount("4").unwrap(),4_000_000);
++    }
++    #[test]
++    fn encodes_only_exact_collateral_approval() {
++        let call=bounded_adapter_call(3_751_000);
++        assert_eq!(call.target,Contracts::PUSD); assert_eq!(call.value,0);
++        assert_eq!(call.data.len(),138);
++        assert!(call.data.starts_with("0x095ea7b3"));
++        assert_eq!(u128::from_str_radix(&call.data[74..],16).unwrap(),3_751_000);
++        assert_eq!(&call.data[10..74],pad_address_hex(Contracts::NEG_RISK_ADAPTER));
++    }
++}
