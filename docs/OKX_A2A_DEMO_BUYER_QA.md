@@ -605,3 +605,26 @@ Buyer admission reported lookup_off and no execution. The actual report has
 orderAuthorized=false and orderSubmitted=false. A fresh task-status query still
 returned submitted. No delivery acceptance or service-payment release was issued.
 Follow-up: "Show results" before reviewing acceptance or raising a specific issue.
+
+## Fresh validated review accepted and settled
+
+The buyer explicitly instructed: "accept this research delivery and release
+0.1 USDT," after seeing the INSUFFICIENT assessment, confidence 42/100, missing
+numerical score derivation and unresolved evidence gaps. This exact reply was
+relayed to the buyer session for job
+0x6fbeb3612da2117158baf4f5ea20661361b5e68ab9883ad1b6557cc93756463c.
+After 45 seconds, a fresh CLI status read returned complete. Both buyer 5579
+and provider 5427 received job_completed, code 0, jobStatus complete, timestamp
+1789028273 (2026-09-10 08:17:53 UTC / 09:17:53 Lagos). The provider's official
+completion playbook identified funds received and income 0.1 USDT. These are
+platform settlement confirmations; a separate ERC-20 transfer-log/balance audit
+was not performed in this closeout.
+
+The original JSON was received and its byte identity verified before acceptance.
+Delivery acceptance settles research work despite its inconclusive trading case;
+it does not establish a favorable trade or authorize an order. No trade was
+submitted by this acceptance action. The same operator controls both demo agents.
+This cycle now demonstrates fresh request, AI findings, original JSON receipt,
+explicit buyer review and confirmed settlement after the timeout correction.
+Follow-up: decline this trade and analyze more markets, or resolve the evidence
+gaps before considering a separately authorized trade.
