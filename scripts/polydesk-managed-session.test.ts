@@ -154,3 +154,12 @@ test('managed receipt continuation replays without repeating completion and does
  assert.equal(calls,1)
  assert.ok(!JSON.stringify([...f.store.values()]).includes('private-proof'))
 })
+
+
+test('managed local preparation returns an authorization artifact once without executing',async()=>{
+ const f=setup();let calls=0
+ f.deps.prepareLocal=async(_input,id)=>{calls++;return{ok:true,state:'BUYER_LOCAL_AUTHORIZATION_REQUIRED',requestId:id,orderSubmitted:false,tradeAuthorized:false,followUpPrompts:['Review and sign the exact owner authorization.']}}
+ const request={action:'PREPARE_LOCAL_TRADE',requestId:'local_preview_message_01',trade:{ownerAddress:owner}}
+ assert.equal((await f.run(request)).state,'BUYER_LOCAL_AUTHORIZATION_REQUIRED')
+ assert.equal((await f.run(request)).idempotentReplay,true);assert.equal(calls,1)
+})

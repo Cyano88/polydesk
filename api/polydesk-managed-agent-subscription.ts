@@ -1,3 +1,5 @@
+import { prepareManagedLocalOrder } from './polydesk-managed-local-order.js'
+import { preflightPolymarketTrade } from './polymarket-trade-preflight.js'
 import { continueManagedTrade } from './polydesk-managed-trade.js'
 import { runManagedSession, type ManagedSession } from './polydesk-managed-session.js'
 import { mutateDurableJson } from './render-durable-store.js'
@@ -600,6 +602,7 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
               digestFrequency: row.digest_frequency, digestTimezone: row.digest_timezone, digestHourLocal: row.digest_hour_local, digestWeekday: row.digest_weekday },
             monitoringEnabled: row.monitoring_enabled === true && managedMonitoringEnabled({ status: row.status, periodEndAt: new Date(row.period_end_at).toISOString(), emailVerified: row.alert_email_verified === true }) }
         },
+        prepareLocal: (input, requestId) => prepareManagedLocalOrder(subscription, requestId, input, preflightPolymarketTrade),
         continueTrade: input => continueManagedTrade(subscription, input),
         recall: recallManagedReceiptContext,
         research: (input, context) => runPolymarketTaskResearch(input, undefined, context),

@@ -8,12 +8,21 @@ if ($Recover) {
 $taskWalletHome = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.onchainos')).Trim()
 $taskConfigDir = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.config\polymarket')).Trim()
 $taskBinary = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.local\bin\polydesk-polymarket-linux')).Trim()
+if ($env:POLYDESK_MANAGED_CONSTRAINTS) {
+  $taskManagedBinary = Join-Path $taskOwnerRoot '.local\bin\polydesk-polymarket-managed-linux'
+  $taskManagedHash = '3ae311482ea308fbcdac0098b379f3c5d4b9253bd212ff95ceb1c80e40054e24'
+  if (!(Test-Path -LiteralPath $taskManagedBinary) -or (Get-FileHash -LiteralPath $taskManagedBinary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskManagedHash) { throw 'Reviewed managed-native binary unavailable; no managed order attempted.' }
+  if ($PluginArgs[0] -ne 'buy') { throw 'Managed local execution currently supports BUY only.' }
+  $taskBinary = (wsl.exe --exec wslpath -u $taskManagedBinary).Trim()
+}
+
 if (!$taskWalletHome -or !$taskConfigDir -or !$taskBinary) { throw 'Could not resolve the existing local wallet paths.' }
 $taskBuilderCode = '0x873845696727f985cc6a23dcdffaefefd3f47a712dd8a02f1a938cac615844db' # Public PolyDesk code confirmed by owner, 2026-09-10.
 if ($env:POLYMARKET_BUILDER_CODE -and $env:POLYMARKET_BUILDER_CODE -ne $taskBuilderCode) { throw 'Builder code conflicts with the verified PolyDesk profile.' }
 if ($PluginArgs[0] -in @('buy','sell') -and $taskBuilderCode -notmatch '^0x[0-9a-fA-F]{64}$') { throw 'Set the verified public POLYMARKET_BUILDER_CODE before trading.' }
 # Original Windows binary is preserved. The Linux CLI hash is verified in the audit.
 $taskWslArgs = @('--exec','env',"POLYMARKET_BUILDER_CODE=$taskBuilderCode","ONCHAINOS_HOME=$taskWalletHome","POLYMARKET_CONFIG_DIR=$taskConfigDir",'POLYMARKET_ONCHAINOS_BIN=/root/.local/bin/onchainos',$taskBinary) + $PluginArgs
+if ($env:POLYDESK_MANAGED_CONSTRAINTS) { $taskWslArgs = $taskWslArgs[0..1] + @('POLYDESK_MANAGED_CONSTRAINTS=' + $env:POLYDESK_MANAGED_CONSTRAINTS) + $taskWslArgs[2..($taskWslArgs.Length-1)] }
 $taskLiveOrder = $PluginArgs[0] -in @('buy','sell') -and '--dry-run' -notin $PluginArgs -and '--help' -notin $PluginArgs -and '-h' -notin $PluginArgs
 if ($taskLiveOrder) {
   $taskRecoveryText = & node (Join-Path $PSScriptRoot 'polymarket-execution-recovery.mjs') $taskLedger

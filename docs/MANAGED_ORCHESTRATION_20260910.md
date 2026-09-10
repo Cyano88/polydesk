@@ -62,3 +62,12 @@ The managed conversation now supports CHECK_TRADE with short-lived owner-signed 
 The action distinguishes unconfirmed settlement, pending verification, legacy receipts requiring reverification, and verified completion. Every result supplies buyer follow-up prompts. It never submits an order or claims Sibyl synchronization without checking memory delivery. Durable conversation replay avoids repeating completion; raw access and completion signatures are not persisted in the conversation journal.
 
 Scope: governed BUY receipts only. Buyer-local order signing/submission, native plugin SELL receipts, live unattended copy adapters, and owner-authorized live acceptance remain separate work. The provider wallet is never used as a substitute for buyer authority. The existing public owner-authorized recovery endpoints remain available when a managed subscription expires.
+## Receipt continuation deployment acceptance
+
+Final release: 99e02fe5a45da6630356a4a7531b591f727b2508, Render deployment dep-dahc9vgcmn7c73e76lp0, verified live 2026-09-10. VPS checkout and instructions synchronized. Final server typecheck passed. The full three-service suite passed 158 tests before the last two narrow safeguards; their targeted tests passed, and all 35 final managed orchestration tests passed on the Linux host.
+
+Hosted acceptance passed for an existing controlled enrolled subscription: MONITORING_ACTIVE, duplicate STATUS replay, wrong-buyer rejection, and three exact active subscription identities. A clearly synthetic unsigned execution reference returned OWNER_AUTHORIZATION_REQUIRED with the exact signing message and follow-up prompts. This unsigned challenge performed no real receipt lookup, signature, order submission, paid research, enrollment change, or buyer message. The probe did persist two controlled conversation operations (STATUS and the synthetic authorization challenge).
+
+Unsigned CHECK_TRADE requests can now return the exact access message directly, so the buyer need not construct it manually. After signing, use a new request ID with the same execution fields plus signature. Request fresh authorization when the five-minute proof expires. A saved request ID returns a snapshot, not a refreshed status.
+
+Remaining: buyer-local submission adapter, native SELL receipt integration, live unattended copy source/execution/reconciliation adapters, and live owner-authorized managed execution acceptance. No production readiness claim for unattended copying is supported by these checks. Demo evidence must retain this distinction.
