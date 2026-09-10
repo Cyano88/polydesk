@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+﻿import { createHash, randomBytes } from 'node:crypto'
 import { publicDeliveryStatus } from './smart-trader-delivery-status.js'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
@@ -1143,13 +1143,15 @@ function executionHandoff(
   const fundingFlow = input.side === 'BUY'
     ? {
         trigger: 'When the active owner-derived Polymarket Deposit Wallet pUSD balance is below requiredBalanceUsdc.',
-        requiredBalanceUsdc: input.amountUsdc,
+        requiredBalanceUsdc: null,
+        requiredBalanceSource: 'Use requiredBalance from a fresh /api/polymarket-account/trade-preflight response; never substitute order notional.',
         readiness: {
           endpoint: '/api/polymarket-account/readiness',
           method: 'POST',
           input: {
             ownerAddress: 'Resolve from the active OnchainOS Polygon wallet context.',
-            requiredBalanceUsdc: input.amountUsdc,
+            requiredBalanceUsdc: null,
+            requiredBalanceSource: 'Use requiredBalance from a fresh /api/polymarket-account/trade-preflight response; never substitute order notional.',
           },
         },
         onShortfall: {
@@ -1158,7 +1160,8 @@ function executionHandoff(
           method: 'POST',
           input: {
             ownerAddress: 'Use the same active owner EOA verified by readiness.',
-            requiredBalanceUsdc: input.amountUsdc,
+            requiredBalanceUsdc: null,
+            requiredBalanceSource: 'Use requiredBalance from a fresh /api/polymarket-account/trade-preflight response; never substitute order notional.',
             network: 'Select base or arbitrum from the buyer funding source.',
           },
           instruction: 'Request funding only for the deterministic owner-derived Deposit Wallet, wait until the checkout status is funded, refresh readiness, then continue to preview.',
@@ -1181,11 +1184,20 @@ function executionHandoff(
     previewCommand: `polymarket-plugin ${previewArgs.map(shellArg).join(' ')}`,
     liveCommand: `polymarket-plugin ${args.map(shellArg).join(' ')}`,
     fundingFlow,
+    tradePreflight: input.side === 'BUY' ? {
+      endpoint: '/api/polymarket-account/trade-preflight', method: 'POST',
+      input: { ownerAddress: 'Resolve the active Polygon owner.', marketSlug: selected.market.marketSlug,
+        outcome: selected.outcome.label, maxTotalUsdc: input.amountUsdc, orderType: input.orderType, postOnly: input.postOnly,
+        limitPrice: input.limitPrice ?? 'Resolve a current limit and show it to the buyer.' },
+      require: 'publicChecksPassed=true; use returned rounded orderAmount and requiredBalance, never the original unadjusted amount. Refresh within 30 seconds before signing.',
+      approvalBoundary: 'Deposit wallets use deposit-wallet relayer approvals. Never use the legacy proxy factory or require pUSD approval to the Neg Risk Adapter.',
+      localChecks: ['Verify region access, active signer authentication and configured wallet mode.', 'Stop on TLS, unknown allowance or signing errors; do not loop live retries.'],
+    } : null,
     requiredGates: [
       'Run polymarket-plugin check-access.',
       'Resolve the active OnchainOS Polygon owner wallet and its owner-derived Polymarket Deposit Wallet.',
       ...(input.side === 'BUY'
-        ? ['Run the free PolyDesk account-readiness check; if it reports a pUSD shortfall, complete fundingFlow and refresh readiness before preview.']
+        ? ['Run tradePreflight before funding or confirmation. Use its fee-inclusive requiredBalance and rounded orderAmount; resolve approval and local authentication issues. Funding alone never means ready to trade.']
         : ['Resolve the active OnchainOS Polygon wallet balances.']),
       ...(input.side === 'SELL' && input.limitPrice === undefined
         ? ['Run polymarket-plugin get-market and complete the mandatory pre-sell liquidity check.']

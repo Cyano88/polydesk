@@ -175,6 +175,10 @@ export async function checkPolymarketAccountReadiness(
     data: {
       ok: true,
       state,
+      scope: 'wallet-funding-only',
+      tradeReady: false,
+      tradePreflightEndpoint: '/api/polymarket-account/trade-preflight',
+      requiredAmountIncludesFees: 'Caller must supply requiredBalance from trade-preflight; this endpoint does not calculate trading fees.',
       owner: {
         address: wallet.ownerAddress,
         role: 'signer',

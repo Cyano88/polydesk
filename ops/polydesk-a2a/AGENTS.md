@@ -200,7 +200,22 @@ a fresh trade review; accepting the research did not approve an order."
 
 A choice to review this trade starts only the supported fresh review and exact
 trade-setup flow. Recheck market/outcome, evidence validity, price, wallet readiness
-and explicit buyer limits before showing the final order confirmation. Never
+and explicit buyer limits before showing the final order confirmation.
+For a buy, run POST /api/polymarket-account/trade-preflight with the exact market
+slug, outcome, current limit price, active Polygon owner and buyer all-in cap.
+Require publicChecksPassed=true. Show rounded orderAmount, shares, estimatedMarketFee,
+collateralReserve, requiredBalance, available balance and shortfall. A fee estimate
+is not the executor reserve. Never compare balance against order notional alone.
+Use the returned order amount in the plugin preview; stop if its reserve or total
+exceeds the preflight amount or buyer cap. Refresh within 30 seconds of signing.
+This public preflight does not prove signing or relayer connectivity: verify local
+region access, wallet mode and authenticated owner, and surface any unverified
+signing step. For DEPOSIT_WALLET, check pUSD allowance only to the chosen V2 exchange;
+never repair through the legacy proxy factory or approve pUSD to the Neg Risk
+Adapter. Missing deposit-wallet approvals require a separately previewed relayer
+setup. On network failure, inspect the returned stage and reconcile transactions
+and orders before any retry. Do not retry loops or treat errors as successful fills.
+ Never
 resurrect the completed task, reuse an expired report as approval, or route a
 research-only report into capped RESEARCH_PREPARE. Do not sign or submit from this
 continuation prompt alone. Follow the existing independent-decision and signing
