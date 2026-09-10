@@ -63,3 +63,11 @@ test('access expiring during lookup cannot start completion',async()=>{
  f.deps.read=async()=>{f.deps.now=()=>now+60001;return f.record}
  await assert.rejects(continueManagedTrade(identity,await f.sign(),f.deps));assert.equal(f.completed,0)
 })
+
+
+test('unsigned receipt request returns a concrete owner prompt without reading private execution data',async()=>{
+ const f=await fixture();let reads=0;f.deps.read=async()=>{reads++;return f.record}
+ const r=await continueManagedTrade(identity,f.input,f.deps)
+ assert.equal(r.state,'OWNER_AUTHORIZATION_REQUIRED');assert.equal(r.authorizationMessage,managedTradeAccessMessage(identity,f.input))
+ assert.equal(reads,0);assert.equal(f.completed,0);assert.equal(r.orderSubmitted,false)
+})

@@ -30,7 +30,9 @@ const live: ManagedTradeDeps = {now:Date.now,read:readDurableJson,complete}
 /** Reuses actual governed receipt verification and its atomic receipt/outbox commit. Never submits orders. */
 export async function continueManagedTrade(identity: Identity, input: Obj, deps: ManagedTradeDeps = live) {
   const message=managedTradeAccessMessage(identity,input)
-  if (input.expiresAt <= deps.now() || input.expiresAt > deps.now()+300_000 || typeof input.signature !== 'string' || verifyMessage(message,input.signature).toLowerCase() !== input.owner) throw new Error('Current owner-signed managed receipt access is required.')
+  if (input.expiresAt <= deps.now() || input.expiresAt > deps.now()+300_000) throw new Error('A current receipt access expiry within five minutes is required.')
+  if (input.signature === undefined) return {ok:true,state:'OWNER_AUTHORIZATION_REQUIRED',authorizationMessage:message,tradeAuthorized:false,orderSubmitted:false,automaticRetryAllowed:false,followUpPrompts:['Sign this receipt-access message with the trading owner wallet, then check the receipt.','Decline receipt access?']}
+  if (typeof input.signature !== 'string' || verifyMessage(message,input.signature).toLowerCase() !== input.owner) throw new Error('Current owner-signed managed receipt access is required.')
   const key='polymarket-governed-execution:'+input.executionId
   let record=await deps.read(key)
   if (!record || record.executionId!==input.executionId || record.authoritySigner?.toLowerCase()!==input.owner) throw new Error('Execution is unavailable for this owner.')
