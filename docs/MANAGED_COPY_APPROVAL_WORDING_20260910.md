@@ -9,3 +9,8 @@ The provider must explicitly correct stale marketplace serviceGuide text in its 
 Provider scope now correctly retains three A2A products plus Football Match Live Data #33343 and Polymarket LP Scout #33342. Other four legacy listings stay retired. Original avatar is unchanged.
 
 Validation: listing QA passed with no findings; git diff --check passed. This is a wording and provider-instruction change, not a new copy executor or proof of live end-to-end copying. automaticCopyExecution stays false. Deployment and marketplace results are recorded separately below.
+
+Verified deployment: commit 62eb5f6 is on the provider host; active workspace AGENTS.md exactly matches the tracked version and daemon is active. Marketplace update succeeded: 0xa48dfe9c621ab87e39672c20601a58590ef18da42f36408ba5ee32b97bd3c5e7. A fresh service-list read verified the description exactly, 5 USDT/month and 72-hour trial. The separate serviceGuide does NOT match the correction and still contains automatic-trading wording. Provider conversation correction is deployed, but this does not replace the platform guide.
+
+
+Superseding result: the actual OKX serviceGuide is now fixed and independently verified. The five-service listing was successfully resubmitted for review (submitApproval success=true, approvalStatus=2). See OKX_MANAGED_GUIDE_FIELD_REPAIR_20260910.md.

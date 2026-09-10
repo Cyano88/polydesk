@@ -1,0 +1,14 @@
+{
+  "id": 38496,
+  "guideMatches": true,
+  "serviceGuide": "Before subscribing: 1) Ask for the public wallet to monitor, verified email, alert preferences and summary schedule. Monitoring needs no trading funds or permission. 2) Explain: To copy a trade, request an exact preview. PolyDesk checks account access, balance, fees and price limits. The buyer agent must explicitly approve each exact trade within the authority its buyer granted it before supported execution. Following a wallet or subscribing is not trading approval. Unattended auto-copy is unavailable. Changed or expired previews need fresh approval. 3) Show the 5 USDT monthly price, 72-hour trial, current renewal/cancellation terms and chosen settings; obtain buyer confirmation. 4) Offer Check monitoring status, Change preferences, Preview a trade to copy, Pause monitoring or Review cancellation. After a verified trade, show its receipt and next-step choices.",
+  "descriptionMatches": true,
+  "subscription": [
+    {
+      "fee": "5",
+      "interval": "month"
+    }
+  ],
+  "freeTrial": "72",
+  "picture": "https://static.okx.com/cdn/web3/wallet/marketplace/headimages/agent/avatar/81c8db28-3e60-418d-8ee7-70f1c3dbd3e5.png"
+}

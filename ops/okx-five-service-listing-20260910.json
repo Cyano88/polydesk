@@ -1,0 +1,30 @@
+{
+  "agentId": "5427",
+  "name": "PolyDesk",
+  "description": "PolyDesk helps agents understand Polymarket markets, check football scores, compare liquidity rewards, monitor portfolios, and review trading integrations. It explains findings clearly, shows evidence, and requires separate approval before any supported trade.",
+  "avatarPolicy": "Preserve existing avatar; omit picture from update.",
+  "services": [
+    {
+      "operation": "update",
+      "id": "33343",
+      "serviceName": "Football Match Live Data",
+      "serviceType": "A2MCP",
+      "fee": "0.1",
+      "endpoint": "https://polydesk-i96m.onrender.com/api/a2mcp/worldcup-live-scores",
+      "serviceDescription": "1. [Service Description] Check football scores, match times and match events from our data provider. Choose a team or date and receive structured results your agent can turn into a clear summary. Coverage depends on the provider; missing data is reported rather than guessed. This service provides match information and does not place bets. Payment is required: an unpaid request returns HTTP 402 instructions; after authorized payment, repeat the request to get results.\n2. [Parameter Spec] team(string, optional): club or national-team name; date(string, optional): match date in YYYY-MM-DD format, defaults to today in UTC\n3. [Request Method] GET\n4. [Request Example] curl -X GET \"https://polydesk-i96m.onrender.com/api/a2mcp/worldcup-live-scores?team=Real%20Madrid\" -H \"Accept: application/json\""
+    },
+    {
+      "operation": "update",
+      "id": "33342",
+      "serviceName": "Polymarket LP Scout",
+      "serviceType": "A2MCP",
+      "fee": "0.3",
+      "endpoint": "https://polydesk-i96m.onrender.com/api/a2mcp/okx/polymarket-lp-scout",
+      "serviceDescription": "1. [Service Description] Find and compare Polymarket markets that may offer rewards for providing liquidity. Liquidity means keeping buy and sell offers available for other traders. The report compares rewards, available orders, the gap between buy and sell prices, and risks. You receive research to inspect; this service does not place orders or guarantee earnings. Payment is required: an unpaid request returns HTTP 402 instructions; after authorized payment, repeat the request to get results.\n2. [Parameter Spec] scoutMode(string, optional): best for general search, news for a topic, market for one market, or football; context(string, optional): topic or market URL for the chosen mode; budget(string, optional): amount to use as research context, not permission to spend\n3. [Request Method] GET\n4. [Request Example] curl -X GET \"https://polydesk-i96m.onrender.com/api/a2mcp/okx/polymarket-lp-scout?scoutMode=best\" -H \"Accept: application/json\""
+    }
+  ],
+  "status": "guide-fixed-five-services-submitted-for-review",
+  "guideApplied": true,
+  "managedGuideStatus": "saved-and-exactly-verified",
+  "resubmittedForReview": true
+}

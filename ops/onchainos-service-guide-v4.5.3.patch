@@ -1,0 +1,84 @@
+diff --git a/cli/src/commands/agent_commerce/identity/mutations.rs b/cli/src/commands/agent_commerce/identity/mutations.rs
+index 807d5b7..ff0a349 100644
+--- a/cli/src/commands/agent_commerce/identity/mutations.rs
++++ b/cli/src/commands/agent_commerce/identity/mutations.rs
+@@ -403,6 +403,27 @@ async fn precheck_impl(args: &PrecheckArgs, ctx: &Context) -> Result<Value> {
+ 
+ // ─── `agent update` ───────────────────────────────────────────────────────
+ 
++// Forward only the known onboarding field after the normal service validation.
++fn update_services_with_guide(raw: &str) -> Result<Value> {
++    let services = parse_services(Some(raw))?;
++    let original: Vec<Value> = serde_json::from_str(raw)?;
++    let mut value = serde_json::to_value(&services)?;
++    let serialized = value.as_array_mut().context("services must serialize as an array")?;
++    for (source, target) in original.iter().zip(serialized.iter_mut()) {
++        if let Some(guide) = source.get("serviceGuide") {
++            let text = guide.as_str().context("serviceGuide must be a string")?.trim();
++            if text.is_empty() { bail!("serviceGuide must not be empty"); }
++            if target.get("serviceType").and_then(Value::as_str) != Some("A2A")
++                || target.get("operation").and_then(Value::as_str) == Some("delete") {
++                bail!("serviceGuide is only supported for A2A create/update entries");
++            }
++            target.as_object_mut().context("service must be an object")?
++                .insert("serviceGuide".to_string(), json!(text));
++        }
++    }
++    Ok(value)
++}
++
+ async fn update_impl(args: &UpdateArgs, ctx: &Context) -> Result<Value> {
+     let access_token = ensure_tokens_refreshed().await?;
+     let mut client = wallet_client(ctx)?;
+@@ -443,10 +464,9 @@ async fn update_impl(args: &UpdateArgs, ctx: &Context) -> Result<Value> {
+     // the user changes no service this call, `services` is omitted entirely
+     // (omission no longer means "clear all").
+     if args.service.is_some() {
+-        let services = parse_services(args.service.as_deref())?;
+         card.insert(
+             "services".into(),
+-            serde_json::to_value(&services).context("failed to serialize services list")?,
++            update_services_with_guide(args.service.as_deref().unwrap())?,
+         );
+     }
+ 
+diff --git a/cli/src/commands/agent_commerce/identity/tests/mutations_tests.rs b/cli/src/commands/agent_commerce/identity/tests/mutations_tests.rs
+index 728470b..a5d1a60 100644
+--- a/cli/src/commands/agent_commerce/identity/tests/mutations_tests.rs
++++ b/cli/src/commands/agent_commerce/identity/tests/mutations_tests.rs
+@@ -177,3 +177,35 @@ fn erc8004_overlay_task_id_present_without_feedback_agent() {
+     assert_eq!(inner.get("taskId").and_then(|v| v.as_str()), Some("JOB-XYZ"));
+     assert!(inner.get("feedBackAgentId").is_none());
+ }
++
++fn guide_field_service() -> Value {
++    json!({"operation":"update","id":"38496","serviceName":"Managed Polymarket Agent","serviceDescription":"Monitor a public portfolio.","serviceType":"A2A","fee":"","subscription":[{"interval":"month","fee":"5"}],"freeTrial":"72"})
++}
++#[test]
++fn guide_field_preserves_pricing_and_identity() {
++    let mut service = guide_field_service();
++    service["serviceGuide"] = json!("Approve each exact preview before execution.");
++    let result = update_services_with_guide(&json!([service]).to_string()).unwrap();
++    assert_eq!(result[0]["serviceGuide"], "Approve each exact preview before execution.");
++    assert_eq!(result[0]["id"], "38496");
++    assert_eq!(result[0]["fee"], "");
++    assert_eq!(result[0]["freeTrial"], "72");
++    assert_eq!(result[0]["subscription"][0]["fee"], "5");
++}
++#[test]
++fn guide_field_absent_and_unknown_not_forwarded() {
++    let mut service = guide_field_service();
++    service["ownerAddress"] = json!("must-not-forward");
++    let result = update_services_with_guide(&json!([service]).to_string()).unwrap();
++    assert!(result[0].get("serviceGuide").is_none());
++    assert!(result[0].get("ownerAddress").is_none());
++}
++#[test]
++fn guide_field_rejects_non_text_empty_or_delete() {
++    for bad in [json!(true), json!(null), json!(" ")] {
++        let mut service = guide_field_service(); service["serviceGuide"] = bad;
++        assert!(update_services_with_guide(&json!([service]).to_string()).is_err());
++    }
++    let mut service = guide_field_service(); service["operation"] = json!("delete"); service["serviceGuide"] = json!("Invalid delete guide");
++    assert!(update_services_with_guide(&json!([service]).to_string()).is_err());
++}
