@@ -477,3 +477,53 @@ the saved report. Its assessment is not a fresh trade recommendation. Next work
 should budget inference, fallback, archive and caller timeouts together and test
 representative real-evidence inputs before asking for another paid review.
 No timeout configuration change was deployed in this diagnosis.
+
+## Coordinated timeout correction and real-evidence validation
+
+On 2026-09-10, the subsequent authorized correction deployed ZeroScout commit
+4e11c74 and PolyDesk commit 48da0b1. Inference now allows 90 seconds overall,
+35 seconds per attempt, and up to 20 seconds reserved for fallback. Three slow
+routes receive approximately 35 + 35 + 20 seconds, subject to overhead.
+The PolyDesk research caller now allows 150 seconds, with zero automatic retries,
+and the outer A2A worker allows 240 seconds. The general upstream default remains
+75 seconds; this change targets the research call.
+
+Deployment evidence:
+- Render deployment dep-dah5s8bbc2fs73fgs6r0 is live at PolyDesk 48da0b1.
+- Railway deployment 7d0a81e7-c638-44f2-97ab-07c2ab262fc6 succeeded at 4e11c74.
+- Production variables were read back as total 90000 / attempt 35000 ms.
+- Deployed startup readiness reported available at 2026-09-10T07:41:03.185Z;
+  its small probe returned valid JSON in 12,057 ms of model time.
+- VPS worker updated to 48da0b1, 240000 ms verified, daemon active.
+- An unauthenticated public-config request returned HTTP 403; it was not used
+  as evidence of effective configuration.
+
+Six deadline-allocation tests, the full direct-trade routing smoke suite,
+77 relevant PolyDesk tests, and both repositories' TypeScript checks passed.
+The smoke suite exercises two hanging routes followed by a successful third.
+
+Three sequential operator-only calls used normal generateCustomIntelligence,
+locally with production compute settings and reconstructed saved public evidence.
+They did not use the special single-model 60-second diagnostic override.
+All returned valid model-backed JSON with a trade assessment and degraded=false,
+using gpt-5.6-terra with default trust.
+
+| Saved evidence case | Input characters | Model ms | Total ms | Output tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Recovery review d6bb | 14,380 | 21,984 | 23,297 | 1,371 |
+| Fresh review 2, 6d9c | 15,780 | 20,182 | 21,322 | 1,325 |
+| Earlier fresh review 0864 | 14,560 | 22,372 | 23,426 | 1,292 |
+
+Every observed model duration exceeded the old 20-second cutoff. This supports
+the timeout-headroom diagnosis, but three samples of the same market do not
+establish a reliability rate, validate every fallback provider, or prove the
+full deployed HTTP/archive/receipt/settlement path. Reconstructed requests are
+not byte-identical to the originals. These historical inputs and diagnostic
+scores are not current trade advice or replacement deliveries.
+No archive, buyer task, escrow release, refund or trade was created by these
+validation calls. The original failed recovery report remains unchanged.
+
+Demo follow-up: "The timeout correction is deployed, and all three saved
+inputs returned AI analysis. The failed delivery still needs its own buyer-review
+decision. Would you like to request a refund for its missing AI analysis?
+A fresh paid review requires a separate disclosed purchase approval."
