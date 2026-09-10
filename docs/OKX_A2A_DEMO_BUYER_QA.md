@@ -408,3 +408,35 @@ refund event and preserved the original evidence."
 This remains a controlled test with the same operator controlling buyer and
 provider. It demonstrates the refund lifecycle, not independent customer demand
 or contested-dispute arbitration. No screen-recorded video has yet been made.
+## Timeout recovery deployed and validated
+
+ZeroScout commit f4430b165b3d58a9c05a54bcc8f61cbc97cefda0 fixes fallback
+starvation within the existing 40-second model-routing deadline. The first two
+attempts reserve time for a third route when configured candidates permit it;
+shorter budgets scale the reservation down. Fast failures can still permit
+additional candidates. This does not promise that every discovered model runs.
+The degraded message now distinguishes failed/timed-out attempts from candidates
+that may not have been tried. No report or completed/refunded task was rewritten.
+
+Validation passed:
+- Five focused deadline-allocation tests, including scheduling overhead.
+- Full direct-trade smoke suite, including two hanging routes followed by a
+  successful third route before a 10-second test deadline; balance-rejection,
+  strict JSON, trust handling and non-authorizing degradation checks remain.
+- Client and server TypeScript checks.
+- Railway deployment a57944f0-b755-454b-9db5-41afc8e75189 succeeded for f4430b1.
+- Public health returned ok=true with AI configured. The deployed startup probe
+  reported model readiness available at 2026-09-10T07:21:06.507Z.
+- One local synthetic canary using the production compute route/settings returned
+  valid model-backed JSON in 14,829 ms (model call 13,600 ms). Input was 16,612
+  characters, output limit 4,000 tokens; model gpt-5.6-terra, default trust.
+  Its INSUFFICIENT/LOW result refers only to synthetic evidence, not the United
+  market. No buyer task, archive upload, trade or escrow payment was created by
+  that canary. Production credentials were not included in this documentation.
+
+Demo follow-up: "We reproduced the fallback starvation, fixed it within the
+same overall deadline, deployed it, and validated both the third-model fallback
+and a live model response before asking a buyer to purchase again."
+This is one live canary plus mocked regression coverage, not a reliability rate
+or proof every future research request will succeed. A new real review remains
+a separate disclosed purchase requiring buyer approval.
