@@ -575,3 +575,33 @@ reinterpreted against a different internal multi-option card. This session used
 an authorized direct-command fallback; no general relay-code fix is claimed.
 Follow-up: "The full 0.1 USDT refund is confirmed. Would you like to start a
 fresh research review for 0.1 USDT, or inspect the validation findings first?"
+
+## Fresh validated review: original JSON receipt verified
+
+Task 0x6fbeb3612da2117158baf4f5ea20661361b5e68ab9883ad1b6557cc93756463c
+(United Fresh Review Validated) was commissioned with explicit 0.1 USDT approval.
+Creation transaction: 0xd689565eb5e90c77c45c0c9e9cbb5810d67ba6da1753771e6e7baa29254c5a64.
+On receipt check, the buyer CLI deliverable list was empty even though the buyer
+session had downloaded, read and then saved the original JSON. Its old temporary
+download path no longer existed because the file had moved to persistent storage.
+The actual user file is UnitedFreshReviewVal_20260910_081218990.json; provider
+original is UnitedFreshReviewVal_20260910_080902388.json in their respective
+.onchainos/deliverables user/asp task folders. Both and the local downloaded copy
+are 21,990 bytes with SHA-256:
+19e432be477870bd7310a8307db25af2c2474ff6b38997f8a37cd606def4b9f2.
+The empty listing is not evidence of non-receipt; its cause remains unverified.
+
+Report generated 2026-09-10T08:08:17.506Z; validUntil 08:23:17.505Z
+(09:23:17 Lagos). researchStatus AVAILABLE, modelBacked true, stance INSUFFICIENT,
+confidence 42/100, evidence quality MEDIUM. Summary, signals, thesis and
+counter-thesis are present; reasoningSummary is empty. The report cites conflicting
+fixture date/time excerpts and missing attributable team-form, injury, suspension
+and lineup evidence. These are report findings, not independently reverified facts
+in this receipt check. The 42 score is research confidence, not win probability.
+The saved report includes a 0G storage proof; this receipt check verified byte
+identity, not an independent storage-chain audit.
+
+Buyer admission reported lookup_off and no execution. The actual report has
+orderAuthorized=false and orderSubmitted=false. A fresh task-status query still
+returned submitted. No delivery acceptance or service-payment release was issued.
+Follow-up: "Show results" before reviewing acceptance or raising a specific issue.
