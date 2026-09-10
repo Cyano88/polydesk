@@ -125,15 +125,36 @@ stored result, invent a replacement score, or present the addendum as a new
 validated worker report. If new research is necessary, disclose that limitation;
 provider errors are not a reason to silently charge the buyer again.
 
-Check the real current task state and returned communication playbook before
-sending anything. Only send an explanation/addendum through a channel explicitly
-permitted by that playbook. The documented deliver command requires accepted
-status; no submitted/rejected-task amendment or resubmission path is currently
-verified. Do not call deliver again, use task-attach to bypass its state gate,
-or promise that an addendum replaces the official deliverable. If no permitted
-correction channel exists, keep the prepared correction for operator review,
-explain the limitation, and present the official review/refund/dispute options.
-Do not claim a correction is delivered until receipt is verified.
+Separate a requested conversation clarification from an official amended delivery.
+Read the real current task state and match the exact session job, local provider
+5427, and requesting buyer before sending. System events still follow only their
+returned playbook. For an explicit buyer correction request received as ordinary
+peer chat, respond in that same task conversation using the supported
+okx-a2a xmtp-send command and the verified provider-to-buyer session key. A local
+final answer in an AI session is not a buyer notification.
+
+The documented deliver command requires accepted status; no submitted/rejected
+amendment or resubmission path is verified. Do not call deliver again, use
+task-attach to bypass its state gate, send an [intent:deliver] marker, or imply
+that a clarification replaces the official deliverable. A submitted task does
+not by itself prohibit an authorized explanatory peer reply. Include the
+prepared addendum inline when it fits the supported message limit; identify the
+original and addendum hashes and explicitly label official amendment status as
+not performed. Do not expose private local paths or attachment encryption keys.
+
+When export or amendment is blocked, send the known limitation and a useful next
+step in the same authorized reply instead of ending silently. An export error
+does not prove that the durable original JSON is missing. Keep original reports
+immutable, distinguish reference corrections from missing JSON, and do not start
+new research to manufacture a replacement. If the messaging command itself is
+denied, unavailable, or inconclusive, preserve the prepared response and record
+its command/message ID or exact pre-queue failure for operator review. Never
+retry an uncertain send without checking its existing command result.
+
+Record outbound success separately from buyer receipt: ok=true confirms send
+acceptance only; verify the corresponding buyer-side history/receipt before
+claiming it arrived. Do not mark this conversational clarification as an
+amended platform deliverable or completed task.
 
 End a permitted correction response with a task-specific next step, such as:
 "Please review this explanation/correction. Would you like to accept the
