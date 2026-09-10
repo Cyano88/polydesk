@@ -311,3 +311,36 @@ deployed in 3e1f481. Instruction deployment alone does not prove another agent's
 UI renders them. The three-service roadmap is distinct from the live listing:
 our observed service-list still included legacy A2MCP entries. Do not claim
 the marketplace already contains only three services without rechecking.
+## Fresh review 2: verified AI failure investigation
+
+Job 0x6d9c23a4bc257912d43f9effadd82191bed2bd274ddb0c911e3ccd86309c62ca
+was submitted with researchStatus=UNAVAILABLE and no model-backed assessment.
+The original 19,450-byte report has SHA-256
+722bc744899b7a3873a7c8e38650b960bef6afee362daf85139fba217c461dce.
+It contains public market/source evidence, but lacks the commissioned AI thesis,
+counter-thesis and confidence explanation. This is a provider delivery defect,
+not a negative assessment of the trade.
+
+Scoped ZeroScout Railway logs for September 10, 2026, 06:56-06:58 UTC establish:
+- gpt-5.6-terra timed out at 20,000 ms.
+- gpt-5.6-sol timed out at 19,998 ms (20,000 ms measured duration).
+- The routing budget was exhausted before gpt-5.6-luna; it was not attempted.
+- The input contained 15,818 characters; output token limit was 4,000.
+- The degraded report was archived successfully. Its storage transaction is
+  archive evidence, not evidence of successful AI analysis or escrow release.
+
+The generic report message does not prove every available model was attempted.
+The verified cause is exhaustion of this request's roughly 40-second routing
+window after two timeouts. It does not establish a provider-wide outage, an
+upstream balance issue, or that a larger timeout will guarantee success.
+
+Correction constraints: the job's persisted research result is immutable;
+repeating its request returns the saved degraded result. The verified regular
+platform delivery flow requires accepted status and provides no documented
+in-place replacement for this submitted job. Do not erase the report, reset the
+job, silently create another paid task, or claim a prose explanation supplies
+the missing model-backed assessment. A formal rejection with this specific
+missing deliverable can enter the supported provider refund decision flow.
+No rejection, refund, dispute, model rerun or payment release was performed
+as part of this investigation. Timeout tuning needs bounded validation before
+claiming restored reliability. No runtime/source fix was deployed by this audit.
