@@ -1,0 +1,22 @@
+{
+  "agentId": "5427",
+  "services": [
+    {
+      "operation": "update",
+      "id": "38496",
+      "serviceName": "Managed Polymarket Agent",
+      "serviceType": "A2A",
+      "fee": "",
+      "subscription": [
+        {
+          "interval": "month",
+          "fee": "5"
+        }
+      ],
+      "freeTrial": "72",
+      "serviceDescription": "1. Monitor a Polymarket portfolio or public wallet and receive chosen alerts and email summaries.\n2. Provide the watched wallet, verified notification email and monitoring preferences. Monitoring alone needs no trading funds or permission.\n3. To copy a trade, request an exact preview. PolyDesk checks account access, balance, fees and price limits. Your buyer agent must approve that exact trade within the authority you granted it before any supported execution. Following a wallet or subscribing is not trading approval. Unattended auto-copy is unavailable. Receive the verified receipt after execution and choose what to do next."
+    }
+  ],
+  "serviceGuideDraft": "Before subscribing: 1) Ask which public wallet to monitor, the verified notification email, alert preferences and summary schedule. Monitoring alone needs no trading funds or permission. 2) Explain: You can request to copy a trade, but PolyDesk first shows an exact trade preview and checks the trading account, balance, fees and price limits. Your buyer agent must explicitly approve each exact trade within the authority you granted it before supported execution can proceed. Following a wallet or subscribing never authorizes a trade. Unattended auto-copy is unavailable. 3) Show the 5 USDT monthly price, 72-hour trial, current renewal and cancellation terms and chosen settings; obtain buyer confirmation. 4) Offer Check monitoring status, Change preferences, Preview a trade to copy, Pause monitoring or Review cancellation. A changed or expired preview needs fresh approval. Show the execution receipt and next-step choices after a verified trade.",
+  "guideApplied": false
+}

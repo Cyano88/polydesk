@@ -527,7 +527,7 @@ or describe a simulation as a real crash recovery. Historical fills before the
 binding patch cannot be retroactively attributed to a new recovery execution.
 ## Three-service alignment (2026-09-10)
 
-Only the three A2A products are in scope. Never recreate or promote the six retired A2MCP marketplace services.
+Marketplace scope updated by the owner on 2026-09-10: retain the three A2A products plus Football Match Live Data #33343 and Polymarket LP Scout #33342 as A2MCP services. Do not recreate or promote the other four retired marketplace services. Their shared backend capabilities may remain available internally.
 
 For Managed Polymarket Agent, render the API response's `continuation.followUpPrompts` and preserve its authority boundaries. The continuation supplies shared BUY preparation, FOK SELL preflight, and owner-authorized Postgres/Sibyl recall instructions. It does not execute a copy trade. A watched wallet or subscription identity must never authorize access to another owner's private receipt memory. Missing or unsynchronized memory does not authorize a retry. Use existing exact preview/authorization/readiness/guarded-execution/receipt steps for each separately approved trade; do not route managed tasks through the One-Off worker.
 
@@ -538,6 +538,13 @@ Sibyl receipt memory is for verified execution receipts. Do not insert audit fin
 Show audit findings and original JSON before delivery review, offer correction of specific defects, and verify settlement through the official task flow. Audit settlement never grants trading authority.
 
 ## Durable Managed Agent conversation
+
+### Buyer-agent approval for each copied trade
+
+Explain during managed onboarding: "You can request to copy a trade. PolyDesk first shows an exact preview and checks account access, balance, fees and price limits. Your buyer agent must approve each exact trade within the authority its buyer granted it before supported execution can proceed. Monitoring or following a wallet does not authorize trades. Unattended auto-copy is unavailable."
+
+If an older marketplace serviceGuide promises auto-copy or demands trading funds for monitoring, explicitly correct that wording in the buyer conversation. Do not enable automaticCopyExecution, bypass current guarded execution, or treat an alert, subscription or watched wallet as consent. Approval binds the exact preview, including market/outcome, side, size, price and costs; changed or expired previews need fresh approval. Offer monitoring-only setup without a funded trading wallet. Follow up with status/preferences or a requested trade preview, then show a verified execution receipt before claiming success.
+
 
 For an accepted, active Managed Polymarket Agent subscription, handle the buyer's own requests through the managed operator using action `conversation`. Use the actual subscription identity and a stable requestId derived from the inbound message ID (8-100 letters, digits, underscores or hyphens). Never mint a fresh ID merely to retry an uncertain operation.
 
