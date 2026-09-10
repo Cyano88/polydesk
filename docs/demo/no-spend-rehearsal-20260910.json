@@ -1,0 +1,61 @@
+{
+  "schema": "polydesk-no-spend-rehearsal-v1",
+  "recordedAt": "2026-09-10T12:08:41.332Z",
+  "commit": "ab4dce6669e48191836a29f95d6c2bcb19f89860",
+  "scope": "unpaid live reads and isolated fixture tests; no paid job, signature, approval or order",
+  "automatedChecks": {
+    "passed": 161,
+    "failed": 0,
+    "kind": "isolated tests, not a fresh buyer-agent acceptance run"
+  },
+  "publicPreflight": {
+    "health": "PASS",
+    "catalog": "PASS",
+    "paymentChallenges": "PASS",
+    "footballNews": "UNAVAILABLE_NON_BILLABLE"
+  },
+  "buyPreview": {
+    "ok": true,
+    "readyForLocalSigning": true,
+    "budget": {
+      "maximumTotal": "4",
+      "orderAmount": "3.8",
+      "marketFeeReserve": "0.19",
+      "builderFeeReserve": "0",
+      "requiredBalance": "3.99",
+      "unallocated": "0.01",
+      "builderRateBps": 0,
+      "marketRate": 0.05,
+      "exponent": 1,
+      "feeAmountsAre": "conservative-reserves-not-settled-charges"
+    },
+    "issues": [],
+    "builderCode": "0x873845696727f985cc6a23dcdffaefefd3f47a712dd8a02f1a938cac615844db",
+    "executionPrice": "0.30",
+    "expiresAt": "2026-09-10T12:09:40.574Z"
+  },
+  "sellPreview": {
+    "publicChecksPassed": false,
+    "positionShares": "0",
+    "issues": [
+      "INSUFFICIENT_OUTCOME_SHARES",
+      "INSUFFICIENT_DEPTH_AT_MINIMUM_PRICE",
+      "STALE_ORDER_BOOK"
+    ],
+    "bidDepthShares": "0",
+    "orderAuthorized": false
+  },
+  "recovery": {
+    "ok": true,
+    "state": "NO_UNCERTAIN_EXECUTION",
+    "executionAuthorized": false,
+    "next": "No interrupted submission requires recovery."
+  },
+  "limitations": [
+    "Research delivery/review and settlement were simulated or previously recorded, not repeated live.",
+    "Crash recovery used synthetic exact-order bindings and receipts; current real ledger was empty.",
+    "Football news was unavailable during public preflight.",
+    "Preview expires; this report never authorizes trading.",
+    "Fresh unattended buyer-agent acceptance and a real interrupted-order recovery remain unproven."
+  ]
+}

@@ -1240,3 +1240,19 @@ Plugin library suite: 28 passed. Launcher help and -Recover entry points verifie
 A successful submission response must also match the durable order hash;
 a mismatched returned ID cannot clear the guard. The public binding is required
 for guarded WSL submissions; an older binary that omits it stays blocked.
+## Full no-spend rehearsal completed (2026-09-10)
+
+See docs/demo/NO_SPEND_REHEARSAL_20260910.md for the three-minute video run sheet,
+scene labels, buyer prompts and judge Q&A; the adjacent JSON file contains the
+captured live preview evidence. 161 automated checks passed. Hosted health,
+catalog and unpaid challenges passed. Football news was explicitly unavailable
+and non-billable. Buy preview showed 3.80 notional plus 0.19 reserve inside the
+4 pUSD cap; PolyDesk builder fee remained zero. Sell preflight blocked zero
+shares, absent minimum-price depth and a stale book. Real recovery ledger was
+empty. No new research payment, signature, approval or trade occurred.
+
+Research/escrow settlement is historical or simulated in this rehearsal;
+interrupted-order recovery uses isolated fixtures. Do not present this as a
+fresh unattended buyer-agent acceptance or a real interrupted trade recovery.
+Follow-up: Show the rehearsal evidence; record the labeled demo; plan a fresh
+buyer-agent acceptance run with a separately agreed spending budget.
