@@ -1179,11 +1179,14 @@ function executionHandoff(
       strategyId: decisionId,
       note: 'The official plugin reports this strategy ID after a successful order so the execution can be reconciled to the PolyDesk decision.',
     },
-    invocation: input.side === 'BUY' ? null : { command: 'polymarket-plugin', args },
+    invocation: null,
     previewInvocation: { command: 'polymarket-plugin', args: previewArgs },
     previewCommand: `polymarket-plugin ${previewArgs.map(shellArg).join(' ')}`,
-    liveCommand: input.side === 'BUY' ? null : `polymarket-plugin ${args.map(shellArg).join(' ')}`,
+    liveCommand: null,
     fundingFlow,
+    sellPreflight: input.side === 'SELL' ? { endpoint: '/api/polymarket-account/sell-preflight', method: 'POST',
+      input: { ownerAddress: 'Resolve the active Polygon owner.', marketSlug: selected.market.marketSlug, outcome: selected.outcome.label, shares: input.shares, minimumPrice: input.limitPrice, orderType: input.orderType },
+      require: 'publicChecksPassed=true before confirmation; refresh within validity. FOK only; never change buyer policy.' } : null,
     tradePreflight: input.side === 'BUY' ? {
       endpoint: '/api/polymarket-account/trade-preflight', method: 'POST',
       input: { ownerAddress: 'Resolve the active Polygon owner.', marketSlug: selected.market.marketSlug,
@@ -1198,7 +1201,7 @@ function executionHandoff(
       'Resolve the active OnchainOS Polygon owner wallet and its owner-derived Polymarket Deposit Wallet.',
       ...(input.side === 'BUY'
         ? ['Run tradePreflight before funding or confirmation. Use its fee-inclusive requiredBalance and rounded orderAmount; resolve approval and local authentication issues. Funding alone never means ready to trade.']
-        : ['Resolve the active OnchainOS Polygon wallet balances.']),
+        : ['Run sellPreflight and require publicChecksPassed=true. Preserve exact whole shares, minimum price and FOK policy; resolve position, depth, operator and freshness blockers.']),
       ...(input.side === 'SELL' && input.limitPrice === undefined
         ? ['Run polymarket-plugin get-market and complete the mandatory pre-sell liquidity check.']
         : []),

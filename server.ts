@@ -1,3 +1,4 @@
+import polymarketSellPreflightHandler from './api/polymarket-sell-preflight.js'
 import express from 'express'
 import { startReceiptMemoryWorker } from './api/receipt-memory-worker.js'
 import { createReceiptMemoryRecallHandler, createSibylMemoryRecallHandler } from './api/receipt-memory-api.js'
@@ -149,6 +150,7 @@ app.all('/api/polymarket-bridge', strictLimiter, polymarketBridgeHandler)
 app.post('/api/polymarket-builder-handoff', strictLimiter, polymarketBuilderHandoffHandler)
 app.post('/api/polymarket-builder-signer', strictLimiter, polymarketBuilderSignerHandler)
 app.post('/api/polymarket-order', strictLimiter, polymarketOrderHandler)
+app.post('/api/polymarket-account/sell-preflight', strictLimiter, polymarketSellPreflightHandler)
 app.post('/api/polymarket-open/prepare', strictLimiter, polymarketOpenPrepareHandler)
 app.get('/api/polymarket-independent/prepare', readLimiter, independentPolymarketPrepareHandler)
 app.post('/api/polymarket-independent/prepare', strictLimiter, independentPolymarketPrepareHandler)

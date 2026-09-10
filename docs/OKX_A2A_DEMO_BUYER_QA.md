@@ -1138,3 +1138,38 @@ instructions byte-for-byte and polydesk-a2a-daemon was active.
 Next buyer action: review a fresh preview before authorizing a trade. The
 remaining production audit still includes sell readiness and crash recovery;
 this hosted preview check does not establish unattended production acceptance.
+## Sell readiness and local crash guard audit (2026-09-10)
+
+Added read-only /api/polymarket-account/sell-preflight and buyer handoff.
+Checks exact market/outcome mapping, owner-derived wallet, ERC1155 share
+balance, selected exchange and negative-risk adapter operator approvals,
+whole-share executor precision, tick-aligned minimum price, sufficient FOK
+bid depth, current builder fees and 30-second freshness after wallet reads.
+Missing metadata/RPC data fails closed. Nonzero builder fees remain blocked
+for the local executor. Gross proceeds and conservative fee/net bounds are
+shown separately. FAK/GTC sells require dedicated support and are not silently
+substituted. Handoffs withhold live commands until readiness and consent.
+
+The local WSL launcher now enforces a fresh sell preflight before live FOK
+execution. Every live buy/sell requires a stable POLYDESK_EXECUTION_ID and a
+durable exclusive submission claim. Existing IDs cannot execute again;
+pending/uncertain execution blocks even a different ID. Nonzero exits, crashes,
+missing response or invalid order ID retain the guard. Successful submission
+stores the order ID durably before releasing the global pending guard. A
+submitted order is not a settled order. No automatic retries or lock expiry.
+The ledger contains public IDs, an intent hash and status; no credentials or
+signed payloads. Original executors and other hosts are outside this guard.
+
+Validation: 73 focused sell/handoff/governed tests, 4 crash/concurrent-process
+tests and server TypeScript checking passed. Crash tests used fake executors
+and temporary directories; no real trade was launched. Both racing processes
+cannot claim submission. Fresh-process retries of pending IDs stay blocked.
+
+Remaining gate: ambiguous executions require operator reconciliation of actual
+orders/receipts. No automatic recovery/unlock is implemented; never delete the
+pending guard or regenerate IDs to bypass it. This is a fail-closed local
+submission guard, not a claim of distributed exactly-once execution. Full
+unattended production acceptance remains unproven.
+
+Buyer follow-up on uncertainty: "The previous submission outcome is uncertain.
+Check orders and the receipt before continuing; do not submit another order."

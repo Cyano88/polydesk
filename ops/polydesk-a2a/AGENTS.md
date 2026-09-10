@@ -422,3 +422,29 @@ preview support. Do not describe research payments as trading builder fees.
 After a future authorized fill, verify the exact OrderFilled builder field
 before claiming attributed volume or earnings. Do not place a trade merely
 to test attribution. Show fees separately and keep them within the buyer cap.
+### Sell readiness and crash recovery
+
+Before a local FOK sell, call /api/polymarket-account/sell-preflight with the
+active owner, exact market slug, outcome, whole shares and minimum price.
+Require publicChecksPassed=true and an unexpired result. It checks outcome
+balance, exchange/negative-risk operator approvals, executable bid depth and
+fees. It does not authorize a trade. Never round shares or downgrade FOK.
+The WSL launcher rechecks this endpoint before guarded live sells. Other
+sell policies are blocked by this guarded path pending dedicated support.
+
+For every authorized live buy/sell through scripts/polymarket-wsl.ps1, set
+POLYDESK_EXECUTION_ID to one stable ID for that buyer-authorized order. Retain
+it across restarts. The launcher claims an exclusive durable local ledger
+before starting the executor. Duplicate IDs are blocked permanently. Crashes,
+nonzero exits and ambiguous responses retain the pending guard and block all
+new submissions, even with a different ID. No automatic retries or timeout
+unlock. A returned order ID means submitted, not settled.
+
+Read pending status using node scripts/polymarket-execution-guard.mjs
+<user-profile>/.config/polymarket/polydesk-executions status.
+If pending, show: "The previous submission outcome is uncertain. Check orders
+and the receipt before continuing; do not submit another order."
+Operator reconciliation is still required for ambiguous outcomes. Do not
+remove ledger files or use the raw binary to bypass this stop. This is a
+local-launcher safeguard, not distributed exactly-once execution across
+unrelated machines or clients. The original raw binary remains outside it.
