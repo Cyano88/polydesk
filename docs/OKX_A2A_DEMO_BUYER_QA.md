@@ -1011,3 +1011,21 @@ receipt -> fresh preflight -> matched FOK order -> exact settlement fee and cap
 verification -> visible position and remaining collateral.
 Buyer follow-up: "Trade complete. Show the trade receipt, check this position,
 or analyze another market." No second trade or paid research is automatic.
+
+## Buyer experience: sell quote and authorization
+
+After the verified buy, buyer requested Check position, then Check sell quote.
+Position read showed 11 Yes shares. Sell quote read the exact outcome book and
+fee schedule, checked market liquidity and produced an explicit dry-run FOK
+sell at 0.30 minimum. Quote: gross 3.30, estimated fee 0.11550, estimated net
+3.18450 pUSD; round-trip loss estimate 0.34314 versus the verified 3.52764 entry.
+Buyer explicitly authorized: Sell these 11 shares at minimum 0.30.
+Refreshed position and access checks passed. Submission was held while the
+book snapshot exceeded the freshness threshold; no order was sent at that stage.
+
+The buyer also requested Markdown documentation and integrated agent follow-ups.
+Added the buyer follow-up state table to the deployed runtime instruction source
+ops/polydesk-a2a/AGENTS.md, covering research, review, quote, position, approval,
+stale data, rejection, pending settlement, confirmed buy/sell and unfilled FOK.
+Suggested choices are never themselves paid-service or transaction consent.
+Final sell receipt and realized figures must be added after actual verification.

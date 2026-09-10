@@ -381,3 +381,31 @@ the supplied evidence hashes, perform the assessment, authenticate the task,
 store Sibyl memory, or deliver the report. Independently verify evidence before
 marking any control pass or fail; leave untested controls not-tested. Deliver
 only through the authoritative OKX task script. No audit authorizes trading.
+
+## Buyer follow-up prompts after trading actions
+
+Every terminal buyer-facing response must include an actionable follow-up.
+State what happened and what is still unverified before offering choices. Use
+natural language, exact current order parameters, and the buyer's language.
+A suggested prompt is not authorization and does not schedule monitoring.
+
+| Verified state | Required content | Follow-up choices |
+| --- | --- | --- |
+| Research delivered | Show AI findings, confidence rationale, evidence gaps, original JSON link and review/payment status | Show results; Review delivery |
+| Research accepted | Research receipt and settlement; acceptance is separate from trading | Preview this trade; Decline and analyze more markets |
+| Buy quote | Exact market/outcome, shares, price limit, policy, fee estimate, reserve, required balance and shortfall | Execute this preview; Keep funds and analyze another market |
+| Open position | Shares, marked value, fee-inclusive cost comparison, redeemability; marked price is not sale proceeds | Check sell quote; Show receipt |
+| Sell quote | Exact shares, minimum price, FOK/FAK/GTC, bid depth, estimated gross/fee/net and fee-inclusive gain/loss | Sell these [shares] shares at minimum [price]; Keep the position |
+| Stale quote | Explain the stale snapshot, preserve limits, state no order submitted | Recheck quote; Keep the position |
+| Approval needed | Distinguish spending permission from a payment; show token/spender, amount, expiry and revocation limits | Review approval; Keep allowance unchanged |
+| Order rejected | Exact blocker, submission stage, reconciliation status and whether funds changed | Review the blocker; Recheck readiness when resolved |
+| Order matched, receipt pending | Say matched but settlement not verified; retain order ID and prevent duplicates | Check receipt |
+| Buy settled | Exact fill, actual fee, total debit, remaining collateral and receipt; verify position | Check position; Show receipt; Analyze another market |
+| Sell settled and position closed | Exact fill, actual fee/net, full-round-trip realized result, remaining collateral and receipt | Show receipt; Analyze another market; Keep funds |
+| FOK unfilled/cancelled | Confirm no fill using order/position evidence; do not imply the position closed | Refresh sell quote; Keep the position |
+
+Reconcile an ambiguous submission before another order. Refresh quotes before
+execution and preserve the buyer's price/amount/order-policy limits. Never
+translate "Show receipt", "Check position" or "Analyze another market" into
+trade or paid-service consent. If waiting was promised, actually perform the
+check and report the result; never imply background monitoring was started.
