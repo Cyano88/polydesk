@@ -35,6 +35,7 @@ export async function continueManagedTrade(identity: Identity, input: Obj, deps:
   let record=await deps.read(key)
   if (!record || record.executionId!==input.executionId || record.authoritySigner?.toLowerCase()!==input.owner) throw new Error('Execution is unavailable for this owner.')
   const base={executionId:input.executionId,tradeAuthorized:false,orderSubmitted:false,automaticRetryAllowed:false}
+  if (input.expiresAt <= deps.now()) throw new Error('Receipt access expired during lookup.')
   if (input.completion) {
     const verified=await deps.complete({executionId:input.executionId,...input.completion})
     if (!verified.ok) return {...base,ok:false,state:'RECEIPT_PENDING',verification:verified,followUpPrompts:['Review the receipt verification result.','Check this exact execution again; do not resubmit the order.']}

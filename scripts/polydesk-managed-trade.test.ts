@@ -57,3 +57,9 @@ test('completion must be persisted before managed flow reports complete',async()
  f.deps.complete=async()=>{f.record.receipt=f.receipt();return{ok:true}}
  assert.equal((await continueManagedTrade(identity,await f.sign(),f.deps)).state,'TRADE_COMPLETE')
 })
+
+test('access expiring during lookup cannot start completion',async()=>{
+ const f=await fixture();f.input.completion={orderId:'0x'+'1'.repeat(64),transactionHash:'0x'+'2'.repeat(64)}
+ f.deps.read=async()=>{f.deps.now=()=>now+60001;return f.record}
+ await assert.rejects(continueManagedTrade(identity,await f.sign(),f.deps));assert.equal(f.completed,0)
+})
