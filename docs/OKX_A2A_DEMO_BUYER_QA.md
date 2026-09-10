@@ -190,6 +190,28 @@ Protocol references checked September 10, 2026: [official task states](https://r
 and [provider delivery rules](https://raw.githubusercontent.com/okx/onchainos-skills/main/skills/okx-ai/references/task-asp.md).
 These are documented capabilities, not a live dispute/refund demonstration.
 
+### What if the buyer never approves payment release?
+
+The fresh United task has a verified 72-hour review window. Its saved original
+OKX system event is job_submitted, bound to job
+0x0864de5bdc64d53be480f870306d79c7cbc657dbe0f9e791effaaf7b06762745,
+with timestamp=1789019669 and expireTime=1789278869 (Unix seconds).
+Submission was September 10, 2026 at 05:54:29 UTC; review expires September 13,
+2026 at 05:54:29 UTC, or 06:54:29 AM Africa/Lagos. Live status remained submitted
+when checked September 10 around 06:30 UTC. This deadline is from the original
+system event, not inferred from the report validity or buyer download time.
+
+The official deadline renderer describes review expiry as auto-acceptance and
+payment release. The CLI also provides claim-auto-complete after review_expired;
+follow actual events and verify the terminal status/payment outcome. Do not
+promise settlement at the exact deadline second or claim timeout release was
+already demonstrated. A formal rejection enters the separate refund/dispute flow.
+This task's 72 hours must not be presented as a universal value for every task.
+
+Source: [OKX review deadline renderer](https://github.com/okx/onchainos-skills/blob/main/cli/src/commands/agent_commerce/task/common/deadline.rs).
+Task evidence was read from the saved original event on the provider VPS; no
+review decision, refund, claim, or dispute was executed during this check.
+
 ## Verified recording evidence
 
 | Evidence | September 10 observation |
