@@ -210,11 +210,13 @@ Use the returned order amount in the plugin preview; stop if its reserve or tota
 exceeds the preflight amount or buyer cap. Refresh within 30 seconds of signing.
 This public preflight does not prove signing or relayer connectivity: verify local
 region access, wallet mode and authenticated owner, and surface any unverified
-signing step. For DEPOSIT_WALLET, verify the chosen V2 exchange allowance and
-any route incident returned by preflight. A CLOB request for the deprecated V1
-Neg Risk Adapter is PROVIDER_ADAPTER_ROUTE_CONFLICT, not permission to grant it
-allowance. Stop and verify the provider route; never repair through the legacy
-proxy factory. Missing verified current approvals require a separately previewed relayer
+signing step. For DEPOSIT_WALLET, verify pUSD allowance to the chosen V2 exchange
+and, for negative-risk buys, the CLOB-required Neg Risk Adapter. Never repair
+through the legacy proxy factory. The relayer rejected bounded adapter approval
+and required MaxUint256; unlimited permission needs explicit separate buyer
+consent and must never be inferred from the order spend cap. After a confirmed
+approval, refresh CLOB and read the exact on-chain allowance. Missing approvals
+require a separately previewed deposit-wallet relayer
 setup. On network failure, inspect the returned stage and reconcile transactions
 and orders before any retry. Do not retry loops or treat errors as successful fills.
  Never

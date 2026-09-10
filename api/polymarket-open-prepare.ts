@@ -414,7 +414,6 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   if (!resolvedResult.ok) return resolvedResult
   const resolved = resolvedResult.value
   const routeIssue = polymarketRouteIssue(resolved.conditionId)
-  if (routeIssue) return { ok: false as const, status: 409, error: routeIssue + ': deprecated adapter requested by provider; current route must be verified before signing.' }
 
   const bookFetchStartedAt = dependencies.now()
   let book: OrderBook
@@ -466,8 +465,10 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   let walletState: Awaited<ReturnType<PrepareOpenDependencies['readWallet']>>
   const walletCheckStartedAt = dependencies.now()
   let walletCheckSucceeded = false
+  let adapterAllowance: bigint | null = null
   try {
     walletState = await dependencies.readWallet(input.wallet as `0x${string}`, spender)
+    if (negRisk) adapterAllowance = (await dependencies.readWallet(input.wallet as `0x${string}`, '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296')).allowanceRaw
     walletCheckSucceeded = true
   } catch (error) {
     return { ok: false as const, status: 502, error: `Polygon wallet-readiness check failed: ${error instanceof Error ? error.message : 'unknown error'}` }
@@ -489,6 +490,7 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   }
   const amountRaw = usdcAtomic(input.maxSpendUsdc)
   const issues: string[] = []
+  if (adapterAllowance !== null && adapterAllowance < amountRaw) issues.push(routeIssue || 'DEPOSIT_WALLET_ADAPTER_APPROVAL_REQUIRED')
   if (!walletState.deployed) issues.push('Deposit wallet is not deployed on Polygon.')
   if (walletState.balanceRaw < amountRaw) issues.push('pUSD balance is below maxSpendUsdc.')
   if (walletState.allowanceRaw < amountRaw) issues.push(`pUSD allowance to the ${negRisk ? 'Neg Risk ' : ''}CTF Exchange V2 is below maxSpendUsdc.`)

@@ -7,6 +7,7 @@ import { tradeBudget } from './polymarket-trade-budget.js'
 
 const PUSD = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB' as const
 const EXCHANGE = '0xE111180000d2663C0091e4f400237545B87B996B' as const
+const NEG_ADAPTER = '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296' as const
 const NEG_EXCHANGE = '0xe2222d279d744050d28e00520010520000310F59' as const
 const abi = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
@@ -71,10 +72,11 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
   const depth = (Array.isArray(book.asks) ? book.asks : []).filter((x: any) => Number(x.price) > 0 && Number(x.price) <= Number(price) && Number(x.size) > 0).reduce((sum: number, x: any) => sum + Number(x.size), 0)
   const spender = book.neg_risk ? NEG_EXCHANGE : EXCHANGE
   const state = wallet.deployed ? await deps.readWallet(wallet.depositWalletAddress as `0x${string}`, spender) : { balance: 0n, allowance: 0n }
+  const adapterState = wallet.deployed && book.neg_risk ? await deps.readWallet(wallet.depositWalletAddress as `0x${string}`, NEG_ADAPTER) : null
   const required = parseUnits(budget.requiredBalance, 6)
   const issues: string[] = []
   const routeIssue = polymarketRouteIssue(String(market.conditionId))
-  if (routeIssue) issues.push(routeIssue)
+  if (adapterState && adapterState.allowance < required) issues.push(routeIssue || 'DEPOSIT_WALLET_ADAPTER_APPROVAL_REQUIRED')
   if (deps.now() - timestamp > 60_000) issues.push('STALE_ORDER_BOOK')
   if (!wallet.deployed) issues.push('DEPOSIT_WALLET_NOT_DEPLOYED')
   if (state.balance < required) issues.push('INSUFFICIENT_COLLATERAL_INCLUDING_RESERVE')
@@ -90,8 +92,10 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
     balance: formatUnits(state.balance, 6), allowance: formatUnits(state.allowance, 6), spender,
     shortfall: formatUnits(required > state.balance ? required - state.balance : 0n, 6),
     marketSlug: slug, orderType, postOnly, conditionId: market.conditionId, tokenId: token, outcome: matches[0].label, ...budget,
-    approvalRoute: routeIssue ? 'provider-review-required' : 'deposit-wallet-relayer',
-    routeConflict: routeIssue ? 'CLOB demanded collateral allowance to the deprecated V1 adapter. Do not approve or retry until the current route is verified.' : null, legacyProxyApprovalAllowed: false,
+    adapterAllowance: adapterState ? formatUnits(adapterState.allowance, 6) : null,
+    adapterSpender: book.neg_risk ? NEG_ADAPTER : null,
+    approvalRoute: 'deposit-wallet-relayer',
+    routeConflict: routeIssue && adapterState && adapterState.allowance < required ? 'Provider-required adapter allowance is insufficient. Never grant unlimited allowance without separate explicit consent.' : null, legacyProxyApprovalAllowed: false,
     authenticationVerified: false, signingVerified: false, orderAuthorized: false,
     previewArgs: ['buy', '--market-id', slug, '--outcome', String(matches[0].label), '--amount', budget.orderAmount, '--price', price, '--order-type', orderType, ...(postOnly ? ['--post-only'] : []), '--dry-run'],
     note: 'Read-only collateral and market checks. Verify local authentication, access and signing readiness before confirmation. No signing, wrapping, approval or order was performed.' }

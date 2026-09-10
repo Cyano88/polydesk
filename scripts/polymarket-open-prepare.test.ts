@@ -278,15 +278,15 @@ test('rejects a resting reward quote that would execute immediately', async () =
 })
 
 
-test('blocks the known adapter-route incident before native wallet checks or signing plans', async () => {
+test('requires provider adapter allowance for negative-risk native plans and accepts verified repair', async () => {
  const blocked = '0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b'
- let walletRead = false
  const payload = event(); payload.markets[0].conditionId = blocked
+ for (const approved of [false,true]) {
  const result = await preparePolymarketOpen(input(), dependencies({
-  fetchJson: async url => url.includes('/events/slug/') ? payload : book('111', { market: blocked }),
-  readWallet: async () => { walletRead = true; throw new Error('must not read wallet') },
+  fetchJson: async url => url.includes('/events/slug/') ? payload : book('111', { market: blocked, neg_risk:true }),
+  readWallet: async (_,spender) => ({deployed:true,balanceRaw:100_000_000n,allowanceRaw:!approved && spender.toLowerCase().startsWith('0xd91') ? 0n : 100_000_000n}),
  }))
- assert.equal(result.ok, false)
- if (!result.ok) assert.match(result.error, /PROVIDER_ADAPTER_ROUTE_CONFLICT/)
- assert.equal(walletRead, false)
+ assert.equal(result.ok, true)
+ if(result.ok) { assert.equal(result.data.readyForLocalSigning,approved); assert.equal(result.data.issues.includes('PROVIDER_ADAPTER_ROUTE_CONFLICT'),!approved) }
+ }
 })

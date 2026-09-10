@@ -9,7 +9,7 @@ const now = 1_800_000_000_000
 const input = { ownerAddress: owner, marketSlug: 'united', outcome: 'Yes', maxTotalUsdc: '4', limitPrice: '0.31' }
 function deps(balance = 5_025_010n, allowance = 100_000_000n): TradePreflightDependencies {
  return { now: () => now, inspectWallet: async () => ({ ownerAddress: owner, depositWalletAddress: wallet, deployed: true } as any),
- readWallet: async (_, spender) => { assert.equal(spender.toLowerCase(), '0xe2222d279d744050d28e00520010520000310f59'); return { balance, allowance } },
+ readWallet: async (_, spender) => { assert.ok(['0xe2222d279d744050d28e00520010520000310f59','0xd91e80cf2e7be2e162c6513ced06f1dd0da35296'].includes(spender.toLowerCase())); return { balance, allowance } },
  fetchJson: async url => url.includes('gamma-api') ? { slug: 'united', active: true, closed: false, acceptingOrders: true, conditionId: condition, outcomes: '["Yes","No"]', clobTokenIds: '["111","222"]', feesEnabled: true, feeSchedule: { rate: 0.05, exponent: 1 } }
  : url.includes('fee-rate') ? { base_fee: 1000 } : { asset_id: '111', market: condition, timestamp: String(now), neg_risk: true, tick_size: '0.01', asks: [{ price: '0.31', size: '100' }] } }
 }
@@ -63,9 +63,12 @@ test('blocks the observed deprecated-adapter route even with ample funds and exc
  const d = deps(), original = d.fetchJson
  const blocked = '0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b'
  d.fetchJson = async url => { const value = await original(url); if (url.includes('gamma-api')) value.conditionId = blocked; if (url.includes('/book?')) value.market = blocked; return value }
+ d.readWallet = async (_, spender) => ({balance:5_025_010n,allowance:spender.toLowerCase().startsWith('0xd91') ? 0n : 100_000_000n})
  const result = await preflightPolymarketTrade(input, d)
  assert.equal(result.publicChecksPassed, false)
  assert.ok(result.issues.includes('PROVIDER_ADAPTER_ROUTE_CONFLICT'))
- assert.equal(result.approvalRoute, 'provider-review-required')
+ assert.equal(result.approvalRoute, 'deposit-wallet-relayer')
+ d.readWallet = async () => ({balance:5_025_010n,allowance:100_000_000n})
+ assert.equal((await preflightPolymarketTrade(input,d)).publicChecksPassed,true)
  assert.equal(result.shortfall, '0')
 })

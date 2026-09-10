@@ -32,3 +32,9 @@ orderType and postOnly preserve buyer policy (GTD is not supported by this
 preflight). The response is read-only; publicChecksPassed is not signing or
 trading authorization. Use its rounded orderAmount, and refresh before signing.
 `setup-deposit-wallet --adapter-allowance 3.751 --dry-run` previews the opt-in bounded local repair. Never remove dry-run without review of this new spending permission. This does not remove the market incident guard or establish that CLOB will accept an order.
+
+Verified repair supersedes the temporary market block: after explicit unlimited
+approval consent, the deposit-wallet relayer accepted MaxUint256 to the adapter.
+Both exchange and adapter allowances are now checked before negative-risk buys.
+The opt-in argument `--adapter-allowance unlimited` encodes full uint256 max and
+checks the exact on-chain value; it is never inferred from a trade cap.

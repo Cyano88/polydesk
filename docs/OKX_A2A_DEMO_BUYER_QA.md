@@ -957,3 +957,20 @@ Fresh authenticated check still returned balance 5.02501 pUSD and zero adapter
 allowance. Unlimited approval might clear the observed allowance rejection but
 has not been proven to result in a successful order. The previous approval
 consent covered only 3.751 pUSD and does not authorize this expanded permission.
+
+## Authorized unlimited approval verified (2026-09-10)
+Buyer chose to proceed after the unlimited-scope assessment. Exact preview
+confirmed the owner-derived wallet, pUSD, the CLOB-requested adapter, one call,
+MaxUint256 and relayer-funded gas. The approval succeeded:
+0xfe7fe4fa473573ae54ef2dfb32826779c39231b5b3a688f291a20cdab1d94099
+Receipt wait completed and exact on-chain allowance equaled all 64 hex f digits.
+Authenticated CLOB cache refresh returned HTTP 200 and the adapter allowance
+became MaxUint256; balance remained 5.02501 pUSD. No token transfer or trade was
+part of this approval. Permission has no expiry; revocation route is unverified.
+
+Replaced the temporary unconditional incident block with exchange AND adapter
+allowance checks in public preflight, native preparation and local plugin buy.
+No automatic approval from a buy. Regression verifies that the known market
+blocks without adapter allowance and passes that gate once funded/approved.
+Native SDK fee sizing remains a separate known limitation. Live fill still
+requires a fresh market check and the original $4-capped order authorization.
