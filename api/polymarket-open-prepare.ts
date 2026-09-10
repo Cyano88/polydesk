@@ -1,3 +1,4 @@
+import { readTradeFees, feeInclusiveBudget, type VerifiedFees } from './polymarket-native-fees.js'
 import { polymarketRouteIssue } from './polymarket-route-incidents.js'
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
@@ -104,6 +105,7 @@ export type PrepareOpenDependencies = {
   }>
   now: () => number
   builderCode: () => string
+  readFees?: (condition: string, token: string, code: string) => Promise<VerifiedFees>
   observeTiming?: (timing: PreparationTiming) => void
 }
 
@@ -440,16 +442,25 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
     return { ok: false as const, status: 502, error: 'Polymarket order book is missing valid tick-size or minimum-size metadata.' }
   }
   const immediateOrder = input.orderType !== 'GTC'
+  let budget: ReturnType<typeof feeInclusiveBudget>
+  try {
+    const fees = await (dependencies.readFees
+      ? dependencies.readFees(resolved.conditionId, resolved.tokenId, builderCode)
+      : readTradeFees(dependencies.fetchJson, resolved.conditionId, resolved.tokenId, builderCode))
+    budget = feeInclusiveBudget(input.maxSpendUsdc, fees, !immediateOrder)
+  } catch (error) {
+    return { ok: false as const, status: 502, error: `Fee verification failed: ${error instanceof Error ? error.message : 'unknown error'}` }
+  }
   const pricePlan = input.orderType === 'GTC'
     ? restingPrice(book, input.limitPrice || '')
-    : executionPrice(book, Number(input.maxSpendUsdc), input.orderType)
+    : executionPrice(book, Number(budget.orderAmount), input.orderType)
   if (!pricePlan.ok) return { ok: false as const, status: 409, error: pricePlan.error, ...('availableUsdc' in pricePlan && pricePlan.availableUsdc ? { availableUsdc: pricePlan.availableUsdc } : {}) }
   const orderPrice = pricePlan.price
   const normalizedPrice = priceString(orderPrice, tickSize)
   if (Math.abs(Number(normalizedPrice) - orderPrice) > 1e-9) {
     return { ok: false as const, status: 409, error: `Limit price must follow this market's ${tickSize} tick size.` }
   }
-  const estimatedShares = Number((Number(input.maxSpendUsdc) / orderPrice).toFixed(6))
+  const estimatedShares = Number((Number(budget.orderAmount) / orderPrice).toFixed(6))
   if (estimatedShares < Number(minimumOrderSize)) {
     return {
       ok: false as const,
@@ -488,12 +499,12 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         bookAgeAfterWalletMs: finite(finishedAt - timestamp), walletCheckSucceeded })
     } catch { /* Observability must not alter readiness or grant authority. */ }
   }
-  const amountRaw = usdcAtomic(input.maxSpendUsdc)
+  const amountRaw = usdcAtomic(budget.requiredBalance)
   const issues: string[] = []
   if (adapterAllowance !== null && adapterAllowance < amountRaw) issues.push(routeIssue || 'DEPOSIT_WALLET_ADAPTER_APPROVAL_REQUIRED')
   if (!walletState.deployed) issues.push('Deposit wallet is not deployed on Polygon.')
-  if (walletState.balanceRaw < amountRaw) issues.push('pUSD balance is below maxSpendUsdc.')
-  if (walletState.allowanceRaw < amountRaw) issues.push(`pUSD allowance to the ${negRisk ? 'Neg Risk ' : ''}CTF Exchange V2 is below maxSpendUsdc.`)
+  if (walletState.balanceRaw < amountRaw) issues.push('pUSD balance is below the fee-inclusive required balance.')
+  if (walletState.allowanceRaw < amountRaw) issues.push(`pUSD allowance to the ${negRisk ? 'Neg Risk ' : ''}CTF Exchange V2 is below the fee-inclusive required balance.`)
   if (immediateOrder && 'partialFillPossible' in pricePlan && pricePlan.partialFillPossible) issues.push('The available market may fill only part of this purchase.')
 
   const now = dependencies.now()
@@ -502,7 +513,8 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
     externalOrderId: input.externalOrderId,
     wallet: input.wallet.toLowerCase(),
     tokenId: resolved.tokenId,
-    amount: input.maxSpendUsdc,
+    amount: budget.orderAmount,
+    maximumTotal: input.maxSpendUsdc,
     orderType: input.orderType,
     price: normalizedPrice,
     bookHash: clean(book.hash, 96),
@@ -552,10 +564,11 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
           balance: formatUnits(walletState.balanceRaw, PUSD_DECIMALS),
           allowance: formatUnits(walletState.allowanceRaw, PUSD_DECIMALS),
           spender,
-          required: input.maxSpendUsdc,
+          required: budget.requiredBalance,
         },
         clobCredentials: 'buyer-local-unverified',
       },
+      budget,
       signingPlan: {
         sdk: '@polymarket/clob-client-v2',
         client: {
@@ -568,11 +581,11 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
         ...(immediateOrder ? {
           createMarketOrder: {
             tokenID: resolved.tokenId,
-            amount: Number(input.maxSpendUsdc),
+            amount: Number(budget.orderAmount),
             price: Number(normalizedPrice),
             side: 'BUY',
             orderType: input.orderType,
-            userUSDCBalance: Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS)),
+            userUSDCBalance: Math.min(Number(input.maxSpendUsdc), Number(formatUnits(walletState.balanceRaw, PUSD_DECIMALS))),
           },
         } : {
           createOrder: {

@@ -1097,3 +1097,30 @@ ok=true, dry_run=true and the exact confirmed PolyDesk builder_code. No order
 was signed or submitted. Installed local binary SHA256:
 6cbb4182732a65106ebf48be144993cad2da5eb840f5e9ef4e304aaa5483bb17.
 Cargo binary build succeeded; existing compiler warnings remain.
+## Native fee-inclusive preview completed locally (2026-09-10)
+
+Native SDK preparation now reads exact-token CLOB fee metadata and the enabled
+builder profile rates. Missing, disabled, mismatched or unsupported schedules
+fail closed. It reserves platform and builder fees within maxSpendUsdc before
+checking liquidity, wallet balance, exchange allowance and adapter allowance.
+The SDK receives the reduced order notional and a balance bound no higher than
+the buyer cap. Post-only plans use maker builder rates and omit taker-only
+platform fees. Returned budget fields explicitly label conservative reserves,
+not claimed settlement charges. Builder rate configuration was not changed.
+
+Live public-data verification for the demonstrated market: market rate 0.05,
+exponent 1, taker-only=true, builder maker/taker both 0 bps. With a 4 pUSD cap,
+the native preview reserves 0.19 for market fees, allocates 3.80 to order
+notional and requires 3.99 collateral. The 0.01 remainder is unallocated.
+This is the native SDK budget; the separate Rust executor has its own
+collateral reserve and precision constraints. Its nonzero-builder-fee block
+remains in place. These paths must not exchange executable amounts blindly.
+
+Validation: 100 focused fee, native preparation, independent preparation,
+smart-trader, governed-order and signed-order tests passed; server TypeScript
+check passed. Current public provider responses passed the new fee parser.
+Changes are local pending deployment; no paid service, approval or order ran.
+
+Follow-up prompt: Review the fee breakdown and total spending limit before
+signing. PolyDesk builder fees remain zero. Actual fees require the settlement
+receipt; accepting research is separate from authorizing a trade.

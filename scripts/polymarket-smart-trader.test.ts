@@ -1045,7 +1045,7 @@ test('researched exact preparation binds real validated approval and never downg
         return { ownerAddress: owner as `0x${string}`, depositWalletAddress: wallet as `0x${string}`, deployed: true }
       },
       prepare: raw => preparePolymarketOpen(raw, {
-        now: () => clock, builderCode: () => '0x' + 'ab'.repeat(32),
+        now: () => clock, readFees: async () => ({ marketRate: 0, exponent: 1, takerOnly: true, makerBps: 0, takerBps: 0 }), builderCode: () => '0x' + 'ab'.repeat(32),
         readWallet: async () => ({ deployed: true, balanceRaw: scenario === 'unfunded' ? 0n : 20_000_000n, allowanceRaw: 20_000_000n }),
         fetchJson: async url => url.includes('/events/slug/') ? { slug: market().eventSlug, markets: [{
           id: '501', slug: market().marketSlug, question: market().question, conditionId, outcomes: '["Yes","No"]',

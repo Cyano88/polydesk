@@ -27,7 +27,7 @@ function dependencies(options: { price?: string; timestamp?: string; balance?: b
       clock += options.walletDelayMs ?? 0
       return { deployed: options.deployed !== false, balanceRaw: options.balance ?? 20_000_000n, allowanceRaw: options.allowance ?? 20_000_000n }
     },
-    now: () => clock, builderCode: () => `0x${'ab'.repeat(32)}`, observeTiming: options.observeTiming,
+    now: () => clock, readFees: async () => ({ marketRate: 0, exponent: 1, takerOnly: true, makerBps: 0, takerBps: 0 }), builderCode: () => `0x${'ab'.repeat(32)}`, observeTiming: options.observeTiming,
   }
   return {
     inspectWallet: async () => ({ ownerAddress: owner as `0x${string}`, depositWalletAddress: wallet as `0x${string}`, deployed: options.deployed !== false }),

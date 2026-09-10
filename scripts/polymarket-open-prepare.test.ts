@@ -97,7 +97,7 @@ function dependencies(overrides: Partial<PrepareOpenDependencies> = {}): Prepare
       allowanceRaw: 10_000_000n,
     }),
     now: () => 1_800_000_000_000,
-    builderCode: () => builderCode,
+    readFees: async () => ({ marketRate: 0, exponent: 1, takerOnly: true, makerBps: 0, takerBps: 0 }), builderCode: () => builderCode,
     ...overrides,
   }
 }
@@ -289,4 +289,27 @@ test('requires provider adapter allowance for negative-risk native plans and acc
  assert.equal(result.ok, true)
  if(result.ok) { assert.equal(result.data.readyForLocalSigning,approved); assert.equal(result.data.issues.includes('PROVIDER_ADAPTER_ROUTE_CONFLICT'),!approved) }
  }
+})
+
+test('native signing amount includes fee reserves within cap and blocks fee shortfall', async () => {
+  for (const balance of [4_000_000n, 3_800_000n]) {
+    const result = await preparePolymarketOpen(input({maxSpendUsdc:'4',orderType:'FOK'}), dependencies({
+      readFees: async () => ({marketRate:0.05,exponent:1,takerOnly:true,makerBps:0,takerBps:100}),
+      readWallet: async () => ({deployed:true,balanceRaw:balance,allowanceRaw:10_000_000n}),
+    }))
+    assert.equal(result.ok,true)
+    if (!result.ok) continue
+    assert.equal(result.data.signingPlan.createMarketOrder?.amount,3.77)
+    assert.equal(result.data.budget.requiredBalance,'3.9962')
+    assert.equal(result.data.readyForLocalSigning,balance === 4_000_000n)
+    assert.ok(result.data.signingPlan.createMarketOrder!.userUSDCBalance <= 4)
+  }
+})
+test('fee provider failure blocks native plan before wallet read or signing', async () => {
+  const result = await preparePolymarketOpen(input(), dependencies({
+    readFees: async () => {throw new Error('fee lookup timeout')},
+    readWallet: async () => {throw new Error('wallet must not be read')},
+  }))
+  assert.equal(result.ok,false)
+  if (!result.ok) assert.match(result.error,/Fee verification failed: fee lookup timeout/)
 })
