@@ -1,0 +1,32 @@
+{
+  "schema": "polydesk-judge-reproduction-v1",
+  "startedAt": "2026-09-10T21:01:31.423Z",
+  "finishedAt": "2026-09-10T21:01:49.690Z",
+  "commit": "7b1d644c9b5d3e7c4dfbe1a9cf11b113b63b64da",
+  "trackedChanges": "",
+  "node": "v23.11.0",
+  "python": "Python 3.12.3",
+  "pass": true,
+  "tests": 101,
+  "passed": 101,
+  "failed": 0,
+  "skipped": 0,
+  "evidence": {
+    "syntheticOnly": true,
+    "realSdk": true,
+    "freshNodeProcess": true,
+    "memoryOnlyRetryVerified": true,
+    "duplicateCaptureVerified": true,
+    "missingMemoryBlocks": true,
+    "restoredMemoryRecalls": true,
+    "decision": "LOCAL_MEMORY_RECONCILIATION_REQUIRED",
+    "continuationGate": "MEMORY_RECONCILED_OPEN",
+    "continuationPassed": true,
+    "orderSubmitted": false
+  },
+  "memoryRoot": "/tmp/polydesk-judge-htkXug",
+  "syntheticOnly": true,
+  "liveTradeSubmitted": false,
+  "livePaymentMade": false,
+  "productionMemoryTouched": false
+}

@@ -27,3 +27,9 @@ This is a reproducible no-spend judge path. It does not submit a trade, make a s
 The live buyer launcher additionally needs owner-controlled Onchain OS credentials and the reviewed PolyDesk native executor, plus live market, region, balance and approval checks. That live executor is not built or installed by these instructions. No private binary or credentials are required for judge reproduction. A fresh-machine live-trading install remains a separate distribution task.
 
 For the video, record the command and its fresh-process memory evidence continuously with its timestamp/commit visible, alongside the published actual live receipt evidence. The README points to memory write/read code and declares prior work. Licensing and public submission remain separate requirements.
+
+## Verified clean setup
+
+On September 10, 2026, a fresh Linux clone of commit 7b1d644 passed this setup with no tracked changes, Node v23.11.0 and Python 3.12.3. npm installed 632 packages from the lockfile; the new pinned Python environment passed 11 runtime tests. The judge command passed 101 tests with zero failures or skips. See [the machine-readable report](demo/judge-fresh-clone-20260910.json).
+
+The verification clone was created from a Git bundle of the exact committed source because this workstation's Windows worktree pointer is not readable by Linux Git. Dependencies and Python runtime were newly installed in the clone. Public GitHub cloning uses the same committed tree. A missing python3-venv prerequisite was installed before the successful run. No existing buyer Python runtime or native trading binary was used.
