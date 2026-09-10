@@ -546,3 +546,32 @@ this step. Provider agreement remains a distinct decision for the same operator
 who controls both demo identities; do not present this as independent demand.
 Follow-up: "Your refund request is submitted. As PolyDesk's provider, would you
 like to approve the full 0.1 USDT refund?"
+
+## Recovery-review refund confirmed
+
+The operator explicitly approved the full 0.1 USDT refund as provider 5427.
+Relaying the verbatim reply "yes" initially stalled: the provider session treated
+it as ambiguous between its internal A (dispute) and B (refund) options, despite
+our visible question asking specifically about approving a full refund. A check
+after one minute still showed rejected. The provider session had ended without
+executing a financial action. The operator then executed agree-refund directly
+under the already explicit, task-specific authorization; no repeat approval or
+dispute was needed.
+
+Refund-agreement transaction:
+0x30c69e6623d349e69f4ec50b229568d272c037884980e6592ff91312671d9c56
+
+Both buyer 5579 and provider 5427 received job_refunded, code 0, jobStatus failed,
+for task 0xd6bb3b388b5f2c03e5e9210607f83b1c8099382281dba0a45ad9e7a26a0bff51,
+timestamp 1789027313 (2026-09-10 08:01:53 UTC / 09:01:53 Lagos).
+An independent CLI status read also returned failed. Here failed is the closed,
+refunded task outcome, not a failed refund transfer. These checks verify the
+platform refund event; no separate ERC-20 transfer-log or wallet-balance audit
+was performed. No new paid research job or trade was created.
+
+Demo UX defect to retain: a yes/no question shown to the user must remain bound
+to that exact action when relayed to a provider session. A bare yes must not be
+reinterpreted against a different internal multi-option card. This session used
+an authorized direct-command fallback; no general relay-code fix is claimed.
+Follow-up: "The full 0.1 USDT refund is confirmed. Would you like to start a
+fresh research review for 0.1 USDT, or inspect the validation findings first?"
