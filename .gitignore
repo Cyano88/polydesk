@@ -12,3 +12,4 @@ data/
 .playwright-cli/
 output/
 demo-assets/*.mp4
+.judge-artifacts/

@@ -90,9 +90,13 @@ export async function runBridge(action,payload){
  const bridge=fileURLToPath(new URL('./sibyl-local-execution-memory.py',import.meta.url))
  const python=process.env.POLYDESK_LOCAL_MEMORY_PYTHON,root=process.env.POLYDESK_LOCAL_MEMORY_ROOT
  requireThat(python?.startsWith('/')&&root?.startsWith('/')&&!root.includes('..')&&!/\/(\.codex|\.agents)(\/|$)/.test(root),'Configure private native local-memory runtime/root')
- const converted=spawnSync('wsl.exe',['--exec','wslpath','-u',bridge],{encoding:'utf8',windowsHide:true,timeout:15000})
- requireThat(converted.status===0,'Cannot resolve local memory bridge')
- const run=spawnSync('wsl.exe',['--exec',python,'-I','-B',converted.stdout.trim(),'--root',root,'--action',action],{input:JSON.stringify(payload),encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:262144})
+ let executable=python,args=['-I','-B',bridge,'--root',root,'--action',action]
+ if(process.platform==='win32'){
+  const converted=spawnSync('wsl.exe',['--exec','wslpath','-u',bridge],{encoding:'utf8',windowsHide:true,timeout:15000})
+  requireThat(converted.status===0,'Cannot resolve local memory bridge')
+  executable='wsl.exe';args=['--exec',python,'-I','-B',converted.stdout.trim(),'--root',root,'--action',action]
+ }
+ const run=spawnSync(executable,args,{input:JSON.stringify(payload),encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:262144})
  requireThat(run.status===0,'Sibyl local memory unavailable; receipt retained, no trade retry')
  return JSON.parse(run.stdout)
 }
