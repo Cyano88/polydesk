@@ -1,0 +1,37 @@
+{
+  "schema": "polydesk-sibyl-demo-rehearsal-v1",
+  "startedAt": "2026-09-10T19:53:48.320Z",
+  "finishedAt": "2026-09-10T19:54:01.164Z",
+  "commit": "364acbedf1a36d12b5fd9914da1445ef5dc58340",
+  "workingTreeTestChanges": true,
+  "passed": true,
+  "tests": 90,
+  "pass": 90,
+  "fail": 0,
+  "skipped": 0,
+  "realSdkEvidence": {
+    "syntheticOnly": true,
+    "realSdk": true,
+    "freshNodeProcess": true,
+    "memoryOnlyRetryVerified": true,
+    "duplicateCaptureVerified": true,
+    "missingMemoryBlocks": true,
+    "restoredMemoryRecalls": true,
+    "decision": "LOCAL_MEMORY_RECONCILIATION_REQUIRED",
+    "orderSubmitted": false
+  },
+  "scope": "synthetic chain and provider evidence; real Sibyl SDK; isolated native memory; fresh Node processes",
+  "livePaymentMade": false,
+  "liveTradeSubmitted": false,
+  "productionMemoryTouched": false,
+  "hostedAcceptanceProven": false,
+  "testFiles": [
+    "scripts/polymarket-local-memory.test.mjs",
+    "scripts/polymarket-execution-recovery.test.mjs",
+    "scripts/polymarket-execution-guard.test.mjs",
+    "scripts/paid-delivery-guidance.test.ts",
+    "scripts/smart-trader-delivery-status.test.ts",
+    "scripts/base-payment-lifecycle.test.ts",
+    "scripts/base-payment-recovery.test.ts"
+  ]
+}

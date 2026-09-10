@@ -79,3 +79,8 @@ Commit 27a29740d632d36555bf13242c0f81bfcf907611 deployed live as dep-dahgdb2jnfa
 ## Local executor integration added
 
 See LOCAL_EXECUTOR_SIBYL_INTEGRATION_20260910.md. The working guarded launcher now attempts local finalized-fill capture after submission and recovery, with an explicit memory-only retry and fresh-session review command. Real SDK fresh-process tests passed using synthetic fills. This uses separate local provenance and does not populate the governed server outbox. Historical trades remain ineligible; no live fill was created for this change.
+
+
+## Rehearsal completed: 90/90
+
+The repeatable demo rehearsal passed 90 tests with no failures or skips, including real-SDK capture, memory-only retry, duplicate capture, separate-process recall, missing-memory rejection and restored recall. See demo/SIBYL_DEMO_RUNBOOK_20260910.md for the recording sequence and judge Q&A, and demo/sibyl-rehearsal-20260910.json plus its log for evidence. This uses synthetic trades and isolated native memory; no new payment, signature, order or production-memory write was performed.

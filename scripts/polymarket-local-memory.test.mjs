@@ -30,11 +30,21 @@ test('capture is idempotent and recall changes decision without granting authori
 test('capture outage retains inventory and prevents empty-history success',async t=>{const {dir,claim}=ledger(t);await assert.rejects(captureLocalExecution(dir,b.executionId,async()=>{throw Error('outage')},async()=>fixture().deps));assert.equal(JSON.parse(readFileSync(claim.record)).state,'SUBMITTED');assert.ok(readFileSync(claim.record+'.memory.json'));await assert.rejects(reviewLocalMemory(dir,b.owner,'111',async()=>({ok:true,records:[]})))})
 test('uncaptured execution and changed binding block recall',async t=>{const {dir,claim}=ledger(t),sdk=bridge();await assert.rejects(reviewLocalMemory(dir,b.owner,'111',sdk));await captureLocalExecution(dir,b.executionId,sdk,async()=>fixture().deps);writeFileSync(claim.record+'.binding.json',JSON.stringify({...b,conditionId:'0x'+'99'.repeat(32)}));await assert.rejects(reviewLocalMemory(dir,b.owner,'111',sdk))})
 test('real SDK capture and separate Node process recall with synthetic finalized evidence',{skip:process.env.POLYDESK_TEST_REAL_SIBYL!=='1'},async t=>{
- const {dir}=ledger(t);await captureLocalExecution(dir,b.executionId,runBridge,async()=>fixture().deps)
+ const {dir,claim}=ledger(t)
+ // First simulate unavailable memory. The durable receipt and expected inventory survive.
+ await assert.rejects(captureLocalExecution(dir,b.executionId,async()=>{throw Error('synthetic SDK outage')},async()=>fixture().deps))
+ assert.equal(JSON.parse(readFileSync(claim.record)).state,'SUBMITTED')
+ await captureLocalExecution(dir,b.executionId,runBridge,async()=>fixture().deps)
+ await captureLocalExecution(dir,b.executionId,runBridge,async()=>fixture().deps)
  const code="import {reviewLocalMemory} from './scripts/polymarket-local-memory.mjs'; console.log(JSON.stringify(await reviewLocalMemory(process.argv[1],process.argv[2],process.argv[3])))"
  const child=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:process.env,windowsHide:true,timeout:45000})
  assert.equal(child.status,0,child.stderr);const r=JSON.parse(child.stdout);assert.equal(r.state,'LOCAL_MEMORY_RECONCILIATION_REQUIRED');assert.equal(r.source,'SIBYL_LOCAL_FINALIZED_FILLS');assert.equal(r.signingAuthorized,false)
- console.log(JSON.stringify({syntheticOnly:true,realSdk:true,freshNodeProcess:true,decision:r.state,orderSubmitted:false}))
+ const missing=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:{...process.env,POLYDESK_LOCAL_MEMORY_ROOT:process.env.POLYDESK_LOCAL_MEMORY_ROOT+'/missing-test-store'},windowsHide:true,timeout:45000})
+ assert.notEqual(missing.status,0,'Missing expected memory must not become an empty-history success')
+ const restored=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:process.env,windowsHide:true,timeout:45000})
+ assert.equal(restored.status,0,restored.stderr)
+ assert.equal(JSON.parse(restored.stdout).state,'LOCAL_MEMORY_RECONCILIATION_REQUIRED')
+ console.log(JSON.stringify({syntheticOnly:true,realSdk:true,freshNodeProcess:true,memoryOnlyRetryVerified:true,duplicateCaptureVerified:true,missingMemoryBlocks:true,restoredMemoryRecalls:true,decision:r.state,orderSubmitted:false}))
 })
 
 test('conflicting verified fee cannot overwrite a captured projection',async t=>{
