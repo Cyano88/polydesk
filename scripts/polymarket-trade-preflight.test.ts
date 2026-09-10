@@ -72,3 +72,15 @@ test('blocks the observed deprecated-adapter route even with ample funds and exc
  assert.equal((await preflightPolymarketTrade(input,d)).publicChecksPassed,true)
  assert.equal(result.shortfall, '0')
 })
+
+
+test('native preview rounds the 3.5 cap to 10 whole shares at 0.30',()=>{
+ const budget=tradeBudget({maxTotal:'3.5',price:'0.30',reserveBps:1000,feeRate:0.05})
+ assert.equal(budget.orderAmount,'3');assert.equal(budget.shares,'10')
+ assert.equal(budget.requiredBalance,'3.3');assert.equal(budget.estimatedMarketFee,'0.105')
+ for(const price of ['0.1','0.2','0.3','0.4','0.5','0.6','0.7','0.8','0.9']){
+  const b=tradeBudget({maxTotal:'3.5',price,reserveBps:1000,feeRate:0.05})
+  assert.equal(Number.isInteger(Number(b.shares)),true)
+  assert.ok(Number(b.requiredBalance)<=3.5)
+ }
+})

@@ -10,8 +10,9 @@ export function tradeBudget(input: { maxTotal: string; price: string; reserveBps
   if (cap <= 0n || price <= 0n || price >= 1_000_000n) throw new Error('Budget and price must be positive; price must be below one.')
   const ceil = (n: bigint, d: bigint) => (n + d - 1n) / d
   const gcd = (a: bigint, b: bigint): bigint => b === 0n ? a : gcd(b, a % b)
-  // Maker precision is cents; taker precision is 0.00001 shares.
-  const step = 10_000n * (price / gcd(price, 1_000_000_000n))
+  // Preserve collateral precision and the installed native executor's whole-share step.
+  const collateralStep = 10_000n * (price / gcd(price, 1_000_000_000n))
+  const step = collateralStep / gcd(collateralStep, price) * price
   // Reserve at least the published fee's maximum as a fraction of notional.
   const feeBpsCeil = Math.ceil(input.feeRate * 10_000)
   const reserveBps = Math.max(input.reserveBps, feeBpsCeil)

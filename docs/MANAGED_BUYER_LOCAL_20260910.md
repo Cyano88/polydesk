@@ -29,3 +29,15 @@ Remaining acceptance: actual owner-approved exact trade on the buyer runtime; na
 - Hash-pinned managed launcher successfully executed `buy --help`; no wallet or order was used.
 
 The native guard requires the actual rounded order amount to equal the approved amount; any sizing change requires a new preview. The patch application check passed with `git apply --check --ignore-space-change` because the preserved source contains mixed Windows/Linux line endings. Apply using `git apply --ignore-space-change` after the existing patches.
+## Hosted release acceptance
+
+Release 8e927831b45c76b8aba241bdd46b55f90299d4e4 is live on Render as dep-dahcrk15efls73cvftk0. VPS source and active instructions match the release; its daemon is active. The complete final three-service suite passed 170 tests on the Linux host.
+
+Hosted controlled probes confirmed MONITORING_ACTIVE with follow-up choices, safe STATUS replay, wrong-buyer rejection, and refusal of PREPARE_LOCAL_TRADE without independent-decision acknowledgment. Both tradeAuthorized and orderSubmitted remained false. The two controlled conversation probes persisted status/rejection operations only. They did not call native preflight, spend funds, sign a real order, send buyer messages, or alter enrollment.
+
+No real owner signature or actual managed trade was used. Live acceptance requires a selected market, explicit total cap, fresh exact preview and owner-signed order. Unattended copying remains disabled. Exactly three A2A marketplace services remain the intended lineup; no listing was changed by this release.
+## Live preview mismatch found before signing
+
+The buyer selected Manchester United to win on 2026-09-13 with a 3.5 total cap. At a 0.30 FOK limit, server preflight initially returned 10.6 shares / 3.18 notional, but the installed native dry-run rounded to 10 whole shares / 3.00 notional. No signature or submission occurred. The shared native budget now requires both collateral precision and whole-share sizing; it preserves the buyer cap and native executor policy. Regression covers the observed 3.5/0.30 case and multiple tenth-price levels. The native preflight suite is included in the managed and three-service test commands. The prior unsigned preview is superseded and must not be signed.
+
+Correct sizing for that quote: 10 shares, 3.00 notional, estimated fee 0.105, conservative reserve 0.30, required collateral 3.30, maximum buyer cap 3.50. Prices and readiness still require refresh before execution.
