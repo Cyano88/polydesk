@@ -394,7 +394,7 @@ Compile the existing conformance-input schema locally with:
 
 ```bash
 cd /opt/polydesk-a2a/app
-npm run audit:report -- --request /tmp/polydesk-audit-input.json
+npm run audit:report -- --request /tmp/polydesk-audit-input.json --out-dir /tmp/polydesk-audit-UNIQUE_JOB_REVISION
 ```
 
 This command only validates and compiles supplied findings. It does not verify
@@ -402,6 +402,30 @@ the supplied evidence hashes, perform the assessment, authenticate the task,
 store Sibyl memory, or deliver the report. Independently verify evidence before
 marking any control pass or fail; leave untested controls not-tested. Deliver
 only through the authoritative OKX task script. No audit authorizes trading.
+
+For a real audit delivery, export to a new task/revision-specific directory.
+The bundle contains audit-report.json (the original structured compilation),
+findings.md, and delivery-manifest.json with byte hashes. The output directory
+must not already exist; do not delete or overwrite old reports to force export.
+A missing manifest or failed export is not a complete delivery bundle. Validate
+exact job/buyer/report identifiers, resolve evidence references, and independently
+verify the underlying evidence; artifact hashes alone do not establish truth.
+The 25 USDT field is the listed service price, not proof of task payment.
+
+Attach the original audit-report.json and readable findings through the official
+accepted-task delivery workflow, with the manifest available to verify receipt.
+Do not silently substitute a prose-only report for the JSON. Show findings,
+failed and untested controls, limitations and source evidence before requesting
+review. Use the shared requested-correction notification rules above: preserve
+original files, identify revisions/addenda, and notify the buyer of a prepared
+correction or blocker rather than ending only in a local AI session.
+
+After explicit audit acceptance, verify the actual task completion/payment state
+and offer Review the remediation plan or Define a separate re-audit scope.
+Neither acceptance nor a proposed re-audit authorizes new paid work. Do not
+append a trade-execution prompt to an integration-audit delivery. Sibyl remains
+owner-authorized receipt context where applicable, not storage for audit prose.
+
 
 ## Buyer follow-up prompts after trading actions
 
