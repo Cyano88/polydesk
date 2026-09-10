@@ -527,3 +527,22 @@ Demo follow-up: "The timeout correction is deployed, and all three saved
 inputs returned AI analysis. The failed delivery still needs its own buyer-review
 decision. Would you like to request a refund for its missing AI analysis?
 A fresh paid review requires a separate disclosed purchase approval."
+
+## Recovery-review refund request
+
+The buyer explicitly approved requesting a refund for United Review After Recovery.
+Before mutation, the live task was submitted, buyer 5579, provider 5427, budget
+0.1 USDT. The buyer rejected task
+0xd6bb3b388b5f2c03e5e9210607f83b1c8099382281dba0a45ad9e7a26a0bff51
+because researchStatus UNAVAILABLE omitted the agreed AI assessment, thesis,
+counter-thesis and confidence explanation. Later diagnostics do not replace the
+original delivery. The rejection succeeded and a fresh status read confirmed
+rejected. Transaction:
+0xcf9e40b616e6b48b0edf56576f29c8ee54892c9fdd10d79eb0e4839851f6c130
+
+This records a refund request, not a completed refund or a filed dispute.
+No provider refund agreement, escrow release or new purchase was performed in
+this step. Provider agreement remains a distinct decision for the same operator
+who controls both demo identities; do not present this as independent demand.
+Follow-up: "Your refund request is submitted. As PolyDesk's provider, would you
+like to approve the full 0.1 USDT refund?"
