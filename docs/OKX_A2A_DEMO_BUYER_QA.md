@@ -801,3 +801,46 @@ or private wallet material should be included in any report.
 Buyer follow-up: "Trade remains blocked by a provider contract-route conflict.
 You can review the incident report or choose another market for analysis; no
 additional research payment or trade will be started by this notice."
+
+## Successful-trade comparison recovered on 2026-09-10
+
+The buyer correctly recalled a real prior trade. Recovered the original command,
+preview and post-trade evidence from the September 3 session
+01a06647-b48f-7210-a8d2-b92bcebe0cc7 (15:52-15:56 UTC).
+
+| Field | Successful September 3 order | Failed September 10 order |
+| --- | --- | --- |
+| Market | US announces end of Iranian blockade by September 7, 2026? | Manchester United win September 13 |
+| Outcome | No | Yes |
+| Plugin base | 0.7.1, original Windows binary | 0.7.1, audited local Linux patch |
+| Wallet mode | Deposit Wallet / V2 | Same Deposit Wallet / V2 |
+| Negative risk | false | true |
+| Exchange | Standard CTF Exchange V2 | Neg Risk CTF Exchange V2 |
+| Fee-rate response | 0 bps | 1000 bps executor reserve input |
+| Order policy | Explicit FOK | Explicit FOK |
+| Result | Matched, 5.00507 shares, 4.93 pUSD | Rejected for adapter allowance; no position |
+
+Earlier order ID:
+0x2281c95f6327ff2a2ab36b41f2aea672679d91c93e7ac6ac59259530d4cf55f2
+Settlement:
+0x8aef7d15b3063fd6aa9a2be2285e2774ed31dc43ed4f082f6ce99cb242a0479f
+A fresh Polygon RPC receipt read returned status 0x1 and destination
+0xe111180000d2663c0091e4f400237545b87b996b, confirming successful settlement
+through the standard V2 exchange. Historical tool output supplies the fill size
+and cost; this audit did not buy again to reproduce them.
+
+The original plugin source explains the behavioral difference: neg_risk=false
+checks only the exchange allowance. neg_risk=true also checks the old adapter,
+and the original code grouped DepositWallet with PolyProxy for approval repair.
+The September 3 success never exercised that missing-adapter repair branch.
+The recent patch removed the wrong legacy proxy repair, but its exchange-only
+readiness conclusion was incomplete for the observed negative-risk rejection.
+
+Conclusion: do not call this a general Polymarket, wallet migration, or V2
+signing outage. A known successful standard-market path exists. Current evidence
+narrows this failure to the negative-risk approval/routing path, plus separately
+observed Windows transport failures and fee reserve handling. The external
+provider/contract discrepancy remains unresolved; earlier standard-market
+success does not establish which spender is correct for this negative-risk buy.
+The existing exact-market incident guard stays in place. No support report was
+sent and no additional approval, research payment or trade was initiated.
