@@ -1124,3 +1124,17 @@ Changes are local pending deployment; no paid service, approval or order ran.
 Follow-up prompt: Review the fee breakdown and total spending limit before
 signing. PolyDesk builder fees remain zero. Actual fees require the settlement
 receipt; accepting research is separate from authorizing a trade.
+## Hosted fee preview verified (2026-09-10)
+
+Render deployment dep-dah95tgu01pc73ck90u0 is live at commit c1108b8.
+POST https://polydesk.trade/api/polymarket-open/prepare returned ok=true,
+readyForLocalSigning=true and no public readiness issues for the existing
+public deposit wallet and demonstrated market. Verified exact PolyDesk builder
+code, 4 pUSD maximum, 3.80 order notional, 0.19 market-fee reserve, zero builder
+reserve, 3.99 required balance and SDK balance cap 4. These are preview reserves,
+not a new fill or actual fee receipt. No signing, approval or order submission.
+VPS app advanced to c1108b8; active workspace AGENTS.md matched the committed
+instructions byte-for-byte and polydesk-a2a-daemon was active.
+Next buyer action: review a fresh preview before authorizing a trade. The
+remaining production audit still includes sell readiness and crash recovery;
+this hosted preview check does not establish unattended production acceptance.
