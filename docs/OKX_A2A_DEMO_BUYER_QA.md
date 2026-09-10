@@ -647,3 +647,40 @@ actual charged fee is claimed. Do not silently deposit funds or exceed $5.
 A smaller 14-share order at $0.31 costs $4.34; even using that 10% reserve,
 required collateral is $4.774. Prepare its dry-run and obtain approval for the
 revised preview before another live attempt. No private credentials recorded.
+
+## Revised $4 trade blocked by OKX connection
+
+The user revised the amount to "use 4 usdc". The operator interpreted this as
+an all-in $4 cap and preserved the $0.31 limit: 11 Yes shares, $3.41 order value,
+plus the plugin's $0.341 reserve, total $3.751. Dry-run succeeded. The live call
+selected DEPOSIT_WALLET mode and reported insufficient pUSD allowance for the
+Neg Risk CTF Exchange V2. Its automatic approval failed with NETWORK_UNREACHABLE
+and TLS BadRecordMac during OKX auth/refresh. One retry outside the sandbox failed
+with the same TLS error during pre-transaction/unsignedInfo. Neither returned
+an approval transaction hash, order ID or trade settlement receipt. Further
+live retries stopped. A fresh balance read still displayed $5.03 pUSD.
+This does not establish whether the network, TLS client or OKX endpoint caused
+the connection failure. The prior research job remains complete and settled;
+this is a separate trade-approval execution blocker. No extra funding requested.
+
+## Audit: fee-inclusive buyer readiness is incomplete
+
+Source audit after the blocked trade confirmed existing wallet ownership,
+deployment, pUSD balance and funding-shortfall checks. The native open-prepare
+path also checks the correct exchange allowance. However, smart-trader funding
+handoff passes amountUsdc directly as requiredBalanceUsdc, and account-readiness
+compares that supplied amount without calculating a fee reserve. Native
+open-prepare similarly compares balance/allowance against maxSpendUsdc, with no
+fee-inclusive calculation. It explicitly reports CLOB credentials and signature
+as unverified. Runtime instructions require wallet readiness and buyer limits
+but do not implement a reconciled fee-inclusive preflight.
+
+Therefore do not claim the full pre-confirmation flow is implemented. The plugin
+protected submission with balance/allowance guards, but its dry-run did not expose
+the 10% collateral reserve later used by buy. Required follow-up is a shared,
+fail-closed preflight for rounded order cost, live fees, executor reserve,
+fee-inclusive buyer cap and wallet balance, correct-spender allowance, and
+signer/relayer readiness. Estimates and actual fees must be distinguished.
+Read-only checks cannot guarantee a later network call will succeed. The latest
+position query returned zero positions and balance still displayed $5.03 pUSD.
+No code fix or deployment of this complete preflight is claimed in this audit.
