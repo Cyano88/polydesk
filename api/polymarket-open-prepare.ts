@@ -1,3 +1,4 @@
+import { polymarketRouteIssue } from './polymarket-route-incidents.js'
 import { createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { createPublicClient, formatUnits, getAddress, http, isAddress } from 'viem'
@@ -412,6 +413,8 @@ export async function preparePolymarketOpen(inputValue: unknown, dependencies: P
   }
   if (!resolvedResult.ok) return resolvedResult
   const resolved = resolvedResult.value
+  const routeIssue = polymarketRouteIssue(resolved.conditionId)
+  if (routeIssue) return { ok: false as const, status: 409, error: routeIssue + ': deprecated adapter requested by provider; current route must be verified before signing.' }
 
   const bookFetchStartedAt = dependencies.now()
   let book: OrderBook

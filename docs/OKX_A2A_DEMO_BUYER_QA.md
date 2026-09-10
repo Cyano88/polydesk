@@ -756,3 +756,48 @@ claim universal fee-aware execution across every PolyDesk path. A future live
 attempt needs a refreshed preflight because each result expires after 30 seconds.
 Demo follow-up: "Readiness checks passed. Review the exact trade preview before
 execution; after submission, check the order receipt and actual filled position."
+
+CORRECTION - live attempt, 2026-09-10 09:52 UTC: After the buyer explicitly
+said "Execute this preview", the first preflight blocked an old book. A single
+read-only recheck after one minute passed. The approved 11-share, 3.41 pUSD,
+0.31 FOK buy was submitted once through the patched plugin. CLOB rejected it
+with BUY_FAILED: allowance to Neg Risk Adapter
+0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296 was zero; required amount including
+fees was 3.527640 pUSD. This supersedes the earlier claim that adapter collateral
+allowance is unrelated. The exchange-only preflight and patch are incomplete
+for this actual market. Do not present their publicChecksPassed as executable
+readiness until the provider-required adapter allowance is handled correctly.
+No live retry or approval was attempted. Reconciliation returned zero open
+orders and displayed deposit-wallet balance $5.03. The default positions command
+reported a wallet-session error; do not delete credentials on that generic
+suggestion. The next repair must verify the supported deposit-wallet relayer
+approval route and exact spenders before any additional signing.
+
+Route audit continuation (2026-09-10): The current official contract registry at
+https://docs.polymarket.com/resources/contracts marks the exact spender named in
+the rejection as "Neg Risk Adapter (CLOB v1, deprecated)". It separately lists
+NegRiskCtfCollateralAdapter. These addresses must not be substituted or granted
+allowance just to satisfy an error. Historical approval examples are not proof
+of a current supported deposit-wallet route. The plugin V2 request and installed
+SDK both post to /order; no wrong-endpoint cause was established.
+
+Implemented an explicit incident block for the observed condition in public
+preflight, native open preparation and the patched local buy command. Issue:
+PROVIDER_ADAPTER_ROUTE_CONFLICT. It cannot be cleared by funding, granting the
+old adapter allowance, or retrying. Runtime guidance now requires provider-route
+verification. The earlier exchange-only readiness conclusion is superseded.
+72 combined preparation, smart-trader and preflight tests passed. No new approval
+or buy was attempted in this audit. Direct deposit-wallet reconciliation after
+the rejected order confirmed zero positions as well as zero open orders.
+
+Provider support draft (not sent): A V2 POLY_1271 FOK BUY for condition
+0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b
+was rejected for pUSD allowance to deprecated V1 adapter
+0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296. The V2 Neg Risk exchange allowance
+is sufficient. Please confirm the current supported collateral spender and why
+CLOB requests the deprecated adapter for this market. No credentials, signature
+or private wallet material should be included in any report.
+
+Buyer follow-up: "Trade remains blocked by a provider contract-route conflict.
+You can review the incident report or choose another market for analysis; no
+additional research payment or trade will be started by this notice."

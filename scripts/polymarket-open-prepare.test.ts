@@ -276,3 +276,17 @@ test('rejects a resting reward quote that would execute immediately', async () =
     assert.match(result.error, /stay below the current sell price/i)
   }
 })
+
+
+test('blocks the known adapter-route incident before native wallet checks or signing plans', async () => {
+ const blocked = '0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b'
+ let walletRead = false
+ const payload = event(); payload.markets[0].conditionId = blocked
+ const result = await preparePolymarketOpen(input(), dependencies({
+  fetchJson: async url => url.includes('/events/slug/') ? payload : book('111', { market: blocked }),
+  readWallet: async () => { walletRead = true; throw new Error('must not read wallet') },
+ }))
+ assert.equal(result.ok, false)
+ if (!result.ok) assert.match(result.error, /PROVIDER_ADAPTER_ROUTE_CONFLICT/)
+ assert.equal(walletRead, false)
+})

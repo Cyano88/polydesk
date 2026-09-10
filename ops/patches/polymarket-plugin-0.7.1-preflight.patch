@@ -11,7 +11,18 @@
  
  /// Run the buy command.
  ///
-@@ -352,6 +356,9 @@
+@@ -259,6 +263,10 @@
+     }
+     let tick_scale = (1.0 / tick_size).round() as u128;
+     let price_ticks = (limit_price / tick_size).round() as u128;
++    if condition_id.eq_ignore_ascii_case("0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b") {
++        bail!("PROVIDER_ADAPTER_ROUTE_CONFLICT: CLOB requested the deprecated V1 adapter for this V2 market. No approval, signing or order attempted. Verify the provider route before retrying.");
++    }
++
+     const SHARE_RAW: u128 = 1_000_000; // 1 whole share in raw units (6 decimal places)
+     // Minimum k such that price_ticks × (k × SHARE_RAW) is divisible by tick_scale.
+     // = tick_scale / gcd(price_ticks × SHARE_RAW, tick_scale)
+@@ -352,6 +360,9 @@
                  "usdc_requested": usdc_amount,
                  "shares": taker_amount_raw as f64 / 1_000_000.0,
                  "fee_rate_bps": fee_rate_bps,
@@ -21,7 +32,7 @@
                  "post_only": post_only,
                  "expires": if expiration > 0 { serde_json::Value::Number(expiration.into()) } else { serde_json::Value::Null },
                  "clob_version": dry_version_label,
-@@ -381,6 +388,7 @@
+@@ -381,6 +392,7 @@
      let effective_mode = match mode_override {
          Some("proxy") => TradingMode::PolyProxy,
          Some("eoa")   => TradingMode::Eoa,
@@ -29,7 +40,7 @@
          _             => creds.mode.clone(),
      };
  
-@@ -436,7 +444,7 @@
+@@ -436,7 +448,7 @@
  
              // V2 server deducts order_amount + fee from pUSD at submission time.
              // Compute required pUSD including fee (ceiling division to avoid rounding short).
@@ -38,7 +49,7 @@
              let total_needed = usdc_needed_raw + fee_buffer as u64;
  
              // Pre-flight POL gas check (POLY_PROXY only):
-@@ -663,7 +671,17 @@
+@@ -663,7 +675,17 @@
              crate::onchainos::wait_for_tx_receipt(&tx_hash, approve_timeout_secs()).await?;
              eprintln!("[polymarket] Approval confirmed.");
          }
@@ -57,7 +68,7 @@
          // POLY_PROXY + V2: query pUSD allowance on-chain (not via CLOB API).
          // The CLOB /balance-allowance endpoint hard-codes signature_type=0, which scopes
          // the lookup to the EOA address — but the V2 pUSD approvals live on the proxy
-@@ -1140,3 +1158,15 @@
+@@ -1140,3 +1162,15 @@
          assert_eq!(t, 90, "invalid env var value should fall back to default 90s");
      }
  }

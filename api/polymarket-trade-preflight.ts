@@ -1,3 +1,4 @@
+import { polymarketRouteIssue } from './polymarket-route-incidents.js'
 import type { Request, Response } from 'express'
 import { createPublicClient, formatUnits, getAddress, http, parseUnits } from 'viem'
 import { polygon } from 'viem/chains'
@@ -72,6 +73,8 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
   const state = wallet.deployed ? await deps.readWallet(wallet.depositWalletAddress as `0x${string}`, spender) : { balance: 0n, allowance: 0n }
   const required = parseUnits(budget.requiredBalance, 6)
   const issues: string[] = []
+  const routeIssue = polymarketRouteIssue(String(market.conditionId))
+  if (routeIssue) issues.push(routeIssue)
   if (deps.now() - timestamp > 60_000) issues.push('STALE_ORDER_BOOK')
   if (!wallet.deployed) issues.push('DEPOSIT_WALLET_NOT_DEPLOYED')
   if (state.balance < required) issues.push('INSUFFICIENT_COLLATERAL_INCLUDING_RESERVE')
@@ -87,7 +90,8 @@ export async function preflightPolymarketTrade(input: RecordValue, deps = defaul
     balance: formatUnits(state.balance, 6), allowance: formatUnits(state.allowance, 6), spender,
     shortfall: formatUnits(required > state.balance ? required - state.balance : 0n, 6),
     marketSlug: slug, orderType, postOnly, conditionId: market.conditionId, tokenId: token, outcome: matches[0].label, ...budget,
-    approvalRoute: 'deposit-wallet-relayer', legacyProxyApprovalAllowed: false,
+    approvalRoute: routeIssue ? 'provider-review-required' : 'deposit-wallet-relayer',
+    routeConflict: routeIssue ? 'CLOB demanded collateral allowance to the deprecated V1 adapter. Do not approve or retry until the current route is verified.' : null, legacyProxyApprovalAllowed: false,
     authenticationVerified: false, signingVerified: false, orderAuthorized: false,
     previewArgs: ['buy', '--market-id', slug, '--outcome', String(matches[0].label), '--amount', budget.orderAmount, '--price', price, '--order-type', orderType, ...(postOnly ? ['--post-only'] : []), '--dry-run'],
     note: 'Read-only collateral and market checks. Verify local authentication, access and signing readiness before confirmation. No signing, wrapping, approval or order was performed.' }

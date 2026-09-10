@@ -1190,7 +1190,7 @@ function executionHandoff(
         outcome: selected.outcome.label, maxTotalUsdc: input.amountUsdc, orderType: input.orderType, postOnly: input.postOnly,
         limitPrice: input.limitPrice ?? 'Resolve a current limit and show it to the buyer.' },
       require: 'publicChecksPassed=true; use returned rounded orderAmount and requiredBalance, never the original unadjusted amount. Refresh within 30 seconds before signing.',
-      approvalBoundary: 'Deposit wallets use deposit-wallet relayer approvals. Never use the legacy proxy factory or require pUSD approval to the Neg Risk Adapter.',
+      approvalBoundary: 'Deposit wallets use deposit-wallet relayer approvals. Never use the legacy proxy factory. A request for deprecated adapter approval requires provider-route review; do not auto-approve or retry.',
       localChecks: ['Verify region access, active signer authentication and configured wallet mode.', 'Stop on TLS, unknown allowance or signing errors; do not loop live retries.'],
     } : null,
     requiredGates: [

@@ -5,9 +5,10 @@ This is a local audited patch, not an upstream release. Keep the original binary
 
 Changes:
 - Show the same V2 collateral reserve in dry-run that live balance validation uses.
-- Deposit-wallet buys check pUSD allowance to the selected V2 exchange only.
-  They never call the legacy proxy factory or require pUSD allowance to the
-  Neg Risk Adapter. RPC errors fail closed; real missing approvals require the
+- Deposit-wallet buys check pUSD allowance to the selected V2 exchange.
+  The observed United market is blocked before signing because CLOB demands
+  the deprecated V1 adapter; this conflict is unresolved.
+  They never call the legacy proxy factory or automatically grant adapter allowance. RPC errors fail closed; real missing approvals require the
   supported deposit-wallet setup/relayer flow, with its own preview.
 - Honor the deposit-wallet mode override.
 - Optional POLYMARKET_CONFIG_DIR selects an existing credential directory, so

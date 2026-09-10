@@ -57,3 +57,15 @@ test('preserves order policy and blocks crossing post-only or insufficient FOK d
  assert.ok(result.issues.includes('INSUFFICIENT_DEPTH_AT_LIMIT'))
  await assert.rejects(preflightPolymarketTrade({ ...input, orderType: 'GTD' }, deps()))
 })
+
+
+test('blocks the observed deprecated-adapter route even with ample funds and exchange approval', async () => {
+ const d = deps(), original = d.fetchJson
+ const blocked = '0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b'
+ d.fetchJson = async url => { const value = await original(url); if (url.includes('gamma-api')) value.conditionId = blocked; if (url.includes('/book?')) value.market = blocked; return value }
+ const result = await preflightPolymarketTrade(input, d)
+ assert.equal(result.publicChecksPassed, false)
+ assert.ok(result.issues.includes('PROVIDER_ADAPTER_ROUTE_CONFLICT'))
+ assert.equal(result.approvalRoute, 'provider-review-required')
+ assert.equal(result.shortfall, '0')
+})
