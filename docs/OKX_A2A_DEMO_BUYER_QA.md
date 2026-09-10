@@ -933,3 +933,27 @@ permission does not authorize MaxUint256 or a different funding/signing route.
 The relayer's unlimited requirement is materially different from the buyer's
 bounded approval; it needs its own concrete preview and explicit consent if
 chosen. No support report was sent.
+
+## Unlimited-allowance assessment (2026-09-10)
+
+Assessed only; no broader permission granted. Proposed scope would be one
+pUSD ERC-20 approve(MaxUint256) for the existing deposit wallet to
+0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296. This grants token spending permission
+to that contract, not a fee payment, wallet ownership, private keys, or blanket
+access to other tokens. Permission has no expiry and is not limited to the
+current 3.41 pUSD order or $4 cap; it could cover future pUSD deposits. Actual
+use depends on the spender contract's callable logic; this is not a claim that
+any arbitrary caller can withdraw funds. Trade authorization and order/preflight
+limits remain separate application controls, not restrictions on the allowance.
+
+ERC-20 defines resetting allowance via approve(spender, 0). However, this
+specific relayer rejected a non-MaxUint256 amount. Revocation through the same
+WALLET route is NOT verified, so do not promise an automatic post-trade revoke
+or a temporary permission. A different route would require its own audit and
+could have gas/permission requirements. Do not broadcast a revocation probe
+merely to test policy. Source: https://eips.ethereum.org/EIPS/eip-20
+
+Fresh authenticated check still returned balance 5.02501 pUSD and zero adapter
+allowance. Unlimited approval might clear the observed allowance rejection but
+has not been proven to result in a successful order. The previous approval
+consent covered only 3.751 pUSD and does not authorize this expanded permission.
