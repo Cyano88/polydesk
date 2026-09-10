@@ -87,3 +87,5 @@ PolyDesk's research, payment and Polymarket service flows existed before this me
 - Repeatable no-spend regression rehearsal: `node scripts/sibyl-demo-rehearsal.mjs`. Synthetic trade fixtures use the real SDK in isolated storage; they are labelled separately from the live receipts.
 
 The live buyer-local route is verified. Hosted governed receipt-memory acceptance and the continuous video recording remain separate work. No open-source license file is currently tracked; licensing must be settled before claiming a licensed hackathon submission.
+
+The supported buyer launcher now requires [memory-dependent position reconciliation](docs/MEMORY_DEPENDENT_BUYER_FLOW_20260910.md) before every live order. Remembered BUY/SELL quantities determine whether continuation is possible; missing memory or a live-position mismatch blocks it. Extra buys into existing exposure need exact review. This is the claimed memory-dependent function; raw Polymarket trading remains independently possible outside this orchestration path.

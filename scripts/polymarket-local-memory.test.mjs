@@ -36,15 +36,15 @@ test('real SDK capture and separate Node process recall with synthetic finalized
  assert.equal(JSON.parse(readFileSync(claim.record)).state,'SUBMITTED')
  await captureLocalExecution(dir,b.executionId,runBridge,async()=>fixture().deps)
  await captureLocalExecution(dir,b.executionId,runBridge,async()=>fixture().deps)
- const code="import {reviewLocalMemory} from './scripts/polymarket-local-memory.mjs'; console.log(JSON.stringify(await reviewLocalMemory(process.argv[1],process.argv[2],process.argv[3])))"
+ const code="import {reviewLocalMemory} from './scripts/polymarket-local-memory.mjs'; const memory=await reviewLocalMemory(process.argv[1],process.argv[2],process.argv[3]); const {evaluateContinuation}=await import('./scripts/polymarket-memory-continuation.mjs'); const gate=await evaluateContinuation({side:'SELL',quantity:'10',price:'0.31',marketSlug:'fixture',outcome:'Yes',orderType:'FOK'},{owner:process.argv[2],wallet:'0x'+'11'.repeat(20),tokenId:process.argv[3]},{review:async()=>memory,position:async()=>10000000n}); console.log(JSON.stringify({...memory,gate}))"
  const child=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:process.env,windowsHide:true,timeout:45000})
- assert.equal(child.status,0,child.stderr);const r=JSON.parse(child.stdout);assert.equal(r.state,'LOCAL_MEMORY_RECONCILIATION_REQUIRED');assert.equal(r.source,'SIBYL_LOCAL_FINALIZED_FILLS');assert.equal(r.signingAuthorized,false)
+ assert.equal(child.status,0,child.stderr);const r=JSON.parse(child.stdout);assert.equal(r.state,'LOCAL_MEMORY_RECONCILIATION_REQUIRED');assert.equal(r.source,'SIBYL_LOCAL_FINALIZED_FILLS');assert.equal(r.signingAuthorized,false);assert.equal(r.gate.memoryGatePassed,true)
  const missing=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:{...process.env,POLYDESK_LOCAL_MEMORY_ROOT:process.env.POLYDESK_LOCAL_MEMORY_ROOT+'/missing-test-store'},windowsHide:true,timeout:45000})
  assert.notEqual(missing.status,0,'Missing expected memory must not become an empty-history success')
  const restored=spawnSync(process.execPath,['--input-type=module','-e',code,dir,b.owner,'111'],{encoding:'utf8',env:process.env,windowsHide:true,timeout:45000})
  assert.equal(restored.status,0,restored.stderr)
  assert.equal(JSON.parse(restored.stdout).state,'LOCAL_MEMORY_RECONCILIATION_REQUIRED')
- console.log(JSON.stringify({syntheticOnly:true,realSdk:true,freshNodeProcess:true,memoryOnlyRetryVerified:true,duplicateCaptureVerified:true,missingMemoryBlocks:true,restoredMemoryRecalls:true,decision:r.state,orderSubmitted:false}))
+ console.log(JSON.stringify({syntheticOnly:true,realSdk:true,freshNodeProcess:true,memoryOnlyRetryVerified:true,duplicateCaptureVerified:true,missingMemoryBlocks:true,restoredMemoryRecalls:true,decision:r.state,continuationGate:r.gate.state,continuationPassed:r.gate.memoryGatePassed,orderSubmitted:false}))
 })
 
 test('conflicting verified fee cannot overwrite a captured projection',async t=>{

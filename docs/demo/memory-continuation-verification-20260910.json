@@ -1,0 +1,22 @@
+﻿{
+    "schema":  "polydesk-memory-continuation-verification-v1",
+    "recordedAt":  "2026-09-10T20:46:56.8015313Z",
+    "liveReadOnlyCheck":  {
+                              "state":  "MEMORY_RECONCILED_CLOSED",
+                              "memoryGatePassed":  true,
+                              "rememberedNetRaw":  "0",
+                              "positionRaw":  "0",
+                              "matchingExecutionIds":  [
+                                                           "buyer:sybil-live:20260910:mun-sell-10-030",
+                                                           "buyer:sybil-live:20260910:mun-10-031"
+                                                       ],
+                              "signingAuthorized":  false,
+                              "orderSubmitted":  false
+                          },
+    "rehearsalTests":  101,
+    "passed":  101,
+    "skipped":  0,
+    "scope":  "Supported buyer launcher; not wallet-level enforcement or raw upstream binary restriction",
+    "productionMemoryDeleted":  false,
+    "newTradeSubmitted":  false
+}

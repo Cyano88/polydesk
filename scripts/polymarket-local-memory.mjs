@@ -77,8 +77,11 @@ export async function reviewLocalMemory(directory,owner,tokenId,bridge=runBridge
  requireThat(response?.ok===true&&response.records?.length===manifests.length,'Sibyl inventory unavailable')
  response.records.forEach((r,i)=>requireThat(JSON.stringify(r)===JSON.stringify(manifests[i].projection),'Sibyl content mismatch'))
  const matches=response.records.filter(r=>r.tokenId===tokenId)
+ const bought=matches.filter(r=>r.side==='BUY').reduce((n,r)=>n+BigInt(r.matchedSharesRaw),0n)
+ const sold=matches.filter(r=>r.side==='SELL').reduce((n,r)=>n+BigInt(r.matchedSharesRaw),0n)
  return {ok:true,state:matches.length?'LOCAL_MEMORY_RECONCILIATION_REQUIRED':'LOCAL_HISTORY_REVIEWED_NOT_AUTHORIZED',
   source:'SIBYL_LOCAL_FINALIZED_FILLS',historyComplete:false,matchingExecutionIds:matches.map(r=>r.executionId),
+  rememberedBoughtRaw:bought.toString(),rememberedSoldRaw:sold.toString(),rememberedNetRaw:(bought-sold).toString(),
   nextAction:matches.length?'REVIEW_PRIOR_BUYS_AND_SELLS_AND_REFRESH_POSITION':'REQUIRE_FRESH_RESEARCH_AND_ACCOUNT_CHECKS',
   governedAuthorityVerified:false,signingAuthorized:false,paymentAuthorized:false,currentPositionVerified:false,orderSubmitted:false}
 }

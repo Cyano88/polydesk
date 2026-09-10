@@ -16,7 +16,7 @@ The native bridge uses existing Sibyl 0.8.0 and a separate private local root. L
 
 Use scripts/polymarket-wsl.ps1 -CaptureMemory -MemoryExecutionId <existing-id> for capture only. Use -ReviewMemory -MemoryOwner <local-owner> -MemoryToken <exact-token> in a new session. These are local operator commands using the local credential/OS boundary; they are not remote APIs or a replacement for owner-signed hosted recall. The provider must ask the buyer host to run them rather than importing buyer secrets.
 
-A matching token returns LOCAL_MEMORY_RECONCILIATION_REQUIRED and asks to review prior buys/sells and refresh positions. Recall alone never permits signing. The launcher automatically attempts capture; the conversation must invoke the explicit review command before using memory to guide a new preview. This release does not enforce a memory acknowledgement in every possible direct executor invocation.
+A matching token returns LOCAL_MEMORY_RECONCILIATION_REQUIRED and asks to review prior buys/sells and refresh positions. Recall alone never permits signing. The launcher automatically attempts capture; the conversation must invoke the explicit review command before using memory to guide a new preview. The supported launcher now requires Sibyl/live-position reconciliation before every live order, with an exact exposure-review digest for additional buys into an open position. See MEMORY_DEPENDENT_BUYER_FLOW_20260910.md. Direct upstream binaries remain outside this orchestration boundary.
 
 ## Validation and remaining proof
 

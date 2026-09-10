@@ -1,8 +1,13 @@
-param([switch]$Recover,[switch]$ReviewMemory,[switch]$CaptureMemory,[string]$MemoryExecutionId,[string]$MemoryOwner,[string]$MemoryToken,[Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
+param([string]$MemoryReviewDigest,[switch]$CheckMemoryContinuation,[switch]$Recover,[switch]$ReviewMemory,[switch]$CaptureMemory,[string]$MemoryExecutionId,[string]$MemoryOwner,[string]$MemoryToken,[Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
 $taskOwnerRoot = [Environment]::GetFolderPath('UserProfile')
 $taskLedger = Join-Path $taskOwnerRoot '.config\polymarket\polydesk-executions'
 if (!$env:POLYDESK_LOCAL_MEMORY_PYTHON) { $env:POLYDESK_LOCAL_MEMORY_PYTHON = '/root/polydesk-buyer-candidate.hXrameVt/runtime/bin/python' }
 if (!$env:POLYDESK_LOCAL_MEMORY_ROOT) { $env:POLYDESK_LOCAL_MEMORY_ROOT = '/root/.local/share/polydesk-local-finalized-memory' }
+if ($CheckMemoryContinuation) {
+  $taskAck = if ($MemoryReviewDigest) { $MemoryReviewDigest } else { 'none' }
+  & node (Join-Path $PSScriptRoot 'polymarket-memory-continuation.mjs') $taskLedger $taskAck @PluginArgs
+  exit $LASTEXITCODE
+}
 if ($CaptureMemory) {
   & node (Join-Path $PSScriptRoot 'polymarket-local-memory.mjs') capture $taskLedger $MemoryExecutionId
   exit $LASTEXITCODE
@@ -44,6 +49,9 @@ if ($taskLiveOrder) {
   }
   $taskLedger = Join-Path $taskOwnerRoot '.config\polymarket\polydesk-executions'
   if (!$env:POLYDESK_EXECUTION_ID) { throw 'Set POLYDESK_EXECUTION_ID to the stable buyer-authorized order ID. Never generate a new ID to retry an uncertain order.' }
+  $taskAck = if ($MemoryReviewDigest) { $MemoryReviewDigest } else { 'none' }
+  & node (Join-Path $PSScriptRoot 'polymarket-memory-continuation.mjs') $taskLedger $taskAck @PluginArgs
+  if ($LASTEXITCODE -ne 0) { throw 'Required Sibyl and live-position reconciliation failed; no order attempted.' }
   if ($PluginArgs[0] -eq 'sell') {
     $taskAllowedFlags = @('--market-id','--outcome','--shares','--price','--order-type','--strategy-id','--autotrade-job')
     foreach ($taskArg in $PluginArgs) { if ($taskArg.StartsWith('--') -and $taskArg -notin $taskAllowedFlags) { throw 'Unsupported or overriding flag in guarded sell; no order attempted.' } }

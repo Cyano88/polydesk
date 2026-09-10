@@ -1,6 +1,6 @@
 # Sibyl demo runbook and tested flows
 
-Release rehearsal September 10, 2026: 93 passed, 0 failed, 0 skipped. Machine evidence: sibyl-rehearsal-20260910.json; full output: sibyl-rehearsal-20260910.log. Run again for recording with node scripts/sibyl-demo-rehearsal.mjs from the release checkout. Requires Windows/WSL and the existing pinned Sibyl 0.8.0 runtime; POLYDESK_TEST_SIBYL_PYTHON can select an explicitly installed equivalent runtime.
+Release rehearsal September 10, 2026: 101 passed, 0 failed, 0 skipped. Machine evidence: sibyl-rehearsal-20260910.json; full output: sibyl-rehearsal-20260910.log. Run again for recording with node scripts/sibyl-demo-rehearsal.mjs from the release checkout. Requires Windows/WSL and the existing pinned Sibyl 0.8.0 runtime; POLYDESK_TEST_SIBYL_PYTHON can select an explicitly installed equivalent runtime.
 
 ## Recording sequence
 
@@ -77,3 +77,5 @@ Buyer approved: Sell these 10 shares at minimum 0.30. Fresh sell preflight passe
 The corrected response parser recorded submission normally. Initial automatic capture returned LOCAL_MEMORY_REVIEW_REQUIRED; no detailed cause was exposed. Memory-only retry verified the finalized sell and returned LOCAL_FILL_MEMORY_VERIFIED without replaying the trade. A fresh process recalled both the BUY and SELL execution IDs; an independent live position query returned zero open positions. This shows why memory must review sells alongside buys and cannot alone claim current holdings.
 
 Evidence: demo/manchester-united-live-sell-20260910.json. Local live buy-to-sell-to-memory flow verified; hosted governed acceptance and the actual continuous demo recording remain separate. Buyer follow-ups: Show receipt; Review remembered fills; Analyze another market. Any new trade requires a fresh preview and buyer approval.
+
+Mandatory continuation update: the supported live launcher now requires Sibyl recall and a matching fresh Polygon position before submission. Show -CheckMemoryContinuation returning MEMORY_RECONCILED_CLOSED from the live BUY and SELL history. Use the isolated rehearsal for deletion/restoration tests; never delete production memory. See ../MEMORY_DEPENDENT_BUYER_FLOW_20260910.md. Earlier statements that launcher review was optional describe the previous release.
