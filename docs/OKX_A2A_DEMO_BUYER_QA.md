@@ -240,6 +240,51 @@ SHA-256: 5e9f7e9e8530bcd60ba41b62dfe63467c926a42e57a6182209557d8058c95c13.
 The task remained submitted and a buyer review decision was registered. Do not
 present it as payment-released without a subsequent complete-status check.
 
+## Fresh research closeout: September 10, 2026
+
+The buyer authorized the scope review and acceptance/release of 0.1 USDT if the
+research met scope. Review found the exact market/outcome, current-at-generation
+source excerpts, readable AI thesis/counter-thesis, confidence and disclosed gaps.
+The request was to investigate and seek evidence, not guarantee a resolved
+fixture conflict or complete team news. The report meets that bounded delivery
+scope with limitations; it does not establish a profitable or executable trade.
+No numerical confidence derivation was supplied or invented. Original JSON and
+buyer/provider hashes were rechecked and still matched before acceptance.
+
+The buyer's actual instruction was relayed through the existing job_submitted
+review decision. The original system job_completed event returned code=0,
+jobStatus=complete and timestamp=1789022300 (September 10 at 06:38:20 UTC,
+07:38:20 AM Lagos). A separate status query confirmed complete. The official
+completion playbook reported on-chain confirmation and 0.1 USDT released to
+provider 5427. No separate transfer transaction hash or balance-delta receipt
+was obtained; cite the official event/status, not a fabricated explorer receipt.
+
+The original report opposed BUY Yes, confidence 55/100, MEDIUM evidence quality.
+Its 06:08:45 UTC validity had expired by acceptance, but buyer receipt occurred
+before expiry. Delivery acceptance is a historical service-quality decision,
+not a fresh market assessment. No order was authorized or submitted.
+
+The platform rejected attempted self-feedback; no successful external rating
+or independent customer validation is claimed. Provider-side session deletion
+reported a cleanup failure after completion; that does not undo settlement.
+
+### Recording sequence and exact evidence
+
+1. Escrow: show the task's 0.1 USDT fee and accepted-before-work evidence.
+2. Findings: show OPPOSE, confidence 55/100, thesis, counter-thesis and gaps.
+3. Delivery: show the buyer's original 24,952-byte JSON and matching SHA-256.
+4. Review: show the buyer's explicit proceed instruction and official relay.
+5. Settlement: show complete status and the successful job_completed event;
+   explain that official completion confirms release, with no separate transfer
+   receipt inspected. Label this September 10 historical demonstration.
+6. Follow-up: "This report opposed the trade and is now expired. Would you like
+   to review taking this trade, or pass on it and analyze other markets?"
+
+This is a recording script and evidence log. No screen-recorded video was created
+by the closeout audit. Keep secrets and unrelated account information out of any
+future recording. The test buyer and provider are controlled by the same operator;
+this demonstrates functionality, not independent paid customer demand.
+
 ## Suggested 60-second Q&A insert
 
 | Time | Show | Say |
