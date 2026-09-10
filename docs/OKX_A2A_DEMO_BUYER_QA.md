@@ -156,9 +156,11 @@ in this walkthrough. Report prices and validity windows are historical.
 
 Fresh review job:
 0x0864de5bdc64d53be480f870306d79c7cbc657dbe0f9e791effaaf7b06762745.
-At its last check in this conversation it was submitted with a 24,952-byte
-provider JSON; buyer saving was still pending. Do not present it as another
-completed run without a new status and receipt check.
+The buyer saved the 24,952-byte original JSON at 05:58:41 UTC, before its
+06:08:45 UTC expiry. Byte-for-byte comparison and task/market validation passed;
+SHA-256: 5e9f7e9e8530bcd60ba41b62dfe63467c926a42e57a6182209557d8058c95c13.
+The task remained submitted and a buyer review decision was registered. Do not
+present it as payment-released without a subsequent complete-status check.
 
 ## Suggested 60-second Q&A insert
 
