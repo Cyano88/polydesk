@@ -65,6 +65,8 @@ test('actual A2A research JSON survives file delivery with resolvable handoff pa
         (r: any) => { delete r.evidence },
         (r: any) => { r.agentHandoff.evidencePath = '$.missing' },
         (r: any) => { r.agentHandoff.market.tokenId = '999' },
+        (r: any) => { r.selected.market.conditionId = r.agentHandoff.market.conditionId = '0x' + '99'.repeat(32) },
+        (r: any) => { r.selected.outcome.label = r.agentHandoff.market.outcome = 'No' },
         (r: any) => { r.agentHandoff.state = 'PREPARE_AVAILABLE' },
         (r: any) => { r.agentHandoff.automaticResearchRetry = true },
         (r: any) => { r.orderAuthorized = true },
@@ -78,6 +80,14 @@ test('actual A2A research JSON survives file delivery with resolvable handoff pa
         assert.throws(() => serializeResearchDeliverable(changed, request), /Invalid research deliverable/)
       }
       assert.throws(() => serializeResearchDeliverable({ data: raw }, request), /Invalid research deliverable/)
+      for (const marketId of [raw.selected.market.eventSlug, raw.selected.market.marketSlug, raw.selected.market.url,
+        raw.selected.market.url + '/' + raw.selected.market.marketSlug, raw.selected.market.url + '/?source=fixture']) {
+        assert.deepEqual(JSON.parse(serializeResearchDeliverable(raw, { ...request, research: { ...research, marketId } })), raw)
+      }
+      for (const marketId of ['unrelated-market', 'https://polymarket.com/event/unrelated-market', 'https://example.com/event/' + raw.selected.market.eventSlug,
+        raw.selected.market.url + '/unrelated-child', raw.selected.market.url.replace('https:', 'http:')]) {
+        assert.throws(() => serializeResearchDeliverable(raw, { ...request, research: { ...research, marketId } }), /Invalid research deliverable/)
+      }
     }
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

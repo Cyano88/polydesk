@@ -98,3 +98,36 @@ a verification blocker, not become a capability rejection or automatic approval.
 This is a local instruction mitigation, not a fix to the upstream CLI renderer;
 unattended compliance and the original JSON delivery remain unverified. No task
 reassignment, new test purchase, or refund/payment claim was made in this audit.
+
+## Recovery audit and continuation
+
+After the workstation shutdown, live read-only checks confirmed VPS commit
+2edf04e, matching workspace/runtime instructions, and an active daemon using
+/opt/polydesk-a2a/workspace. Runtime versions were onchainos 4.5.3 and
+okx-a2a 0.2.11. No inbound event was replayed to test a state transition.
+
+The JSON export audit reproduced a validation gap: changing both the selected
+market and handoff condition ID together passed the old validator. The same
+internal-consistency gap applied to outcome labels. Export now independently
+compares the selection against the request's condition ID, event/market slug or
+Polymarket event URL, and the requested outcome. Child-market URL paths must
+match the selected child. Report contents and historical timestamps are preserved.
+
+Regression coverage includes AVAILABLE and UNAVAILABLE engine reports, coordinated
+wrong-market/outcome changes, supported references, unrelated references, and
+wrong URL origins/children. The regression failed before the fix and passed after;
+all 77 research/worker/smart-trader tests and TypeScript checking passed. The
+additional URL variants also passed a subsequent focused regression run.
+
+Runtime instructions now explicitly identify saved-context verification as a
+read-only exception to script-only routing. If no notification path exists,
+the runtime must record an operator blocker and stop without inventing commands.
+This removes an instruction ambiguity; it is not deterministic enforcement or
+proof of unattended compliance. Export checks likewise do not independently
+verify task acceptance, market-provider truth, or archived evidence integrity.
+
+Remaining live gate: a genuinely accepted task must show saved-description
+verification when loader text appears, followed by original validated JSON
+delivery and buyer-side file/identifier/path/validity checks. The expired task
+cannot establish this. No new paid test or execution was initiated during this
+continuation. A future paid test requires separate authorization.

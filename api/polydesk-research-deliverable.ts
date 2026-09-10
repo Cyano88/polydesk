@@ -4,6 +4,20 @@ type Json = Record<string, any>
 const object = (v: unknown): v is Json => Boolean(v && typeof v === 'object' && !Array.isArray(v))
 const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
+function matchesRequestedMarket(value: unknown, market: Json): boolean {
+  if (!nonempty(value)) return false
+  const reference = value.trim()
+  if (/^0x[a-fA-F0-9]{64}$/.test(reference)) return reference.toLowerCase() === market.conditionId.toLowerCase()
+  if (!reference.includes('://')) return [market.eventSlug, market.marketSlug].includes(reference)
+  try {
+    const url = new URL(reference)
+    if (url.protocol !== 'https:' || !/^(www\.)?polymarket\.com$/i.test(url.hostname) || url.username || url.password || url.port) return false
+    const parts = url.pathname.replace(/\/$/, '').split('/').slice(1).map(decodeURIComponent)
+    return parts[0] === 'event' && parts[1] === market.eventSlug
+      && (parts.length === 2 || (parts.length === 3 && parts[2] === market.marketSlug))
+  } catch { return false }
+}
+
 // Keep the actual response at the JSON root so its handoff paths resolve.
 export function serializeResearchDeliverable(raw: unknown, request: { jobId: unknown; buyerAgentId: unknown; research: unknown }): string {
   const fail = (): never => { throw new Error('Invalid research deliverable; reconcile the saved task without rerunning research.') }
@@ -34,6 +48,11 @@ export function serializeResearchDeliverable(raw: unknown, request: { jobId: unk
     || h.market.outcome !== selected.outcome.label || h.market.url !== selected.market.url
     || h.market.marketSlug !== selected.market.marketSlug || h.market.side !== request.research.side) return fail()
   const researchOnly = !Object.prototype.hasOwnProperty.call(request.research, 'mandate')
+  // Internal agreement is insufficient: a consistently wrong selection must
+  // not escape under the original task's identifiers.
+  if (!matchesRequestedMarket(request.research.marketId, selected.market)
+    || !nonempty(request.research.outcome)
+    || selected.outcome.label.trim().toLowerCase() !== request.research.outcome.trim().toLowerCase()) return fail()
   if (raw.researchOnly !== researchOnly || (researchOnly && raw.screeningMandate !== null)) return fail()
   if (raw.researchStatus === 'AVAILABLE') {
     const proof = raw.evidence.zeroScout?.proof
