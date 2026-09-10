@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import { dirname, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { runResearchOperator } from '../api/polydesk-a2a-research-operator.js'
+import { writeResearchDeliverable } from '../api/polydesk-research-deliverable.js'
 import {
   runA2aTradingWorker,
   validateA2aWorkerRequest,
@@ -203,7 +204,13 @@ const raw = parseJson(await readFile(resolve(requestPath), 'utf8'), 'Worker requ
 if (raw?.action === 'RESEARCH' || raw?.action === 'RESEARCH_PREPARE') {
   // This branch never invokes grant/sign/deliver commands or the copy worker.
   try {
+    const reportIndex = args.indexOf('--report-out')
+    const reportPath = reportIndex >= 0 ? args[reportIndex + 1] : undefined
+    if (raw.action === 'RESEARCH' && !dryRun && (!reportPath || reportPath.startsWith('--') || existsSync(resolve(reportPath)))) {
+      fail('RESEARCH execute requires --report-out <new-report.json>; existing files are never overwritten. No research started.')
+    }
     const result = await runResearchOperator(raw, { execute: !dryRun, operatorKey, url: baseUrl })
+    if (raw.action === 'RESEARCH' && !dryRun) await writeResearchDeliverable(resolve(reportPath!), result, raw)
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   } catch {
     process.stderr.write('Research operator failed. Reconcile the same task; no automatic payment, execution or retry was performed.\n')

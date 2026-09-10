@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { serializeResearchDeliverable, writeResearchDeliverable } from '../api/polydesk-research-deliverable.js'
 import { prepareResearchedPolymarketTrade } from '../api/polymarket-researched-prepare.js'
 import { preparePolymarketOpen } from '../api/polymarket-open-prepare.js'
 import {
@@ -27,6 +31,56 @@ import {
 } from '../api/polymarket-smart-trader.js'
 
 const now = Date.parse('2026-09-01T10:00:00.000Z')
+
+test('actual A2A research JSON survives file delivery with resolvable handoff paths', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'polydesk-json-report-'))
+  try {
+    for (const outage of [false, true]) {
+      const research = { marketId: conditionId, outcome: 'Yes', side: 'BUY' }
+      const base = dependencies()
+      const result = await runPolymarketTaskResearch(research, dependencies({ research: async context => {
+        if (outage) throw new Error('fixture outage')
+        return { ...await base.research(context), proof: { storageRoot: '0x' + 'ab'.repeat(32), contentHash: '0x' + 'cd'.repeat(32) } }
+      } }))
+      assert.equal(result.ok, true)
+      if (!result.ok) continue
+      const request = { jobId: '0x' + 'ef'.repeat(32), buyerAgentId: '5579', research }
+      const raw = { ok: true, ...result.data, jobId: request.jobId, buyerAgentId: request.buyerAgentId, reportId: 'pdar_' + '12'.repeat(32) }
+      const json = serializeResearchDeliverable(raw, request)
+      assert.deepEqual(JSON.parse(json), raw)
+      const parsed = JSON.parse(json)
+      assert.deepEqual(parsed[parsed.agentHandoff.evidencePath.slice(2)], raw.evidence)
+      assert.deepEqual(parsed[parsed.agentHandoff.selectionPath.slice(2)], raw.selected)
+      // This fixture is expired: export preserves history, never extends validity.
+      assert.equal(parsed.validUntil, raw.validUntil)
+      const path = join(directory, outage ? 'unavailable.json' : 'available.json')
+      await writeResearchDeliverable(path, raw, request)
+      assert.equal(await readFile(path, 'utf8'), json)
+      await assert.rejects(writeResearchDeliverable(path, raw, request), /EEXIST/)
+      assert.equal(await readFile(path, 'utf8'), json)
+      for (const mutate of [
+        (r: any) => { r.buyerAgentId = 'other' },
+        (r: any) => { r.jobId = 'wrong' },
+        (r: any) => { r.reportId = null },
+        (r: any) => { delete r.evidence },
+        (r: any) => { r.agentHandoff.evidencePath = '$.missing' },
+        (r: any) => { r.agentHandoff.market.tokenId = '999' },
+        (r: any) => { r.agentHandoff.state = 'PREPARE_AVAILABLE' },
+        (r: any) => { r.agentHandoff.automaticResearchRetry = true },
+        (r: any) => { r.orderAuthorized = true },
+        (r: any) => { r.orderSubmitted = true },
+        (r: any) => { r.screeningMandate = {} },
+        (r: any) => { r.validUntil = r.generatedAt },
+        (r: any) => { r.researchStatus = 'AVAILABLE'; r.evidence.zeroScout = null },
+      ]) {
+        const changed = structuredClone(raw)
+        mutate(changed)
+        assert.throws(() => serializeResearchDeliverable(changed, request), /Invalid research deliverable/)
+      }
+      assert.throws(() => serializeResearchDeliverable({ data: raw }, request), /Invalid research deliverable/)
+    }
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
 const conditionId = `0x${'12'.repeat(32)}`
 const smartWallet = '0x1111111111111111111111111111111111111111'
 const servicePayment: SmartTraderServicePayment = {

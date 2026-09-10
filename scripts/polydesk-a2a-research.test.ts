@@ -141,6 +141,12 @@ test('existing worker CLI routes research dry-run without copy-trade fields', ()
     assert.equal(output.dryRun, true)
     assert.equal(output.action, 'RESEARCH')
     assert.equal(output.orderSubmitted, false)
+    const missingOutput = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/polydesk-a2a-worker.ts', '--request', path, '--execute'], { encoding: 'utf8', timeout: 20000, windowsHide: true })
+    assert.equal(missingOutput.status, 1)
+    assert.match(missingOutput.stderr, /requires --report-out/)
+    const existingOutput = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/polydesk-a2a-worker.ts', '--request', path, '--execute', '--report-out', path], { encoding: 'utf8', timeout: 20000, windowsHide: true })
+    assert.equal(existingOutput.status, 1)
+    assert.match(existingOutput.stderr, /No research started/)
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })
 

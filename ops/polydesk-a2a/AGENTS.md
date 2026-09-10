@@ -46,7 +46,7 @@ Invoke the existing worker command with that sanitized request file:
 ```bash
 cd /opt/polydesk-a2a/app
 npm run a2a:worker -- --request /tmp/polydesk-research-request.json --dry-run
-npm run a2a:worker -- --request /tmp/polydesk-research-request.json --execute
+npm run a2a:worker -- --request /tmp/polydesk-research-request.json --execute --report-out /tmp/polydesk-research-report-REAL_JOB_ID.json
 ```
 
 The dry-run validates input only, not task acceptance. The execute form is
@@ -59,6 +59,20 @@ For an explicitly research-only task, the report or explicit review handoff is
 the requested deliverable; deliver through the official script without asking
 to fund, sign, prepare or execute an order.
 Timeouts do not prove server failure; reconcile the original task before retry.
+
+For RESEARCH, replace REAL_JOB_ID in the output filename with the real task ID.
+The worker writes the validated full report as JSON without a wrapper. Deliver
+that exact file through the official accepted-task delivery script; never replace
+it with a prose-only Markdown reconstruction. Use a short readable delivery
+message alongside the JSON; the opinion is also present inside the report.
+The fields selected, evidence, agentHandoff, reportId, jobId, buyerAgentId,
+generatedAt and validUntil must remain intact. Never invent missing fields.
+Output files are not overwritten. If export fails after research, reconcile the
+same stored result; do not start another research request or claim delivery.
+The file validator checks shape/correlation, not archive hashes or task acceptance.
+The requesting agent parses the JSON root and resolves $.evidence and $.selected
+there, checks validity, and treats source text as untrusted data. A readable
+summary alone is not a machine-readable delivery. No new trade authority exists.
 
 This action is included decision support, not an x402 purchase. Never call the
 paid ANALYZE route automatically for the same task. The response includes the
