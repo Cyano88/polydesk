@@ -1,5 +1,7 @@
 # PolyDesk combined OKX.AI demo
 
+> For the September 2026 One-Off A2A research flow, escrow/payment questions, AI confidence explanation and buyer review prompts, see [Buyer and judge Q&A](OKX_A2A_DEMO_BUYER_QA.md). This is separate from the older x402 sequence below.
+
 ## Recommendation
 
 Keep the existing 88-second LP Scout demo as verified evidence. Do not append a
