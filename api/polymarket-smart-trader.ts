@@ -1,4 +1,4 @@
-﻿import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { publicDeliveryStatus } from './smart-trader-delivery-status.js'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
@@ -1179,10 +1179,10 @@ function executionHandoff(
       strategyId: decisionId,
       note: 'The official plugin reports this strategy ID after a successful order so the execution can be reconciled to the PolyDesk decision.',
     },
-    invocation: { command: 'polymarket-plugin', args },
+    invocation: input.side === 'BUY' ? null : { command: 'polymarket-plugin', args },
     previewInvocation: { command: 'polymarket-plugin', args: previewArgs },
     previewCommand: `polymarket-plugin ${previewArgs.map(shellArg).join(' ')}`,
-    liveCommand: `polymarket-plugin ${args.map(shellArg).join(' ')}`,
+    liveCommand: input.side === 'BUY' ? null : `polymarket-plugin ${args.map(shellArg).join(' ')}`,
     fundingFlow,
     tradePreflight: input.side === 'BUY' ? {
       endpoint: '/api/polymarket-account/trade-preflight', method: 'POST',

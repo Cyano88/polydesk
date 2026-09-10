@@ -997,7 +997,9 @@ test('PREPARE returns a preview-only official plugin handoff and performs no sig
   assert.equal(result.data.handoff.provider, 'OKX OnchainOS')
   assert.equal(result.data.handoff.plugin, 'polymarket-plugin')
   assert.equal(result.data.handoff.previewInvocation.args.at(-1), '--dry-run')
-  assert.deepEqual(result.data.handoff.invocation.args, [
+  assert.equal(result.data.handoff.invocation, null)
+  assert.equal(result.data.handoff.liveCommand, null)
+  assert.deepEqual(result.data.handoff.previewInvocation.args.slice(0, -1), [
     'buy', '--market-id', conditionId, '--outcome', 'Yes', '--amount', '5', '--price', '0.5', '--post-only',
     '--strategy-id', decision.decisionId,
   ])

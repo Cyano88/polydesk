@@ -733,3 +733,26 @@ an old book snapshot even after a cache-busting request. The guard remains; retu
 the full wallet/budget checks with STALE_ORDER_BOOK so the buyer sees the actual
 blocker. No live order was submitted by these audit checks. A read-only success
 must not be presented as proof of a filled trade or universal network reliability.
+
+Final audit verification (2026-09-10 09:43 UTC): production preflight passed
+with a fresh 11.5-second book, sufficient exchange allowance, zero shortfall,
+and a $3.751 collateral requirement for the buyer's $4 all-in cap. Estimated
+market fee was $0.117645; the $0.341 executor reserve is not a charged fee.
+A separate read-only chain check confirmed the chosen exchange allowance was
+already sufficient while the adapter's pUSD allowance was zero. This confirms
+why the old deposit-wallet approval check was misleading. Region access passed.
+
+The operator preflight CLI supports the existing wallet through the verified
+Linux CLI and reports non-JSON service failures without trying to sign. BUY
+handoffs now withhold both liveCommand and invocation until a fresh preflight
+has supplied the adjusted order size; the original amount remains preview-only.
+Regression validation after this change: 60 smart-trader and preflight tests pass.
+
+Remaining boundaries: the Windows TLS root cause is not proven resolved; Linux
+read-only success does not prove live signing or settlement. No order was placed
+by this audit. The separate native SDK open-prepare path still uses its existing
+notional balance checks and is not covered by the plugin reserve fix. Do not
+claim universal fee-aware execution across every PolyDesk path. A future live
+attempt needs a refreshed preflight because each result expires after 30 seconds.
+Demo follow-up: "Readiness checks passed. Review the exact trade preview before
+execution; after submission, check the order receipt and actual filled position."
