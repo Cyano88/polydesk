@@ -32,9 +32,9 @@ delivery, the task reached complete, which the OKX task protocol identifies as
 funds released to the provider.
 
 A buyer disappearing therefore does not mean the research was unfunded.
-However, the exact timeout, dispute, refund and provider-claim conditions still
-need verification before we claim how abandoned reviews settle. Do not promise
-automatic or unconditional payout, or quote a deadline from memory.
+The official protocol includes review-timeout completion and provider claims.
+Use the actual task deadline and next-action flow; payout is not unconditional.
+These timeout and dispute branches have not been exercised in this demo.
 
 ### What is the difference between accepted, submitted and complete?
 
@@ -134,6 +134,62 @@ Show the exact order and obtain the required authorization before signing or
 submission. A completed research-only task or expired report cannot become
 a trade approval.
 
+### What if the buyer finds an error?
+
+An issue starts clarification and evidence review, not an automatic rejection or
+refund. Compare the complaint with the commissioned scope and original report.
+Prepare a factual correction or explanation from existing evidence without
+silently charging for new research. Preserve the original JSON and attach any
+permitted correction as a clearly identified addendum with its sources and
+impact. Never invent a revised confidence score or extend the original expiry.
+
+There is currently no verified official resubmission path after submitted status:
+the documented deliver command requires accepted status. A correction may only
+be sent through a channel allowed by the real task playbook; it must not be
+advertised as replacement delivery. If that channel is unavailable, explain the
+limitation and use the supported review/refund/dispute flow. The conversation
+does not stop platform deadlines. Runtime handling is implemented as agent
+instructions; a live correction-and-receipt demonstration remains untested.
+
+Follow-up: "Please review this clarification. Would you like to accept the
+delivery, or formally reject it with the remaining issue? Accepting releases the
+service fee and does not authorize a trade."
+
+### What if a buyer repeatedly asks for refunds after consuming the research?
+
+This escrow rejection process is not a card chargeback. For a regular task,
+formal rejection opens a documented 24-hour provider decision window. PolyDesk
+can agree to a justified refund or contest the rejection using the official
+dispute flow. The actual response deadline must come from the live task.
+
+A dispute should compare the agreed scope against the delivered work, using the
+original JSON/hash, escrow evidence, submission/receipt times, validity window,
+buyer's stated issue and correction history. File integrity alone does not prove
+research quality. Disagreeing with an OPPOSE recommendation alone does not prove
+the commissioned research was defective.
+
+The regular-task CLI has two steps: dispute raise approves the dispute deposit;
+dispute confirm creates the dispute on-chain. A bond may be needed, so disclose
+the actual amount and obtain approval through the provider decision flow. Verify
+disputed status before claiming a case was filed. Evaluation determines the
+outcome; neither winning nor bond recovery is guaranteed. Do not miss the
+response window while discussing corrections.
+
+Repeated requests warrant review of verified task outcomes. They do not justify
+automatic refund denial. Future engagement decisions can be reviewed by the
+operator; no automatic abuse detector or platform-wide ban is implemented.
+Existing obligations and valid complaints must still be honored.
+
+Judge-facing answer: "Escrow protects payment before work starts. If a buyer
+rejects a valid delivery, PolyDesk can submit evidence through the platform's
+dispute process. We distinguish real defects from unsupported refund claims,
+and we keep the original report and receipt as evidence."
+
+Protocol references checked September 10, 2026: [official task states](https://raw.githubusercontent.com/okx/onchainos-skills/main/skills/okx-ai/references/task-state-machine.md),
+[official task commands](https://raw.githubusercontent.com/okx/onchainos-skills/main/skills/okx-ai/references/task-cli-reference.md),
+and [provider delivery rules](https://raw.githubusercontent.com/okx/onchainos-skills/main/skills/okx-ai/references/task-asp.md).
+These are documented capabilities, not a live dispute/refund demonstration.
+
 ## Verified recording evidence
 
 | Evidence | September 10 observation |
@@ -177,7 +233,7 @@ Keep private keys, credentials, private wallet details and unrelated tasks off-s
 
 ## Claims still needing evidence before the final recording
 
-- Exact abandoned-review timeout, refund, dispute and provider-claim rules.
+- Live correction receipt, refund/dispute resolution and timeout-claim behavior; exact task deadlines and dispute bond amounts.
 - Repeated unattended reliability beyond the one completed run above.
 - Live delivery of the newly added analysis and continuation prompts.
 - A separate governed trade and verified fill if the video claims execution.

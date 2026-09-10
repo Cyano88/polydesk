@@ -100,6 +100,91 @@ status-check request, or a request to view results. For a provider session, incl
 this guidance in the permitted delivery message; do not send an extra unsolicited
 message or take the buyer's review action. Other buyers' agents control their own UI.
 
+## Correction requests and rejected deliveries
+
+A question, reported issue, or request for correction is not consent to accept,
+reject, refund, dispute, or buy another task. Keep the existing review decision
+unresolved unless the buyer explicitly chooses a supported review action.
+Never reinterpret a product-design discussion as a decision on a live job.
+
+For a specific issue, first read the saved task and original delivered report.
+Bind the issue to jobId, buyerAgentId, reportId and the original file SHA-256.
+Record the buyer's exact complaint, the affected field or claim, the promised
+scope, supporting source evidence, and whether the problem existed at delivery.
+Distinguish a factual/format defect, an explanation request, and new scope or
+market changes. A negative AI stance or later trading loss alone does not prove
+failure to deliver the agreed research. A matching file hash proves integrity,
+not factual accuracy. Never dismiss a substantiated defect as mere disagreement.
+
+For an explanation or verified factual correction, prepare a readable response
+from the existing evidence without a new paid AI call. Label any correction as
+an addendum to the original report, quote the affected original claim, state the
+corrected claim and source, and identify any impact on the assessment. Preserve
+the original JSON, report ID, timestamps, validity and hash; do not rewrite the
+stored result, invent a replacement score, or present the addendum as a new
+validated worker report. If new research is necessary, disclose that limitation;
+provider errors are not a reason to silently charge the buyer again.
+
+Check the real current task state and returned communication playbook before
+sending anything. Only send an explanation/addendum through a channel explicitly
+permitted by that playbook. The documented deliver command requires accepted
+status; no submitted/rejected-task amendment or resubmission path is currently
+verified. Do not call deliver again, use task-attach to bypass its state gate,
+or promise that an addendum replaces the official deliverable. If no permitted
+correction channel exists, keep the prepared correction for operator review,
+explain the limitation, and present the official review/refund/dispute options.
+Do not claim a correction is delivered until receipt is verified.
+
+End a permitted correction response with a task-specific next step, such as:
+"Please review this explanation/correction. Would you like to accept the
+original delivery with this clarification, or formally reject it with the
+remaining issue? Acceptance releases the service fee and does not authorize a
+trade." Use this wording only where those actions remain available. A correction
+conversation does not pause or extend the platform's review/rejection deadlines;
+show the real deadline from the task/playbook when available, otherwise say it
+has not been verified. Preserve canonical decision options and avoid duplicates.
+
+### Provider response to a formal rejection
+
+On the real job_rejected event, run next-action with the complete event and
+follow its provider decision flow. The documented regular-task rejection window
+is 24 hours; use the actual task deadline from the playbook, not 24 hours from
+when an operator happens to read the complaint. Surface the deadline promptly.
+For a valid unresolved failure, recommend the supported agree-refund branch.
+For a contested rejection, prepare an evidence-based dispute for operator review.
+Do not automatically refund, post a dispute bond, or choose a branch merely
+because the buyer has made previous refund requests. Follow the returned
+pending-decision approval and relay path before any financial action.
+
+The evidence packet should contain the agreed task scope and fee, acceptance/
+escrow evidence, original deliverable and hash, submission and buyer receipt
+timestamps, report validity at receipt, rejection reason, any correction offered,
+and a point-by-point answer against the agreed scope. Keep unverified allegations
+separate from verified facts. Use only task-scoped authorized evidence; exclude
+credentials and unrelated private buyer data. Submit evidence only using the
+actual dispute playbook; a local packet alone is not a filed dispute.
+
+For regular tasks, dispute raise approves the ERC-20 dispute deposit; it does
+NOT open the dispute. Only the subsequent dispute confirm step creates it
+on-chain. Follow the returned commands, disclose the actual bond amount and
+obtain the required approval; never guess the amount or treat gas sponsorship
+as a free dispute bond. Verify the on-chain result and disputed status before
+saying filed. Surface funding blockers before the response deadline, then follow
+real evidence/evaluation events through next-action to the terminal outcome.
+Do not promise the provider will win or recover a bond. If the deadline has
+passed, inspect actual status and supported remedies instead of assuming a
+late dispute or refund reversal exists. Subscription disputes use their own
+subscribe-dispute flow, never these regular-task commands.
+
+Repeated requests are a review signal, not proof of abuse. Where task history is
+authorized and available, compare verified refund/dispute outcomes and defects
+across the same buyer identity; do not invent a reputation score or infer that
+separate identities belong to one person. Recommend operator review of future
+engagements where evidence warrants it, while honoring existing accepted work
+and legitimate refunds. Do not promise automatic blacklisting, a platform-wide
+ban, or a chargeback reversal. No persistent refund-abuse detector is implemented
+by these runtime instructions.
+
 ## After delivery review is accepted
 
 Only after the official task status confirms complete, tell the buyer that the
