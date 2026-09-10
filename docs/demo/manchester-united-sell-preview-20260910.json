@@ -1,0 +1,47 @@
+﻿{
+  "ok": true,
+  "publicChecksPassed": true,
+  "issues": [],
+  "orderAuthorized": false,
+  "signingVerified": false,
+  "wallet": "0xBA14B70B65DAdD5ca9b8d6539f372AeDbf570B4C",
+  "marketSlug": "epl-mun-mac-2026-09-13-mun",
+  "conditionId": "0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b",
+  "tokenId": "19101488282691860729231803936229393208813096118086124934330053364832952447484",
+  "outcome": "Yes",
+  "shares": "10",
+  "minimumPrice": "0.3",
+  "orderType": "FOK",
+  "positionShares": "10",
+  "bidDepthShares": "402.86",
+  "operators": [
+    "0xe2222d279d744050d28e00520010520000310F59",
+    "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
+  ],
+  "operatorApprovals": [
+    true,
+    true
+  ],
+  "builderCode": "0x873845696727f985cc6a23dcdffaefefd3f47a712dd8a02f1a938cac615844db",
+  "builderRateBps": 0,
+  "minimumGrossProceeds": "3",
+  "feeReserveAtMinimum": "0.15",
+  "conservativeMinimumNetProceeds": "2.85",
+  "checkedAt": "2026-09-10T20:27:54.744Z",
+  "validUntil": "2026-09-10T20:27:57.862Z",
+  "previewArgs": [
+    "sell",
+    "--market-id",
+    "epl-mun-mac-2026-09-13-mun",
+    "--outcome",
+    "Yes",
+    "--shares",
+    "10",
+    "--price",
+    "0.3",
+    "--order-type",
+    "FOK",
+    "--dry-run"
+  ],
+  "next": "Review the sell preview and separately confirm execution. Fees shown are reserves, not settled charges."
+}

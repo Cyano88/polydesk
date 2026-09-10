@@ -57,7 +57,14 @@ export async function captureLocalExecution(directory,id,bridge=runBridge,depsFa
 
 export async function reviewLocalMemory(directory,owner,tokenId,bridge=runBridge){
  owner=lower(owner);requireThat(/^0x[a-f0-9]{40}$/.test(owner)&&/^[1-9][0-9]{0,77}$/.test(tokenId),'Exact local owner and token required')
- const files=readdirSync(directory).filter(f=>/^[a-f0-9]{64}\.json\.memory\.json$/.test(f))
+ let inventory
+ try{inventory=readdirSync(directory)}catch(error){
+  if(error.code!=='ENOENT')throw error
+  const empty=await bridge('recall',{owner,records:[]})
+  requireThat(empty?.ok===true&&Array.isArray(empty.records)&&empty.records.length===0,'Local memory runtime unavailable')
+  return {ok:true,state:'LOCAL_HISTORY_NOT_INITIALIZED',source:'LOCAL_EXECUTION_LEDGER',historyComplete:false,matchingExecutionIds:[],nextAction:'REVIEW_EXISTING_ACCOUNT_HISTORY_AND_FRESH_PREVIEW',signingAuthorized:false,paymentAuthorized:false,currentPositionVerified:false,orderSubmitted:false}
+ }
+ const files=inventory.filter(f=>/^[a-f0-9]{64}\.json\.memory\.json$/.test(f))
  requireThat(files.length<=100,'Memory inventory exceeds bounded review')
  for(const f of readdirSync(directory).filter(f=>/^[a-f0-9]{64}\.json$/.test(f))){
   const record=read(join(directory,f));if(record.schema!=='polydesk-local-execution-v1')continue

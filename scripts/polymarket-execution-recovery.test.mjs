@@ -80,3 +80,18 @@ test('a successful-looking response with a different order hash retains the guar
  assert.throws(()=>recordSubmission(claim,'0x'+'ff'.repeat(32)),/differs from the durable binding/)
  assert.equal(executionStatus(dir).state,'PENDING')
 })
+test('recovery CLI finishes module evaluation before a cyclic memory import',async t=>{
+ const {spawnSync}=await import('node:child_process')
+ const dir=mkdtempSync(join(tmpdir(),'polydesk-recovery-cli-'))
+ t.after(()=>rmSync(dir,{recursive:true,force:true}))
+ const source=readFileSync(new URL('./polymarket-execution-recovery.mjs',import.meta.url),'utf8')
+ const tail=source.slice(source.indexOf('async function main(){'))
+ assert.ok(tail.startsWith('async function main(){'))
+ const prefix="import {resolve} from 'node:path';import {pathToFileURL} from 'node:url';const requireThat=(v,m)=>{if(!v)throw Error(m)};const recoverPending=async()=>({recovered:true,state:'FILLED',executionId:'buyer:fixture:001'});\n"
+ writeFileSync(join(dir,'recovery.mjs'),prefix+tail)
+ writeFileSync(join(dir,'polymarket-local-memory.mjs'),"import './recovery.mjs';export async function captureLocalExecution(){return {ok:true,state:'LOCAL_FILL_MEMORY_VERIFIED'}}")
+ const result=spawnSync(process.execPath,[join(dir,'recovery.mjs'),dir],{encoding:'utf8',timeout:10000,windowsHide:true})
+ assert.equal(result.status,0,result.stderr)
+ assert.equal(JSON.parse(result.stdout).memory.state,'LOCAL_FILL_MEMORY_VERIFIED')
+ assert.doesNotMatch(result.stderr,/unsettled top-level await/i)
+})

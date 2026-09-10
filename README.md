@@ -75,3 +75,15 @@ The public browser surface is intentionally limited to the foundation site, inte
 - `docs/POLYDESK_A2A_WORKER.md` - production worker operation.
 - `docs/POLYDESK_INTEGRATION_CONFORMANCE_AUDIT.md` - external platform audit contract.
 - `docs/polymarket-agent-ready-buy.md` - funding, readiness, authorization, and completion sequence.
+
+## Sibyl integration and verified local demo
+
+PolyDesk's research, payment and Polymarket service flows existed before this memory integration. The added work binds finalized local BUY/SELL receipts to owner-scoped Sibyl memory and recalls that history in a fresh process before reconciling positions. It does not turn research payment or memory recall into trading authority.
+
+- Memory verification and write entry: [scripts/polymarket-local-memory.mjs](scripts/polymarket-local-memory.mjs), `captureLocalExecution`.
+- Native Sibyl SDK bridge: [scripts/sibyl-local-execution-memory.py](scripts/sibyl-local-execution-memory.py).
+- Memory read entry: `reviewLocalMemory` in the same adapter; buyer commands and provenance are described in [the integration guide](docs/LOCAL_EXECUTOR_SIBYL_INTEGRATION_20260910.md).
+- Live September 10 BUY and SELL receipts, fresh-process recall, closed position and recording sequence: [demo runbook](docs/demo/SIBYL_DEMO_RUNBOOK_20260910.md).
+- Repeatable no-spend regression rehearsal: `node scripts/sibyl-demo-rehearsal.mjs`. Synthetic trade fixtures use the real SDK in isolated storage; they are labelled separately from the live receipts.
+
+The live buyer-local route is verified. Hosted governed receipt-memory acceptance and the continuous video recording remain separate work. No open-source license file is currently tracked; licensing must be settled before claiming a licensed hackathon submission.

@@ -1,0 +1,22 @@
+﻿{
+    "checkedAt":  "2026-09-10T20:16:51.577Z",
+    "marketSlug":  "epl-mun-mac-2026-09-13-mun",
+    "side":  "BUY",
+    "outcome":  "Yes",
+    "shares":  "10",
+    "limitPrice":  "0.30",
+    "maxTotal":  "3.5",
+    "orderType":  "FOK",
+    "publicChecksPassed":  false,
+    "issues":  [
+                   "STALE_ORDER_BOOK",
+                   "INSUFFICIENT_DEPTH_AT_LIMIT"
+               ],
+    "bookAgeMs":  127083,
+    "balance":  "4.68187",
+    "collateral":  "pUSD",
+    "requiredBalance":  "3.3",
+    "orderSubmitted":  false,
+    "signingAttempted":  false,
+    "note":  "Insufficient depth reported on stale data; current executable liquidity cannot be confirmed. No live order was attempted."
+}

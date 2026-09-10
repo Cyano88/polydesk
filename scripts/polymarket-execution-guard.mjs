@@ -54,9 +54,13 @@ export function runGuard(directory,id,command,args,run=spawnSync) {
  if(result.stdout)process.stdout.write(result.stdout)
  if(result.stderr)process.stderr.write(result.stderr)
  if(result.error||result.signal||result.status!==0)throw new Error('Execution did not finish cleanly. Submission guard retained; reconcile before retrying.')
- const lines=String(result.stdout??'').trim().split(/\r?\n/)
  let response
- for(let i=lines.length-1;i>=0;i--){try{response=JSON.parse(lines[i]);break}catch{}}
+ const output=String(result.stdout??'').trim()
+ // The native executor can emit indented JSON, not just one JSON line.
+ try{response=JSON.parse(output)}catch{
+  const lines=output.split(/\r?\n/)
+  for(let i=lines.length-1;i>=0;i--){try{response=JSON.parse(lines[i]);break}catch{}}
+ }
  if(response?.ok!==true||!response?.data?.order_id)throw new Error('Order response is uncertain. Submission guard retained; reconcile before retrying.')
  if(command==='wsl.exe'&&!existsSync(`${claim.record}.binding.json`))throw new Error('Executor did not persist an order binding; retain guard.')
  return recordSubmission(claim,response.data.order_id)

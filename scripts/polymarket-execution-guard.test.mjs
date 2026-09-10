@@ -42,3 +42,10 @@ test('guard injects an exact portable pre-submit binding path into WSL',t=>{
  assert.ok(!path.includes('\\'))
  assert.ok(childArgs.includes('POLYDESK_EXECUTION_ID=buyer:order:001'))
 })
+test('native pretty-printed success records once and blocks duplicate execution',t=>{
+ const d=fixture(t);let calls=0
+ const result=runGuard(d,'buyer:pretty:001','fake',[],()=>{calls++;return {status:0,stdout:JSON.stringify({ok:true,data:{order_id:order}},null,2)}})
+ assert.equal(result.state,'SUBMITTED');assert.equal(result.orderId,order)
+ assert.equal(executionStatus(d).state,'NO_UNCERTAIN_EXECUTION');assert.equal(calls,1)
+ assert.throws(()=>claimExecution(d,'buyer:pretty:001',['fake']),/already recorded/)
+})

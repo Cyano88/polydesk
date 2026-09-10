@@ -1,0 +1,31 @@
+﻿{
+    "checkedAt":  "2026-09-10T20:12:57.685Z",
+    "source":  "Live read-only trade preflight",
+    "buyerApproval":  "Execute this preview",
+    "marketSlug":  "epl-mun-mac-2026-09-13-mun",
+    "outcome":  "Yes",
+    "side":  "BUY",
+    "orderType":  "FOK",
+    "shares":  "10",
+    "limitPrice":  "0.30",
+    "orderAmount":  "3",
+    "maxTotal":  "3.5",
+    "collateral":  "pUSD",
+    "balance":  "4.68187",
+    "requiredBalance":  "3.3",
+    "estimatedMarketFee":  "0.105",
+    "publicChecksPassed":  false,
+    "issues":  [
+                   "INSUFFICIENT_DEPTH_AT_LIMIT"
+               ],
+    "orderSubmitted":  false,
+    "signingAttempted":  false,
+    "executionGuardState":  "NO_UNCERTAIN_EXECUTION",
+    "newLiveMemoryCaptureProven":  false,
+    "followUpPrompts":  [
+                            "Check the same 0.30 limit again",
+                            "Show a fresh preview",
+                            "Analyze another market"
+                        ],
+    "note":  "No live executor invocation occurred. This was a pre-submission liquidity stop, not an exchange rejection or settlement receipt."
+}

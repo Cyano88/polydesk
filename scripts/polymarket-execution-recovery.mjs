@@ -135,7 +135,9 @@ export async function defaultDependencies(binding){
   },
   readReceipt:async tx=>{const receipt=await rpc('eth_getTransactionReceipt',[tx]);const [block,finalized,chainId]=await Promise.all([rpc('eth_getBlockByNumber',[receipt.blockNumber,false]),rpc('eth_getBlockByNumber',['finalized',false]),rpc('eth_chainId',[])]);return {receipt,canonicalBlockHash:block.hash,finalizedBlock:finalized.number,canonicalBlock:block,finalizedHeader:finalized,chainId}}}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
+async function main(){
  try{const directory=process.argv[2];requireThat(Boolean(directory),'Execution ledger directory required.');const result=await recoverPending(directory);if(result.recovered&&result.state==='FILLED'){try{const {captureLocalExecution}=await import('./polymarket-local-memory.mjs');result.memory=await captureLocalExecution(directory,result.executionId)}catch{result.memory={ok:false,state:'LOCAL_MEMORY_REVIEW_REQUIRED',retryTrade:false}}}console.log(JSON.stringify(result))}
  catch{console.log(JSON.stringify({ok:false,state:'UNRESOLVED',executionAuthorized:false,retryAuthorized:false,next:'Keep submission blocked. Exact order or finalized receipt evidence is unavailable; check recovery records and provider status.'}));process.exitCode=1}
 }
+// Finish module evaluation before the memory adapter imports these helpers.
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){void main()}

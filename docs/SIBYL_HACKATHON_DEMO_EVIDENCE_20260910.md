@@ -84,3 +84,23 @@ See LOCAL_EXECUTOR_SIBYL_INTEGRATION_20260910.md. The working guarded launcher n
 ## Rehearsal completed: 90/90
 
 The repeatable demo rehearsal passed 90 tests with no failures or skips, including real-SDK capture, memory-only retry, duplicate capture, separate-process recall, missing-memory rejection and restored recall. See demo/SIBYL_DEMO_RUNBOOK_20260910.md for the recording sequence and judge Q&A, and demo/sibyl-rehearsal-20260910.json plus its log for evidence. This uses synthetic trades and isolated native memory; no new payment, signature, order or production-memory write was performed.
+
+## Live local trade-to-memory acceptance verified
+
+This supersedes the earlier open acceptance gate for the local route. The buyer explicitly approved the revised 0.31 preview. Fresh preflight passed at 2026-09-10T20:20:45.341Z, then the guarded PolyDesk Polymarket skill submitted exactly once under buyer:sybil-live:20260910:mun-10-031. Ten Manchester United Yes shares filled at 0.31: 3.10 pUSD notional plus 0.10695 fee, total 3.20695 within the 3.50 cap. No new research payment or allowance approval was made.
+
+The native executor returned indented JSON that the line-only parser did not recognize. It kept the uncertainty lock, preventing another buy. Read-only recovery verified the exact bound order against authenticated order data and finalized fills, recorded FILLED and cleared the lock. Recovery then exposed a dynamic-import cycle with the memory adapter; memory-only capture for the same execution succeeded. Both local handling bugs are corrected. Regression checks: 22 passed, 0 failed, 1 optional SDK test skipped. Fixes are local, not yet deployed or committed.
+
+Live SDK capture returned LOCAL_FILL_MEMORY_VERIFIED. A separate process recalled the same execution and returned LOCAL_MEMORY_RECONCILIATION_REQUIRED, instructing review of previous fills and a fresh position check. The independent live position query then showed 10 Yes shares. No trade was replayed during recovery or memory capture. Guard status: NO_UNCERTAIN_EXECUTION.
+
+Evidence: demo/manchester-united-live-fill-20260910.json includes the recovered receipt, exact transaction and immutable memory projection. This proves the live buyer-local finalized-fill route with honest LOCAL_BOUND_ORDER_AND_FINALIZED_CHAIN provenance. Hosted governed memory remains a separate unproven route, and a continuous video recording is still to be made. Prior historical trades were not backfilled.
+
+Buyer prompts: **Show receipt**; **Review remembered fills**; **Check position**; **Analyze another market**. Selling requires a fresh sell preview and buyer approval. The demo should show the actual recovery, not claim the first submission response completed cleanly.
+
+## Live sell and closed-position recall verified
+
+Buyer approved: Sell these 10 shares at minimum 0.30. Fresh sell preflight passed at 2026-09-10T20:29:09.601Z; exactly one FOK sell submitted under buyer:sybil-live:20260910:mun-sell-10-030. All 10 sold at 0.30. Finalized exact-order fill: 3.00 pUSD gross, 0.105 settled fee, 2.895 net. Against the fresh buy cost of 3.20695, this completed round trip lost 0.31195 pUSD including both trade fees.
+
+The corrected response parser recorded submission normally. Initial automatic capture returned LOCAL_MEMORY_REVIEW_REQUIRED; no detailed cause was exposed. Memory-only retry verified the finalized sell and returned LOCAL_FILL_MEMORY_VERIFIED without replaying the trade. A fresh process recalled both the BUY and SELL execution IDs; an independent live position query returned zero open positions. This shows why memory must review sells alongside buys and cannot alone claim current holdings.
+
+Evidence: demo/manchester-united-live-sell-20260910.json. Local live buy-to-sell-to-memory flow verified; hosted governed acceptance and the actual continuous demo recording remain separate. Buyer follow-ups: Show receipt; Review remembered fills; Analyze another market. Any new trade requires a fresh preview and buyer approval.

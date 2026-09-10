@@ -1,0 +1,55 @@
+﻿{
+    "recordedAt":  "2026-09-10T20:31:17.4184412Z",
+    "approval":  "Sell these 10 shares at minimum 0.30",
+    "submissionCount":  1,
+    "preflightCheckedAt":  "2026-09-10T20:29:09.601Z",
+    "preflightPassed":  true,
+    "orderType":  "FOK",
+    "manifest":  {
+                     "schema":  "polydesk-local-memory-manifest-v1",
+                     "owner":  "0x988263a851afe17f8a827eda81269f9fb7553cbc",
+                     "executionId":  "buyer:sybil-live:20260910:mun-sell-10-030",
+                     "payloadHash":  "4089773a63721c148e195eed09a49bbf9fa18e08320627c4733bcbb5222c5bca",
+                     "projection":  {
+                                        "schema":  "polydesk-local-finalized-fill-v1",
+                                        "provenance":  "LOCAL_BOUND_ORDER_AND_FINALIZED_CHAIN",
+                                        "owner":  "0x988263a851afe17f8a827eda81269f9fb7553cbc",
+                                        "executionId":  "buyer:sybil-live:20260910:mun-sell-10-030",
+                                        "conditionId":  "0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b",
+                                        "tokenId":  "19101488282691860729231803936229393208813096118086124934330053364832952447484",
+                                        "side":  "SELL",
+                                        "orderId":  "0xc1d1620bbd9a76e0cb6aca3e3cffe1051361d6c2084b156c7e713d9c9b8bda9d",
+                                        "chainId":  "eip155:137",
+                                        "matchedSharesRaw":  "10000000",
+                                        "collateralRaw":  "3000000",
+                                        "feeRaw":  "105000",
+                                        "fills":  [
+                                                      {
+                                                          "transaction":  "0xe33f43926d4c860682f22b8a498da06d5d76bf1d7b3fdd7b2bc7ec3506d6349c",
+                                                          "blockNumber":  "0x593e364",
+                                                          "blockHash":  "0x9e9cda76f52b2f07156df3ce703c85e6b711ee2ab52f3f6649df5f7be846e176"
+                                                      }
+                                                  ],
+                                        "bindingHash":  "f42f6e1ca1f9befd8971dd90ea938f97a03ebd5023e564ad7a9b0d5db73d273b",
+                                        "governedAuthorityVerified":  false,
+                                        "signingAuthorized":  false,
+                                        "paymentAuthorized":  false,
+                                        "currentPositionVerified":  false
+                                    }
+                 },
+    "grossProceeds":  "3.00",
+    "settledFee":  "0.105",
+    "netProceeds":  "2.895",
+    "collateral":  "pUSD",
+    "priorBuyTotal":  "3.20695",
+    "roundTripNetPnl":  "-0.31195",
+    "positionCount":  0,
+    "positionShares":  "0",
+    "captureState":  "LOCAL_FILL_MEMORY_VERIFIED",
+    "freshProcessRecallState":  "LOCAL_MEMORY_RECONCILIATION_REQUIRED",
+    "matchingExecutionIds":  [
+                                 "buyer:sybil-live:20260910:mun-sell-10-030",
+                                 "buyer:sybil-live:20260910:mun-10-031"
+                             ],
+    "note":  "Initial capture returned review required; memory-only retry verified finalized sell and persisted it. No sell replay. Exact initial capture failure reason was not exposed; do not claim a diagnosed cause."
+}

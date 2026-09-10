@@ -1,12 +1,12 @@
 {
   "schema": "polydesk-sibyl-demo-rehearsal-v1",
-  "startedAt": "2026-09-10T19:53:48.320Z",
-  "finishedAt": "2026-09-10T19:54:01.164Z",
-  "commit": "364acbedf1a36d12b5fd9914da1445ef5dc58340",
+  "startedAt": "2026-09-10T20:34:46.399Z",
+  "finishedAt": "2026-09-10T20:35:00.256Z",
+  "commit": "eb9678ddd06e6c6089384633a017e9ec9361c7d5",
   "workingTreeTestChanges": true,
   "passed": true,
-  "tests": 90,
-  "pass": 90,
+  "tests": 93,
+  "pass": 93,
   "fail": 0,
   "skipped": 0,
   "realSdkEvidence": {

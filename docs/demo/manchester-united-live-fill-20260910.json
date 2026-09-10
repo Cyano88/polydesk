@@ -1,0 +1,81 @@
+﻿{
+    "schema":  "polydesk-live-local-demo-evidence-v1",
+    "recordedAt":  "2026-09-10T20:25:45.7053358Z",
+    "approval":  "Execute this preview: 10 Manchester United Yes shares, BUY FOK, limit 0.31, 3.50 total cap",
+    "preflightCheckedAt":  "2026-09-10T20:20:45.341Z",
+    "preflightPassed":  true,
+    "submissionCount":  1,
+    "receipt":  {
+                    "schema":  "polydesk-local-execution-v1",
+                    "id":  "buyer:sybil-live:20260910:mun-10-031",
+                    "intentHash":  "d79043e1747c25962c9017fba92ac7059f55be2e304ce9861751f4a897377899",
+                    "state":  "FILLED",
+                    "guardPid":  24108,
+                    "createdAt":  "2026-09-10T20:21:05.160Z",
+                    "orderId":  "0xe66be72516bebb187ff930bc65771c528aeaff5889ffc2662546893169e46430",
+                    "transactions":  [
+                                         "0x9ea715c3ef6e40d0176316e8303e9e466aec00dc52d493753e2f099b3683bd61"
+                                     ],
+                    "evidenceSource":  "authenticated-order-and-finalized-fills",
+                    "matchedSharesRaw":  "10000000",
+                    "collateralRaw":  "3100000",
+                    "feeRaw":  "106950",
+                    "executionAuthorized":  false,
+                    "retryAuthorized":  false,
+                    "next":  "Show the recovered receipt and refresh the position.",
+                    "recoveredAt":  "2026-09-10T20:21:55.726Z"
+                },
+    "shares":  "10",
+    "collateral":  "pUSD",
+    "notional":  "3.10",
+    "fee":  "0.10695",
+    "totalSpend":  "3.20695",
+    "totalCap":  "3.50",
+    "memoryManifest":  {
+                           "schema":  "polydesk-local-memory-manifest-v1",
+                           "owner":  "0x988263a851afe17f8a827eda81269f9fb7553cbc",
+                           "executionId":  "buyer:sybil-live:20260910:mun-10-031",
+                           "payloadHash":  "8f05e669548bceba37e7ba12ff9bd506cf21b73d3e1b6f1b41d112962a8ec450",
+                           "projection":  {
+                                              "schema":  "polydesk-local-finalized-fill-v1",
+                                              "provenance":  "LOCAL_BOUND_ORDER_AND_FINALIZED_CHAIN",
+                                              "owner":  "0x988263a851afe17f8a827eda81269f9fb7553cbc",
+                                              "executionId":  "buyer:sybil-live:20260910:mun-10-031",
+                                              "conditionId":  "0xb28000f3db74c4e892a9b8bafb5b66d1a7815aeee9689864a1ec644f32bb4c9b",
+                                              "tokenId":  "19101488282691860729231803936229393208813096118086124934330053364832952447484",
+                                              "side":  "BUY",
+                                              "orderId":  "0xe66be72516bebb187ff930bc65771c528aeaff5889ffc2662546893169e46430",
+                                              "chainId":  "eip155:137",
+                                              "matchedSharesRaw":  "10000000",
+                                              "collateralRaw":  "3100000",
+                                              "feeRaw":  "106950",
+                                              "fills":  [
+                                                            {
+                                                                "transaction":  "0x9ea715c3ef6e40d0176316e8303e9e466aec00dc52d493753e2f099b3683bd61",
+                                                                "blockNumber":  "0x593e223",
+                                                                "blockHash":  "0xa502604e4037b4175c368819c10f9b4b31dd9909b90897a972e34fd73d2040f5"
+                                                            }
+                                                        ],
+                                              "bindingHash":  "778cb359c7da1dabff3bb388e92c22b008ae7fa76180162a063bbfda31ed411d",
+                                              "governedAuthorityVerified":  false,
+                                              "signingAuthorized":  false,
+                                              "paymentAuthorized":  false,
+                                              "currentPositionVerified":  false
+                                          }
+                       },
+    "captureState":  "LOCAL_FILL_MEMORY_VERIFIED",
+    "freshProcessRecallState":  "LOCAL_MEMORY_RECONCILIATION_REQUIRED",
+    "recalledExecutionIds":  [
+                                 "buyer:sybil-live:20260910:mun-10-031"
+                             ],
+    "positionVerifiedShares":  "10",
+    "guardState":  "NO_UNCERTAIN_EXECUTION",
+    "hostedGovernedMemoryProven":  false,
+    "fixes":  "Local pretty-printed JSON parsing and recovery dynamic-import cycle corrected; 22 tests passed, 1 optional SDK test skipped. Live SDK capture and fresh-process recall passed separately.",
+    "followUpPrompts":  [
+                            "Show receipt",
+                            "Review remembered fills",
+                            "Check position",
+                            "Analyze another market"
+                        ]
+}

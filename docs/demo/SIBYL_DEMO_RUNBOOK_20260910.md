@@ -1,6 +1,6 @@
 # Sibyl demo runbook and tested flows
 
-Rehearsed September 10, 2026: 90 passed, 0 failed, 0 skipped. Machine evidence: sibyl-rehearsal-20260910.json; full output: sibyl-rehearsal-20260910.log. Run again for recording with node scripts/sibyl-demo-rehearsal.mjs from the release checkout. Requires Windows/WSL and the existing pinned Sibyl 0.8.0 runtime; POLYDESK_TEST_SIBYL_PYTHON can select an explicitly installed equivalent runtime.
+Release rehearsal September 10, 2026: 93 passed, 0 failed, 0 skipped. Machine evidence: sibyl-rehearsal-20260910.json; full output: sibyl-rehearsal-20260910.log. Run again for recording with node scripts/sibyl-demo-rehearsal.mjs from the release checkout. Requires Windows/WSL and the existing pinned Sibyl 0.8.0 runtime; POLYDESK_TEST_SIBYL_PYTHON can select an explicitly installed equivalent runtime.
 
 ## Recording sequence
 
@@ -45,3 +45,35 @@ These are buyer-local commands, not remote owner-signature APIs. The current con
 The original historical buy/sell predate the saved local bindings and cannot be backfilled honestly. The rehearsal does not migrate those trades, spend funds, sign messages or touch production memory. It uses an isolated temporary native store and keeps an explicit synthetic-only label.
 
 Before claiming full live trade-to-memory production acceptance, separately approve one exact fresh trade through the updated guarded launcher, verify its eligible receipt and capture, then run owner-scoped local recall in a fresh session. Hosted governed memory acceptance is a separate unproven path. Record the actual demo last, after selecting the evidence and displaying these boundaries accurately.
+
+## Approved live preview: liquidity check stopped submission
+
+The buyer approved the PolyDesk Polymarket skill preview: Manchester United Yes, 10 shares, BUY FOK, 0.30 maximum price, 3.00 pUSD order amount and 3.50 total cap. At 2026-09-10T20:12:57.685Z the refreshed check returned INSUFFICIENT_DEPTH_AT_LIMIT. Balance was 4.68187 pUSD against 3.30 required collateral; balance was sufficient. No signing or live order submission was attempted. The execution guard subsequently returned NO_UNCERTAIN_EXECUTION.
+
+Evidence: manchester-united-execution-check-20260910.json alongside the earlier preview. Approval does not guarantee liquidity; the exact limit remains binding. This demonstrates a pre-submission stop, not an exchange rejection, settlement receipt or live Sibyl capture. Live trade-to-memory acceptance remains open.
+
+Buyer follow-up prompts: **Check the same 0.30 limit again**; **Show a fresh preview**; **Analyze another market**. A new price or size must be presented for buyer approval. These are documented conversation prompts; this evidence does not claim they were newly integrated into every API response.
+
+Recheck at 2026-09-10T20:16:51.577Z: STALE_ORDER_BOOK (127083 ms old) and INSUFFICIENT_DEPTH_AT_LIMIT. No signing or submission. Balance remained 4.68187 pUSD. Insufficient depth was reported on stale data, so current executable liquidity is unconfirmed. Evidence: manchester-united-recheck-20260910-201651.json. Follow-up: Show a fresh preview; Analyze another market.
+
+Fresh revised preview at 2026-09-10T20:19:01.430Z passed public checks with a 1146 ms book age: Manchester United Yes, BUY 10 shares, FOK, limit 0.31, order 3.10 pUSD, estimated market fee 0.10695 pUSD, estimated spend 3.20695 pUSD, collateral requirement 3.41 pUSD including reserve, total cap 3.50. Balance 4.68187 pUSD. Exact local dry-run passed with PolyDesk builder attribution. No order submitted. Evidence: manchester-united-preview-031-20260910.json. Because 0.31 exceeds the previously approved 0.30 limit, the buyer must approve this revised preview before signing; refresh checks again before submission. Buyer prompt: Execute this preview.
+
+## Live local trade-to-memory acceptance verified
+
+This supersedes the earlier open acceptance gate for the local route. The buyer explicitly approved the revised 0.31 preview. Fresh preflight passed at 2026-09-10T20:20:45.341Z, then the guarded PolyDesk Polymarket skill submitted exactly once under buyer:sybil-live:20260910:mun-10-031. Ten Manchester United Yes shares filled at 0.31: 3.10 pUSD notional plus 0.10695 fee, total 3.20695 within the 3.50 cap. No new research payment or allowance approval was made.
+
+The native executor returned indented JSON that the line-only parser did not recognize. It kept the uncertainty lock, preventing another buy. Read-only recovery verified the exact bound order against authenticated order data and finalized fills, recorded FILLED and cleared the lock. Recovery then exposed a dynamic-import cycle with the memory adapter; memory-only capture for the same execution succeeded. Both local handling bugs are corrected. Regression checks: 22 passed, 0 failed, 1 optional SDK test skipped. Fixes are local, not yet deployed or committed.
+
+Live SDK capture returned LOCAL_FILL_MEMORY_VERIFIED. A separate process recalled the same execution and returned LOCAL_MEMORY_RECONCILIATION_REQUIRED, instructing review of previous fills and a fresh position check. The independent live position query then showed 10 Yes shares. No trade was replayed during recovery or memory capture. Guard status: NO_UNCERTAIN_EXECUTION.
+
+Evidence: demo/manchester-united-live-fill-20260910.json includes the recovered receipt, exact transaction and immutable memory projection. This proves the live buyer-local finalized-fill route with honest LOCAL_BOUND_ORDER_AND_FINALIZED_CHAIN provenance. Hosted governed memory remains a separate unproven route, and a continuous video recording is still to be made. Prior historical trades were not backfilled.
+
+Buyer prompts: **Show receipt**; **Review remembered fills**; **Check position**; **Analyze another market**. Selling requires a fresh sell preview and buyer approval. The demo should show the actual recovery, not claim the first submission response completed cleanly.
+
+## Live sell and closed-position recall verified
+
+Buyer approved: Sell these 10 shares at minimum 0.30. Fresh sell preflight passed at 2026-09-10T20:29:09.601Z; exactly one FOK sell submitted under buyer:sybil-live:20260910:mun-sell-10-030. All 10 sold at 0.30. Finalized exact-order fill: 3.00 pUSD gross, 0.105 settled fee, 2.895 net. Against the fresh buy cost of 3.20695, this completed round trip lost 0.31195 pUSD including both trade fees.
+
+The corrected response parser recorded submission normally. Initial automatic capture returned LOCAL_MEMORY_REVIEW_REQUIRED; no detailed cause was exposed. Memory-only retry verified the finalized sell and returned LOCAL_FILL_MEMORY_VERIFIED without replaying the trade. A fresh process recalled both the BUY and SELL execution IDs; an independent live position query returned zero open positions. This shows why memory must review sells alongside buys and cannot alone claim current holdings.
+
+Evidence: demo/manchester-united-live-sell-20260910.json. Local live buy-to-sell-to-memory flow verified; hosted governed acceptance and the actual continuous demo recording remain separate. Buyer follow-ups: Show receipt; Review remembered fills; Analyze another market. Any new trade requires a fresh preview and buyer approval.

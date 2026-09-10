@@ -55,3 +55,10 @@ test('conflicting verified fee cannot overwrite a captured projection',async t=>
  await assert.rejects(captureLocalExecution(dir,b.executionId,sdk,async()=>f.deps),/conflict/)
  assert.equal(readFileSync(claim.record+'.memory.json','utf8'),original)
 })
+
+test('absent first-use ledger is explicit incomplete history, never silent empty success',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'polydesk-first-ledger-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const missing=join(dir,'not-initialized')
+ const result=await reviewLocalMemory(missing,b.owner,'111',async()=>({ok:true,records:[]}))
+ assert.equal(result.state,'LOCAL_HISTORY_NOT_INITIALIZED');assert.equal(result.historyComplete,false);assert.equal(result.signingAuthorized,false)
+ await assert.rejects(reviewLocalMemory(missing,b.owner,'111',async()=>{throw Error('SDK unavailable')}))
+})
