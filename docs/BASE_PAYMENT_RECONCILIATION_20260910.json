@@ -1,0 +1,106 @@
+{
+  "checkedAt": "2026-09-10T19:22:58.155Z",
+  "readOnly": true,
+  "attempts": [
+    {
+      "id": "e997a0873002f758525415064e5cba7f9c2d4b8fa2206f3d7adb9ce2a011a25c",
+      "state": "settled",
+      "transaction": "0x3171e54ff003b82a5948c8ef12bb05f5d2c3ea0eba7c34a432fa6b27a5c92cc9",
+      "proof": {
+        "chainId": "eip155:8453",
+        "transaction": "0x3171e54ff003b82a5948c8ef12bb05f5d2c3ea0eba7c34a432fa6b27a5c92cc9",
+        "blockNumber": "0x309c1f1",
+        "blockHash": "0xb85d2b0265fd6117eba7d81992a4bef3184208821ef87da8a4af21d7583d3519",
+        "finalizedBlockNumber": "0x30c50ee",
+        "finalizedBlockHash": "0x181bf2baa5a81677a5a5f90b82d472d1d5fca23d4778e4057ee599eac269ec71"
+      },
+      "error": null,
+      "deliveryState": "completed",
+      "requestHashMatches": true,
+      "resultAction": "ANALYZE",
+      "researchStatus": "AVAILABLE"
+    }
+  ],
+  "deliveries": [
+    {
+      "transaction": "0xc5aad82b0346df5331ca4966252a81d9fa250e5e1d930db024bf3189272fce55",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0xc6a312bc714cee47ea0dae168190187e023deb7abbbe5b0d3e723e0d8e8e229e",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0x91fe084840e528d00f9ec72b364fbedbecc0d69dc0ad46d9880b36fed75f5b6f",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0xf6c1e321e3625ddf340763c0c1931ae3b5fce500859fb99986858710ab10ef03",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0xe3150f841e56d6185cdeba69925315308f91cfea844510a312fc92022fb943a6",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0x5264d2b7e554a43612b7e7e1b4caacfbd0f07ec4c9cfa34a0950c9ff24a46ba1",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0x2a8a5d4379fc8925dd82b9c696766ad57b1e5b697fec54343bbe1ca6f2c09a4e",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0xfd3f4bbaf8b1160ab007d73d00e60590fa06f00626ac74d4677d9ef57229138d",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0x4ffedcaa362d8c75c893704e38990b0fe48432de6b98d1104d41444de0961d42",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": false,
+      "researchStatus": null
+    },
+    {
+      "transaction": "0x3171e54ff003b82a5948c8ef12bb05f5d2c3ea0eba7c34a432fa6b27a5c92cc9",
+      "storedStatus": "completed",
+      "receiptFound": true,
+      "receiptStatus": "0x1",
+      "strictAttemptProofAvailable": true,
+      "researchStatus": "AVAILABLE"
+    }
+  ]
+}

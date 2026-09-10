@@ -1,0 +1,21 @@
+{
+  "checkedAt": "2026-09-10T19:30:34.001Z",
+  "passed": true,
+  "syntheticOnly": true,
+  "sdkVersion": "0.8.0",
+  "processIds": [
+    752,
+    755,
+    784,
+    785
+  ],
+  "before": "REQUIRE_FRESH_RESEARCH_AND_ACCOUNT_CHECKS",
+  "after": "REVIEW_EXISTING_TOKEN_FILLS",
+  "recalledFillCount": 1,
+  "withoutDisposableMemory": "REQUIRE_FRESH_RESEARCH_AND_ACCOUNT_CHECKS",
+  "signingAuthorized": false,
+  "paymentAuthorized": false,
+  "currentPositionVerified": false,
+  "productionMemoryTouched": false,
+  "hostedBuyerAcceptance": false
+}

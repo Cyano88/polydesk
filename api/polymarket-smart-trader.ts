@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { publicDeliveryStatus } from './smart-trader-delivery-status.js'
+import { publicDeliveryStatus, paidDeliveryGuidance } from './smart-trader-delivery-status.js'
 import type { Request, Response } from 'express'
 import { isAddress } from 'viem'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
@@ -1845,6 +1845,7 @@ export default async function polymarketSmartTraderHandler(req: Request, res: Re
       paymentStatus: 'settled',
       statusUrl: `/api/a2mcp/polymarket-smart-trader/payment/${servicePayment.transaction}`,
       message: 'The settled request is processing asynchronously. Poll statusUrl; no additional payment is required.',
+      buyerGuidance: paidDeliveryGuidance(bound.status, null),
     })
   }
   const result = await runPolymarketSmartTrader(req.body, liveDependencies, servicePayment)
@@ -1904,6 +1905,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     ok: true,
     transaction: transaction.toLowerCase(),
     ...publicDeliveryStatus(record.status, record.response),
+    buyerGuidance: paidDeliveryGuidance(record.status, record.response),
     decisionId: record.decisionId || null,
     analysisHash: record.analysisHash || null,
     decisionUrl: record.decisionId
