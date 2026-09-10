@@ -440,3 +440,40 @@ and a live model response before asking a buyer to purchase again."
 This is one live canary plus mocked regression coverage, not a reliability rate
 or proof every future research request will succeed. A new real review remains
 a separate disclosed purchase requiring buyer approval.
+## Recovery-review failure: latency diagnosis
+
+Job 0xd6bb3b388b5f2c03e5e9210607f83b1c8099382281dba0a45ad9e7a26a0bff51
+also delivered researchStatus UNAVAILABLE. The original provider JSON is 18,236
+bytes, SHA-256 0e3a642cb077dd225ed47a994d7ca9e4d28307cf806222ac8f8f7c736fd53f06.
+No refund, acceptance or additional buyer purchase was performed in this diagnosis.
+
+Production logs confirm f4430b1's third-attempt reservation operated as intended:
+- gpt-5.6-terra: timeout at 20,000 ms (20,002 ms measured).
+- gpt-5.6-sol: timeout at 9,999 ms (10,001 ms measured).
+- gpt-5.6-luna: timeout at 9,997 ms (9,999 ms measured).
+- gpt-5.5 was not attempted because the routing budget was exhausted.
+All used default trust, chat completions, 14,418 input characters and a 4,000
+output-token limit. No completed response was available for JSON parsing;
+these logs do not show a balance rejection or authentication failure. Log
+collection timestamps are buffered; use measured attempt durations for timing.
+
+One operator-only diagnostic reconstructed the input from the saved public
+report evidence and used the existing 60-second single-model diagnostic path.
+The request was 14,380 characters (not byte-identical to the original request).
+Using the same production compute settings from the local operator environment,
+gpt-5.6-terra returned valid JSON in 19,578 ms, with 1,300 output tokens,
+including 192 reasoning tokens. Total diagnostic duration was 19,580 ms.
+The prior synthetic canary model call took 13,600 ms and 736 output tokens.
+
+Interpretation: a real-evidence inference can succeed, but this observed response
+had only 422 ms headroom under the production primary-attempt cutoff. This is
+consistent with variable model/transport latency and insufficient timeout
+headroom. It does not isolate provider queueing from network/runtime effects,
+prove malformed input, or prove raising the timeout alone guarantees success.
+The earlier fix addressed fallback starvation, not end-to-end reliability.
+
+The diagnostic performed no archive upload or task delivery and did not replace
+the saved report. Its assessment is not a fresh trade recommendation. Next work
+should budget inference, fallback, archive and caller timeouts together and test
+representative real-evidence inputs before asking for another paid review.
+No timeout configuration change was deployed in this diagnosis.
