@@ -600,7 +600,7 @@ const liveDependencies: SmartTraderDependencies = {
         data: context,
         includeClaudeReview: true,
         includeOpenAiReview: true,
-      }, { requireProof: true, timeoutMs: 75_000, retryAttempts: 0 })
+      }, { requireProof: true, timeoutMs: 150_000, retryAttempts: 0 })
     } catch (error) {
       console.warn('[smart-trader] ZeroScout research unavailable', {
         status: typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : undefined,

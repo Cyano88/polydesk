@@ -36,7 +36,7 @@ export async function runResearchOperator(raw: unknown, options: {
   if ((options.url || endpoint) !== endpoint) throw new Error('Research operator endpoint must be the exact trusted PolyDesk route.')
   if (!options.operatorKey?.trim()) throw new Error('Research operator access is not configured.')
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 180000)
+  const timer = setTimeout(() => controller.abort(), 240000)
   try {
     const response = await (options.fetch || fetch)(endpoint, { method: 'POST', redirect: 'error', signal: controller.signal,
       headers: { Authorization: `Bearer ${options.operatorKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
