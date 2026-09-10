@@ -628,3 +628,22 @@ This cycle now demonstrates fresh request, AI findings, original JSON receipt,
 explicit buyer review and confirmed settlement after the timeout correction.
 Follow-up: decline this trade and analyze more markets, or resolve the evidence
 gaps before considering a separately authorized trade.
+
+## First live trade attempt blocked before submission
+
+After research settlement, the user requested buying Manchester United Yes,
+specified a $5 budget and typed "Confirm live mode" after an explicit preview.
+The local Polymarket plugin used the configured deposit wallet with $5.025010
+pUSD. The proposed FOK buy was 15 shares at a maximum price of $0.31, order value
+$4.65. Live Gamma feeSchedule reported sports_fees_v3, rate 0.05, exponent 1;
+the published fee formula estimated roughly $0.16043, giving $4.81043 total.
+
+The actual plugin buy failed its balance precheck with INSUFFICIENT_BALANCE:
+it required $5.115 (order $4.65 plus a $0.465 fee reserve). No submitted order,
+order ID or settlement transaction was returned. This is a trade-execution
+blocker after successful research settlement, not a failed research delivery.
+The plugin reserve differs from the public fee formula estimate; no fix or
+actual charged fee is claimed. Do not silently deposit funds or exceed $5.
+A smaller 14-share order at $0.31 costs $4.34; even using that 10% reserve,
+required collateral is $4.774. Prepare its dry-run and obtain approval for the
+revised preview before another live attempt. No private credentials recorded.
