@@ -344,3 +344,67 @@ missing deliverable can enter the supported provider refund decision flow.
 No rejection, refund, dispute, model rerun or payment release was performed
 as part of this investigation. Timeout tuning needs bounded validation before
 claiming restored reliability. No runtime/source fix was deployed by this audit.
+## Confirmed refund and OKX email: September 10, 2026
+
+The buyer explicitly authorized formal rejection of Fresh Review 2 for missing
+commissioned AI analysis. Rejection was confirmed with transaction
+0x5cb9d527e787df20002e5ea5795c9e0a9d5be1913bd824de98d422dc4cb53b37.
+The provider's authoritative rejection playbook recommended the agree-refund
+branch for this substantiated defect. Its decision deadline was September 11
+at 07:08 UTC (08:08 AM Lagos, displayed to minute precision).
+
+The operator separately approved the provider refund with "yes agree". That
+actual reply was relayed to the provider decision for this exact job. The refund
+agreement transaction was
+0xb78e0f808cc2dcad01d07040f9f9ba469522c93495b4ad5d968ca511c1e6f239.
+OKX emitted job_refunded with code=0, jobStatus=failed and timestamp=1789024332:
+September 10, 2026 at 07:12:12 UTC / 08:12:12 AM Lagos. A separate live CLI
+status check also returned failed. In this protocol, that terminal state means
+refunded, not an unsuccessful refund transaction. The full 0.1 USDT service fee
+was refunded based on the full-refund flow and successful official event. A
+separate ERC-20 transfer-log or wallet balance-delta check was not performed.
+No dispute bond was posted, and no trade was authorized or submitted.
+
+### Email evidence and correction of the earlier uncertainty
+
+The user confirmed receiving an OKX email and supplied the latest Documents
+image, WhatsApp Image 2026-09-10 at 08.09.24.jpeg. It was visually inspected and
+preserved byte-for-byte as [the email screenshot](../demo-assets/okx-refund-request-email-20260910.jpeg).
+The screenshot shows the OKX mark, the heading that PolyDesk received a refund
+request from a buyer, and the complete matching job ID
+0x6d9c23a4bc257912d43f9effadd82191bed2bd274ddb0c911e3ccd86309c62ca.
+It asks the provider to approve the refund or file for evaluation.
+
+This is observed evidence of the platform refund-request email for this task,
+corroborated by the user's receipt confirmation. Our earlier suggestion that
+PolyDesk needed its own email sender to obtain this alert was premature: OKX
+sent the platform alert independently of PolyDesk's application email code.
+The screenshot does not show sender headers or transport authentication; it
+is not an email-header audit. It proves neither guaranteed email delivery for
+all future events nor an email for an already-opened dispute. This was a refund
+request/rejection notification; no dispute was opened in this demonstration.
+
+### Future video: failure and refund branch
+
+1. Show the original JSON: researchStatus UNAVAILABLE, absent AI assessment;
+   explain that market data alone did not fulfill the commissioned AI review.
+2. Show sanitized provider timeout evidence: two roughly 20-second timeouts,
+   then routing budget exhausted before the third model. No fabricated score.
+3. Show buyer rejection and the specific missing-deliverable reason.
+4. Show the preserved OKX email screenshot and matching task ID. Say:
+   "OKX emailed the provider when the buyer requested a refund."
+5. Show the provider's refund-versus-evaluation choice and explicit operator
+   agreement to refund. This complaint was accepted; no dispute was filed.
+6. Show job_refunded/code=0 and the live terminal status. Explain failed means
+   refunded in the CLI; quote the 0.1 USDT refund and agreement transaction.
+7. End with: "The refund is complete. Next, fix and validate the AI timeout
+   handling before commissioning another paid review."
+
+Suggested narration: "When the AI review failed, we did not invent an answer
+or pressure the buyer to accept. The buyer rejected the incomplete delivery,
+OKX emailed PolyDesk, and the provider approved a full refund. We verified the
+refund event and preserved the original evidence."
+
+This remains a controlled test with the same operator controlling buyer and
+provider. It demonstrates the refund lifecycle, not independent customer demand
+or contested-dispute arbitration. No screen-recorded video has yet been made.
