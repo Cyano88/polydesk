@@ -844,3 +844,46 @@ provider/contract discrepancy remains unresolved; earlier standard-market
 success does not establish which spender is correct for this negative-risk buy.
 The existing exact-market incident guard stays in place. No support report was
 sent and no additional approval, research payment or trade was initiated.
+
+## Negative-risk spender trace (2026-09-10)
+
+Read-only reproduction: node --import tsx scripts/polymarket-negative-risk-route-audit.ts
+No wallet authentication, signing, approvals, or orders are used by this script.
+
+Deployed Polygon getter results:
+- Neg Risk V2 exchange getCollateral(): pUSD,
+  0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB.
+- getOutcomeTokenFactory(): 0xAdA200001000ef00D07553cEE7006808F895c6F1.
+- getCtfCollateral(): 0x3A3BD7bb9528E159577F7C2e685CC81A765002E2.
+- The actual factory's COLLATERAL_TOKEN is pUSD, USDCE is
+  0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174, and NEG_RISK_ADAPTER is
+  0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296.
+- The exchange already grants maximum pUSD allowance to its own factory.
+- Legacy adapter col() is USDC.e, not pUSD; wcol() matches getCtfCollateral().
+- The registry-listed newer adapter 0xadA2005600Dec949baf300f4C6120000bDB6eAab
+  returns the same collateral/USDC.e/legacy adapter identities, but is NOT the
+  factory returned by this deployed exchange. Do not substitute its address.
+
+Source trace (current official source; not a bytecode equivalence audit):
+https://github.com/Polymarket/ctf-exchange-v2/blob/main/src/exchange/mixins/AssetOperations.sol
+shows the exchange invokes collateral transferFrom for the buyer and calls its
+outcome-token factory for mint/merge. Assets.sol grants the exchange's own
+factory approval. CtfCollateralAdapter.sol pulls pUSD from its caller and unwraps
+it to USDC.e; NegRiskCtfCollateralAdapter.sol calls the legacy adapter internally.
+https://github.com/Polymarket/neg-risk-ctf-adapter/blob/main/src/NegRiskAdapter.sol
+pulls its col token (confirmed on-chain as USDC.e) for splitPosition.
+
+Correction to earlier framing: deprecated does not mean unused. The legacy
+adapter remains in the internal contract chain. However, an internal adapter
+call does not establish that this buyer should grant that adapter pUSD allowance.
+The rs-clob-client-v2 approval example hardcodes USDC.e, despite the repository
+name; it is not evidence for pUSD approval to the same old adapter. Installed
+TypeScript SDK config also retains legacy addresses alongside V2 addresses;
+config presence alone does not establish the required spender.
+
+The observed CLOB rejection still conflicts with this collateral/actor trace.
+No verified local change can yet make that order executable. Keep the exact
+market incident block. Do not promise that an adapter approval would fix it or
+that all negative-risk markets fail. Provider clarification must explain which
+TOKEN, OWNER and SPENDER its allowance check uses for this V2 POLY_1271 order.
+No report was sent and no new trade or approval was attempted.
