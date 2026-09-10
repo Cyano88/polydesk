@@ -1180,3 +1180,63 @@ INSUFFICIENT_OUTCOME_SHARES and INSUFFICIENT_DEPTH_AT_MINIMUM_PRICE (bid depth
 at 0.30 was zero). Builder rate remained 0 bps. No sell or approval occurred.
 The real local execution guard status was NO_UNCERTAIN_EXECUTION, confirming
 all crash tests stayed isolated. VPS instructions matched and daemon active.
+## Demo: recover an interrupted submission without duplicate trading (2026-09-10)
+
+Buyer question: "What does the remaining mean?" The earlier guard stopped
+uncertain retries but needed operator reconciliation. The new local recovery
+path automatically checks exact-order evidence and records a known result.
+
+Demo sequence:
+1. Show the authorized preview and stable execution ID. Before submission,
+   the patched plugin durably saves the public V2 order fields, owner and
+   selected exchange. No signature, private key or API credential is saved.
+2. Rehearse a crash or dropped response using the isolated fake executor.
+   Show the persistent pending guard blocking duplicate and fresh IDs.
+3. Run scripts/polymarket-wsl.ps1 -Recover. It derives the exact order hash and
+   checks authenticated order/trade history and finalized on-chain receipts.
+4. Show the outcome and follow-up: OPEN -> track existing order; FILLED ->
+   show recovered receipt and refresh position; CANCELED -> show cancellation
+   and any proven partial fills; UNRESOLVED -> keep submission blocked.
+5. Show the original execution ID still cannot submit again. Recovery clears
+   the uncertainty only after saving the verified result; it never grants
+   permission for another trade. A fresh preview/authorization remains separate.
+
+Judges' Q&A:
+- "Can a timeout cause two purchases?" The supported local launcher uses a
+  durable exclusive claim and stable ID. Uncertain outcomes block resubmission.
+  This is not a distributed exactly-once guarantee for unrelated clients.
+- "What if the order lookup says nothing?" That is not proof of rejection.
+  Recovery searches authenticated history for the exact order hash. Only fully
+  accounted finalized fills can resolve an absent order record automatically.
+- "What if it only partly filled?" A live remainder stays OPEN_PARTIALLY_FILLED;
+  a canceled remainder is CANCELED_PARTIALLY_FILLED after receipt verification.
+  Partial history without authoritative remainder status stays blocked.
+- "Will it trade again after recovering?" No. It shows the existing result;
+  old IDs remain blocked and a new trade needs its own preview/authorization.
+- "Does this handle every failure unattended?" No. Missing/corrupt bindings,
+  unavailable providers, unfinalized/reorganized receipts, a live submitter or
+  an abandoned recovery lock remain blocked for investigation. No lock expiry
+  or missing-order response is treated as permission to retry.
+
+Live read-only evidence: the historical completed sell order lookup returned
+null, while authenticated history found exactly one trade for order
+0x818ba33b560d8a79a86322465a3ab0b8e07f036e7089056b58c97ce07e3b4ba6,
+with settlement 0x3b707d7ae42f7812adc7fa8609ce1689d77a50db4dd219ca35b18a417bd84918.
+The receipt was successful, canonical and at/below the RPC finalized block.
+This validated provider readers only; the historical trade predates the new
+binding and was not fabricated into a real pending-recovery demonstration.
+The actual ledger returned NO_UNCERTAIN_EXECUTION. No money moved.
+
+Automated coverage: 14 Node recovery/guard tests pass, including exact BUY/SELL
+fills, open/canceled/partial orders, malformed identities, price/size mismatch,
+timeout/not-found, reorg/unfinalized/duplicate logs, durable completion, race
+exclusion, missing binding, and WSL binding-path injection. Plugin library
+tests include durable public-binding persistence and refuse overwriting it.
+Original Windows binary remains preserved. Apply recovery-binding.patch after
+the preflight and builder-attribution patches to reproduce the isolated build.
+Installed recovery-aware binary SHA256:
+0bf1726d2a42142a4455ae712f4d6dd161738ac81ef419dd9d781521673fbbf5.
+Plugin library suite: 28 passed. Launcher help and -Recover entry points verified.
+A successful submission response must also match the durable order hash;
+a mismatched returned ID cannot clear the guard. The public binding is required
+for guarded WSL submissions; an older binary that omits it stays blocked.

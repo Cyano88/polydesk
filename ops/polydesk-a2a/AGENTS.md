@@ -448,3 +448,35 @@ Operator reconciliation is still required for ambiguous outcomes. Do not
 remove ledger files or use the raw binary to bypass this stop. This is a
 local-launcher safeguard, not distributed exactly-once execution across
 unrelated machines or clients. The original raw binary remains outside it.
+### Exact-order automatic reconciliation
+
+For interrupted local submissions, run scripts/polymarket-wsl.ps1 -Recover.
+The launcher also invokes this recovery check before any new live buy/sell.
+The patched executor saves public unsigned order fields before signing and
+submission. Recovery derives the exact V2 order hash from that immutable
+binding and uses locally authenticated read-only order/trade queries.
+
+A verified open order is tracked rather than resubmitted. A filled order needs
+matching exchange, order hash, maker, side, token, builder, metadata, quantity
+and price bounds in canonical finalized receipts. If the order endpoint no
+longer returns the completed order, exact-order trade history plus fully
+accounted finalized fills can establish completion. Explicit cancellation can
+resolve the order; any partial fills require verified receipts. Missing order
+history is never evidence that submission did not happen.
+
+Verified recovery durably saves the result before clearing the pending guard.
+The original execution ID remains permanently non-replayable. Recovery never
+places, retries, cancels, approves or signs a trade. If pre-trade recovery
+finds an old result, show it and stop before the new trade; get a fresh preview
+and the appropriate buyer authorization. Use the returned next prompt:
+- OPEN: Track the existing order; do not submit it again.
+- FILLED: Show the recovered receipt and refresh the position.
+- CANCELED: Show cancellation and any fills; a new order needs a fresh preview.
+- UNRESOLVED: Keep submission blocked; verify provider status and evidence.
+
+A missing/corrupt binding, unknown order state, partial history without an order
+record, unfinalized/reorganized receipt, still-running submitter, or abandoned
+recovery lock stays blocked. These exceptional cases still require operator
+investigation. Do not delete locks, manufacture bindings for historical orders,
+or describe a simulation as a real crash recovery. Historical fills before the
+binding patch cannot be retroactively attributed to a new recovery execution.

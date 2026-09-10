@@ -34,3 +34,11 @@ test('two independent processes cannot both claim submission',async t=>{
  const codes=await Promise.all([run('buyer:order:001'),run('buyer:order:002')])
  assert.deepEqual(codes.sort(),[0,1])
 })
+test('guard injects an exact portable pre-submit binding path into WSL',t=>{
+ const d=fixture(t);let childArgs
+ assert.throws(()=>runGuard(d,'buyer:order:001','wsl.exe',['--exec','env','OTHER=1','binary','buy'],(_command,args)=>{childArgs=args;return {status:1}}))
+ const path=childArgs.find(value=>value.startsWith('POLYDESK_RECOVERY_BINDING_PATH='))
+ assert.ok(path.endsWith('.json.binding.json'))
+ assert.ok(!path.includes('\\'))
+ assert.ok(childArgs.includes('POLYDESK_EXECUTION_ID=buyer:order:001'))
+})

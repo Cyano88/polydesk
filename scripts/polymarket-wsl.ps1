@@ -1,5 +1,10 @@
-param([Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
+param([switch]$Recover,[Parameter(ValueFromRemainingArguments=$true)][string[]]$PluginArgs)
 $taskOwnerRoot = [Environment]::GetFolderPath('UserProfile')
+$taskLedger = Join-Path $taskOwnerRoot '.config\polymarket\polydesk-executions'
+if ($Recover) {
+  & node (Join-Path $PSScriptRoot 'polymarket-execution-recovery.mjs') $taskLedger
+  exit $LASTEXITCODE
+}
 $taskWalletHome = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.onchainos')).Trim()
 $taskConfigDir = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.config\polymarket')).Trim()
 $taskBinary = (wsl.exe --exec wslpath -u (Join-Path $taskOwnerRoot '.local\bin\polydesk-polymarket-linux')).Trim()
@@ -11,6 +16,13 @@ if ($PluginArgs[0] -in @('buy','sell') -and $taskBuilderCode -notmatch '^0x[0-9a
 $taskWslArgs = @('--exec','env',"POLYMARKET_BUILDER_CODE=$taskBuilderCode","ONCHAINOS_HOME=$taskWalletHome","POLYMARKET_CONFIG_DIR=$taskConfigDir",'POLYMARKET_ONCHAINOS_BIN=/root/.local/bin/onchainos',$taskBinary) + $PluginArgs
 $taskLiveOrder = $PluginArgs[0] -in @('buy','sell') -and '--dry-run' -notin $PluginArgs -and '--help' -notin $PluginArgs -and '-h' -notin $PluginArgs
 if ($taskLiveOrder) {
+  $taskRecoveryText = & node (Join-Path $PSScriptRoot 'polymarket-execution-recovery.mjs') $taskLedger
+  if ($LASTEXITCODE -ne 0) { Write-Output $taskRecoveryText; throw 'Interrupted execution remains unresolved; no new order attempted.' }
+  $taskRecovery = $taskRecoveryText | ConvertFrom-Json
+  if ($taskRecovery.state -ne 'NO_UNCERTAIN_EXECUTION') {
+    Write-Output $taskRecoveryText
+    throw 'Previous execution reconciled. Review its result before requesting a fresh trade preview; no new order attempted.'
+  }
   $taskLedger = Join-Path $taskOwnerRoot '.config\polymarket\polydesk-executions'
   if (!$env:POLYDESK_EXECUTION_ID) { throw 'Set POLYDESK_EXECUTION_ID to the stable buyer-authorized order ID. Never generate a new ID to retry an uncertain order.' }
   if ($PluginArgs[0] -eq 'sell') {

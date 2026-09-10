@@ -1,0 +1,85 @@
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -397,3 +397,46 @@
+         }
+     }
+ }
++
++/// Persist only public unsigned order fields before signing/submission. Recovery
++/// derives the exact order hash; signatures and API credentials never enter it.
++pub fn persist_recovery_binding(order: &crate::signing::OrderParamsV2, owner: &str, condition: &str, neg_risk: bool) -> Result<()> {
++    use std::io::Write;
++    let path = match std::env::var("POLYDESK_RECOVERY_BINDING_PATH") { Ok(path) => path, Err(_) => return Ok(()) };
++    let execution_id = std::env::var("POLYDESK_EXECUTION_ID").context("Missing recovery execution ID")?;
++    let value = serde_json::json!({
++        "schema":"polydesk-order-binding-v1", "executionId":execution_id,
++        "owner":owner, "conditionId":condition,
++        "exchange":Contracts::exchange(OrderVersion::V2,neg_risk),
++        "order": {"salt":order.salt.to_string(),"maker":order.maker,"signer":order.signer,
++            "tokenId":order.token_id,"makerAmount":order.maker_amount.to_string(),"takerAmount":order.taker_amount.to_string(),
++            "side":order.side,"signatureType":order.signature_type,"timestamp":order.timestamp_ms.to_string(),
++            "metadata":order.metadata,"builder":order.builder}
++    });
++    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)
++        .context("Recovery binding already exists or cannot be persisted; refusing submission")?;
++    file.write_all(serde_json::to_string(&value)?.as_bytes())?;
++    file.sync_all()?;
++    Ok(())
++}
++
++#[cfg(test)]
++mod recovery_binding_tests {
++    use super::*;
++    #[test]
++    fn persists_public_exact_order_once_without_credentials_or_signature() {
++        let path=std::env::temp_dir().join(format!("polydesk-recovery-binding-{}-{}.json",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
++        std::env::set_var("POLYDESK_RECOVERY_BINDING_PATH",&path);
++        std::env::set_var("POLYDESK_EXECUTION_ID","test:recovery:001");
++        let order=crate::signing::OrderParamsV2 {salt:9007199254740993,maker:"0x1111111111111111111111111111111111111111".into(),signer:"0x1111111111111111111111111111111111111111".into(),token_id:"111".into(),maker_amount:3100000,taker_amount:10000000,side:0,signature_type:3,timestamp_ms:1800000000000,metadata:crate::signing::BYTES32_ZERO.into(),builder:crate::signing::BYTES32_ZERO.into()};
++        persist_recovery_binding(&order,"0x2222222222222222222222222222222222222222","condition",false).unwrap();
++        let value:serde_json::Value=serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
++        assert_eq!(value["order"]["salt"],"9007199254740993");
++        assert_eq!(value["executionId"],"test:recovery:001");
++        assert!(value["order"].get("signature").is_none());
++        assert!(value.get("credentials").is_none());
++        assert!(persist_recovery_binding(&order,"owner","condition",false).is_err());
++        std::env::remove_var("POLYDESK_RECOVERY_BINDING_PATH");std::env::remove_var("POLYDESK_EXECUTION_ID");
++        std::fs::remove_file(path).unwrap();
++    }
++}
+--- a/src/commands/buy.rs
++++ b/src/commands/buy.rs
+@@ -435,6 +435,7 @@
+     );
+     let clob_version_raw = clob_version_raw?;
+     let clob_version = if clob_version_raw == 2 { OrderVersion::V2 } else { OrderVersion::V1 };
++    if std::env::var_os("POLYDESK_RECOVERY_BINDING_PATH").is_some() && clob_version != OrderVersion::V2 { bail!("Guarded recovery requires V2; refusing legacy submission."); }
+ 
+     // Pre-flight balance check — collateral token depends on CLOB version.
+     // V2 uses pUSD. If pUSD balance is insufficient but USDC.e balance is sufficient,
+@@ -800,6 +801,7 @@
+                 metadata: BYTES32_ZERO.to_string(),
+                 builder: builder_code.clone(),
+             };
++            crate::config::persist_recovery_binding(&params, &order_auth_addr, &condition_id, neg_risk)?;
+             let signature = if effective_mode == TradingMode::DepositWallet {
+                 sign_order_v2_poly1271_via_onchainos(&params, neg_risk).await?
+             } else {
+--- a/src/commands/sell.rs
++++ b/src/commands/sell.rs
+@@ -319,6 +319,7 @@
+     // Fetch CLOB version in parallel with credentials.
+     let clob_version_raw = get_clob_version(&client).await?;
+     let clob_version = if clob_version_raw == 2 { OrderVersion::V2 } else { OrderVersion::V1 };
++    if std::env::var_os("POLYDESK_RECOVERY_BINDING_PATH").is_some() && clob_version != OrderVersion::V2 { bail!("Guarded recovery requires V2; refusing legacy submission."); }
+ 
+     // Wallet address was pre-fetched in parallel with the order book (non-dry-run path).
+     let signer_addr = signer_addr_opt.expect("signer_addr must be set in non-dry-run path");
+@@ -570,6 +571,7 @@
+                 metadata: BYTES32_ZERO.to_string(),
+                 builder: builder_code.clone(),
+             };
++            crate::config::persist_recovery_binding(&params, &order_auth_addr, &condition_id, neg_risk)?;
+             let signature = if effective_mode == TradingMode::DepositWallet {
+                 sign_order_v2_poly1271_via_onchainos(&params, neg_risk).await?
+             } else {
