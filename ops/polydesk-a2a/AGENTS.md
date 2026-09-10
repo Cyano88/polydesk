@@ -63,6 +63,25 @@ supported channel. If results have not yet been shown, end with:
 
 "Reply 'show results' to read the findings before reviewing the delivery."
 
+### Show the AI analysis behind the score
+
+When presenting a research report, display the available AI assessment before
+asking for delivery review. Read evidence.zeroScout from that exact report and
+include its summary, tradeAssessment.stance, thesis, counterThesis, evidenceQuality,
+confidence, key source links, material risks/dataGaps, and the report's generatedAt
+and validUntil. Label confidence as "AI research confidence: N/100", never win
+probability, statistical certainty, expected return, or a calibrated forecast.
+The opportunity-screening score is a separate measure and must not replace it.
+
+Explain the evidence supporting and weakening the assessment using the delivered
+summary, signals, thesis and counter-thesis. Do not invent a numeric decomposition
+of confidence. If reasoningSummary is empty, use the actual available assessment
+fields and disclose any missing explanation; never fabricate hidden reasoning.
+Missing AI analysis must be displayed as unavailable, not as zero confidence or
+an implied approval. Separate recorded observations from AI inferences, and flag
+expired reports and conflicting sources rather than presenting them as fresh facts.
+Keep the original JSON intact; this is its readable companion.
+
 After showing the results, present the review actions available in the current
 official task flow. Explain that accepting the delivery completes the service
 review and releases its payment; it does not authorize a trade. For an available
@@ -80,6 +99,38 @@ a delivery accepted, release payment, or authorize execution from silence, a
 status-check request, or a request to view results. For a provider session, include
 this guidance in the permitted delivery message; do not send an extra unsolicited
 message or take the buyer's review action. Other buyers' agents control their own UI.
+
+## After delivery review is accepted
+
+Only after the official task status confirms complete, tell the buyer that the
+research delivery is accepted and its service payment released. Then append a
+clear optional continuation, with no default action:
+
+"Would you like to review taking this trade, or pass on it and analyze other markets?"
+
+For an INSUFFICIENT, OPPOSE, unavailable, or expired assessment, keep that warning
+visible beside the prompt. Do not present taking the trade as an AI recommendation.
+For example: "This report found insufficient evidence. Taking it further requires
+a fresh trade review; accepting the research did not approve an order."
+
+A choice to review this trade starts only the supported fresh review and exact
+trade-setup flow. Recheck market/outcome, evidence validity, price, wallet readiness
+and explicit buyer limits before showing the final order confirmation. Never
+resurrect the completed task, reuse an expired report as approval, or route a
+research-only report into capped RESEARCH_PREPARE. Do not sign or submit from this
+continuation prompt alone. Follow the existing independent-decision and signing
+flow; approval of a research delivery is not execution consent.
+
+A choice to analyze other markets starts discovery and scope selection. Disclose
+and obtain approval for any additional paid research before purchase; never
+silently reuse the completed task's fee or start an automatic paid analysis loop.
+If the reply does not distinguish the two branches (for example a bare "yes"),
+ask which branch the buyer wants. Do not infer a trade choice or spend authority.
+
+Append this only to permitted buyer-facing completion updates. Do not modify
+canonical event notifications or send extra peer messages outside the returned
+playbook. In provider deliveries, supply the readable analysis and continuation
+guidance for the requesting agent; its own application controls the final UI.
 
 ## Worker request
 
