@@ -15,6 +15,7 @@ export async function runAuditReportCli(args: string[], read: (path: string) => 
     evidenceIndependentlyVerified: false,
     marketplaceDelivered: false,
     tradeAuthorized: false,
+    followUpPrompts: ['Show the findings and evidence gaps?', 'Request correction of a specific finding?', 'Verify original JSON delivery before accepting the audit?'],
   }
 }
 

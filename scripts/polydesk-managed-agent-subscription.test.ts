@@ -1,3 +1,4 @@
+import { managedServiceContinuation } from '../api/polydesk-managed-continuation.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -137,4 +138,32 @@ test('portfolio monitor gates every periodic path and rehydrates public watched 
 
 test('request schema is stable', () => {
   assert.equal(MANAGED_AGENT_SCHEMA, 'polydesk-managed-agent-subscription-v1')
+})
+
+test('managed continuation shares owner-bound memory and current preparation without granting execution', () => {
+  const flow = managedServiceContinuation('active', '2026-10-01T00:00:00Z', true, Date.parse('2026-09-10'))
+  assert.equal(flow.tradeAuthorized, false)
+  assert.equal(flow.orderSubmitted, false)
+  assert.equal(flow.automaticCopyExecution, false)
+  assert.equal(flow.receiptMemory.authorization.type, 'OWNER_PERSONAL_SIGN')
+  assert.equal(flow.receiptMemory.historyComplete, false)
+  assert.equal(flow.trading?.buy.endpoint, '/api/polymarket-independent/prepare')
+  assert.equal(flow.trading?.sell.orderType, 'FOK')
+  assert.equal(flow.trading?.sell.previewOnly, true)
+  assert.ok(flow.followUpPrompts.includes('Prepare a trade for review?'))
+})
+
+test('paused, expired and invalid entitlement never advertise an active trade handoff', () => {
+  for (const [state, end] of [['paused', '2026-10-01'], ['cancelled', '2026-10-01'], ['active', '2026-09-01'], ['active', 'invalid']]) {
+    const flow = managedServiceContinuation(state, end, true, Date.parse('2026-09-10'))
+    assert.equal(flow.trading, null)
+    assert.equal(flow.tradeAuthorized, false)
+    assert.ok(!flow.followUpPrompts.includes('Prepare a trade for review?'))
+  }
+})
+
+test('unverified notification email gets a verification prompt before monitoring', () => {
+  const flow = managedServiceContinuation('active', '2026-10-01', false, Date.parse('2026-09-10'))
+  assert.match(flow.followUpPrompts[0], /Verify your notification email/)
+  assert.equal(flow.tradeAuthorized, false)
 })

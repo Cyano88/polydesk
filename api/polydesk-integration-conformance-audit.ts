@@ -1,3 +1,4 @@
+import { POLYDESK_ALIGNMENT_CHECKS, type AlignmentCheckId } from './polydesk-alignment-checks.js'
 import { createHash } from 'node:crypto'
 
 export const POLYDESK_CONFORMANCE_AUDIT_PRICE_USDT = 25
@@ -23,6 +24,14 @@ export type PolyDeskConformanceFinding = {
   remediation?: string
 }
 
+export type PolyDeskAlignmentFinding = {
+  id: AlignmentCheckId
+  status: PolyDeskConformanceStatus | 'not-applicable'
+  summary: string
+  evidenceIds: string[]
+  remediation?: string
+}
+
 export type PolyDeskConformanceAuditInput = {
   jobId: string
   buyerAgentId: string
@@ -32,11 +41,12 @@ export type PolyDeskConformanceAuditInput = {
   generatedAt: string
   evidence: PolyDeskConformanceEvidence[]
   findings: PolyDeskConformanceFinding[]
+  checks?: PolyDeskAlignmentFinding[]
 }
 
 export type PolyDeskConformanceAuditReport = {
   schema: 'polydesk-integration-conformance-report'
-  schemaVersion: '1.0.0'
+  schemaVersion: '1.1.0'
   reportId: string
   jobId: string
   buyerAgentId: string
@@ -45,6 +55,7 @@ export type PolyDeskConformanceAuditReport = {
   price: { amountUsdt: 25; billing: 'per-task' }
   verdict: 'CONFORMANT' | 'NON_CONFORMANT' | 'INCOMPLETE'
   counts: { pass: number; fail: number; notTested: number }
+  checks: PolyDeskAlignmentFinding[]
   controls: PolyDeskConformanceFinding[]
   evidenceManifest: PolyDeskConformanceEvidence[]
   boundary: string
@@ -91,7 +102,7 @@ function canonicalJson(value: unknown): string {
 
 export function buildPolyDeskConformanceAuditReport(raw: PolyDeskConformanceAuditInput): PolyDeskConformanceAuditReport {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Audit input must be an object.')
-  assertAllowedKeys(raw as unknown as Record<string, unknown>, ['jobId', 'buyerAgentId', 'integrationName', 'platformUrl', 'assessedVersion', 'generatedAt', 'evidence', 'findings'], 'Audit input')
+  assertAllowedKeys(raw as unknown as Record<string, unknown>, ['jobId', 'buyerAgentId', 'integrationName', 'platformUrl', 'assessedVersion', 'generatedAt', 'evidence', 'findings', 'checks'], 'Audit input')
   const jobId = clean(raw.jobId, 'jobId', 66).toLowerCase()
   if (!/^0x[a-f0-9]{64}$/.test(jobId)) throw new Error('jobId must be a 32-byte 0x-prefixed identifier.')
   const buyerAgentId = clean(raw.buyerAgentId, 'buyerAgentId', 20)
@@ -138,9 +149,28 @@ export function buildPolyDeskConformanceAuditReport(raw: PolyDeskConformanceAudi
     return { control: finding.control, status: finding.status, summary: clean(finding.summary, `findings[${index}].summary`, 1000), evidenceIds: linkedEvidence, ...(remediation ? { remediation } : {}) }
   })
 
+  if (raw.checks !== undefined && (!Array.isArray(raw.checks) || raw.checks.length > POLYDESK_ALIGNMENT_CHECKS.length)) throw new Error('checks must be an array of known alignment checks.')
+  const supplied = new Map<AlignmentCheckId, PolyDeskAlignmentFinding>()
+  for (const item of raw.checks ?? []) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Invalid alignment check.')
+    assertAllowedKeys(item as unknown as Record<string, unknown>, ['id', 'status', 'summary', 'evidenceIds', 'remediation'], 'Alignment check')
+    if (!POLYDESK_ALIGNMENT_CHECKS.some(check => check.id === item.id) || supplied.has(item.id)) throw new Error('Unknown or duplicate alignment check.')
+    if (!['pass', 'fail', 'not-tested', 'not-applicable'].includes(item.status)) throw new Error('Invalid alignment status.')
+    if (!Array.isArray(item.evidenceIds)) throw new Error('Alignment evidenceIds must be an array.')
+    const evidenceIds = [...new Set(item.evidenceIds.map(id => clean(id, 'Alignment evidence id', 80)))]
+    if (evidenceIds.some(id => !evidence.some(e => e.id === id))) throw new Error('Alignment check references unknown evidence.')
+    if (item.status !== 'not-tested' && !evidenceIds.length) throw new Error('Alignment pass, fail and not-applicable results require evidence.')
+    const remediation = item.remediation ? clean(item.remediation, 'Alignment remediation', 1000) : undefined
+    if (item.status === 'fail' && !remediation) throw new Error('Failed alignment checks require remediation.')
+    supplied.set(item.id, { id: item.id, status: item.status, summary: clean(item.summary, 'Alignment summary or applicability reason', 1000), evidenceIds, ...(remediation ? { remediation } : {}) })
+  }
+  const checks: PolyDeskAlignmentFinding[] = POLYDESK_ALIGNMENT_CHECKS.map(check => supplied.get(check.id) ?? {
+    id: check.id, status: 'not-tested', summary: check.requirement, evidenceIds: [],
+  })
+
   const counts = { pass: findings.filter(item => item.status === 'pass').length, fail: findings.filter(item => item.status === 'fail').length, notTested: findings.filter(item => item.status === 'not-tested').length }
-  const verdict = counts.fail ? 'NON_CONFORMANT' : counts.notTested ? 'INCOMPLETE' : 'CONFORMANT'
-  const reportCore = { jobId, buyerAgentId, integration: { name: integrationName, platformUrl, ...(assessedVersion ? { assessedVersion } : {}) }, generatedAt, findings, evidence }
+  const verdict = counts.fail || checks.some(check => check.status === 'fail') ? 'NON_CONFORMANT' : counts.notTested || checks.some(check => check.status === 'not-tested') ? 'INCOMPLETE' : 'CONFORMANT'
+  const reportCore = { jobId, buyerAgentId, integration: { name: integrationName, platformUrl, ...(assessedVersion ? { assessedVersion } : {}) }, generatedAt, findings, evidence, checks }
   const reportId = `pcia_${createHash('sha256').update(canonicalJson(reportCore)).digest('hex').slice(0, 32)}`
-  return { schema: 'polydesk-integration-conformance-report', schemaVersion: '1.0.0', reportId, jobId, buyerAgentId, integration: reportCore.integration, generatedAt, price: { amountUsdt: 25, billing: 'per-task' }, verdict, counts, controls: findings, evidenceManifest: evidence, boundary: 'This report assesses supplied and independently captured integration evidence. It is not a profitability guarantee, legal opinion, or formal security certification.' }
+  return { schema: 'polydesk-integration-conformance-report', schemaVersion: '1.1.0', reportId, jobId, buyerAgentId, integration: reportCore.integration, generatedAt, price: { amountUsdt: 25, billing: 'per-task' }, verdict, counts, checks, controls: findings, evidenceManifest: evidence, boundary: 'This report compiles declared assessments and evidence references; compilation does not independently verify evidence or perform live checks. It is not a profitability guarantee, legal opinion, or formal security certification.' }
 }

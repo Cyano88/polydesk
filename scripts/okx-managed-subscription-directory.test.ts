@@ -77,3 +77,14 @@ test('status fallback refuses ambiguity or a buyer job not bound to PolyDesk', (
   assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService] } }, new Map([[jobId, goodStatus.replace('asp: 5427', 'asp: 10764')]])), /did not bind/)
   assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, { ok: true, data: { list: [exactService] } }, new Map([[jobId, goodStatus.replace('Managed Polymarket Agent', 'Fake Managed Polymarket Agent Offer')]])), /did not bind/)
 })
+
+test('accepts verified localized DACS subscription title without weakening identity checks', () => {
+  const jobId = '0x' + 'a'.repeat(64)
+  const service = { id: 38496, serviceId: MANAGED_AGENT_SERVICE_ID, serviceName: 'Managed Polymarket Agent', subscription: [{}] }
+  const catalog = { ok: true, data: { list: [service] } }
+  const status = `Task status: accepted\njobId: ${jobId}\ntitle: DACS\u8ba2\u9605-PolyDesk Trading Membership\nuser: 8178\nasp: 5427`
+  assert.equal(catalogAndStatusManagedSubscriptions(singleActive, catalog, new Map([[jobId, status]])).length, 1)
+  for (const bad of [status.replace('asp: 5427', 'asp: 9999'), status.replace('Task status: accepted', 'Task status: submitted'), status.replace('Membership', 'Membership Fake')]) {
+    assert.throws(() => catalogAndStatusManagedSubscriptions(singleActive, catalog, new Map([[jobId, bad]])), /did not bind/)
+  }
+})

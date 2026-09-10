@@ -19,7 +19,7 @@ The standard task covers one integration and one deployed version. A buyer provi
 
 PolyDesk returns:
 
-- a machine-readable `polydesk-integration-conformance-report` at schema version `1.0.0`;
+- a machine-readable `polydesk-integration-conformance-report` at schema version `1.1.0`;
 - one result for each mandatory control: `pass`, `fail`, or `not-tested`;
 - an evidence manifest with SHA-256 hashes and capture timestamps;
 - remediation for every failed control;
@@ -41,3 +41,6 @@ The report generator lives in `api/polydesk-integration-conformance-audit.ts`. I
 ## Boundary
 
 This is an integration conformance assessment, not a profitability guarantee, legal opinion, penetration test, or formal security certification. Custom source-code reviews, additional deployments, and continuous monitoring require a separately scoped task.
+
+
+Updated coverage and applicability rules: see THREE_A2A_ALIGNMENT_20260910.md and api/polydesk-alignment-checks.ts. Missing checks produce INCOMPLETE even when the six broad controls pass. A not-applicable assessment requires a scope explanation and evidence.

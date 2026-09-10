@@ -1,3 +1,4 @@
+import { managedServiceContinuation } from './polydesk-managed-continuation.js'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { getAddress, isAddress } from 'viem'
@@ -570,13 +571,14 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
       const subscription = validateManagedSubscriptionIdentity(body.subscription)
       const preferences = validateManagedPreferences(body.preferences)
       const result = await enroll(req, subscription, preferences)
-      return res.status(202).json({ ok: true, ...result })
+      return res.status(202).json({ ok: true, ...result, continuation: managedServiceContinuation(subscription.status, subscription.periodEndAt, result.monitoringEnabled) })
     }
     if (action === 'pause' || action === 'resume' || action === 'cancel') {
       const subscription = validateManagedSubscriptionIdentity(body.subscription)
       const expected = action === 'pause' ? 'paused' : action === 'cancel' ? 'cancelled' : 'active'
       if (subscription.status !== expected) throw new Error(`${action} requires subscription status ${expected}.`)
-      return res.json({ ok: true, ...(await setLifecycle(subscription)) })
+      const result = await setLifecycle(subscription)
+      return res.json({ ok: true, ...result, continuation: managedServiceContinuation(result.state, subscription.periodEndAt, result.monitoringEnabled) })
     }
     if (action === 'payment_failed') {
       const subscription = validateManagedSubscriptionIdentity(body.subscription)
@@ -604,7 +606,8 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
         [subscription.jobId, MANAGED_AGENT_SERVICE_ID],
       )).rows[0]
       if (!row) return res.status(404).json({ ok: false, error: 'Managed subscription is not enrolled.' })
-      return res.json({ ok: true, subscription: row })
+      if (String(row.buyer_agent_id) !== subscription.buyerAgentId) return res.status(403).json({ ok: false, error: 'Managed subscription buyer mismatch.' })
+      return res.json({ ok: true, subscription: row, continuation: managedServiceContinuation(String(row.status), new Date(row.period_end_at).toISOString(), row.alert_email_verified === true) })
     }
     return res.status(400).json({ ok: false, error: 'Unsupported action.' })
   } catch (error) {

@@ -480,3 +480,14 @@ recovery lock stays blocked. These exceptional cases still require operator
 investigation. Do not delete locks, manufacture bindings for historical orders,
 or describe a simulation as a real crash recovery. Historical fills before the
 binding patch cannot be retroactively attributed to a new recovery execution.
+## Three-service alignment (2026-09-10)
+
+Only the three A2A products are in scope. Never recreate or promote the six retired A2MCP marketplace services.
+
+For Managed Polymarket Agent, render the API response's `continuation.followUpPrompts` and preserve its authority boundaries. The continuation supplies shared BUY preparation, FOK SELL preflight, and owner-authorized Postgres/Sibyl recall instructions. It does not execute a copy trade. A watched wallet or subscription identity must never authorize access to another owner's private receipt memory. Missing or unsynchronized memory does not authorize a retry. Use existing exact preview/authorization/readiness/guarded-execution/receipt steps for each separately approved trade; do not route managed tasks through the One-Off worker.
+
+For Integration Audit, use report schema 1.1.0 and assess every requirement in `api/polydesk-alignment-checks.ts`. Supply `checks` entries with id, status, summary, evidenceIds and remediation for failures. Unsupported scope is not automatically a pass: a not-applicable result needs evidence and a scope explanation. Omitted checks produce INCOMPLETE. Independently verify evidence before declaring pass/fail; the compiler does not perform live verification.
+
+Sibyl receipt memory is for verified execution receipts. Do not insert audit findings, research prose, credentials, or unverified fills into it. Assess owner isolation, expiring recall authorization, integrity, partial-history disclosure and failed-projection recovery when relevant.
+
+Show audit findings and original JSON before delivery review, offer correction of specific defects, and verify settlement through the official task flow. Audit settlement never grants trading authority.

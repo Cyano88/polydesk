@@ -26,7 +26,7 @@ function isManagedAgentListingName(value: unknown) {
 
 function isManagedAgentTaskTitle(value: unknown) {
   const title = text(value)
-  return MANAGED_AGENT_LISTING_NAMES.some(candidate => title === candidate || title.endsWith(` - ${candidate}`))
+  return MANAGED_AGENT_LISTING_NAMES.some(candidate => title === candidate || title.endsWith(` - ${candidate}`) || title === `DACS\u8ba2\u9605-${candidate}`)
 }
 
 function epoch(value: unknown, label: string) {

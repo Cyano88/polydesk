@@ -1,3 +1,4 @@
+import { POLYDESK_ALIGNMENT_CHECKS } from '../api/polydesk-alignment-checks.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildPolyDeskConformanceAuditReport, POLYDESK_CONFORMANCE_AUDIT_PRICE_USDT, POLYDESK_CONFORMANCE_CONTROLS, type PolyDeskConformanceAuditInput } from '../api/polydesk-integration-conformance-audit.js'
@@ -11,6 +12,7 @@ function validInput(): PolyDeskConformanceAuditInput {
     assessedVersion: '2026.09.04',
     generatedAt: '2026-09-04T17:00:00.000Z',
     evidence: [{ id: 'runtime-readiness', sha256: 'a'.repeat(64), capturedAt: '2026-09-04T16:55:00.000Z', kind: 'runtime-response', source: 'https://agent.example/api/polymarket/readiness', summary: 'Sanitized readiness response captured during the assessment.' }],
+    checks: POLYDESK_ALIGNMENT_CHECKS.map(check => ({ id: check.id, status: 'pass' as const, summary: check.requirement, evidenceIds: ['runtime-readiness'] })),
     findings: POLYDESK_CONFORMANCE_CONTROLS.map(control => ({ control, status: 'pass' as const, summary: `${control} control produced the expected bounded response.`, evidenceIds: ['runtime-readiness'] })),
   }
 }
@@ -52,4 +54,40 @@ test('requires safe URLs and evidence dated no later than the report', () => {
   assert.throws(() => buildPolyDeskConformanceAuditReport(unsafe), /credential-free HTTPS URL/)
   const future = validInput(); future.evidence[0].capturedAt = '2026-09-04T18:00:00.000Z'
   assert.throws(() => buildPolyDeskConformanceAuditReport(future), /dated after the report/)
+})
+
+test('legacy broad controls cannot certify the new trading and memory flow', () => {
+  const input = validInput()
+  delete input.checks
+  const report = buildPolyDeskConformanceAuditReport(input)
+  assert.equal(report.schemaVersion, '1.1.0')
+  assert.equal(report.verdict, 'INCOMPLETE')
+  assert.equal(report.checks.filter(check => check.status === 'not-tested').length, POLYDESK_ALIGNMENT_CHECKS.length)
+})
+
+test('alignment failures change verdict and report identity', () => {
+  const input = validInput()
+  const original = buildPolyDeskConformanceAuditReport(input)
+  input.checks![4] = { ...input.checks![4], status: 'fail', remediation: 'Block replay until exact finalized receipt reconciliation.' }
+  const failed = buildPolyDeskConformanceAuditReport(input)
+  assert.equal(failed.verdict, 'NON_CONFORMANT')
+  assert.notEqual(failed.reportId, original.reportId)
+  delete input.checks![4].remediation
+  assert.throws(() => buildPolyDeskConformanceAuditReport(input), /require remediation/)
+})
+
+test('scope exclusions require evidence and cannot hide omitted checks', () => {
+  const input = validInput()
+  input.checks![6] = { id: 'sibyl-owner-isolation', status: 'not-applicable', summary: 'Assessed version has no receipt-memory integration; architecture evidence establishes this scope.', evidenceIds: ['runtime-readiness'] }
+  assert.equal(buildPolyDeskConformanceAuditReport(input).verdict, 'CONFORMANT')
+  input.checks![6].evidenceIds = []
+  assert.throws(() => buildPolyDeskConformanceAuditReport(input), /require evidence/)
+  input.checks![6].evidenceIds = ['missing']
+  assert.throws(() => buildPolyDeskConformanceAuditReport(input), /unknown evidence/)
+})
+
+test('duplicate alignment results are rejected', () => {
+  const input = validInput()
+  input.checks![1] = input.checks![0]
+  assert.throws(() => buildPolyDeskConformanceAuditReport(input), /duplicate alignment/)
 })
