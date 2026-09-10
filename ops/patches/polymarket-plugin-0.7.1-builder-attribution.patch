@@ -1,0 +1,123 @@
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -352,3 +352,48 @@
+             .unwrap_or_else(|_| Self::WEB.to_string())
+     }
+ }
++
++// Explicit attribution; fail closed until fee-inclusive buyer execution is supported.
++pub fn validate_builder_code(value: &str) -> Result<String> {
++    let value = value.trim();
++    anyhow::ensure!(value.starts_with("0x") && value.len() == 66
++        && value[2..].bytes().all(|b| b.is_ascii_hexdigit())
++        && value[2..].bytes().any(|b| b != b'0'), "A nonzero bytes32 POLYMARKET_BUILDER_CODE is required");
++    Ok(value.to_ascii_lowercase())
++}
++pub fn validate_attribution_fees(code: &str, value: &serde_json::Value) -> Result<()> {
++    anyhow::ensure!(value["code"].as_str().map(|v| v.eq_ignore_ascii_case(code)) == Some(true)
++        && value["enabled"].as_bool() == Some(true), "Builder code is disabled or unverified");
++    anyhow::ensure!(value["builder_maker_fee_rate_bps"].as_u64() == Some(0)
++        && value["builder_taker_fee_rate_bps"].as_u64() == Some(0),
++        "Nonzero or unknown builder fees require a fee-inclusive buyer preview; execution blocked");
++    Ok(())
++}
++pub async fn verified_builder_code(client: &reqwest::Client) -> Result<String> {
++    let code = validate_builder_code(&std::env::var("POLYMARKET_BUILDER_CODE")
++        .context("POLYMARKET_BUILDER_CODE is missing")?)?;
++    let value: serde_json::Value = client.get(format!("https://clob.polymarket.com/fees/builder-fees/{}", code))
++        .timeout(std::time::Duration::from_secs(12)).send().await?
++        .error_for_status()?.json().await?;
++    validate_attribution_fees(&code, &value)?;
++    Ok(code)
++}
++#[cfg(test)]
++mod attribution_tests {
++    use super::*;
++    #[test]
++    fn reject_missing_invalid_disabled_mismatched_or_fee_charging_codes() {
++        for invalid in ["".to_string(), "0x1234".to_string(), format!("0x{}", "0".repeat(64)), format!("0x{}", "z".repeat(64))] {
++            assert!(validate_builder_code(&invalid).is_err());
++        }
++        let code = validate_builder_code(&format!("0x{}", "AB".repeat(32))).unwrap();
++        let valid = serde_json::json!({"code":code,"enabled":true,"builder_maker_fee_rate_bps":0,"builder_taker_fee_rate_bps":0});
++        assert!(validate_attribution_fees(&code, &valid).is_ok());
++        for (key, value) in [("enabled", serde_json::json!(false)), ("code", serde_json::json!("wrong")),
++            ("builder_maker_fee_rate_bps", serde_json::json!(1)), ("builder_taker_fee_rate_bps", serde_json::json!(1)),
++            ("builder_taker_fee_rate_bps", serde_json::Value::Null)] {
++            let mut invalid = valid.clone(); invalid[key] = value;
++            assert!(validate_attribution_fees(&code, &invalid).is_err());
++        }
++    }
++}
+--- a/src/commands/buy.rs
++++ b/src/commands/buy.rs
+@@ -137,6 +137,7 @@
+     };
+ 
+     let client = Client::new();
++    let builder_code = crate::config::verified_builder_code(&client).await?;
+ 
+     // ── Public API phase (no auth, runs for dry-run too) ─────────────────────
+ 
+@@ -344,6 +345,7 @@
+         let mut dry_result = serde_json::json!({
+             "ok": true,
+             "dry_run": true,
++            "builder_code": builder_code,
+             "data": {
+                 "market_id": market_id,
+                 "condition_id": condition_id,
+@@ -796,7 +798,7 @@
+                 signature_type: sig_type,
+                 timestamp_ms,
+                 metadata: BYTES32_ZERO.to_string(),
+-                builder: BYTES32_ZERO.to_string(),
++                builder: builder_code.clone(),
+             };
+             let signature = if effective_mode == TradingMode::DepositWallet {
+                 sign_order_v2_poly1271_via_onchainos(&params, neg_risk).await?
+@@ -814,7 +816,7 @@
+                 signature_type: sig_type,
+                 timestamp: timestamp_ms.to_string(),
+                 metadata: BYTES32_ZERO.to_string(),
+-                builder: BYTES32_ZERO.to_string(),
++                builder: builder_code.clone(),
+                 signature,
+             };
+             // In V2, expiration moves to the outer wrapper (not part of the signed struct).
+--- a/src/commands/sell.rs
++++ b/src/commands/sell.rs
+@@ -128,6 +128,7 @@
+     };
+ 
+     let client = Client::new();
++    let builder_code = crate::config::verified_builder_code(&client).await?;
+ 
+     // ── Public API phase (no auth, runs for dry-run too) ─────────────────────
+ 
+@@ -283,6 +284,7 @@
+         let mut dry_result = serde_json::json!({
+             "ok": true,
+             "dry_run": true,
++            "builder_code": builder_code,
+             "data": {
+                 "market_id": market_id,
+                 "condition_id": condition_id,
+@@ -566,7 +568,7 @@
+                 signature_type: sig_type,
+                 timestamp_ms,
+                 metadata: BYTES32_ZERO.to_string(),
+-                builder: BYTES32_ZERO.to_string(),
++                builder: builder_code.clone(),
+             };
+             let signature = if effective_mode == TradingMode::DepositWallet {
+                 sign_order_v2_poly1271_via_onchainos(&params, neg_risk).await?
+@@ -584,7 +586,7 @@
+                 signature_type: sig_type,
+                 timestamp: timestamp_ms.to_string(),
+                 metadata: BYTES32_ZERO.to_string(),
+-                builder: BYTES32_ZERO.to_string(),
++                builder: builder_code.clone(),
+                 signature,
+             };
+             let order_req = OrderRequestV2 {

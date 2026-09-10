@@ -409,3 +409,16 @@ execution and preserve the buyer's price/amount/order-policy limits. Never
 translate "Show receipt", "Check position" or "Analyze another market" into
 trade or paid-service consent. If waiting was promised, actually perform the
 check and report the result; never imply background monitoring was started.
+
+### PolyDesk builder attribution
+
+The local patched WSL trade executor must use the owner-confirmed public code
+0x873845696727f985cc6a23dcdffaefefd3f47a712dd8a02f1a938cac615844db.
+Use scripts/polymarket-wsl.ps1 for local previews and authorized execution.
+The original Windows plugin does not attach this code. Never substitute it to
+bypass an attribution or fee-check failure. Current builder rates are zero;
+the patched executor rejects unknown or nonzero rates pending fee-inclusive
+preview support. Do not describe research payments as trading builder fees.
+After a future authorized fill, verify the exact OrderFilled builder field
+before claiming attributed volume or earnings. Do not place a trade merely
+to test attribution. Show fees separately and keep them within the buyer cap.

@@ -1052,3 +1052,48 @@ that every future model response is guaranteed. Demo should show post-sale:
 "Position closed. Net proceeds 3.18450 pUSD; round-trip loss 0.34314; balance
 4.68187. Show receipt, analyze another market, or keep funds."
 No new paid research or trade is implied by those choices.
+
+## Builder attribution and proposed service fee (2026-09-10)
+
+Buyer asked who receives trading fees and authorized PolyDesk attribution.
+Buyer confirmed public code 0x873845696727f985cc6a23dcdffaefefd3f47a712dd8a02f1a938cac615844db.
+The official CLOB builder-fees endpoint returned this code, enabled=true,
+maker=0 bps and taker=0 bps. Ownership confirmation came from the buyer;
+no matching public leaderboard entry was independently found.
+
+The native SDK preparation already passes POLYMARKET_BUILDER_CODE through
+builderConfig. The local plugin had hardcoded bytes32 zero for both BUY and
+SELL. Its new patch uses the verified configured code in BOTH the signed V2
+struct and submitted order body, and exposes it in dry-run output. The PolyDesk
+WSL launcher pins the buyer-confirmed public code and rejects conflicting env
+configuration. The isolated original Windows binary is preserved.
+
+The patched executor queries current builder status/rates before proceeding.
+Missing, malformed, disabled, mismatched, nonzero-fee or unknown-fee responses
+block execution. Current scope is zero-fee attribution. No builder rate was
+changed and no trade was authorized by this attribution request.
+
+Question: Can PolyDesk charge half whatever Polymarket charges?
+Answer: Not exactly through the native fixed-rate builder setting. Official
+rules specify flat percentages of notional: taker maximum 100 bps (1%), maker
+maximum 50 bps (0.5%), steps of 1 bp, one rate change per 7 days and changes
+effective after 3 days. Platform fees vary by market and execution price.
+For the recorded sell, half of 0.115500 is 0.057750 pUSD, or 1.75% of the
+3.300000 gross notional, exceeding the 1% native taker-builder cap.
+The separate 0.1 USDT research service payment is not a trading builder fee.
+Source: https://docs.polymarket.com/programs/builders/fees
+
+Reproduction: apply the existing preflight patch, then
+ops/patches/polymarket-plugin-0.7.1-builder-attribution.patch (use
+--ignore-space-change for Windows line endings). Cargo --lib tests: 27 passed.
+A live fill carrying PolyDesk's builder field and any future fee payout still
+require independent verification; previews and unit tests do not prove them.
+
+Buyer follow-up: Attribution is configured at zero builder fees. Review a fresh
+preview before any new trade. Choosing a future nonzero service rate is a
+separate decision, and requires fee-inclusive balances and buyer disclosure.
+Validation completed: BUY and SELL public-data-only dry-runs both returned
+ok=true, dry_run=true and the exact confirmed PolyDesk builder_code. No order
+was signed or submitted. Installed local binary SHA256:
+6cbb4182732a65106ebf48be144993cad2da5eb840f5e9ef4e304aaa5483bb17.
+Cargo binary build succeeded; existing compiler warnings remain.
