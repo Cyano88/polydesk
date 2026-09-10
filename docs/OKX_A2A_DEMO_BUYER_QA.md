@@ -974,3 +974,40 @@ No automatic approval from a buy. Regression verifies that the known market
 blocks without adapter allowance and passes that gate once funded/approved.
 Native SDK fee sizing remains a separate known limitation. Live fill still
 requires a fresh market check and the original $4-capped order authorization.
+
+## Negative-risk trade completed and independently reconciled (2026-09-10)
+
+The local repair worked without contacting support. Deployed commit 281a388
+was live; 72 combined regressions and server typecheck passed. Local build and
+region access passed. Fresh production preflight at 10:39:25 UTC returned
+publicChecksPassed=true, zero issues, 20.6-second book age, 3.751 required and
+both exchange/adapter allowances sufficient. Existing user-authorized preview
+was unchanged: 11 Yes shares, 0.31 maximum, 3.41 pUSD, FOK, $4 all-in cap.
+
+One post-repair buy was submitted and returned matched.
+Order: 0xe01949ac53b80038eb63793cd892255fd80d789c11eded30bbcf708d3a13061d
+Settlement: 0x3ee24092bc45dcb2e96b7138cbcf51e648328076ab5686663d7514be8a46d06c
+Polygon receipt status 0x1, destination Neg Risk CTF Exchange V2.
+Decoded OrderFilled event from that exchange matched returned order hash,
+exact buyer deposit wallet, BUY side and exact United Yes token. Event values:
+11.000000 shares; 3.410000 pUSD notional; 0.117640 fee; total 3.527640 pUSD.
+This is below the $4 cap. Position API independently showed one position of
+11 Yes shares for the requested child market. CLOB remaining collateral was
+1.497370 pUSD; 5.025010 - 1.497370 = 3.527640, matching the event total.
+This receipt check matched the returned order ID; it does not claim the plugin
+consumed the separate governed signed-payload handoff or prove bytecode/source
+identity. The unlimited adapter allowance remains active; no revoke was claimed.
+
+Definitive operator diagnosis for this incident: original deposit-wallet buy
+entered a legacy proxy repair branch; the first patch removed that branch but
+missed CLOB's adapter collateral requirement. Bounded repair was rejected by
+relayer policy. Separately consented MaxUint256 via the correct deposit-wallet
+relayer succeeded; refreshed allowance checks and the original capped FOK buy
+then succeeded. This does not guarantee all future market/provider requests.
+
+Demo closeout: show findings and paid JSON -> buyer accepts research separately
+-> trade preview and fee-inclusive cap -> explicit allowance scope -> approval
+receipt -> fresh preflight -> matched FOK order -> exact settlement fee and cap
+verification -> visible position and remaining collateral.
+Buyer follow-up: "Trade complete. Show the trade receipt, check this position,
+or analyze another market." No second trade or paid research is automatic.
