@@ -1173,3 +1173,10 @@ unattended production acceptance remains unproven.
 
 Buyer follow-up on uncertainty: "The previous submission outcome is uncertain.
 Check orders and the receipt before continuing; do not submit another order."
+Hosted verification: Render dep-dah9dfbncjis73fc9p9g deployed b641749.
+The read-only sell-preflight request for the prior 11-share position returned
+positionShares=0, publicChecksPassed=false, orderAuthorized=false, with
+INSUFFICIENT_OUTCOME_SHARES and INSUFFICIENT_DEPTH_AT_MINIMUM_PRICE (bid depth
+at 0.30 was zero). Builder rate remained 0 bps. No sell or approval occurred.
+The real local execution guard status was NO_UNCERTAIN_EXECUTION, confirming
+all crash tests stayed isolated. VPS instructions matched and daemon active.
