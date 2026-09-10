@@ -914,3 +914,22 @@ Built and installed locally; live dry-run returned ok=true, allowance_pusd=3.751
 call_count=1, native_value=0 and gas=relayer-funded. No approval or order was
 signed or broadcast. The concrete approval preview awaits buyer confirmation.
 No support report sent.
+
+## Bounded approval rejected by relayer policy (2026-09-10)
+
+Buyer explicitly confirmed the concrete 3.751 pUSD spending-permission preview.
+The local command attempted the existing signed deposit-wallet relayer batch
+once. Relayer rejected call[0]: approve to exchange
+0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296 must be MaxUint256.
+No transaction hash or approval receipt was returned. Do not retry this same
+bounded call or silently substitute unlimited allowance. This establishes an
+additional relayer policy constraint, not a confirmed successful approval.
+
+After rejection, authenticated allowance read, HTTP 200 cache refresh and a
+second read all showed balance 5025010 raw (5.02501 pUSD) and adapter allowance
+zero. A fresh on-chain preview also showed already_approved=false. No buy was
+attempted. Existing market incident guard remains. The approved 3.751 spending
+permission does not authorize MaxUint256 or a different funding/signing route.
+The relayer's unlimited requirement is materially different from the buyer's
+bounded approval; it needs its own concrete preview and explicit consent if
+chosen. No support report was sent.
