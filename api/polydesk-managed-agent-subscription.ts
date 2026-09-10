@@ -1,3 +1,9 @@
+import { runManagedSession, type ManagedSession } from './polydesk-managed-session.js'
+import { mutateDurableJson } from './render-durable-store.js'
+import { recallManagedReceiptContext } from './receipt-memory-api.js'
+import { runPolymarketTaskResearch } from './polymarket-smart-trader.js'
+import { prepareIndependentPolymarketTrade } from './polymarket-independent-prepare.js'
+import { preflightPolymarketSell } from './polymarket-sell-preflight.js'
 import { managedServiceContinuation } from './polydesk-managed-continuation.js'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { Request, Response } from 'express'
@@ -564,9 +570,42 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
     await ensurePolymarketPortfolioSchema()
     const body = req.body as unknown
     if (!isRecord(body) || hasSecretField(body)) throw new Error('Request is invalid or contains forbidden secret material.')
-    onlyFields(body, ['schema', 'action', 'subscription', 'subscriptions', 'preferences', 'complete'], 'request')
+    onlyFields(body, ['schema', 'action', 'subscription', 'subscriptions', 'preferences', 'complete', 'conversation'], 'request')
     if (body.schema !== MANAGED_AGENT_SCHEMA) throw new Error('Managed-agent schema is unsupported.')
     const action = String(body.action ?? '').toLowerCase()
+    if (action === 'conversation') {
+      const subscription = validateManagedSubscriptionIdentity(body.subscription)
+      const output = await runManagedSession(subscription, body.conversation, {
+        now: Date.now,
+        mutate: (key, change) => mutateDurableJson<ManagedSession>(key, change),
+        validatePreferences: validateManagedPreferences,
+        enroll: preferences => enroll(req, subscription, preferences),
+        status: async () => {
+          const row = (await getPolymarketPortfolioPool().query(
+            `select m.buyer_agent_id, m.status, m.period_end_at, s.monitoring_enabled, s.alert_email_verified,
+                      p.watched_address, s.alert_email, s.loss_threshold_percent, s.profit_threshold_percent,
+                      s.new_position_alerts_enabled, s.resolved_alerts_enabled, s.claimable_alerts_enabled,
+                      s.digest_frequency, s.digest_timezone, s.digest_hour_local, s.digest_weekday
+               from polymarket_managed_subscriptions m
+               join polymarket_alert_settings s on s.privy_user_id=m.privy_user_id
+               join polymarket_profiles p on p.privy_user_id=m.privy_user_id
+              where m.job_id=$1 and m.service_id=$2`, [subscription.jobId, MANAGED_AGENT_SERVICE_ID],
+          )).rows[0]
+          if (!row) return { enrolled: false, monitoringEnabled: false }
+          if (String(row.buyer_agent_id) !== subscription.buyerAgentId) throw new Error('Managed buyer mismatch.')
+          return { enrolled: true, subscriptionState: Date.parse(row.period_end_at) <= Date.now() ? 'expired' : row.status,
+            preferences: { address: row.watched_address, email: row.alert_email, lossThresholdPercent: row.loss_threshold_percent, profitThresholdPercent: row.profit_threshold_percent,
+              newPositionAlertsEnabled: row.new_position_alerts_enabled, resolvedAlertsEnabled: row.resolved_alerts_enabled, claimableAlertsEnabled: row.claimable_alerts_enabled,
+              digestFrequency: row.digest_frequency, digestTimezone: row.digest_timezone, digestHourLocal: row.digest_hour_local, digestWeekday: row.digest_weekday },
+            monitoringEnabled: row.monitoring_enabled === true && managedMonitoringEnabled({ status: row.status, periodEndAt: new Date(row.period_end_at).toISOString(), emailVerified: row.alert_email_verified === true }) }
+        },
+        recall: recallManagedReceiptContext,
+        research: (input, context) => runPolymarketTaskResearch(input, undefined, context),
+        prepareBuy: prepareIndependentPolymarketTrade,
+        prepareSell: input => { const { side, ...sell } = input; return preflightPolymarketSell(sell) },
+      })
+      return res.json(output)
+    }
     if (action === 'enroll' || action === 'update_preferences') {
       const subscription = validateManagedSubscriptionIdentity(body.subscription)
       const preferences = validateManagedPreferences(body.preferences)

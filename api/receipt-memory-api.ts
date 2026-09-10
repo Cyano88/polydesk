@@ -83,3 +83,17 @@ export function createReceiptMemoryRecallHandler(query = memoryDatabaseQuery, si
 export function createSibylMemoryRecallHandler() {
   return createReceiptMemoryRecallHandler(memoryDatabaseQuery, recallFromSibyl)
 }
+
+/** Internal reuse of the same owner-authenticated recall handler; no unsigned read path. */
+export async function recallManagedReceiptContext(proof: Record<string, unknown>) {
+  let status = 200
+  let body: any
+  const response = {
+    setHeader: () => undefined,
+    status(code: number) { status = code; return this },
+    json(value: unknown) { body = value; return this },
+  }
+  await createSibylMemoryRecallHandler()({ body: proof } as Request, response as unknown as Response)
+  if (status !== 200 || body?.ok !== true) throw new Error('Owner-authorized memory recall unavailable.')
+  return body as Record<string, any>
+}

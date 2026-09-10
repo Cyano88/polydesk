@@ -40,7 +40,7 @@ test('managed operator replaces caller entitlement with exact official directory
 })
 
 test('managed operator cannot enroll or resume another buyer or a missing subscription', async () => {
-  for (const action of ['enroll', 'update_preferences', 'resume']) {
+  for (const action of ['enroll', 'update_preferences', 'resume', 'conversation']) {
     for (const entries of [[], [validateManagedSubscriptionIdentity({ ...subscription, buyerAgentId: '9002' })]]) {
       await assert.rejects(submitManagedRequest({ schema: MANAGED_AGENT_SCHEMA, action, subscription }, {
         list: async () => entries, post: async () => { assert.fail('must not post') },

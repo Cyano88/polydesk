@@ -27,7 +27,7 @@ async function post(body: unknown) {
       body: JSON.stringify(body),
     })
     const result = await response.json().catch(() => null)
-    if (!response.ok) throw new Error(`Managed-agent endpoint returned HTTP ${response.status}: ${JSON.stringify(result)}`)
+    if (!response.ok) throw new Error(`Managed-agent endpoint returned HTTP ${response.status}. Inspect the private service result; no automatic retry.`)
     return result
   } finally {
     clearTimeout(timer)
@@ -43,7 +43,7 @@ export async function submitManagedRequest(raw: unknown, deps = { list: listExac
   if (!record(raw) || raw.schema !== MANAGED_AGENT_SCHEMA) throw new Error('Managed-agent request is invalid.')
   const body = { ...raw }
   const action = String(body.action ?? '').toLowerCase()
-  if (['enroll', 'update_preferences', 'resume'].includes(action)) {
+  if (['enroll', 'update_preferences', 'resume', 'conversation'].includes(action)) {
     const requested = validateManagedSubscriptionIdentity(body.subscription)
     const active = await deps.list()
     const authoritative = active.find(item => item.jobId === requested.jobId && item.buyerAgentId === requested.buyerAgentId)

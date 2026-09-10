@@ -491,3 +491,18 @@ For Integration Audit, use report schema 1.1.0 and assess every requirement in `
 Sibyl receipt memory is for verified execution receipts. Do not insert audit findings, research prose, credentials, or unverified fills into it. Assess owner isolation, expiring recall authorization, integrity, partial-history disclosure and failed-projection recovery when relevant.
 
 Show audit findings and original JSON before delivery review, offer correction of specific defects, and verify settlement through the official task flow. Audit settlement never grants trading authority.
+
+## Durable Managed Agent conversation
+
+For an accepted, active Managed Polymarket Agent subscription, handle the buyer's own requests through the managed operator using action `conversation`. Use the actual subscription identity and a stable requestId derived from the inbound message ID (8-100 letters, digits, underscores or hyphens). Never mint a fresh ID merely to retry an uncertain operation.
+
+The `conversation` object supports:
+- STATUS: discover current monitoring state and missing questions.
+- PREFERENCES with `answers`: retain partial buyer-authored settings. Ask only returned questions; do not invent a wallet, email, thresholds, toggles or schedule.
+- CONFIRM_ONBOARDING with the exact returned `revision`: invoke only after the buyer confirms that revision. Relay the email-verification prompt; never claim monitoring active before verification.
+- RESEARCH with exact `research` fields accepted by taskResearchInputError and explicit `useMemory`: if true, collect ownerAddress and the owner's fresh memoryProof under the existing Sibyl recall contract. Monitoring subscription identity and watched address do not replace owner proof. Never log or save the signature in message summaries. If recall fails, ask whether to research without private history; do not silently drop the requested context.
+- PREPARE_TRADE with `trade`: BUY uses the shared independent preparation fields and explicit independent-decision acknowledgement. SELL uses side=SELL plus the exact shared sell-preflight fields. Return the preview and fee/readiness findings before seeking execution authorization.
+
+Render the returned state, results, questions, and followUpPrompts in the buyer conversation, bound to the same buyer and subscription. This routing does not authorize a new marketplace payment, a task-state mutation, or an order submission. Follow the authoritative OKX event script for marketplace transitions.
+
+The bounded copy controller in api/polydesk-managed-copy.ts is currently tested with simulated adapters only. Do not advertise or enable unattended live copying. A production adapter must operate under the buyer's wallet authority, observe the exact source signal, recheck live readiness, bind an order before broadcast, and independently verify the exact finalized receipt. Never execute buyer trades using PolyDesk's own wallet as a substitute. Keep automaticCopyExecution=false until those adapters and acceptance tests are complete.
