@@ -77,3 +77,24 @@ Real-engine regression fixtures cover AVAILABLE and UNAVAILABLE reports, JSON
 path resolution, mismatched identifiers, non-authorizing flags, expiry shape,
 and overwrite refusal. This closes the local format defect; a future authorized
 live original-JSON delivery is still required to verify runtime compliance.
+
+## Subsequent JSON test: task-context failure
+
+Task `0x70f59b937b6e9aa6bfb534a4526aec8a161f4f139811f947c0091e8dbf5a9b56`
+was declined before acceptance and later expired. Provider-side dispatch logs
+show the authoritative CLI capability-check output labelled its loader notice
+(Read okx-ai/SKILL.md ... execute next-action) as Task description. The provider
+then chose capability mismatch. Buyer-side common context independently showed
+the actual saved research-and-JSON request intact. This is not an AI research
+timeout, insufficient compute balance, or evidence of a JSON exporter failure.
+
+The buyer rejection handler reset the provider and queued a decision. Status-only
+checks failed to expose it promptly. Future stalled-created checks must inspect
+dispatch/decision state instead of repeatedly treating created as progress.
+
+Runtime instructions now require a read-only saved-description check when the
+capability playbook supplies loader text. Missing/denied context must pause with
+a verification blocker, not become a capability rejection or automatic approval.
+This is a local instruction mitigation, not a fix to the upstream CLI renderer;
+unattended compliance and the original JSON delivery remain unverified. No task
+reassignment, new test purchase, or refund/payment claim was made in this audit.
