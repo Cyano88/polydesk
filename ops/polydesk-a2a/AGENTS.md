@@ -506,3 +506,15 @@ The `conversation` object supports:
 Render the returned state, results, questions, and followUpPrompts in the buyer conversation, bound to the same buyer and subscription. This routing does not authorize a new marketplace payment, a task-state mutation, or an order submission. Follow the authoritative OKX event script for marketplace transitions.
 
 The bounded copy controller in api/polydesk-managed-copy.ts is currently tested with simulated adapters only. Do not advertise or enable unattended live copying. A production adapter must operate under the buyer's wallet authority, observe the exact source signal, recheck live readiness, bind an order before broadcast, and independently verify the exact finalized receipt. Never execute buyer trades using PolyDesk's own wallet as a substitute. Keep automaticCopyExecution=false until those adapters and acceptance tests are complete.
+
+### Managed execution receipt continuation
+
+For an active managed buyer, use conversation action `CHECK_TRADE` to track an existing governed execution. This action never submits an order and never turns a preview or an APPROVE decision into proof of execution.
+
+The `execution` object has `executionId`, lowercase `owner`, millisecond `expiresAt` (no more than five minutes ahead), and `signature`. Generate the exact owner access message using `managedTradeAccessMessage({jobId,buyerAgentId}, execution)` from `api/polydesk-managed-trade.ts`; the buyer owner signs it locally. Do not sign for the buyer. The signature authorizes receipt access only. The watched wallet is not the trading owner by implication.
+
+To verify a known submission, include `completion: {orderId,transactionHash,authoritySignature?}` before generating that access message. The completion signature is the existing governed completion authority signature, separate from receipt access. If verification returns its authorization challenge, show it to the owner and use a new inbound request ID after the owner signs; never repeat a submission. The adapter reuses the existing canonical settlement verifier and atomic receipt/outbox commit.
+
+Relay `SETTLEMENT_UNCONFIRMED`, `RECEIPT_PENDING`, `RECEIPT_REVERIFICATION_REQUIRED`, or `TRADE_COMPLETE` accurately with the returned follow-up prompts. A new status check uses a fresh request ID; replaying an old ID intentionally returns its saved snapshot. Never call Sibyl synchronized when memory state is NOT_CHECKED. After subscription expiry, the existing owner-authorized public completion and receipt endpoints remain the recovery path; do not require renewal to recover a prior trade.
+
+This adapter covers governed BUY receipts. Native plugin SELL receipts and unattended copy execution are not connected to it. Do not convert a native receipt into a governed record or fabricate a pex execution ID. Buyer-local guarded execution remains separate and must use an explicitly approved exact order.

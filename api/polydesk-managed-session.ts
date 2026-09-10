@@ -15,6 +15,7 @@ export type ManagedSessionDeps = {
   research: (input: Obj, context?: Obj) => Promise<Obj>
   prepareBuy: (input: Obj) => Promise<Obj>
   prepareSell: (input: Obj) => Promise<Obj>
+  continueTrade?: (input: Obj) => Promise<Obj>
 }
 const object = (v: unknown): v is Obj => Boolean(v && typeof v === 'object' && !Array.isArray(v))
 const canonical = (v: any): string => Array.isArray(v) ? '[' + v.map(canonical).join(',') + ']' : object(v)
@@ -63,9 +64,9 @@ function preferences(p: Obj) {
 /** Called only by the private operator after authoritative subscription verification. */
 export async function runManagedSession(subscription: ManagedSubscriptionIdentity, raw: unknown, deps: ManagedSessionDeps) {
   if (!object(raw)) throw new Error('Managed conversation must be an object.')
-  checkKeys(raw, ['requestId','action','answers','revision','research','useMemory','ownerAddress','memoryProof','trade'])
+  checkKeys(raw, ['requestId','action','answers','revision','research','useMemory','ownerAddress','memoryProof','trade','execution'])
   if (typeof raw.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(raw.requestId)) throw new Error('A stable requestId is required.')
-  if (!['STATUS','PREFERENCES','CONFIRM_ONBOARDING','RESEARCH','PREPARE_TRADE'].includes(raw.action)) throw new Error('Unsupported conversation action.')
+  if (!['STATUS','PREFERENCES','CONFIRM_ONBOARDING','RESEARCH','PREPARE_TRADE','CHECK_TRADE'].includes(raw.action)) throw new Error('Unsupported conversation action.')
   if (subscription.status !== 'active' || Date.parse(subscription.periodEndAt) <= deps.now()) return result('SUBSCRIPTION_INACTIVE',{followUpPrompts:['Review subscription status before continuing.']})
   if (raw.action === 'PREFERENCES') partial(raw.answers)
   if (raw.action === 'RESEARCH') {
@@ -74,6 +75,7 @@ export async function runManagedSession(subscription: ManagedSubscriptionIdentit
     if(raw.useMemory && (!object(raw.memoryProof) || raw.memoryProof.owner !== raw.ownerAddress)) throw new Error('Memory proof must match the explicitly selected trading owner.')
   }
   if(raw.action === 'PREPARE_TRADE' && !object(raw.trade)) throw new Error('Exact trade preparation inputs are required.')
+  if(raw.action==='CHECK_TRADE' && !object(raw.execution))throw new Error('Owner-signed execution access is required.')
   const currentStatus=await deps.status()
   if(currentStatus.enrolled && currentStatus.subscriptionState && currentStatus.subscriptionState !== 'active') return result('SUBSCRIPTION_INACTIVE',{followUpPrompts:['Resume or review the subscription before continuing.']})
   const initialPreferences=object(currentStatus.preferences) ? partial(currentStatus.preferences) : {}
@@ -118,6 +120,9 @@ export async function runManagedSession(subscription: ManagedSubscriptionIdentit
       if(Date.parse(subscription.periodEndAt)<=deps.now())throw new Error('Subscription expired before research.')
       const research=await deps.research(raw.research,context)
       output=result(research.ok?'RESULTS_READY':'RESEARCH_UNAVAILABLE',{research,...(context?{receiptContext:{source:context.source,historyComplete:false,records:context.records,nextCursor:context.nextCursor??null}}:{}),followUpPrompts:research.ok?['Show findings and evidence gaps?','Prepare an independently approved exact trade?','Decline and analyze another market?']:['Review the research failure before starting another request.']})
+    } else if(raw.action==='CHECK_TRADE'){
+      if(!deps.continueTrade)throw new Error('Managed receipt continuation is unavailable.')
+      output=await deps.continueTrade(raw.execution)
     } else {
       const trade=raw.trade
       if(!['BUY','SELL'].includes(trade.side))throw new Error('Exact BUY or SELL side is required.')

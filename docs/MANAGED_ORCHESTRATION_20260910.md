@@ -36,3 +36,29 @@ These are local tests with simulated execution and storage adapters. They do not
 - Marketplace scope remains exactly three A2A services; no retired listing was changed.
 
 No live trade, paid research request, email, buyer message, or subscription mutation was performed by these development tests.
+
+## Production acceptance update
+
+Release `0ba4eb494e9878d94c8f70437945f7a92678ac83` was pushed to main and verified live on Render as deployment `dep-dahc3rnavr4c738pv930` on 2026-09-10. The VPS checkout matches this commit; the active workspace instructions match the repository instructions and the A2A daemon is active.
+
+All 25 new orchestration tests also passed on the Linux operator host (in addition to the previously completed 150-test regression suite and server typecheck).
+
+The hosted acceptance probe used an existing enrolled buyer and fresh authoritative subscription lookup. It verified:
+
+- Actual state: `MONITORING_ACTIVE`.
+- Follow-up prompts: Show monitored positions? Review a trade? Change alerts or pause monitoring?
+- Repeating the same request returned `idempotentReplay: true`.
+- A mismatched buyer was rejected by the operator before forwarding.
+- `tradeAuthorized: false` and `orderSubmitted: false`.
+- Three exact active subscriptions were found; this count is not evidence that all three buyers completed onboarding.
+
+This probe created a durable STATUS operation only. It did not send a buyer message, request paid research, alter enrollment, or execute a trade. It verifies the hosted operator-to-API conversation path, not a new inbound buyer chat exchange. Live owner-authorized recall, buyer-wallet execution adapters, pending-operation recovery, receipt-memory synchronization, and full buyer conversation acceptance remain outstanding. Automatic copy execution remains disabled.
+
+Demo evidence: distinguish local/simulated controller tests from the hosted status acceptance and from the earlier real One-Off trade receipts. Do not describe these checks as a live managed copy trade.
+## Managed receipt continuation implementation
+
+The managed conversation now supports CHECK_TRADE with short-lived owner-signed access bound to the exact subscription, buyer, execution, and optional completion evidence. It reads the existing governed execution record, verifies its authority owner, and reuses the actual governed completion handler when completion evidence is supplied. That handler performs canonical settlement checks and commits the verified receipt and memory outbox atomically. The managed adapter rereads the persisted record before reporting completion.
+
+The action distinguishes unconfirmed settlement, pending verification, legacy receipts requiring reverification, and verified completion. Every result supplies buyer follow-up prompts. It never submits an order or claims Sibyl synchronization without checking memory delivery. Durable conversation replay avoids repeating completion; raw access and completion signatures are not persisted in the conversation journal.
+
+Scope: governed BUY receipts only. Buyer-local order signing/submission, native plugin SELL receipts, live unattended copy adapters, and owner-authorized live acceptance remain separate work. The provider wallet is never used as a substitute for buyer authority. The existing public owner-authorized recovery endpoints remain available when a managed subscription expires.

@@ -143,3 +143,14 @@ test('local pause overrides an active marketplace subscription',async()=>{
  assert.equal(r.state,'SUBSCRIPTION_INACTIVE')
  assert.equal(f.calls.buy,0)
 })
+
+
+test('managed receipt continuation replays without repeating completion and does not persist raw proofs',async()=>{
+ const f=setup();let calls=0
+ f.deps.continueTrade=async()=>{calls++;return{ok:true,state:'TRADE_COMPLETE',orderSubmitted:false,tradeAuthorized:false,followUpPrompts:['Show receipt?']}}
+ const request={action:'CHECK_TRADE',requestId:'receipt_message_01',execution:{signature:'private-proof'}}
+ assert.equal((await f.run(request)).state,'TRADE_COMPLETE')
+ assert.equal((await f.run(request)).idempotentReplay,true)
+ assert.equal(calls,1)
+ assert.ok(!JSON.stringify([...f.store.values()]).includes('private-proof'))
+})
