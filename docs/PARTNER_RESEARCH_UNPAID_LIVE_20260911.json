@@ -1,0 +1,20 @@
+{
+  "evidenceClass": "operator_test_unpaid",
+  "verifiedAt": "2026-09-11T15:23:33.771775+00:00",
+  "jobId": "pdr_259e1f1279f379c9ebca760ddbb5658be4969df35eba47b49e4caabecffc6bf4",
+  "status": "AWAITING_PAYMENT",
+  "reserved": 200,
+  "read": 200,
+  "replay": 200,
+  "changedBody": 409,
+  "otherApplication": 404,
+  "missingAuth": 401,
+  "unpaidCorrection": 409,
+  "paymentRequestMismatch": 409,
+  "amountAtomic": "300000",
+  "network": "Base",
+  "paymentAttempted": false,
+  "researchStarted": false,
+  "orderSubmitted": false,
+  "market": "synthetic identifier; no market selected"
+}

@@ -75,7 +75,7 @@ export function createPartnerResearchRouter(service=jobs, dependencies={ ready:h
    if(paid&&(paid.schema!=='polydesk-smart-trader-paid-analysis-v1'||paid.payment.transaction.toLowerCase()!==job.transaction||paid.payment.amountAtomic!=='300000'||paid.payment.provider!=='CDP x402'||paid.requestHash!==job.requestHash||paid.payment.payer.toLowerCase()!==job.payer||paid.payment.network!=='Base')) throw new PartnerError(409,'SETTLEMENT_BINDING_MISMATCH')
    const result=paid?.response || null
    const quality=paid?publicDeliveryStatus(paid.status,paid.response):null
-   const state=quality?.deliveryStatus==='degraded'?'CORRECTION_REQUIRED':paid?.status==='completed'?'DELIVERED':paid?.status==='failed'?'CORRECTION_REQUIRED':job.transaction?'PROCESSING':job.attemptId?'PAYMENT_RECOVERY_REQUIRED':'AWAITING_PAYMENT'
+   const state=quality?.deliveryStatus==='degraded'?'CORRECTION_REQUIRED':paid?.status==='completed'?'DELIVERED':paid?.status==='failed'?'CORRECTION_REQUIRED':job.transaction?(paid?'PROCESSING':'PAYMENT_RECOVERY_REQUIRED'):job.attemptId?'PAYMENT_RECOVERY_REQUIRED':'AWAITING_PAYMENT'
    res.json({ok:true,schemaVersion:'1.0.0',requestId:res.locals.requestId,jobId:job.id,status:state,request:job.request,fee:researchFee,transaction:job.transaction||null,paymentAttemptId:job.attemptId||null,result,
     delivery:quality,buyerGuidance:paid?paidDeliveryGuidance(paid.status,paid.response):null,correction:job.correction||null,
     researchQuality:'Inspect result researchStatus and deliveryStatus; DELIVERED is not a guarantee of available AI research.',

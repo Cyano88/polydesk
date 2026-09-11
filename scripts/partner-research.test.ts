@@ -49,8 +49,8 @@ test('HTTP delivery preserves original JSON, flags degraded research and records
  const app=express();app.use(express.json())
  const response={action:'ANALYZE',decision:{evidence:{researchStatus:'UNAVAILABLE'},decision:'ESCALATE'}}
  const paid={schema:'polydesk-smart-trader-paid-analysis-v1',status:'completed',requestHash:job.requestHash,payment:{provider:'CDP x402',amountAtomic:'300000',network:'Base',transaction:tx,payer},response} as any
- let reads=0
- app.use('/research',createPartnerResearchRouter(jobs,{ready:()=>true,authenticate:h=>{if(h!=='Bearer test')throw new PartnerError(401,'AUTH_REQUIRED');return p},readPaid:async()=>{reads++;return paid}}))
+ let reads=0,missingPaid=false
+ app.use('/research',createPartnerResearchRouter(jobs,{ready:()=>true,authenticate:h=>{if(h!=='Bearer test')throw new PartnerError(401,'AUTH_REQUIRED');return p},readPaid:async()=>{reads++;return missingPaid?undefined:paid}}))
  const server=app.listen(0,'127.0.0.1');await once(server,'listening')
  const base='http://127.0.0.1:'+ (server.address() as any).port+'/research/'+job.id
  try {
@@ -58,6 +58,10 @@ test('HTTP delivery preserves original JSON, flags degraded research and records
   const unpaid=await (await fetch(base,{headers:{Authorization:'Bearer test'}})).json() as any
   assert.equal(unpaid.status,'AWAITING_PAYMENT');assert.equal(reads,0);assert.equal(unpaid.result,null)
   await jobs.bind(p,job.id,input,attempt,tx,payer)
+  missingPaid=true
+  const gap=await(await fetch(base,{headers:{Authorization:'Bearer test'}})).json() as any
+  assert.equal(gap.status,'PAYMENT_RECOVERY_REQUIRED');assert.equal(gap.retryPayment,false)
+  missingPaid=false
   const delivered=await(await fetch(base,{headers:{Authorization:'Bearer test'}})).json() as any
   assert.equal(delivered.status,'CORRECTION_REQUIRED');assert.deepEqual(delivered.result,response)
   assert.equal(delivered.buyerGuidance.tradeAuthorized,false)
