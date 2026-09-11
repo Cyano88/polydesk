@@ -81,3 +81,13 @@ test('Base seller route contains no trade signer or broadcaster', () => {
   assert.doesNotMatch(source, /PRIVATE_KEY|seed phrase|signTypedData|sendTransaction|submitOrder|broadcast/i)
   assert.match(source, /separately approve any resulting Polymarket trade/i)
 })
+
+
+test('research challenge uses padded standard Base64 required by Coinbase validator',()=>{
+ const challenge={x402Version:2,accepts:[],resource:{description:'Unicode ? / price $90,000'}}
+ const result=addSmartTraderReplaySchema({status:402,headers:{'PAYMENT-REQUIRED':Buffer.from(JSON.stringify(challenge)).toString('base64')}},BASE_AGENTIC_MARKET_SMART_TRADER_PATH)
+ const header=result.headers['PAYMENT-REQUIRED']
+ assert.match(header,/^[A-Za-z0-9+/]+={0,2}$/)
+ assert.equal(header.length%4,0)
+ assert.equal(JSON.parse(Buffer.from(header,'base64').toString()).resource.description,challenge.resource.description)
+})

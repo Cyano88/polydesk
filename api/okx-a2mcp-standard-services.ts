@@ -916,7 +916,7 @@ export function addSmartTraderReplaySchema(
     challenge.outputSchema = smartTraderReplaySchema()
     return {
       ...response,
-      headers: { ...response.headers, [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64url') },
+      headers: { ...response.headers, [paymentHeaderKey]: Buffer.from(JSON.stringify(challenge)).toString('base64') },
     }
   } catch {
     return response
