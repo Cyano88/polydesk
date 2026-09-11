@@ -39,3 +39,17 @@ No automatic pruning is enabled in this initial release: jobs and idempotency bi
 `node --import tsx --test scripts/partner-jobs.test.ts scripts/public-api.test.ts`
 
 `node --import tsx scripts/partner-jobs-postgres-proof.ts` with a designated database proves persistence across a fresh process using synthetic market output. It stores a clearly named operator_test job and makes no upstream market, wallet, payment or trade call. The proof does not establish live partner onboarding or paid-job recovery.
+
+## September 11 verification record
+
+Code release 36210b4 is deployed; OpenAPI and platform docs returned HTTP 200. Unprovisioned /api/v1/jobs returned HTTP 503 PARTNER_ACCESS_NOT_CONFIGURED, as intended. Fifteen focused tests, server type checking and production build passed. Tests cover concurrent idempotency, cross-application denial, stale-worker fencing and loss of a completion write. Recovery tests use an injected atomic store; they are not a live Postgres proof.
+
+The fresh-process Postgres proof is supplied but has not run on the deployed database: this checkout has no configured database and Render SSH returned Permission denied (publickey). No real partner key was provisioned. Complete operator provisioning and run the database proof before claiming authenticated production recovery end to end.
+
+## Live operator-test verification completed
+
+The earlier SSH blocker was bypassed through the supported Render configuration API and the public partner HTTP contract, without changing SSH access or exposing database credentials. Two application-scoped keys were provisioned for tenant polydesk_operator_test: recovery_primary and recovery_isolation. Credentials remain in a restricted local directory, only hashes are installed on Render, and both expire seven days after provisioning. No external partner adoption is claimed.
+
+On September 11, the primary application completed a real, free public discovery job. Render accepted a web-service restart and subsequently reported a new instance created at 14:17:09 UTC. A fresh Python client recovered the original completed job, identical result hash and attempts=1. Three concurrent create replays preserved the original job and result. Changed input returned 409, the other application returned 404, missing credentials returned 401, and resuming a completed job returned the saved result without increasing attempts.
+
+Evidence: [sanitized live recovery receipt](PARTNER_LIVE_RECOVERY_20260911.json). Reusable verifier: scripts/verify-partner-live.py. No payment, wallet funding or trade occurred. This verifies real Postgres-backed completed-job persistence through the HTTP service restart. Interrupted RUNNING lease recovery remains covered by focused tests, not a forced production worker crash. The separate direct-database proof script was not needed and has not been run.
