@@ -1926,6 +1926,8 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     deliveryAttemptCount: smartTraderDeliveryAttemptCount(record),
     maxDeliveryAttempts: smartTraderMaxDeliveryAttempts(record),
     retryable: isRemediableMissingZeroScoutProof(record) || engineUpgradeRemediationAvailable,
+    researchRecoveryAvailable: isRemediableDegradedResearch(record),
+    researchRecoveryUrl: isRemediableDegradedResearch(record) ? `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/recover-research` : null,
     engineUpgradeRemediationAvailable,
     nextRetryAt: record.nextRetryAt || null,
   })
