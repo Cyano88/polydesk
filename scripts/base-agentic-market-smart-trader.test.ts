@@ -56,7 +56,8 @@ test('Base route publishes valid Bazaar POST discovery metadata', () => {
   assert.equal(bazaar?.info?.input?.bodyType, 'json')
   assert.deepEqual(bazaar?.info?.input?.body, {
     action: 'ANALYZE',
-    query: 'Find active liquid Polymarket markets about football',
+    query: 'Will Bitcoin reach $90,000 by December 31, 2026?',
+    outcome: 'Yes',
     side: 'BUY',
   })
 })

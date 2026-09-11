@@ -1,3 +1,4 @@
+import { withServerDiscovery } from './base-discovery-payload.js'
 import { bindPartnerResearch } from './partner-research.js'
 import { PartnerError } from './partner-jobs.js'
 import type { Request, Response } from 'express'
@@ -64,13 +65,15 @@ export function baseSmartTraderDiscoveryExtension() {
   return declareDiscoveryExtension({
     input: {
       action: 'ANALYZE',
-      query: 'Find active liquid Polymarket markets about football',
+      query: 'Will Bitcoin reach $90,000 by December 31, 2026?',
+      outcome: 'Yes',
       side: 'BUY',
     },
     inputSchema: {
       type: 'object',
       properties: inputProperties,
       required: ['action'],
+      allOf: [{ if: { properties: { action: { const: 'ANALYZE' } }, required: ['action'] }, then: { required: ['outcome', 'side'], anyOf: [{ required: ['marketId'] }, { required: ['query'] }, { required: ['category'] }] } }],
       additionalProperties: false,
     },
     bodyType: 'json',
@@ -156,7 +159,11 @@ async function getBaseServer(req: Request) {
       const payTo = clean(process.env.BASE_X402_PAY_TO)
       if (!apiKeyId || !apiKeySecret) throw new Error('CDP_API_KEY_ID and CDP_API_KEY_SECRET are required for Base x402 settlement')
       const facilitator = createCdpFacilitatorClient({ apiKeyId, apiKeySecret })
-      const resourceServer = new x402ResourceServer(facilitator)
+      const discoveryContext: HTTPRequestContext = { adapter: adapterForRequest(req), method: 'POST', path: BASE_AGENTIC_MARKET_SMART_TRADER_PATH }
+      const enrichedExtensions = () => resourceServer.enrichExtensions(baseSmartTraderDiscoveryExtension(), discoveryContext)
+      const resourceServer: x402ResourceServer = new x402ResourceServer(withServerDiscovery(facilitator, {
+        url: `${configuredOrigin(req)}${BASE_AGENTIC_MARKET_SMART_TRADER_PATH}`, description, mimeType: 'application/json',
+      }, enrichedExtensions))
         .register(BASE_MAINNET_CAIP2, new ExactEvmScheme())
         .registerExtension(bazaarResourceServerExtension)
       const routes: RoutesConfig = {
