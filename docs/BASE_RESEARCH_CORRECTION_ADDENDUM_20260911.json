@@ -1,0 +1,25 @@
+{
+  "summary": "Correction to the existing research, not a new AI report: the verified closed Binance BTCUSDT one-minute candle ended 2026-09-11T16:36:59.999000+00:00 at $77,674.01. The snapshot distance to $90,000 was 15.87%, replacing the unsupported roughly 30% inference. ESCALATE remains appropriate because current forward-looking evidence and full-window threshold history have not been verified.",
+  "corrections": [
+    "Replace the scraped $69,111.38 reference with the timestamped closed-candle close $77,674.01; do not describe this historical snapshot as a current executable quote.",
+    "Withdraw the claim that dated December 2025-May 2026 articles establish current bearish conditions. Those articles are historical background only and are excluded from this addendum's current evidence.",
+    "Treat the Yahoo/24-7 Wall St ChatGPT forecast items as one syndicated story, not independent corroboration. Exclude navigation, cookie and error-page text from evidence.",
+    "A roughly 16% distance is arithmetic, not a forecast or win probability. It does not verify whether a qualifying high occurred earlier in the market's full creation-to-deadline window.",
+    "Price drift and buyer spend limits belong to a separately authorized execution preview. Their absence does not expand the purchased research scope or require another research fee.",
+    "The original 63.81 score is an execution-market screening score: spread 18.33 + liquidity 20 + activity 0.48 + near-touch depth 15 + resolution buffer 10. It is unchanged historical screening, not AI probability; AI confidence 55 is separate."
+  ],
+  "sources": [
+    {
+      "url": "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=3",
+      "observedAt": "2026-09-11T16:36:59.999000+00:00",
+      "finding": "Binance BTCUSDT completed one-minute candle: high 77732.01000000, close 77674.01000000; retrieved 2026-09-11T16:37:27.485807+00:00. Raw candle retained in correction evidence."
+    }
+  ],
+  "remainingGaps": [
+    "No verified current ETF-flow, macro, derivatives or on-chain evidence is introduced by this correction; no directional market-regime claim is supported.",
+    "Full Binance one-minute High history since this market's creation is not verified; no claim is made that the threshold has never been hit.",
+    "This dated correction does not refresh the order book, renew the original decision expiry or authorize a trade."
+  ],
+  "disposition": "ESCALATE",
+  "authorship": "OPERATOR_REVIEWED"
+}

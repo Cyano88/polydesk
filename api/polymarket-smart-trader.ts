@@ -1910,6 +1910,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     ok: true,
     transaction: transaction.toLowerCase(),
     ...publicDeliveryStatus(record.status, record.response),
+    correctionUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/correction`,
     buyerGuidance: paidDeliveryGuidance(record.status, record.response),
     decisionId: record.decisionId || null,
     analysisHash: record.analysisHash || null,

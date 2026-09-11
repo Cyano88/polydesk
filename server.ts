@@ -1,3 +1,4 @@
+import { createReceiptCorrectionRouter } from './api/receipt-correction.js'
 import polymarketSellPreflightHandler from './api/polymarket-sell-preflight.js'
 import express from 'express'
 import { createPublicApiRouter } from './api/public-api.js'
@@ -193,6 +194,7 @@ app.get('/api/polymarket/discover', readLimiter, polymarketDiscoverHandler)
 app.post('/api/x402/base/polymarket-smart-trader', strictLimiter, baseAgenticMarketSmartTraderHandler)
 app.post('/api/x402/base/polymarket-smart-trader/recover', strictLimiter, basePaymentRecoveryHandler)
 app.get('/api/a2mcp/polymarket-smart-trader/decision/:decisionId', readLimiter, polymarketSmartTraderDecisionHandler)
+app.use('/api/a2mcp/polymarket-smart-trader/payment/:transaction/correction', strictLimiter, createReceiptCorrectionRouter())
 app.get('/api/a2mcp/polymarket-smart-trader/payment/:transaction', readLimiter, polymarketSmartTraderPaymentStatusHandler)
 app.post('/api/polymarket-signed-open/validate', strictLimiter, polymarketSignedOpenValidationHandler)
 app.post('/api/a2mcp/polymarket-agent-flow', strictLimiter, okxA2mcpStandardServiceHandler)

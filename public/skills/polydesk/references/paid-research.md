@@ -37,3 +37,7 @@ For a specific defect, POST `{ "issue": "<specific missing or incorrect scope it
 x402 payment is already settled: accepting this research does not release escrow. Research review, a fresh fee-inclusive trade preview and exact buyer execution approval are separate. Never submit an order on research payment authority.
 
 Partner reservation access is scoped, but existing transaction-based delivery URLs remain public bearer-style links. Do not send private wallet keys or confidential research inputs. MCP transport, external subscriptions and a unified v1 trading API are not currently offered.
+
+## Keyless marketplace correction
+
+For a completed Base receipt without a partner job, follow the payment status response's `correctionUrl`. GET returns a published, receipt-linked operator addendum without changing the original JSON. If no correction exists, provide the receipt and specific defect to the PolyDesk operator. Creation and publication require operator authentication; a public transaction hash does not authorize changes. Do not request or expose the operator key to buyers. Corrections carry their own revision hash and authorship, remain under the original payment, and grant no trade authority. Follow the correction's review prompts; do not represent an operator addendum as a new ZeroScout AI report.
