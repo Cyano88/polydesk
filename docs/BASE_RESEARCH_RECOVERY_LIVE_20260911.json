@@ -1,0 +1,27 @@
+﻿{
+    "transaction":  "0xbb03fcf20e2a36154fa6907ab9d67281f95a7c1a4906f417b368bb0a26dcd058",
+    "amountAtomic":  "300000",
+    "additionalPaymentRequired":  false,
+    "status":  "completed",
+    "researchStatus":  "AVAILABLE",
+    "decisionId":  "pstd_c81a2e7fa45502966c036abef9776f40",
+    "analysisHash":  "fb03a6d87253885e6154f884cb9405ebeadb240cc54379d0be1769f9578f4c0b",
+    "deliveryAttemptCount":  2,
+    "originalDecisionPreserved":  true,
+    "researchProof":  {
+                          "storageUri":  "0g://mainnet/0xb3aac75f8ad2c2b127511ffc20597970a3538ee37de9f8977d746683b4280871",
+                          "contentHash":  "0xadb05772a55cb96fb2080cde4325dc6636d95db9a2d4d75e0d2fe662c19cd2db",
+                          "storageRoot":  "0xb3aac75f8ad2c2b127511ffc20597970a3538ee37de9f8977d746683b4280871",
+                          "storageTxHash":  "0xd0c4f99c4ecc96d77a903a3881b411ead833af77100f5db055baaaf24e2e1d37"
+                      },
+    "disposition":  "ESCALATE",
+    "tradeAuthorized":  false,
+    "deliveryAccepted":  false,
+    "failedMinuteUsed":  5,
+    "minuteLimit":  5,
+    "dailyBefore":  17,
+    "dailyAfter":  19,
+    "unsignedRecoveryHttp":  401,
+    "polydeskCommit":  "9b124d0",
+    "zeroScoutCommit":  "1f9c0ae"
+}

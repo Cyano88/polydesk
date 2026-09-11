@@ -45,3 +45,10 @@ For a completed Base receipt without a partner job, follow the payment status re
 ## Indexing acknowledgement
 
 After a successful Base payment, retain `X-PolyDesk-Payment-Attempt-Id` and `X-PolyDesk-Indexing-Status` when your client exposes response headers. PolyDesk stores the sanitized indexing acknowledgement with the settlement. `success` means the facilitator reported cataloging success; `processing` is pending; `rejected` requires diagnosis; `unknown` means no usable acknowledgement was captured. These statuses do not prove featured placement or visible search results. Missing metadata never authorizes repayment. Request operator inspection of the existing attempt if needed.
+
+
+## Unavailable AI research after settlement
+
+If receipt status reports `researchRecoveryAvailable: true`, offer: **"Recover this research delivery without another payment."** Preserve the original JSON and decision URL. The buyer-facing PolyDesk operator can POST exactly `{"action":"RECOVER_RESEARCH"}` to `researchRecoveryUrl` with existing operator authentication after the buyer requests recovery. Partner credentials and a public receipt do not grant operator authority; never request or distribute the operator key.
+
+Recovery checks provider readiness, reuses only the receipt's persisted request, and enforces the original attempt budget. It does not pay again or authorize trading. After a timeout, read the receipt status before retrying. A successful recovery response is not proof of AI availability: require `researchStatus: AVAILABLE` and inspect the actual report and proof. If still unavailable, keep the correction open instead of buying another analysis automatically. Follow up with **"Show results"**, then **"Review the recovered delivery."**
