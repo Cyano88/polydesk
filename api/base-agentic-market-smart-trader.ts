@@ -1,3 +1,5 @@
+import { bindPartnerResearch } from './partner-research.js'
+import { PartnerError } from './partner-jobs.js'
 import type { Request, Response } from 'express'
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import {
@@ -207,6 +209,7 @@ export function verifiedBaseServicePayment(
 }
 
 type BaseHandlerDependencies = {
+  partnerBind: typeof bindPartnerResearch
   attempts: BasePaymentAttempts
   server: (req: Request) => Promise<Pick<x402HTTPResourceServer, 'processHTTPRequest' | 'processSettlement'>>
   preflight: typeof preflightSmartTraderBeforeSettlement
@@ -226,7 +229,7 @@ function sendInstructions(res: Response, response: { status: number; headers: Re
 }
 
 export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<BaseHandlerDependencies> = {}) {
- const dependencies: BaseHandlerDependencies = { attempts: new BasePaymentAttempts(), server: getBaseServer, preflight: preflightSmartTraderBeforeSettlement,
+ const dependencies: BaseHandlerDependencies = { partnerBind: bindPartnerResearch, attempts: new BasePaymentAttempts(), server: getBaseServer, preflight: preflightSmartTraderBeforeSettlement,
    ready: polymarketSmartTraderReady, operational: checkPolymarketSmartTraderOperational,
    seller: () => clean(process.env.BASE_X402_PAY_TO), deliver: polymarketSmartTraderHandler, ...overrides }
  return async function baseAgenticMarketSmartTraderHandler(req: Request, res: Response) {
@@ -236,6 +239,7 @@ export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<Bas
   }
   const body = smartTraderRequestInput(req)
   req.body = body
+  try { await dependencies.partnerBind(req, body) } catch (e) { return res.status(e instanceof PartnerError ? e.status : 503).json({ ok: false, error: e instanceof PartnerError ? e.code : 'PARTNER_BINDING_UNAVAILABLE', retryPayment: false }) }
   const hasPaymentProof = Boolean(req.headers['payment-signature'] || req.headers['x-payment'])
   if (Object.keys(body).length > 0 || hasPaymentProof) {
     const preflight = await dependencies.preflight(body)
@@ -268,6 +272,7 @@ export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<Bas
     const seller = dependencies.seller()
     const payer = verifyBaseServiceRequirements(requirements, paymentResult.paymentPayload, seller)
     const binding = basePaymentAttemptBinding(body, requirements, paymentResult.paymentPayload, payer)
+    await dependencies.partnerBind(req, body, binding.id)
     paymentAttemptId = binding.id
     res.setHeader('X-PolyDesk-Payment-Attempt-Id', paymentAttemptId)
     res.setHeader('X-PolyDesk-Payment-Recovery', `${BASE_AGENTIC_MARKET_SMART_TRADER_PATH}/recover`)
@@ -289,9 +294,11 @@ export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<Bas
     paidReq.payment = verifiedBaseServicePayment(requirements, paymentResult.paymentPayload, seller, settlement)
     settlementVerified = true
     await dependencies.attempts.settled(claim, settlement.transaction)
+    await dependencies.partnerBind(req, body, binding.id, settlement.transaction, payer)
     for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
     return await dependencies.deliver(paidReq, res)
   } catch (error) {
+    if (error instanceof PartnerError) return res.status(error.status).json({ok:false,error:error.code,retryPayment:false,recoveryRequired:true})
     if (error instanceof ExistingBasePaymentAttempt) {
       return res.status(409).json({ ok: false, error: 'This payment authorization has an existing attempt. Reconcile it; do not pay again.',
         paymentAttemptId: error.attemptId, paymentStatus: error.paymentState, settlementAttempted: false,

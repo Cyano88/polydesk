@@ -33,7 +33,14 @@ export default function DocsPlatforms() {
       <Section title="Public API foundation">
         <p>The v1 API provides free capability discovery and market search without wallet login. Read <Code>/api/v1/openapi.json</Code> for the implemented contract. Results include request IDs and structured follow-up actions; market candidates never authorize a trade.</p>
         <p>Use <Code>q</Code> for concise keywords and optional <Code>intent</Code> for the original request. Review truncation, market rules and schedule-verification requirements before selecting a candidate. Unknown or repeated query parameters are rejected.</p>
-        <Note>Partner-scoped free market-discovery jobs are available with provisioned credentials. MCP, paid partner jobs, external subscriptions and unified fee-inclusive previews are planned. They are not enabled v1 endpoints. Existing paid HTTP capabilities retain their own contracts; an A2MCP route name does not imply an MCP server.</Note>
+        <Note>Partner-scoped free market-discovery jobs are available with provisioned credentials. Partner research reservations bind to the existing paid Base service. MCP, external subscriptions and unified fee-inclusive previews are planned. They are not enabled v1 endpoints. Existing paid HTTP capabilities retain their own contracts; an A2MCP route name does not imply an MCP server.</Note>
+      </Section>
+
+      <Section title="Paid research for agents and platforms">
+        <p>Installing the PolyDesk skill is free. Backend ANALYZE costs 0.30 native USDC on Base, subject to review of the live payment challenge. A partner key does not pay this fee. Public marketplace buyers use the canonical x402 endpoint without a partner key.</p>
+        <p>Direct partners reserve with <Code>POST /api/v1/research-jobs</Code>, a stable <Code>Idempotency-Key</Code> and their bearer credential. Send the same ANALYZE body, credential and returned <Code>X-PolyDesk-Research-Job</Code> header to the Base payment endpoint. Research starts only after verified settlement. Read the saved job after a disconnect; reconcile the original payment instead of paying again.</p>
+        <p>Show findings and original JSON before review. Report defects through the job correction endpoint for manual review under the original payment. A correction request does not issue a refund. Research payment and acceptance never authorize a trade.</p>
+        <p><a href="/skills/polydesk/references/paid-research.md">Read the payment, gas checks, recovery and follow-up contract</a>.</p>
       </Section>
 
       <Section title="Partner jobs and recovery">

@@ -34,7 +34,7 @@ test('an attempted failed settlement returns reconciliation instead of another p
   assert.equal(h.events.filter(event => event === 'settle').length, 1)
 })
 
-function harness(realRequestValidation = false) {
+function harness(realRequestValidation = false, partnerBind?: Parameters<typeof createBaseAgenticMarketSmartTraderHandler>[0]["partnerBind"]) {
   const events: string[] = []
   const requirements = { scheme: 'exact', network: BASE_MAINNET_CAIP2, asset: BASE_NATIVE_USDC,
     amount: '300000', payTo: seller, maxTimeoutSeconds: 600, extra: {} }
@@ -57,6 +57,7 @@ function harness(realRequestValidation = false) {
     json: (body: unknown) => { output.body = body; return res }, send: (body: unknown) => { output.body = body; return res } } as unknown as Response
   const handler = createBaseAgenticMarketSmartTraderHandler({
     attempts,
+    ...(partnerBind ? { partnerBind } : {}),
     ready: () => config.ready, operational: async () => true, seller: () => seller,
     preflight: async body => {
       events.push('preflight')
@@ -276,4 +277,30 @@ test('durable payment identity compares address and transaction case without ren
   const candidate = buildSettledSmartTraderAnalysisRecord(request, { ...servicePayment,
     transaction: '0x' + transaction.slice(2).toUpperCase(), payer: '0x' + payer.slice(2).toUpperCase() })
   assert.equal(reuseSettledSmartTraderAnalysis(original, candidate), original)
+})
+
+
+test('partner binding fails before settlement and delivery at each boundary', async () => {
+  for (const boundary of [1, 2, 3]) {
+    let calls=0
+    const h=harness(false, async()=> { if(++calls===boundary) throw new Error('synthetic partner store failure') })
+    await h.run()
+    assert.equal(h.output.status,503)
+    assert.equal(h.output.body.retryPayment,false)
+    assert.equal(h.events.includes('deliver'),false)
+    assert.equal(h.events.filter(e=>e==='settle').length,boundary===3?1:0)
+    if(boundary===3) assert.equal(h.output.body.paymentStatus,'settled_delivery_unconfirmed')
+  }
+})
+
+test('partner binding receives verified transaction only after settlement', async () => {
+  const stages: unknown[][]=[]
+  const h=harness(false, async(_req,raw,attempt,tx,p)=> { stages.push([raw,attempt,tx,p]) })
+  await h.run()
+  assert.equal(h.output.status,202)
+  assert.equal(stages.length,3)
+  assert.equal(stages[0][1],undefined)
+  assert.equal(stages[1][2],undefined)
+  assert.equal(stages[2][2],transaction)
+  assert.equal(stages[2][3],payer)
 })

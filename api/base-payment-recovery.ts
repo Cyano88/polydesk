@@ -1,3 +1,4 @@
+import { bindPartnerResearch } from './partner-research.js'
 import type { Request, Response } from 'express'
 import { id } from 'ethers'
 import { BasePaymentAttempts, type BasePaymentAttempt, type BasePaymentRecoveryProof } from './base-payment-attempt.js'
@@ -104,6 +105,7 @@ export function createBaseRecoveryRpc(url: string, fetcher: typeof fetch = fetch
 }
 
 type Dependencies = {
+  partnerBind: typeof bindPartnerResearch
   attempts: BasePaymentAttempts
   ready: () => boolean
   rpc: Rpc
@@ -111,7 +113,7 @@ type Dependencies = {
 }
 export function createBasePaymentRecoveryHandler(overrides: Partial<Dependencies> = {}) {
   const dependencies: Dependencies = {
-    attempts: new BasePaymentAttempts(), ready: () => hasRenderDurableStore() && Boolean(process.env.BASE_PAYMENT_RECOVERY_RPC_URL),
+    partnerBind: bindPartnerResearch, attempts: new BasePaymentAttempts(), ready: () => hasRenderDurableStore() && Boolean(process.env.BASE_PAYMENT_RECOVERY_RPC_URL),
     rpc: (method, params) => createBaseRecoveryRpc(process.env.BASE_PAYMENT_RECOVERY_RPC_URL ?? '')(method, params),
     bind: bindSettledSmartTraderAnalysis, ...overrides,
   }
@@ -128,9 +130,11 @@ export function createBasePaymentRecoveryHandler(overrides: Partial<Dependencies
     try {
       const attempt = await dependencies.attempts.get(body.paymentAttemptId)
       if (!attempt) return res.status(404).json({ ok: false, error: 'Payment attempt not found.', retryPayment: false })
+      await dependencies.partnerBind(req, attempt.request, attempt.id)
       const proof = await verifyBasePaymentRecovery(attempt, body.transaction, dependencies.rpc)
       // Compare the original claim again under the durable lock after all RPC calls.
       const settled = await dependencies.attempts.settled(attempt, proof.transaction, proof)
+      await dependencies.partnerBind(req, settled.request, settled.id, proof.transaction, settled.payer)
       // Restart-safe even if either commit acknowledgement is lost. No new request,
       // payment, research approval, trade signature or order submission is authorized.
       await dependencies.bind(settled.request, { provider: 'CDP x402', network: 'Base', payer: settled.payer,

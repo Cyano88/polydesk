@@ -1,3 +1,4 @@
+import { createPartnerResearchRouter, researchFee, partnerResearchPaths } from './partner-research.js'
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import { createPartnerJobsRouter, partnerJobPaths } from './partner-jobs.js'
@@ -17,7 +18,8 @@ export function capabilities() {
     capabilities: operations.map(op => ({ id: op.id, endpoint: `/api/v1${op.path}`, method: 'GET', description: op.description, parameters: op.parameters, authentication: 'none', paymentRequired: false, signingAuthorized: false, orderSubmitted: false })),
     links: { openapi: '/api/v1/openapi.json', guide: '/docs/platforms', legacyCatalog: '/api/a2mcp/services', skill: '/skills/polydesk/SKILL.md' },
     partnerJobs: { endpoint: '/api/v1/jobs', status: 'requires-partner-provisioning', supportedCapabilities: ['market-discovery'], paymentRequired: false },
-    planned: ['MCP transport', 'Paid partner research jobs', 'External subscriptions', 'Unified fee-inclusive trade previews'],
+    paidResearch: { endpoint: '/api/v1/research-jobs', publicPaymentEndpoint: '/api/x402/base/polymarket-smart-trader', fee: researchFee, partnerKeyRequiredForReservations: true, publicPaymentRequiresPartnerKey: false },
+    planned: ['MCP transport', 'External subscriptions', 'Unified fee-inclusive trade previews'],
     compatibility: { transport: ['HTTP JSON'], mcp: 'not-implemented',
       payment: 'These reads are free. Existing paid routes retain their own live payment challenges.',
       signer: 'No wallet login is required for these reads. Onchain OS is the reference execution signer; alternate signers require adapter verification.',
@@ -36,7 +38,7 @@ export function openapi() {
       '429': { description: 'Rate limited. Honor Retry-After; no payment attempted.' },
     },
   } }]))
-  return { openapi: '3.1.0', info: { title: 'PolyDesk public API', version: VERSION, description: 'Public discovery and partner-authenticated durable free discovery jobs. No MCP, paid jobs or trade execution.' }, servers: [{ url: '/api/v1' }], paths: { ...paths, ...partnerJobPaths() },
+  return { openapi: '3.1.0', info: { title: 'PolyDesk public API', version: VERSION, description: 'Public discovery and partner-authenticated durable free discovery jobs. Partner research reservations bind existing Base payments; no MCP or trade execution.' }, servers: [{ url: '/api/v1' }], paths: { ...paths, ...partnerJobPaths(), ...partnerResearchPaths() },
     components: { securitySchemes: { PartnerKey: { type: 'http', scheme: 'bearer', description: 'Provisioned partner key; scoped to one tenant and application. Not wallet authorization.' } }, responses: { Error: jsonResponse('Invalid input or unavailable upstream.', { ...envelopeSchema, required: [...envelopeSchema.required, 'error'], properties: { ...envelopeSchema.properties, ok: { const: false }, error: { type: 'object', required: ['code', 'message', 'retryable'], properties: { code: { type: 'string' }, message: { type: 'string' }, retryable: { type: 'boolean' } } } } }) } },
   }
 }
@@ -45,6 +47,7 @@ export function createPublicApiRouter(search: typeof discoverPolymarket = discov
   router.use((_req, res, next) => { res.locals.requestId = randomUUID(); res.setHeader('X-Request-ID', res.locals.requestId); res.setHeader('Cache-Control', 'no-store'); next() })
   router.get('/openapi.json', (_req, res) => res.json(openapi()))
   router.use('/jobs', createPartnerJobsRouter())
+  router.use('/research-jobs', createPartnerResearchRouter())
   for (const op of operations) router.get(op.path, async (req, res) => {
     const envelope = { schemaVersion: VERSION, requestId: res.locals.requestId as string }
     const fail = (status: number, code: string, message: string) => res.status(status).json({ ok: false, ...envelope, error: { code, message, retryable: status === 502 }, nextActions: [{ action: status === 502 ? 'RETRY_DISCOVERY' : 'REFINE_QUERY', label: status === 502 ? 'Retry this free search later' : 'Review the request schema', authorizationRequired: false }] })

@@ -777,6 +777,11 @@ export function smartTraderServicePaymentFromContext(value: unknown): SmartTrade
   return validServicePayment(candidate) ? candidate : null
 }
 
+export async function readPaidResearchRecord(transaction: string) {
+  if (!/^0x[a-fA-F0-9]{64}$/.test(transaction)) throw new Error('Invalid settlement reference')
+  return readDurableJson<SmartTraderPaidAnalysisRecord>(paidAnalysisKey(transaction))
+}
+
 function paidAnalysisKey(transaction: string) {
   return `${PAID_ANALYSIS_PREFIX}${transaction.toLowerCase()}`
 }
