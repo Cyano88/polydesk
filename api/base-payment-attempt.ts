@@ -1,3 +1,4 @@
+import { baseIndexingAcknowledgement, type BaseIndexingAcknowledgement } from './base-indexing-acknowledgement.js'
 import { createHash, randomUUID } from 'node:crypto'
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types'
 import { mutateDurableJson, readDurableJson } from './render-durable-store.js'
@@ -36,6 +37,7 @@ export type BasePaymentAttempt = ReturnType<typeof basePaymentAttemptBinding> & 
   claimToken: string
   createdAt: string
   transaction?: string
+  indexingAcknowledgement?: BaseIndexingAcknowledgement
   recoveryProof?: BasePaymentRecoveryProof
 }
 export type BasePaymentRecoveryProof = {
@@ -86,7 +88,7 @@ export class BasePaymentAttempts {
     })
   }
 
-  async settled(claim: BasePaymentAttempt, transaction: string, recoveryProof?: BasePaymentRecoveryProof): Promise<BasePaymentAttempt> {
+  async settled(claim: BasePaymentAttempt, transaction: string, recoveryProof?: BasePaymentRecoveryProof, extensionResponses?: unknown): Promise<BasePaymentAttempt> {
     if (!/^0x[a-fA-F0-9]{64}$/.test(transaction) || /^0x0{64}$/.test(transaction)) throw new Error('Invalid settlement reference')
     if (recoveryProof && (recoveryProof.chainId !== 'eip155:8453' || recoveryProof.transaction !== transaction.toLowerCase())) {
       throw new Error('Recovery proof does not match settlement.')
@@ -100,7 +102,9 @@ export class BasePaymentAttempts {
         || (current.transaction && current.transaction.toLowerCase() !== transaction.toLowerCase())) {
         throw new Error('Payment attempt changed; reconciliation required.')
       }
-      return { ...current, state: 'settled', transaction, ...(recoveryProof ? { recoveryProof } : {}) }
+      return { ...current, state: 'settled', transaction,
+        indexingAcknowledgement: current.indexingAcknowledgement ?? baseIndexingAcknowledgement(extensionResponses),
+        ...(recoveryProof ? { recoveryProof } : {}) }
     })
   }
 }

@@ -304,3 +304,19 @@ test('partner binding receives verified transaction only after settlement', asyn
   assert.equal(stages[2][2],transaction)
   assert.equal(stages[2][3],payer)
 })
+
+
+test('settlement saves indexing acknowledgement atomically and replay never settles again',async()=>{
+ for(const status of ['success','processing','rejected']){
+ const h=harness();h.settlement.extensionResponses={bazaar:{status,rejectedReason:'invalid_schema'}}
+ await h.run();assert.equal(h.output.status,202)
+ const record=[...h.records.values()][0];assert.equal(record.indexingAcknowledgement?.status,status)
+ assert.equal(h.output.headers['X-PolyDesk-Indexing-Status'],status)
+ await h.run();assert.equal(h.output.status,409);assert.equal(h.events.filter(e=>e==='settle').length,1)
+ assert.deepEqual([...h.records.values()][0].indexingAcknowledgement,record.indexingAcknowledgement)
+ }
+})
+test('missing indexing metadata is unknown and does not block paid delivery',async()=>{
+ const h=harness();await h.run();assert.equal(h.output.status,202)
+ assert.equal([...h.records.values()][0].indexingAcknowledgement?.status,'unknown')
+})

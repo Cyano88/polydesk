@@ -293,7 +293,8 @@ export function createBaseAgenticMarketSmartTraderHandler(overrides: Partial<Bas
     const paidReq = req as Request & { payment?: Record<string, unknown> }
     paidReq.payment = verifiedBaseServicePayment(requirements, paymentResult.paymentPayload, seller, settlement)
     settlementVerified = true
-    await dependencies.attempts.settled(claim, settlement.transaction)
+    const savedSettlement = await dependencies.attempts.settled(claim, settlement.transaction, undefined, settlement.extensionResponses)
+    res.setHeader('X-PolyDesk-Indexing-Status', savedSettlement.indexingAcknowledgement?.status || 'unknown')
     await dependencies.partnerBind(req, body, binding.id, settlement.transaction, payer)
     for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
     return await dependencies.deliver(paidReq, res)

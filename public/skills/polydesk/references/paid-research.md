@@ -41,3 +41,7 @@ Partner reservation access is scoped, but existing transaction-based delivery UR
 ## Keyless marketplace correction
 
 For a completed Base receipt without a partner job, follow the payment status response's `correctionUrl`. GET returns a published, receipt-linked operator addendum without changing the original JSON. If no correction exists, provide the receipt and specific defect to the PolyDesk operator. Creation and publication require operator authentication; a public transaction hash does not authorize changes. Do not request or expose the operator key to buyers. Corrections carry their own revision hash and authorship, remain under the original payment, and grant no trade authority. Follow the correction's review prompts; do not represent an operator addendum as a new ZeroScout AI report.
+
+## Indexing acknowledgement
+
+After a successful Base payment, retain `X-PolyDesk-Payment-Attempt-Id` and `X-PolyDesk-Indexing-Status` when your client exposes response headers. PolyDesk stores the sanitized indexing acknowledgement with the settlement. `success` means the facilitator reported cataloging success; `processing` is pending; `rejected` requires diagnosis; `unknown` means no usable acknowledgement was captured. These statuses do not prove featured placement or visible search results. Missing metadata never authorizes repayment. Request operator inspection of the existing attempt if needed.
