@@ -1,3 +1,4 @@
+import { managedDeliveryItems } from './polydesk-managed-delivery.js'
 import { prepareManagedLocalOrder } from './polydesk-managed-local-order.js'
 import { preflightPolymarketTrade } from './polymarket-trade-preflight.js'
 import { continueManagedTrade } from './polydesk-managed-trade.js'
@@ -636,6 +637,26 @@ export default async function polydeskManagedAgentSubscriptionHandler(req: Reque
       const subscriptions = body.subscriptions.map(validateManagedSubscriptionIdentity)
       if (subscriptions.some(item => item.status !== 'active')) throw new Error('The authoritative active snapshot may contain only active subscriptions.')
       return res.json({ ok: true, ...(await reconcile(subscriptions)) })
+    }
+    if (action === 'delivery_items') {
+      const subscription = validateManagedSubscriptionIdentity(body.subscription)
+      const row = (await getPolymarketPortfolioPool().query(
+        `select m.privy_user_id, m.buyer_agent_id, m.status, m.period_end_at,
+                s.monitoring_enabled, s.alert_email_verified
+           from polymarket_managed_subscriptions m
+           join polymarket_alert_settings s on s.privy_user_id=m.privy_user_id
+          where m.job_id=$1 and m.provider_agent_id=$2 and m.service_listing_id=$3 and m.service_id=$4`,
+        [subscription.jobId, POLYDESK_AGENT_ID, MANAGED_AGENT_LISTING_ID, MANAGED_AGENT_SERVICE_ID],
+      )).rows[0]
+      if (row && String(row.buyer_agent_id) !== subscription.buyerAgentId) throw new Error('Managed delivery buyer mismatch.')
+      const alerts = row?.monitoring_enabled === true && row?.alert_email_verified === true
+        ? (await getPolymarketPortfolioPool().query(
+          `select id, alert_type, title, body, created_at from polymarket_alert_history
+            where privy_user_id=$1 and created_at >= $2 and created_at > now() - interval '24 hours'
+            order by id asc limit 500`, [row.privy_user_id, subscription.periodStartAt],
+        )).rows : []
+      if (alerts.length >= 500) throw new Error('Monitoring delivery backlog requires operator review; no truncated batch sent.')
+      return res.json({ ok: true, items: managedDeliveryItems(subscription, row, alerts) })
     }
     if (action === 'status') {
       const subscription = validateManagedSubscriptionIdentity(body.subscription)

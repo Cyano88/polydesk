@@ -43,7 +43,7 @@ export async function submitManagedRequest(raw: unknown, deps = { list: listExac
   if (!record(raw) || raw.schema !== MANAGED_AGENT_SCHEMA) throw new Error('Managed-agent request is invalid.')
   const body = { ...raw }
   const action = String(body.action ?? '').toLowerCase()
-  if (['enroll', 'update_preferences', 'resume', 'conversation'].includes(action)) {
+  if (['enroll', 'update_preferences', 'resume', 'conversation', 'delivery_items'].includes(action)) {
     const requested = validateManagedSubscriptionIdentity(body.subscription)
     const active = await deps.list()
     const authoritative = active.find(item => item.jobId === requested.jobId && item.buyerAgentId === requested.buyerAgentId)
