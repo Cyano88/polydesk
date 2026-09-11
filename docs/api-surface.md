@@ -1,6 +1,6 @@
 # PolyDesk API Boundary
 
-Updated: 2026-09-05
+Updated: 2026-09-11
 
 ## Product boundary
 
@@ -9,6 +9,17 @@ Hash PayLink owns checkout, wallet funding, payment verification, and receipts.
 
 PolyDesk must not provision or manage an x402 payer wallet, execute a local Circle
 CLI payment, or generate a second payment receipt.
+
+## Public v1 foundation
+
+- `GET /api/v1/capabilities`: implemented read operations, query schemas, compatibility and planned features.
+- `GET /api/v1/openapi.json`: OpenAPI 3.1 description of those operations.
+- `GET /api/v1/markets?q=...&intent=...`: existing public market discovery with request IDs, normalized errors and structured follow-up actions.
+- `/llms.txt`: agent documentation index.
+
+These routes require no wallet login or payment. They do not expose jobs, subscriptions, trade submission or operator controls. MCP is not implemented. Unknown/repeated query parameters are rejected; an upstream failure never triggers a paid fallback. Existing paid routes keep their original contracts.
+
+The [external contract](EXTERNAL_INTEGRATION_CONTRACT.md) defines later phases; the [metrics specification](EXTERNAL_ADOPTION_METRICS.md) is not deployed instrumentation. Historic listing IDs and migration notes below require live marketplace reconciliation before reuse.
 
 ## Public integration entry
 

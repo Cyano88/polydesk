@@ -1,7 +1,9 @@
 import { Code, CodeBlock, DocHeader, Note, Section, Table } from './components'
 
 const discoveryExample = `curl https://polydesk.trade/.well-known/polydesk.json
-curl https://polydesk.trade/api/a2mcp/services`
+curl https://polydesk.trade/api/v1/capabilities
+curl https://polydesk.trade/api/v1/openapi.json
+curl "https://polydesk.trade/api/v1/markets?q=Manchester%20United"`
 
 const paymentExample = `# 1. Send the original JSON request and inspect the 402 response.
 curl -i -X POST <service-endpoint> \\
@@ -26,6 +28,18 @@ export default function DocsPlatforms() {
         <p>Read the versioned manifest at runtime. Select a declared product or compatibility capability and use its published endpoint and request schema.</p>
         <CodeBlock lang="bash">{discoveryExample}</CodeBlock>
         <Note>Products are the three customer-facing offers. Capabilities are implementation routes and should not be marketed as additional PolyDesk products.</Note>
+      </Section>
+
+      <Section title="Public API foundation">
+        <p>The v1 API provides free capability discovery and market search without wallet login. Read <Code>/api/v1/openapi.json</Code> for the implemented contract. Results include request IDs and structured follow-up actions; market candidates never authorize a trade.</p>
+        <p>Use <Code>q</Code> for concise keywords and optional <Code>intent</Code> for the original request. Review truncation, market rules and schedule-verification requirements before selecting a candidate. Unknown or repeated query parameters are rejected.</p>
+        <Note>MCP, partner-scoped jobs, external subscriptions and unified fee-inclusive previews are planned. They are not enabled v1 endpoints. Existing paid HTTP capabilities retain their own contracts; an A2MCP route name does not imply an MCP server.</Note>
+      </Section>
+
+      <Section title="Signing and costs">
+        <p>Onchain OS is the reference signer. Authenticate its Agentic Wallet in your own agent environment only when that signer is needed. Public discovery requires no wallet login, and paid research is optional for the existing independently approved preparation path.</p>
+        <p>Off-chain order signing requires no blockchain gas. Funding, approvals and other on-chain operations may require gas or verified sponsorship. Before execution, check the trading balance or sell inventory, all applicable service and trading fees, and who pays gas. Unknown costs or failed sponsorship must block continuation until a fresh approved plan is available.</p>
+        <p>Research payment, delivery acceptance and exact trade approval remain separate decisions. Present findings first, then offer acceptance or correction; offer a trade preview, decline or further research afterwards.</p>
       </Section>
 
       <Section title="Minimum platform contract">

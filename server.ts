@@ -1,5 +1,6 @@
 import polymarketSellPreflightHandler from './api/polymarket-sell-preflight.js'
 import express from 'express'
+import { createPublicApiRouter } from './api/public-api.js'
 import { startReceiptMemoryWorker } from './api/receipt-memory-worker.js'
 import { createReceiptMemoryRecallHandler, createSibylMemoryRecallHandler } from './api/receipt-memory-api.js'
 import type { Response } from 'express'
@@ -182,6 +183,7 @@ app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
+app.use('/api/v1', readLimiter, createPublicApiRouter())
 app.get('/.well-known/polydesk.json', readLimiter, a2mcpServicesHandler)
 app.all('/api/okx-rewards', strictLimiter, okxRewardsHandler)
 app.all('/api/a2mcp/polymarket-funding-link', strictLimiter, okxA2mcpStandardServiceHandler)

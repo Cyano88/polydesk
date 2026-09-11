@@ -70,6 +70,8 @@ The public browser surface is intentionally limited to the foundation site, inte
 
 ## Core documents
 
+- [External integration contract](docs/EXTERNAL_INTEGRATION_CONTRACT.md) - finalized API/MCP design, signing-only flow, gas and fee checks, partner boundaries and release gates; proposed endpoints are not yet live.
+- [External adoption metrics](docs/EXTERNAL_ADOPTION_METRICS.md) - verified integration usage, Onchain OS attribution, reliability and reconciled economics; instrumentation specification, not current adoption claims.
 - `docs/api-surface.md` - public routes, machine contracts, return routing, and service boundaries.
 - `docs/POLYDESK_A2A_TRADING_AGENT.md` - bounded A2A mission and worker lifecycle.
 - `docs/POLYDESK_A2A_WORKER.md` - production worker operation.
