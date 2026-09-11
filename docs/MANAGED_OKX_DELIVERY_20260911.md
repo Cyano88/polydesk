@@ -11,3 +11,5 @@ Incomplete enrollment produces a one-time setup request; unverified email produc
 State is under /var/lib/polydesk-a2a/managed-delivery (or POLYDESK_MANAGED_DELIVERY_DIR). Exclusive per-job locks and fsynced pending records precede transport. Only explicit delivered=true or alreadyDelivered records success. Timeouts and unknown results retain the pending claim and block later sends for that job. Do not delete a pending record or crashed lock without checking the existing command and buyer-side receipt. Sent is transport acknowledgement, not independent buyer receipt.
 
 Validation: targeted tests cover setup, privacy, paused/expired state, event freshness, explicit success, dry-run, persistent duplicate prevention, timeout retention, recheck-before-send, and payload binding. Integration and live acceptance are recorded separately in OKX_LISTING_REJECTION_AUDIT_20260911.md.
+
+Enable scheduled transport only after preview review by creating /var/lib/polydesk-a2a/managed-delivery.enabled on the provider host. Removing that marker pauses scheduled sends without deleting any receipt or ledger.
