@@ -1,7 +1,7 @@
 # PolyDesk external integration contract
 
 Version: 1.0 design baseline, September 11, 2026.
-Status: finalized specification. The public read foundation implements /api/v1/capabilities, /api/v1/openapi.json and /api/v1/markets; all other proposed routes below remain unimplemented. Existing routes retain their published contracts. Deployment evidence belongs in the release record.
+Status: finalized specification. The public read foundation implements /api/v1/capabilities, /api/v1/openapi.json and /api/v1/markets; partner-authenticated free discovery jobs now implement POST /api/v1/jobs, GET /api/v1/jobs/{id} and POST /api/v1/jobs/{id}/resume. The broader paid-job, review and execution operations below remain proposed; see PARTNER_JOBS.md. Existing routes retain their published contracts. Deployment evidence belongs in the release record.
 
 ## Purpose and architecture
 

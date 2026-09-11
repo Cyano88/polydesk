@@ -8,4 +8,4 @@ PolyDesk supplies Polymarket services to agents and platforms. Payment, wallet a
 - Existing catalog: https://polydesk.trade/.well-known/polydesk.json
 - PolyDesk skill: https://polydesk.trade/skills/polydesk/SKILL.md
 
-The v1 foundation supports free capability discovery and public market search. MCP, partner jobs, external subscriptions and unified fee-inclusive trade previews are planned, not enabled v1 operations. Legacy paid routes retain their own contracts. Never infer trade authorization from a payment or discovery result.
+The v1 foundation supports free capability discovery and public market search. Partner-authenticated free discovery jobs are available with provisioned credentials. MCP, paid partner jobs, external subscriptions and unified fee-inclusive trade previews are planned, not enabled v1 operations. Legacy paid routes retain their own contracts. Never infer trade authorization from a payment or discovery result.

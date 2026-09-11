@@ -33,7 +33,7 @@ test('catalog and OpenAPI publish only mounted read operations and no paid/opera
     assert.ok(spec.paths[item.endpoint.replace('/api/v1', '')])
     assert.equal(item.method, 'GET')
   }
-  assert.equal((await fetch(url + '/jobs', { method: 'POST' })).status, 404)
+  assert.equal((await fetch(url + '/jobs', { method: 'POST' })).status, 503)
   const wrongMethod = await fetch(url + '/markets', { method: 'POST' })
   assert.equal(wrongMethod.status, 405)
   assert.equal(wrongMethod.headers.get('allow'), 'GET, HEAD')

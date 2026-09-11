@@ -17,7 +17,7 @@ CLI payment, or generate a second payment receipt.
 - `GET /api/v1/markets?q=...&intent=...`: existing public market discovery with request IDs, normalized errors and structured follow-up actions.
 - `/llms.txt`: agent documentation index.
 
-These routes require no wallet login or payment. They do not expose jobs, subscriptions, trade submission or operator controls. MCP is not implemented. Unknown/repeated query parameters are rejected; an upstream failure never triggers a paid fallback. Existing paid routes keep their original contracts.
+These routes require no wallet login or payment. Partner-scoped free discovery jobs are separately available at /api/v1/jobs with provisioned credentials; see [partner jobs](PARTNER_JOBS.md). They do not expose paid jobs, subscriptions, trade submission or operator controls. MCP is not implemented. Unknown/repeated query parameters are rejected; an upstream failure never triggers a paid fallback. Existing paid routes keep their original contracts.
 
 The [external contract](EXTERNAL_INTEGRATION_CONTRACT.md) defines later phases; the [metrics specification](EXTERNAL_ADOPTION_METRICS.md) is not deployed instrumentation. Historic listing IDs and migration notes below require live marketplace reconciliation before reuse.
 

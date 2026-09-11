@@ -33,7 +33,13 @@ export default function DocsPlatforms() {
       <Section title="Public API foundation">
         <p>The v1 API provides free capability discovery and market search without wallet login. Read <Code>/api/v1/openapi.json</Code> for the implemented contract. Results include request IDs and structured follow-up actions; market candidates never authorize a trade.</p>
         <p>Use <Code>q</Code> for concise keywords and optional <Code>intent</Code> for the original request. Review truncation, market rules and schedule-verification requirements before selecting a candidate. Unknown or repeated query parameters are rejected.</p>
-        <Note>MCP, partner-scoped jobs, external subscriptions and unified fee-inclusive previews are planned. They are not enabled v1 endpoints. Existing paid HTTP capabilities retain their own contracts; an A2MCP route name does not imply an MCP server.</Note>
+        <Note>Partner-scoped free market-discovery jobs are available with provisioned credentials. MCP, paid partner jobs, external subscriptions and unified fee-inclusive previews are planned. They are not enabled v1 endpoints. Existing paid HTTP capabilities retain their own contracts; an A2MCP route name does not imply an MCP server.</Note>
+      </Section>
+
+      <Section title="Partner jobs and recovery">
+        <p>Ask the PolyDesk operator to provision an application-scoped partner key. Keep it server-side. Use <Code>POST /api/v1/jobs</Code> with a stable <Code>Idempotency-Key</Code> and <Code>Authorization: Bearer</Code> credential. The supported capability is <Code>market-discovery</Code>, with an <Code>input</Code> object containing <Code>q</Code> and optional <Code>intent</Code>.</p>
+        <p>Save the returned job ID. Read <Code>GET /api/v1/jobs/&#123;id&#125;</Code> after a disconnect. Retry creation with the same key and inputs to recover a lost response; changed inputs conflict. Use <Code>POST /api/v1/jobs/&#123;id&#125;/resume</Code> to resume interrupted free searches after the 60-second lease expires. Three attempts are allowed. Completed jobs return their saved result.</p>
+        <Note>These jobs are free public market searches. They do not buy AI research or authorize trading. Storage is persistent; polling reads status and does not restart work. Keys grant access only to their own tenant and application.</Note>
       </Section>
 
       <Section title="Signing and costs">
