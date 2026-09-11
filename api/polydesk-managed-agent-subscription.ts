@@ -526,13 +526,13 @@ async function reconcile(subscriptions: ManagedSubscriptionIdentity[]) {
     await database.query(
       `with refreshed as (
          update polymarket_managed_subscriptions
-            set status='active', buyer_agent_id=$2, period_end_at=$3,
+            set status=case when status='paused' then 'paused' else 'active' end, buyer_agent_id=$2, period_end_at=$3,
                 last_reconciled_at=now(), updated_at=now()
           where job_id=$1 and provider_agent_id=$4 and service_listing_id=$5 and service_id=$6
-          returning privy_user_id, period_end_at
+          returning privy_user_id, period_end_at, status
        )
        update polymarket_alert_settings s
-          set monitoring_enabled=(s.alert_email_verified=true and refreshed.period_end_at > now()), updated_at=now()
+          set monitoring_enabled=(refreshed.status='active' and s.alert_email_verified=true and refreshed.period_end_at > now()), updated_at=now()
          from refreshed where s.privy_user_id=refreshed.privy_user_id`,
       [item.jobId, item.buyerAgentId, item.periodEndAt,
         POLYDESK_AGENT_ID, MANAGED_AGENT_LISTING_ID, MANAGED_AGENT_SERVICE_ID],

@@ -51,6 +51,8 @@ export async function runDeliveryCycle(deps: Deps, root: string, deliver = false
         // Re-query the authoritative directory immediately before each outbound call.
         const current = (await deps.list()).find(x=>x.jobId===s.jobId && x.buyerAgentId===s.buyerAgentId && x.serviceId===s.serviceId && x.providerAgentId===s.providerAgentId && x.status==='active' && Date.parse(x.periodEndAt)>Date.now())
         if (!current) { output.push({jobId:s.jobId,state:'NO_LONGER_ACTIVE'});break }
+        const fresh = await deps.items(current)
+        if (!Array.isArray(fresh) || !fresh.some(x=>x.id===item.id && x.text===item.text)) { output.push({jobId:s.jobId,state:'MONITORING_CHANGED'});break }
         const claim = {jobId:s.jobId,buyerAgentId:s.buyerAgentId,itemId:item.id,payloadHash,text:item.text,claimedAt:new Date().toISOString(),state:'pending'}
         durable(pending,claim,true)
         let result: unknown

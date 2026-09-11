@@ -51,3 +51,9 @@ test('payload for another job is rejected before transport',async t=>{
  const out=await runDeliveryCycle({list:async()=>[sub],items:async()=>items,send:async()=>{sends++;return {delivered:true}}},temp(t),true)
  assert.equal(out[0].state,'BLOCKED');assert.equal(sends,0)
 })
+
+test('pause or preferences change after preview prevents outbound delivery',async t=>{
+ let reads=0,sends=0
+ const out=await runDeliveryCycle({list:async()=>[sub],items:async()=>++reads===1?managedDeliveryItems(sub,row,[alert],now):[],send:async()=>{sends++;return {delivered:true}}},temp(t),true)
+ assert.equal(out[0].state,'MONITORING_CHANGED');assert.equal(sends,0)
+})
