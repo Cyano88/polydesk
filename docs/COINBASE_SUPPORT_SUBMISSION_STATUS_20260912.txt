@@ -1,0 +1,8 @@
+Current status: USER_REPORTED_SUBMITTED
+The user confirmed submission through CDP Support. No case number has been provided. Indexing resolution is not yet verified.
+
+Earlier automated attempt (historical):
+Status: NOT SUBMITTED
+The user authorized submission. The native browser tool failed to start. The fallback browser could not reach support.cdp.coinbase.com from the PC (DNS failure, then connection timeout). The site returned HTTP 200 from the VPS, but SSH browser forwarding was administratively prohibited. No form submission was performed and no ticket number exists. Temporary browser and forwarding process closed.
+Prepared request: COINBASE_INDEXING_SUPPORT_REQUEST_20260912.md
+Submission URL: https://support.cdp.coinbase.com/

@@ -50,13 +50,13 @@ export default function Integrations() {
       <main>
         <section className='mx-auto max-w-6xl px-5 pb-16 pt-20 sm:px-8 sm:pb-24 sm:pt-28'>
           <p className='text-xs font-bold uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400'>Polymarket infrastructure</p>
-          <h1 className='mt-5 max-w-4xl text-5xl font-semibold tracking-[-0.055em] sm:text-7xl'>Polymarket infrastructure for agents and platforms.</h1>
+          <h1 className='mt-5 max-w-4xl text-5xl font-semibold tracking-[-0.055em] sm:text-7xl'>Research, review, and approved Polymarket trades.</h1>
           <p className='mt-6 max-w-2xl text-lg leading-8 text-gray-600 dark:text-gray-300'>
-            Integrate bounded trading, managed portfolio operations, and independent flow audits through versioned machine-readable services.
+            Give your agent evidence to review, clear payment terms, and a separate approval step before trading. Integrate through the reusable PolyDesk skill and HTTP JSON API.
           </p>
           <div className='mt-6 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100'>
-            <strong>OKX.AI status: registered</strong>
-            <span className='text-amber-800/80 dark:text-amber-100/70'>Public discovery begins after Agent #5427 marketplace approval.</span>
+            <strong>Marketplace availability</strong>
+            <span className='text-amber-800/80 dark:text-amber-100/70'>Check the live marketplace listing. Base catalog indexing is pending; direct API availability is separate.</span>
           </div>
           <div className='mt-8 flex flex-wrap gap-3'>
             <Link to='/docs/platforms' className='inline-flex min-h-12 items-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white dark:bg-white dark:text-gray-950'>
@@ -84,8 +84,8 @@ export default function Integrations() {
           <div className='grid gap-12 lg:grid-cols-[0.8fr_1.2fr]'>
             <div>
               <p className='text-xs font-bold uppercase tracking-[0.2em] text-gray-500'>Service model</p>
-              <h2 className='mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Three products. One non-custodial control layer.</h2>
-              <p className='mt-4 leading-7 text-gray-600 dark:text-gray-300'>Run one bounded mission, continuously manage an agent, or assess an external Polymarket integration. Internal API capabilities support these products; they are not separate product lines.</p>
+              <h2 className='mt-4 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl'>Three core services, with specialist research tools.</h2>
+              <p className='mt-4 leading-7 text-gray-600 dark:text-gray-300'>Request one trade review, monitor configured accounts, or audit a Polymarket integration. LP Scout and Football Live Data remain specialist paid services. Monitoring requires configuration; copy trading requires buyer approval.</p>
             </div>
             <div className='grid gap-3'>
               {polydeskMarketplaceProducts.map((product, index) => {
@@ -133,7 +133,7 @@ export default function Integrations() {
                 'PolyDesk never requests wallet secrets or reusable Polymarket credentials.',
                 'Read-only requests can complete immediately; financial actions remain buyer-approved.',
                 'Marketplace identity and return routing use allowlisted integration keys, not caller-supplied URLs.',
-                'Hash PayLink remains the funding checkout, settlement-status, and receipt boundary.',
+                'Funding receipts, Base research payments, and marketplace settlement follow their respective payment contracts.',
               ].map(item => <li key={item} className='flex gap-2'><CheckCircleIcon className='mt-0.5 h-5 w-5 shrink-0 text-emerald-600' />{item}</li>)}
             </ul>
           </div>

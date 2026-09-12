@@ -1,6 +1,6 @@
 # PolyDesk
 
-PolyDesk is a non-custodial control layer for Polymarket agents and integration platforms.
+PolyDesk helps agents research Polymarket opportunities, review evidence, and carry out separately approved trades with receipts.
 
 It exposes versioned, machine-readable services for bounded trading, managed portfolio operations, and external integration audits. PolyDesk does not operate a standalone consumer trading application.
 
@@ -10,7 +10,7 @@ It exposes versioned, machine-readable services for bounded trading, managed por
 2. **Managed Polymarket Agent** - continuous portfolio and configured-address monitoring, verified email alerts, scheduled summaries, and optional separately authorized copy trading.
 3. **Polymarket Integration Audit** - an evidence-backed review of an external platform's wallet, payment, authorization, execution, recovery, and receipt controls.
 
-The direct A2MCP routes are implementation capabilities supporting these products, not additional product lines.
+These are the three core A2A products. Polymarket LP Scout and Football Live Data remain specialist paid services for liquidity research and football facts. Discover route availability, supported actions, and current pricing from the live catalog; a service appearing in the catalog does not prove marketplace indexing.
 
 ## Integration entry points
 
@@ -39,7 +39,7 @@ The originating platform:
 - preserves request identifiers and follows declared status or receipt URLs;
 - uses an operator-approved return destination.
 
-Hash PayLink remains the funding checkout, payment verification, settlement-status, and payment-receipt boundary. Polymarket remains the market, order-book, position, and public execution boundary.
+Hash PayLink handles its integrated funding checkout and funding receipts. Base research uses its own CDP x402 USDC settlement receipt; OKX service payments follow their declared marketplace or payment contract. Polymarket remains the market, order-book, position, and public execution boundary.
 
 PolyDesk never accepts private keys, seed phrases, or reusable Polymarket CLOB credentials. Paying for a service does not authorize a trade.
 

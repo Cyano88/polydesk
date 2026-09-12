@@ -18,7 +18,7 @@ export function capabilities() {
     capabilities: operations.map(op => ({ id: op.id, endpoint: `/api/v1${op.path}`, method: 'GET', description: op.description, parameters: op.parameters, authentication: 'none', paymentRequired: false, signingAuthorized: false, orderSubmitted: false })),
     links: { openapi: '/api/v1/openapi.json', guide: '/docs/platforms', legacyCatalog: '/api/a2mcp/services', skill: '/skills/polydesk/SKILL.md' },
     partnerJobs: { endpoint: '/api/v1/jobs', status: 'requires-partner-provisioning', supportedCapabilities: ['market-discovery'], paymentRequired: false },
-    paidResearch: { endpoint: '/api/v1/research-jobs', publicPaymentEndpoint: '/api/x402/base/polymarket-smart-trader', fee: researchFee, partnerKeyRequiredForReservations: true, publicPaymentRequiresPartnerKey: false },
+    paidResearch: { endpoint: '/api/v1/research-jobs', publicPaymentEndpoint: '/api/x402/base/polymarket-smart-trader', fee: researchFee, partnerKeyRequiredForReservations: true, publicPaymentRequiresPartnerKey: false, acceptanceEndpoint: "/api/v1/research-jobs/{id}/acceptance", acceptanceRequiresExactReportHashes: true, acceptanceAuthorizesTrade: false },
     planned: ['MCP transport', 'External subscriptions', 'Unified fee-inclusive trade previews'],
     compatibility: { transport: ['HTTP JSON'], mcp: 'not-implemented',
       payment: 'These reads are free. Existing paid routes retain their own live payment challenges.',

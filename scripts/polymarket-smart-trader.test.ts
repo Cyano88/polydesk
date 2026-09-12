@@ -106,7 +106,7 @@ test('A2A research reuses AI evidence without creating an x402 approval or extra
   let calls = 0
   const base = dependencies()
   const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }, dependencies({
-    research: async context => { calls++; assert.equal((context.mandate as any).maximumSpendUsdc, 5); return base.research(context) },
+    research: async context => { calls++; assert.equal(context.mandate, undefined); return base.research(context) },
     saveDecision: async () => { assert.fail('must not save an x402 decision') },
   }))
   assert.equal(result.ok, true)
@@ -608,7 +608,7 @@ test('ANALYZE routes Valorant to general research and cannot approve empty evide
   assert.equal(sportsCalls, 0)
   assert.equal(generalCalls, 1)
   assert.equal(decision.decision, 'ESCALATE')
-  assert.ok(decision.blockers.some(value => value.includes('No cited market research')))
+  assert.ok(decision.blockers.some(value => value.includes('No current cited market research')))
 })
 
 test('non-football research excludes unrelated retrieval results before assessment', async () => {
@@ -939,9 +939,10 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
   assert.equal(result.ok, true)
   assert.equal(received.proofClass, 'polydesk_smart_market_research')
   assert.equal(received.side, 'BUY')
-  assert.equal(typeof received.mandate, 'object')
+  assert.equal(received.mandate, undefined)
+  assert.equal(received.execution, undefined)
   assert.equal((received.market as Record<string, unknown>).description, 'Resolves Yes if Team A wins the final.')
-  assert.match(String(received.analysisScope), /not a research evidence gap/i)
+  assert.match(String(received.analysisScope), /separate execution checks/i)
 })
 
 test('ANALYZE routes non-sports evidence through ZeroScout general research', async () => {
@@ -1239,4 +1240,21 @@ test('free PREPARE preflight rejects an invalid amount before market-provider wo
   if (result.ok) return
   assert.equal(result.status, 409)
   assert.match(result.error, /maximumSpendUsdc/i)
+})
+
+test('ANALYZE exposes source screening and structured snapshot while withholding approval on stale evidence',async()=>{
+ const snapshot={status:'AVAILABLE',source:'https://data-api.binance.vision/api/v3/klines',pair:'BTCUSDT',interval:'1m',observedAt:new Date(now).toISOString(),openTime:new Date(now-60000).toISOString(),closeTime:new Date(now-1).toISOString(),high:'78000',close:'77500',rawCandle:[],historyCoverage:'LAST_CLOSED_CANDLE_ONLY',fullResolutionHistoryVerified:false}
+ let context:Record<string,unknown>={}
+ const deps=dependencies()
+ const result=await runPolymarketSmartTrader({action:'ANALYZE',marketId:conditionId,outcome:'Yes',side:'BUY'},dependencies({
+  sportsNews:async()=>[{title:'Team A historical update',description:'Old article',source:'Publisher',url:'https://example.com/old',publishedAt:new Date(now-30*86400000).toISOString()}],
+  underlyingData:async()=>snapshot,
+  research:async c=>{context=c;return deps.research(c)},
+ }))
+ assert.equal(result.ok,true);if(!result.ok||result.data.action!=='ANALYZE')return
+ assert.equal(result.data.decision.decision,'ESCALATE')
+ assert.deepEqual(context.newsEvidence,[]);assert.equal(context.execution,undefined)
+ assert.deepEqual(result.data.evidence.structuredUnderlying,snapshot)
+ assert.equal(result.data.evidence.sourceQuality.assessments[0].reason,'OLDER_THAN_SEVEN_DAYS')
+ assert.equal(result.data.evidence.retrievedNews.length,1)
 })

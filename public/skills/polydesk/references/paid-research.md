@@ -52,3 +52,20 @@ After a successful Base payment, retain `X-PolyDesk-Payment-Attempt-Id` and `X-P
 If receipt status reports `researchRecoveryAvailable: true`, offer: **"Recover this research delivery without another payment."** Preserve the original JSON and decision URL. The buyer-facing PolyDesk operator can POST exactly `{"action":"RECOVER_RESEARCH"}` to `researchRecoveryUrl` with existing operator authentication after the buyer requests recovery. Partner credentials and a public receipt do not grant operator authority; never request or distribute the operator key.
 
 Recovery checks provider readiness, reuses only the receipt's persisted request, and enforces the original attempt budget. It does not pay again or authorize trading. After a timeout, read the receipt status before retrying. A successful recovery response is not proof of AI availability: require `researchStatus: AVAILABLE` and inspect the actual report and proof. If still unavailable, keep the correction open instead of buying another analysis automatically. Follow up with **"Show results"**, then **"Review the recovered delivery."**
+
+
+## Review and durable acceptance
+
+Show the AI findings, score explanation, original JSON, source-quality assessments, and any correction before asking for acceptance. A screening score is not a win probability. Current-source screening checks timestamps, duplicate URLs and obvious page clutter; it does not prove relevance or truth. A structured BTC snapshot is only its displayed closed candle, never a complete resolution-history audit.
+
+For a partner-bound job, use `GET /api/v1/research-jobs/{id}/acceptance` with that application's bearer credential. After explicit buyer agreement, POST to the same URL:
+
+```json
+{"action":"ACCEPT_RESEARCH","originalAnalysisHash":"<64-character hash from delivery>","revisionHash":null,"acknowledgeLimitations":true}
+```
+
+If a correction is published, use its exact `revisionHash` instead of null. Do not invent hashes or acknowledge limitations for the buyer. The receipt must match the job's request, payer, network and payment amount. A partner correction request requires operator reconciliation with the published receipt correction before acceptance. Unavailable AI and pending corrections block acceptance.
+
+Public marketplace receipts expose `GET /api/a2mcp/polymarket-smart-trader/payment/{transaction}/acceptance`. POST on this receipt route requires the PolyDesk operator credential and explicit buyer acceptance; possession of a public transaction hash grants no write access. Never request or expose the operator key to buyers. Partner acceptance is scoped to its application and is queried through the partner route.
+
+Acceptance is durable and version-specific; it preserves prior acceptance events and the original report. It does not refund, release escrow or authorize trading: Base x402 payment is already settled. After acceptance, offer: **Show accepted findings**, **Check whether a fresh trade preview is available**, **Decline this trade**, or **Analyze another market (review any new fee first)**. A research ESCALATE result does not become trade approval through acceptance. Execution still needs fresh eligibility, balance, gas and fee checks, an exact preview and separate buyer approval. No public v1 trade-submission endpoint or MCP transport is enabled.

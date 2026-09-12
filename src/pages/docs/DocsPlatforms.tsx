@@ -27,7 +27,7 @@ export default function DocsPlatforms() {
       <Section title="Start with discovery">
         <p>Read the versioned manifest at runtime. Select a declared product or compatibility capability and use its published endpoint and request schema.</p>
         <CodeBlock lang="bash">{discoveryExample}</CodeBlock>
-        <Note>Products are the three customer-facing offers. Capabilities are implementation routes and should not be marketed as additional PolyDesk products.</Note>
+        <Note>Three core A2A products cover one-off trading, managed monitoring and integration audits. LP Scout and Football Live Data remain specialist paid services. Check each route for price, network and supported actions.</Note>
       </Section>
 
       <Section title="Public API foundation">
@@ -39,6 +39,7 @@ export default function DocsPlatforms() {
       <Section title="Paid research for agents and platforms">
         <p>Installing the PolyDesk skill is free. Backend ANALYZE costs 0.30 native USDC on Base, subject to review of the live payment challenge. A partner key does not pay this fee. Public marketplace buyers use the canonical x402 endpoint without a partner key.</p>
         <p>Direct partners reserve with <Code>POST /api/v1/research-jobs</Code>, a stable <Code>Idempotency-Key</Code> and their bearer credential. Send the same ANALYZE body, credential and returned <Code>X-PolyDesk-Research-Job</Code> header to the Base payment endpoint. Research starts only after verified settlement. Read the saved job after a disconnect; reconcile the original payment instead of paying again.</p>
+        <p>After explicit buyer agreement, record acceptance with <Code>POST /api/v1/research-jobs/&#123;id&#125;/acceptance</Code>, the original analysis hash, exact correction revision hash (or null), and limitation acknowledgement. Acceptance survives restart and stays scoped to the partner application. It never authorizes trading.</p>
         <p>Show findings and original JSON before review. Report defects through the job correction endpoint for manual review under the original payment. A correction request does not issue a refund. Research payment and acceptance never authorize a trade.</p>
         <p><a href="/skills/polydesk/references/paid-research.md">Read the payment, gas checks, recovery and follow-up contract</a>.</p>
       </Section>
@@ -80,7 +81,7 @@ export default function DocsPlatforms() {
 
       <Section title="Financial actions">
         <p>Funding and trading remain separate from service payment. PolyDesk may return <Code>FUND</Code>, <Code>APPROVE_COLLATERAL</Code>, or <Code>SIGN</Code>; your compatible EVM signer must authorize the exact action under the buyer's written limits.</p>
-        <p>Hash PayLink remains the hosted funding, payment verification, settlement-status, and receipt boundary. Polymarket remains the execution and public market-state boundary.</p>
+        <p>Hash PayLink handles its integrated funding checkout and receipts. Base research uses CDP x402 USDC settlement; OKX tasks follow their marketplace payment contract. Polymarket remains the execution and public market-state boundary.</p>
       </Section>
 
       <Section title="Production checklist">

@@ -75,6 +75,7 @@ const services: Service[] = [
     input: ['ownerAddress', 'requiredBalanceUsdc', 'optional claimed wallet', 'source network: base or arbitrum'],
     returns: ['derived Deposit Wallet and match proof', 'deployment and pUSD readiness', 'verified shortfall', 'Hash PayLink checkout and status URL only when funding is required'],
     freeSteps: [
+      { endpoint: '/api/a2mcp/polymarket-smart-trader/payment/:transaction/acceptance', purpose: 'Read version-specific research acceptance. Writes require operator authentication and explicit buyer agreement; no trading authority.' },
       { endpoint: '/api/polymarket-account/readiness', purpose: 'Derive and inspect the buyer account before payment.' },
     ],
     boundary: 'A mismatched wallet is rejected before checkout creation. Checkout settlement must complete before trading.',
@@ -241,7 +242,7 @@ export default function a2mcpServicesHandler(_req: Request, res: Response) {
     capabilities: publicServices,
     compatibilityServices: publicServices,
     deprecatedAliases: ['compatibilityServices'],
-    rule: 'Products are the customer-facing marketplace offers. Capabilities are retained implementation routes and must not be presented as additional products.',
+    rule: 'Three core A2A products are complemented by LP Scout and Football Live Data specialist services. Other capability routes are implementation building blocks. Read each route contract for price, network and availability; catalog presence is not marketplace approval.',
     services: polyDeskMarketplaceProducts,
     docs: '/docs/platforms',
   })

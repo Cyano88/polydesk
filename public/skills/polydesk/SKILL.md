@@ -74,3 +74,10 @@ Preparation can still block on market identity, expired or stale books, limits, 
 Use the existing Onchain OS buyer flow only after separate transaction authorization. Verify the execution receipt before reporting a fill or recording completion in Sibyl; preserve replay protection and recovery. Do not claim downstream stages succeeded from discovery alone.
 
 After showing findings and original JSON, offer: **Review this research**, **Review delivery issue**, or **Analyze another market**. After accepted research, offer **Preview this trade** only when the returned handoff permits it, or **Decline and analyze another market**. Research acceptance never authorizes a trade. After an executed trade, offer **Show receipt**, then the supported position or exit follow-up.
+
+
+## Service scope and buyer follow-up
+
+PolyDesk has three core A2A services: One-Off Polymarket Trade, Managed Polymarket Agent, and Polymarket Integration Audit. LP Scout and Football Live Data remain specialist paid services. Use the live catalog for supported actions, network and price; a Base research fee does not buy an OKX managed subscription. API access and marketplace indexing are separate.
+
+Always show results and unresolved gaps before asking for review. Record explicit acceptance using the receipt-linked flow in [paid research](references/paid-research.md), then offer the next relevant choice. Service payment, research acceptance and trade approval are separate decisions. Copy trading requires buyer authorization; monitoring or a subscription alone does not authorize an order.
