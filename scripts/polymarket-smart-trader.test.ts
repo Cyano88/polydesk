@@ -106,7 +106,7 @@ test('A2A research reuses AI evidence without creating an x402 approval or extra
   let calls = 0
   const base = dependencies()
   const result = await runPolymarketTaskResearch({ marketId: conditionId, outcome: 'Yes', side: 'BUY', mandate: { maximumSpendUsdc: 5, maximumPrice: 0.8 } }, dependencies({
-    research: async context => { calls++; assert.equal(context.mandate, undefined); return base.research(context) },
+    research: async context => { calls++; assert.equal((context.mandate as any).maximumSpendUsdc, 5); assert.equal((context.mandate as any).maximumPrice, 0.8); assert.ok(Object.keys(context.execution as object).length); return base.research(context) },
     saveDecision: async () => { assert.fail('must not save an x402 decision') },
   }))
   assert.equal(result.ok, true)
@@ -130,6 +130,7 @@ test('research-only accepts no mandate, does not invent AI limits, and returns r
         calls++
         assert.equal(context.mandate, null)
         assert.equal(context.researchOnly, true)
+        assert.ok(Object.keys(context.execution as object).length)
         assert.match(String(context.analysisScope), /Research only/)
         if (outage) throw new Error('fixture outage')
         return base.research(context)
@@ -939,8 +940,8 @@ test('ANALYZE sends ZeroScout the isolated direct-trade contract', async () => {
   assert.equal(result.ok, true)
   assert.equal(received.proofClass, 'polydesk_smart_market_research')
   assert.equal(received.side, 'BUY')
-  assert.equal(received.mandate, undefined)
-  assert.equal(received.execution, undefined)
+  assert.equal((received.mandate as any).maximumPrice, 0.95)
+  assert.equal((received.execution as any).bestAsk, 0.51)
   assert.equal((received.market as Record<string, unknown>).description, 'Resolves Yes if Team A wins the final.')
   assert.match(String(received.analysisScope), /separate execution checks/i)
 })
@@ -1253,7 +1254,7 @@ test('ANALYZE exposes source screening and structured snapshot while withholding
  }))
  assert.equal(result.ok,true);if(!result.ok||result.data.action!=='ANALYZE')return
  assert.equal(result.data.decision.decision,'ESCALATE')
- assert.deepEqual(context.newsEvidence,[]);assert.equal(context.execution,undefined)
+ assert.deepEqual(context.newsEvidence,[]);assert.equal((context.execution as any).bestAsk,0.51);assert.match(String(context.analysisScope),/separate execution checks/)
  assert.deepEqual(result.data.evidence.structuredUnderlying,snapshot)
  assert.equal(result.data.evidence.sourceQuality.assessments[0].reason,'OLDER_THAN_SEVEN_DAYS')
  assert.equal(result.data.evidence.retrievedNews.length,1)

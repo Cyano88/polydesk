@@ -1497,6 +1497,9 @@ export async function runPolymarketSmartTrader(
     side: input.side,
     market: selected.market,
     outcome: selected.outcome,
+    // Required provider contract context; these remain execution constraints, not directional evidence.
+    mandate: input.mandate,
+    execution: selected.execution,
     smartMoney: selected.smartMoney,
     structuredUnderlying,
     newsEvidence: researchNews,
