@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { OKXFacilitatorClient } from '@okxweb3/x402-core'
+import { DiagnosticOkxFacilitator } from './okx-facilitator-diagnostics.js'
 import {
   x402HTTPResourceServer,
   x402ResourceServer,
@@ -171,7 +171,7 @@ async function getOkxHttpServer(req: Request) {
       }
 
       const okxBaseUrl = env('OKX_X402_BASE_URL')
-      const facilitator = new OKXFacilitatorClient({
+      const facilitator = new DiagnosticOkxFacilitator({
         apiKey,
         secretKey,
         passphrase,
