@@ -169,6 +169,8 @@ export type SmartTraderPaidAnalysisRecord = {
   deliveryAttemptCount?: number
   maxDeliveryAttempts?: number
   nextRetryAt?: string
+  deliveryClaimToken?: string
+  deliveryVersions?: Array<Omit<SmartTraderPaidAnalysisRecord, 'deliveryVersions'>>
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -202,23 +204,54 @@ export function smartTraderMaxDeliveryAttempts(record: SmartTraderPaidAnalysisRe
 export function isRemediableMissingZeroScoutProof(record: SmartTraderPaidAnalysisRecord): boolean {
   return (record.status === 'completed' || record.status === 'failed')
     && !hasUnavailableReviewHandoff(record.response)
+    && !isLegacyProviderFailure(record)
     && smartTraderDeliveryAttemptCount(record) < smartTraderMaxDeliveryAttempts(record)
     && hasMissingZeroScoutProofDelivery(record.response)
+}
+
+/** Explicit recovery only. A proof reference does not establish successful inference. */
+export function isLegacyProviderFailure(record: SmartTraderPaidAnalysisRecord): boolean {
+  const response = record.response
+  if (!response || response.schema !== 'polydesk-smart-market-trader-v1' || response.action !== 'ANALYZE' || response.ok !== true) return false
+  const decision = isRecord(response.decision) ? response.decision : null
+  const evidence = decision && isRecord(decision.evidence) ? decision.evidence : null
+  if (!evidence || Object.hasOwn(evidence, 'researchStatus')) return false
+  const provider = isRecord(response.evidence) && isRecord(response.evidence.zeroScout) ? response.evidence.zeroScout : null
+  const flags = [...(Array.isArray(decision?.riskFlags) ? decision.riskFlags : []), ...(Array.isArray(provider?.riskFlags) ? provider.riskFlags : [])]
+  return record.analysisHash === decision?.analysisHash && record.decisionId === decision?.decisionId
+    && ((typeof provider?.summary === 'string' && provider.summary.startsWith('ZeroScout could not obtain a model-backed directional assessment.'))
+      || flags.includes('All available 0G direct-trade model routes were unavailable or returned unusable output.'))
+}
+
+export function recoveryScopeExpired(record: SmartTraderPaidAnalysisRecord, now = Date.now()): boolean {
+  const selected = record.response && isRecord(record.response.selected) ? record.response.selected : null
+  const market = selected && isRecord(selected.market) ? selected.market : null
+  const end = Date.parse(typeof market?.endDate === 'string' ? market.endDate : '')
+  return Number.isFinite(end) && end <= now
+}
+
+/** Saved in the same atomic update as the claim/result. Never nests or edits older snapshots. */
+export function preserveSmartTraderDelivery(record: SmartTraderPaidAnalysisRecord): SmartTraderPaidAnalysisRecord {
+  if (!record.response || !record.analysisHash) return record
+  const {deliveryVersions = [], ...snapshot} = record
+  if (deliveryVersions.some(v => v.analysisHash === record.analysisHash && stableHash(v.response) === stableHash(record.response))) return record
+  return {...record, deliveryVersions: [...deliveryVersions, structuredClone(snapshot)]}
 }
 
 export function isRemediableDegradedResearch(record: SmartTraderPaidAnalysisRecord): boolean {
   const decision = record.response && isRecord(record.response.decision) ? record.response.decision : null
   const evidence = decision && isRecord(decision.evidence) ? decision.evidence : null
-  return record.status === 'completed'
+  return (record.status === 'completed' || (record.status === 'failed' && record.remediationReason === 'degraded-research'))
     && smartTraderDeliveryAttemptCount(record) < SMART_TRADER_MAX_DELIVERY_ATTEMPTS
     && decision?.decision === 'ESCALATE'
-    && evidence?.researchStatus === 'UNAVAILABLE'
+    && (evidence?.researchStatus === 'UNAVAILABLE' || isLegacyProviderFailure(record))
     && Boolean(record.decisionId && record.analysisHash)
 }
 
 export function isRemediableAfterAnalysisEngineUpgrade(record: SmartTraderPaidAnalysisRecord): boolean {
   return (record.status === 'completed' || record.status === 'failed')
     && !hasUnavailableReviewHandoff(record.response)
+    && !isLegacyProviderFailure(record)
     && record.analysisEngineVersion !== SMART_TRADER_ANALYSIS_ENGINE_VERSION
     && hasMissingZeroScoutProofDelivery(record.response)
 }
@@ -751,7 +784,7 @@ function validReceiptProof(value: unknown) {
   return ['contentHash', 'storageRoot', 'storageTxHash', 'storageUri'].some(key => Boolean(clean(value[key], 500)))
 }
 
-function validServicePayment(value: unknown): value is SmartTraderServicePayment {
+export function validServicePayment(value: unknown): value is SmartTraderServicePayment {
   if (!isRecord(value)) return false
   let amountAtomic = 0n
   try { amountAtomic = BigInt(clean(value.amountAtomic, 80)) } catch { return false }
@@ -1634,19 +1667,20 @@ export async function executeSettledSmartTraderDelivery(
   payer: string,
   dependencies: SmartTraderDependencies = liveDependencies,
   options: { allowEngineUpgradeRemediation?: boolean; allowDegradedResearchRemediation?: boolean } = {},
+  storage: { mutate: typeof mutateDurableJson; run?: typeof runPolymarketSmartTrader } = { mutate: mutateDurableJson },
 ) {
   const analysisKey = paidAnalysisKey(transaction)
-  const claimed = await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
+  const claimed = await storage.mutate<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
     if (!current || current.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
       throw new Error('No exact persisted request exists for this settlement transaction. Recovery is refused.')
     }
     if (current.payment.transaction.toLowerCase() !== transaction.toLowerCase()
       || current.payment.payer.toLowerCase() !== payer.toLowerCase()
-      || current.payment.amountAtomic !== '300000') {
+      || !validServicePayment(current.payment) || current.payment.amountAtomic !== '300000') {
       throw new Error('The persisted payment metadata does not match the verified settlement.')
     }
     const attemptCount = smartTraderDeliveryAttemptCount(current)
-    const maximumAttempts = smartTraderMaxDeliveryAttempts(current)
+    const maximumAttempts = options.allowDegradedResearchRemediation ? SMART_TRADER_MAX_DELIVERY_ATTEMPTS : smartTraderMaxDeliveryAttempts(current)
     const engineUpgradeRemediation = options.allowEngineUpgradeRemediation === true
       && isRemediableAfterAnalysisEngineUpgrade(current)
     if (attemptCount >= maximumAttempts && !engineUpgradeRemediation) throw new Error('The bounded delivery-attempt budget has been exhausted.')
@@ -1656,6 +1690,7 @@ export async function executeSettledSmartTraderDelivery(
     if (options.allowDegradedResearchRemediation && !remediatingDegradedResearch) {
       throw new Error('This settlement is not eligible for explicit degraded-research recovery.')
     }
+    if (remediatingDegradedResearch && recoveryScopeExpired(current)) throw new Error('RECOVERY_SCOPE_REVIEW_REQUIRED')
     if (remediatingDegradedResearch && stableHash(current.request) !== current.requestHash) {
       throw new Error('The persisted research request binding is invalid. Recovery is refused.')
     }
@@ -1667,8 +1702,9 @@ export async function executeSettledSmartTraderDelivery(
       throw new Error('Recovery is already running for this settlement transaction.')
     }
     return {
-      ...current,
+      ...preserveSmartTraderDelivery(current),
       status: 'running',
+      deliveryClaimToken: randomBytes(16).toString('hex'),
       analysisEngineVersion: SMART_TRADER_ANALYSIS_ENGINE_VERSION,
       deliveryAttemptCount: engineUpgradeRemediation ? 0 : attemptCount,
       maxDeliveryAttempts: maximumAttempts,
@@ -1689,21 +1725,28 @@ export async function executeSettledSmartTraderDelivery(
     return await runBoundedSmartTraderDelivery({
       initialAttemptCount: smartTraderDeliveryAttemptCount(claimed),
       maximumAttempts,
-      run: () => {
+      run: async () => {
         nextAttemptCount += 1
+        // Reserve the attempt before compute, including attempts that throw or crash.
+        await storage.mutate<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
+          if (!current || current.deliveryClaimToken !== claimed.deliveryClaimToken) throw new Error('DELIVERY_CLAIM_SUPERSEDED')
+          return {...current, deliveryAttemptCount: nextAttemptCount, updatedAt: new Date().toISOString()}
+        })
         attemptStartedAt = Date.now()
         console.info('[smart-trader] paid delivery attempt started', {
           transaction: claimed.payment.transaction,
           attempt: nextAttemptCount,
           maximumAttempts,
         })
-        return runPolymarketSmartTrader(claimed.request, dependencies, claimed.payment)
+        return (storage.run || runPolymarketSmartTrader)(claimed.request, dependencies, claimed.payment)
       },
       onAttempt: async ({ attemptCount, missingZeroScoutProof, exhausted, result }) => {
         const analysisData = result.ok && result.data.action === 'ANALYZE' ? result.data : null
         const reviewReady = hasUnavailableReviewHandoff(analysisData)
-        await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
-          ...(current || claimed),
+        await storage.mutate<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
+          if (!current || current.deliveryClaimToken !== claimed.deliveryClaimToken) throw new Error('DELIVERY_CLAIM_SUPERSEDED')
+          return {
+          ...preserveSmartTraderDelivery(current),
           status: analysisData && (!missingZeroScoutProof || reviewReady) ? 'completed' : exhausted ? 'failed' : 'running',
           deliveryAttemptCount: attemptCount,
           maxDeliveryAttempts: maximumAttempts,
@@ -1721,7 +1764,7 @@ export async function executeSettledSmartTraderDelivery(
           } : {
             error: result.error,
           }),
-        }))
+        }})
         console.info('[smart-trader] paid delivery attempt finished', {
           transaction: claimed.payment.transaction,
           attempt: attemptCount,
@@ -1737,14 +1780,16 @@ export async function executeSettledSmartTraderDelivery(
       },
     })
   } catch (error) {
-    await mutateDurableJson<SmartTraderPaidAnalysisRecord>(analysisKey, current => ({
-      ...(current || claimed),
+    await storage.mutate<SmartTraderPaidAnalysisRecord>(analysisKey, current => {
+      if (!current || current.deliveryClaimToken !== claimed.deliveryClaimToken) throw new Error('DELIVERY_CLAIM_SUPERSEDED')
+      return {
+      ...current,
       status: 'failed',
       maxDeliveryAttempts: maximumAttempts,
       nextRetryAt: undefined,
       updatedAt: new Date().toISOString(),
       error: error instanceof Error ? error.message : 'Recovery failed.',
-    }))
+    }})
     throw error
   }
 }
@@ -1880,6 +1925,19 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
   if (!record || record.schema !== 'polydesk-smart-trader-paid-analysis-v1') {
     return res.status(404).json({ ok: false, error: 'No paid analysis record was found for this settlement transaction.' })
   }
+  // A version read is strictly read-only, even if the active receipt needs recovery.
+  if (Object.keys(req.query).some(key => key !== 'analysisHash')
+    || (req.query.analysisHash !== undefined && (typeof req.query.analysisHash !== 'string' || !/^[a-f0-9]{64}$/.test(req.query.analysisHash)))) {
+    return res.status(400).json({ok:false,error:'INVALID_ANALYSIS_HASH'})
+  }
+  if (typeof req.query.analysisHash === 'string') {
+    const version = record.deliveryVersions?.find(v => v.analysisHash === req.query.analysisHash)
+      || (record.analysisHash === req.query.analysisHash ? record : null)
+    if (!version?.response) return res.status(404).json({ok:false,error:'DELIVERY_VERSION_NOT_FOUND'})
+    return res.json({ok:true,transaction:transaction.toLowerCase(),analysisHash:version.analysisHash,decisionId:version.decisionId,
+      result:version.response,settledAt:version.settledAt,updatedAt:version.updatedAt,historical:true,tradeAuthorized:false,
+      additionalPaymentRequired:false,followUpPrompts:['Compare this report with the current delivery','Review the current delivery before acceptance']})
+  }
   const engineUpgradeRemediationAvailable = isRemediableAfterAnalysisEngineUpgrade(record)
   if (shouldRecoverSmartTraderDelivery(record, Date.now(), { allowEngineUpgradeRemediation: true })) {
     void executeSettledSmartTraderDelivery(
@@ -1895,7 +1953,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     })
   }
   let acceptance: Record<string, unknown> | null = null
-  if (record.payment.network === 'Base' && record.status === 'completed') {
+  if (validServicePayment(record.payment) && record.status === 'completed') {
     try {
       const { ReceiptAcceptance, acceptanceView } = await import('./research-acceptance.js')
       acceptance = acceptanceView(await new ReceiptAcceptance().get(transaction))
@@ -1917,14 +1975,20 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     // Expose the actual evidence package, not only a receipt ID. Never start a
     // second payment or mutate the immutable decision while serving a result.
     result: (record.status === 'completed' || record.status === 'failed') && record.response?.action === 'ANALYZE' ? record.response : null,
+    deliveryVersions: (record.deliveryVersions || []).map(version => ({
+      analysisHash: version.analysisHash, decisionId: version.decisionId, updatedAt: version.updatedAt,
+      result: version.response, resultUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}?analysisHash=${version.analysisHash}`, correctionUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/correction?analysisHash=${version.analysisHash}`,
+      historical: true, tradeAuthorized: false,
+    })),
     settledAt: record.settledAt,
     updatedAt: record.updatedAt,
     error: record.status === 'failed' ? clean(record.error, 300) : null,
     deliveryAttemptCount: smartTraderDeliveryAttemptCount(record),
     maxDeliveryAttempts: smartTraderMaxDeliveryAttempts(record),
     retryable: isRemediableMissingZeroScoutProof(record) || engineUpgradeRemediationAvailable,
-    researchRecoveryAvailable: isRemediableDegradedResearch(record),
-    researchRecoveryUrl: isRemediableDegradedResearch(record) ? `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/recover-research` : null,
+    researchRecoveryAvailable: validServicePayment(record.payment) && isRemediableDegradedResearch(record) && !recoveryScopeExpired(record),
+    researchRecoveryBlockedReason: isRemediableDegradedResearch(record) && recoveryScopeExpired(record) ? 'RECOVERY_SCOPE_REVIEW_REQUIRED' : null,
+    researchRecoveryUrl: validServicePayment(record.payment) && isRemediableDegradedResearch(record) && !recoveryScopeExpired(record) ? `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/recover-research` : null,
     engineUpgradeRemediationAvailable,
     nextRetryAt: record.nextRetryAt || null,
   })

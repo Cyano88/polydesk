@@ -20,14 +20,34 @@ export function validateAddendum(raw:unknown):Addendum {
 }
 export class ReceiptCorrections {
  constructor(private store:Store={read:readDurableJson,mutate:mutateDurableJson},private paid:typeof readPaidResearchRecord=readPaidResearchRecord){}
- async original(tx:string){validTx(tx);const p=await this.paid(tx);if(!p||p.schema!=='polydesk-smart-trader-paid-analysis-v1'||p.payment.transaction.toLowerCase()!==tx.toLowerCase()||p.payment.network!=='Base'||p.payment.provider!=='CDP x402'||p.payment.amountAtomic!=='300000'||p.status!=='completed'||!p.response||!p.analysisHash)throw new CorrectionError(409,'COMPLETED_BASE_RECEIPT_REQUIRED');return p}
- async get(tx:string){validTx(tx);const c=await this.store.read(key(tx));if(!c)throw new CorrectionError(404,'CORRECTION_NOT_FOUND');return c}
+ async original(tx:string,analysisHash?:string){
+  validTx(tx);const current=await this.paid(tx)
+  const payment=current?.payment
+  const lane=payment&&((payment.network==='Base'&&payment.provider==='CDP x402')||(payment.network==='X Layer'&&payment.provider==='OKX Agent Payments Protocol'))
+  if(!current||current.schema!=='polydesk-smart-trader-paid-analysis-v1'||payment?.transaction.toLowerCase()!==tx.toLowerCase()||!lane||payment.amountAtomic!=='300000')throw new CorrectionError(409,'COMPLETED_BASE_RECEIPT_REQUIRED')
+  if(analysisHash!==undefined&&!/^[a-f0-9]{64}$/.test(analysisHash))throw new CorrectionError(400,'INVALID_ANALYSIS_HASH')
+  const p=analysisHash?(current.deliveryVersions?.find(v=>v.analysisHash===analysisHash)??(current.analysisHash===analysisHash?current:undefined)):current
+  if(!p||!p.response||!p.analysisHash||(p===current&&p.status!=='completed'))throw new CorrectionError(409,'COMPLETED_BASE_RECEIPT_REQUIRED')
+  return p as SmartTraderPaidAnalysisRecord
+ }
+ private async targetKey(tx:string,p:SmartTraderPaidAnalysisRecord){
+  const legacy=await this.store.read(key(tx))
+  if(legacy&&legacy.originalAnalysisHash===p.analysisHash&&legacy.originalResultHash===digest(p.response))return key(tx)
+  const current=await this.paid(tx)
+  if(legacy){
+   const archived=current?.deliveryVersions?.some(v=>v.analysisHash===legacy.originalAnalysisHash&&digest(v.response)===legacy.originalResultHash)
+   if(!archived)throw new CorrectionError(409,'ORIGINAL_CHANGED')
+  }
+  // Existing receipts keep their original key and revision hashes. Recovery versions are separate.
+  return legacy||current?.deliveryVersions?.length?key(tx)+':version:'+digest(p.response):key(tx)
+ }
+ async get(tx:string,analysisHash?:string){const p=await this.original(tx,analysisHash);const c=await this.store.read(await this.targetKey(tx,p));if(!c)throw new CorrectionError(404,'CORRECTION_NOT_FOUND');return c}
  async request(tx:string,issue:string,previousRevisionHash?:string|null){
   const p=await this.original(tx)
   if(typeof issue!=='string'||!issue.trim()||issue.length>5000)throw new CorrectionError(400,'INVALID_ISSUE')
   if(previousRevisionHash!=null&&(typeof previousRevisionHash!=='string'||! /^[a-f0-9]{64}$/.test(previousRevisionHash)))throw new CorrectionError(400,'INVALID_REVISION_HASH')
   issue=issue.trim()
-  return this.store.mutate(key(tx),c=>{
+  return this.store.mutate(await this.targetKey(tx,p),c=>{
    if(c){
     if(c.originalAnalysisHash!==p.analysisHash||c.originalResultHash!==digest(p.response))throw new CorrectionError(409,'ORIGINAL_CHANGED')
     if(c.issue===issue&&!(c.status==='PUBLISHED'&&previousRevisionHash===c.revisionHash))return c
@@ -44,7 +64,7 @@ export class ReceiptCorrections {
  }
  async publish(tx:string,originalHash:string,raw:unknown,requestedRound?:number){
   const p=await this.original(tx),a=validateAddendum(raw)
-  return this.store.mutate(key(tx),c=>{
+  return this.store.mutate(await this.targetKey(tx,p),c=>{
    if(!c)throw new CorrectionError(404,'CORRECTION_NOT_FOUND')
    const round=c.round??1
    if((requestedRound!==undefined&&requestedRound!==round)||(round>1&&requestedRound===undefined))throw new CorrectionError(409,'CURRENT_ROUND_REQUIRED')
@@ -60,14 +80,15 @@ export function correctionOperator(header:unknown,expected=process.env.POLYDESK_
 }
 export function createReceiptCorrectionRouter(service=new ReceiptCorrections(),authorize=correctionOperator){const router=Router({mergeParams:true});router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');next()});router.all('/',async(req,res)=>{try{
  let c:Correction
- if(req.method==='GET')c=await service.get((req.params as Record<string,string>).transaction)
+ if(req.method==='GET'){if(Object.keys(req.query).some(k=>k!=='analysisHash')||(req.query.analysisHash!==undefined&&typeof req.query.analysisHash!=='string'))throw new CorrectionError(400,'INVALID_INPUT');c=await service.get((req.params as Record<string,string>).transaction,req.query.analysisHash as string|undefined)}
  else if(req.method==='POST'){
  authorize(req.headers.authorization)
+ if(Object.keys(req.query).length)throw new CorrectionError(400,'INVALID_INPUT')
  const b=req.body;if(!b||typeof b!=='object'||Array.isArray(b))throw new CorrectionError(400,'INVALID_INPUT')
  if(b.action==='REQUEST'&&Object.keys(b).every(k=>['action','issue','previousRevisionHash'].includes(k)))c=await service.request((req.params as Record<string,string>).transaction,b.issue,b.previousRevisionHash)
  else if(b.action==='PUBLISH'&&Object.keys(b).every(k=>['action','originalAnalysisHash','addendum','round'].includes(k)))c=await service.publish((req.params as Record<string,string>).transaction,b.originalAnalysisHash,b.addendum,b.round)
  else throw new CorrectionError(400,'INVALID_INPUT')
  }else{res.setHeader('Allow','GET, POST');throw new CorrectionError(405,'METHOD_NOT_ALLOWED')}
  const {originalResult,...view}=c
- return res.json({ok:true,correction:view,additionalPaymentRequired:false,tradeAuthorized:false,orderSubmitted:false,originalResultUrl:`/api/a2mcp/polymarket-smart-trader/payment/${c.transaction}`,followUpPrompts:c.status==='PUBLISHED'?['Show corrected findings','Compare original JSON and correction','Review corrected research','Decline and analyze another market']:['Check correction status']})
+ return res.json({ok:true,correction:view,additionalPaymentRequired:false,tradeAuthorized:false,orderSubmitted:false,originalResultUrl:`/api/a2mcp/polymarket-smart-trader/payment/${c.transaction}?analysisHash=${c.originalAnalysisHash}`,followUpPrompts:c.status==='PUBLISHED'?['Show corrected findings','Compare original JSON and correction','Review corrected research','Decline and analyze another market']:['Check correction status']})
  }catch(e){const err=e instanceof CorrectionError?e:new CorrectionError(503,'CORRECTION_UNAVAILABLE');return res.status(err.status).json({ok:false,error:err.code,retryPayment:false})}});return router}

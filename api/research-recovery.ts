@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { correctionOperator, CorrectionError } from './receipt-correction.js'
-import { readPaidResearchRecord, isRemediableDegradedResearch, executeSettledSmartTraderDelivery } from './polymarket-smart-trader.js'
+import { readPaidResearchRecord, isRemediableDegradedResearch, validServicePayment, recoveryScopeExpired, executeSettledSmartTraderDelivery } from './polymarket-smart-trader.js'
 import { preflightZeroScoutIntelligenceAccess } from './zeroscout-intelligence.js'
 
 export function createResearchRecoveryHandler(deps = {
@@ -19,9 +19,9 @@ export function createResearchRecoveryHandler(deps = {
         throw new CorrectionError(400, 'INVALID_RECOVERY_REQUEST')
       }
       const record = await deps.read(tx)
-      if (!record || record.payment.transaction.toLowerCase() !== tx || record.payment.provider !== 'CDP x402'
-        || record.payment.network !== 'Base' || record.payment.amountAtomic !== '300000'
+      if (!record || record.payment.transaction.toLowerCase() !== tx || !validServicePayment(record.payment) || record.payment.amountAtomic !== '300000'
         || !isRemediableDegradedResearch(record)) throw new CorrectionError(409, 'RECEIPT_NOT_RECOVERABLE')
+      if (recoveryScopeExpired(record)) throw new CorrectionError(409, 'RECOVERY_SCOPE_REVIEW_REQUIRED')
       await deps.ready()
       // Execute uses a durable atomic claim, original request hash and bounded attempts.
       // No payment authorization, new request parameters or trade input is accepted.
