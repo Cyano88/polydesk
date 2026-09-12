@@ -1916,13 +1916,21 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
       })
     })
   }
+  let acceptance: Record<string, unknown> | null = null
+  if (record.payment.network === 'Base' && record.status === 'completed') {
+    try {
+      const { ReceiptAcceptance, acceptanceView } = await import('./research-acceptance.js')
+      acceptance = acceptanceView(await new ReceiptAcceptance().get(transaction))
+    } catch { acceptance = {status:'UNAVAILABLE', tradeAuthorized:false} }
+  }
   return res.status(200).json({
     ok: true,
     transaction: transaction.toLowerCase(),
     ...publicDeliveryStatus(record.status, record.response),
     acceptanceUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/acceptance`,
     correctionUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/correction`,
-    buyerGuidance: paidDeliveryGuidance(record.status, record.response),
+    acceptance,
+    buyerGuidance: {...paidDeliveryGuidance(record.status, record.response), ...(acceptance?.status === 'ACCEPTED' ? {followUpPrompts:acceptance.followUpPrompts} : {})},
     decisionId: record.decisionId || null,
     analysisHash: record.analysisHash || null,
     decisionUrl: record.decisionId

@@ -75,11 +75,20 @@ export function createPartnerResearchRouter(service=jobs, dependencies={ ready:h
    const job=create?await service.create(p,req.get('Idempotency-Key')||'',req.body):await service.get(p,req.params.id)
    const paid=job.transaction?await dependencies.readPaid(job.transaction):undefined
    if(paid&&(paid.schema!=='polydesk-smart-trader-paid-analysis-v1'||paid.payment.transaction.toLowerCase()!==job.transaction||paid.payment.amountAtomic!=='300000'||paid.payment.provider!=='CDP x402'||paid.requestHash!==job.requestHash||paid.payment.payer.toLowerCase()!==job.payer||paid.payment.network!=='Base')) throw new PartnerError(409,'SETTLEMENT_BINDING_MISMATCH')
+   let review: Record<string,unknown> | null = null
+   if(paid?.status==='completed' && job.transaction) {
+    try {review=acceptanceView(await acceptance.get(job.transaction,'partner:'+hash([p.tenantId,p.applicationId])))}
+    catch {review={status:'UNAVAILABLE',tradeAuthorized:false}}
+   }
+   if(job.correction && review?.status==='ACCEPTED') {
+    try {const c=await new ReceiptCorrections().get(job.transaction!);if(c.status!=='PUBLISHED'||c.issue!==job.correction.issue)review={status:'REVIEW_REQUIRED',tradeAuthorized:false}}
+    catch {review={status:'REVIEW_REQUIRED',tradeAuthorized:false}}
+   }
    const result=paid?.response || null
    const quality=paid?publicDeliveryStatus(paid.status,paid.response):null
    const state=quality?.deliveryStatus==='degraded'?'CORRECTION_REQUIRED':paid?.status==='completed'?'DELIVERED':paid?.status==='failed'?'CORRECTION_REQUIRED':job.transaction?(paid?'PROCESSING':'PAYMENT_RECOVERY_REQUIRED'):job.attemptId?'PAYMENT_RECOVERY_REQUIRED':'AWAITING_PAYMENT'
    res.json({ok:true,schemaVersion:'1.0.0',requestId:res.locals.requestId,jobId:job.id,status:state,request:job.request,fee:researchFee,transaction:job.transaction||null,paymentAttemptId:job.attemptId||null,result,
-    delivery:quality,buyerGuidance:paid?paidDeliveryGuidance(paid.status,paid.response):null,correction:job.correction||null,
+    delivery:quality,acceptance:review,buyerGuidance:paid?{...paidDeliveryGuidance(paid.status,paid.response),...(review?.status==='ACCEPTED'?{followUpPrompts:review.followUpPrompts}:{})}:null,correction:job.correction||null,
     researchQuality:'Inspect result researchStatus and deliveryStatus; DELIVERED is not a guarantee of available AI research.',
     links:{acceptance:`/api/v1/research-jobs/${job.id}/acceptance`,status:`/api/v1/research-jobs/${job.id}`,payment:path,recovery:path+'/recover',correction:`/api/v1/research-jobs/${job.id}/correction`,delivery:job.transaction?`/api/a2mcp/polymarket-smart-trader/payment/${job.transaction}`:null},
     paymentHeaders:{'X-PolyDesk-Research-Job':job.id,Authorization:'Use the same partner bearer credential; never publish it.'},

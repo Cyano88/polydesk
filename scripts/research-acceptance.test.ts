@@ -58,6 +58,11 @@ test('public receipt cannot authorize acceptance and partner route checks tenant
   assert.equal(response.status,'ACCEPTED');assert.equal(response.tradeAuthorized,false);assert.equal(response.acceptance.actor,undefined)
   assert.equal((await post('/jobs/'+job.id+'/acceptance','other')).status,404)
   assert.equal((await post('/jobs/'+job.id+'/acceptance','partner')).status,200)
+  const delivery=await(await fetch(url+'/jobs/'+job.id,{headers:{Authorization:'Bearer partner'}})).json() as any
+  assert.equal(delivery.acceptance.status,'ACCEPTED');assert.ok(delivery.buyerGuidance.followUpPrompts.includes('Decline this trade'))
+  await jobs.correct(partner,job.id,'New defect')
+  const corrected=await(await fetch(url+'/jobs/'+job.id,{headers:{Authorization:'Bearer partner'}})).json() as any
+  assert.equal(corrected.acceptance.status,'REVIEW_REQUIRED')
   h.paid.payment.payer='0x'+'e'.repeat(40)
   assert.equal((await post('/jobs/'+job.id+'/acceptance','partner')).status,409)
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()))}
