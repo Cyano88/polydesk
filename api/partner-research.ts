@@ -9,7 +9,7 @@ import { smartTraderAnalysisRequestBinding, readPaidResearchRecord } from './pol
 
 const path = '/api/x402/base/polymarket-smart-trader'
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
-export type ResearchJob = { id: string; tenantId: string; applicationId: string; requestHash: string; request: unknown; createdAt: string; attemptId?: string; transaction?: string; payer?: string; correction?: { issue: string; requestedAt: string; status: 'REQUESTED' } }
+export type ResearchJob = { id: string; tenantId: string; applicationId: string; requestHash: string; request: unknown; createdAt: string; attemptId?: string; transaction?: string; payer?: string; correctionHistory?: Array<{issue:string;requestedAt:string;status:'REQUESTED';round?:number}>; correction?: { round?:number; issue: string; requestedAt: string; status: 'REQUESTED' } }
 export interface ResearchStore { read(key: string): Promise<ResearchJob | undefined>; mutate(key: string, fn: (current: ResearchJob | undefined) => ResearchJob): Promise<ResearchJob> }
 const key = (p: Partner, id: string) => `polydesk:partner-research:${hash([p.tenantId,p.applicationId])}:${id}`
 export class PartnerResearch {
@@ -32,12 +32,13 @@ export class PartnerResearch {
   if (!job || job.id!==id || job.tenantId!==p.tenantId || job.applicationId!==p.applicationId) throw new PartnerError(404,'NOT_FOUND')
   return job
  }
- async correct(p: Partner,id: string,issue: string) {
+ async correct(p: Partner,id: string,issue: string,round?:number) {
   await this.get(p,id)
   return this.store.mutate(key(p,id),current=>{
    if(!current?.transaction) throw new PartnerError(409,'PAYMENT_NOT_VERIFIED')
-   if(current.correction) return current
-   return {...current,correction:{issue,requestedAt:new Date().toISOString(),status:'REQUESTED'}}
+   if(round!==undefined&&current.correction?.round!==undefined&&round<current.correction.round)return current
+   if(current.correction?.issue===issue&&current.correction.round===round) return current
+   return {...current,correctionHistory:[...(current.correctionHistory||[]),...(current.correction?[current.correction]:[])],correction:{round,issue,requestedAt:new Date().toISOString(),status:'REQUESTED'}}
   })
  }
  async bind(p: Partner,id: string,raw: unknown,attemptId?: string,transaction?: string,payer?: string) {
@@ -62,11 +63,11 @@ export async function bindPartnerResearch(req: Request,raw: unknown,attemptId?: 
  return jobs.bind(p,id,raw,attemptId,transaction,payer)
 }
 export const researchFee = { provider:'PolyDesk',amount:'0.30',asset:'USDC',network:'Base',chainId:'eip155:8453',amountAtomic:'300000',chargedAt:'ANALYZE',platformFeeIncluded:false,terms:'Inspect the live payment challenge for the recipient and expiry. Service payment never authorizes a trade.' }
-export function createPartnerResearchRouter(service=jobs, dependencies={ ready:hasRenderDurableStore, authenticate:authenticatePartner, readPaid:readPaidResearchRecord }, acceptance = new ReceiptAcceptance()) {
+export function createPartnerResearchRouter(service=jobs, dependencies={ ready:hasRenderDurableStore, authenticate:authenticatePartner, readPaid:readPaidResearchRecord }, acceptance = new ReceiptAcceptance(), corrections = new ReceiptCorrections()) {
  const router=Router()
  router.use(async(req,res,next)=>{
   try { const p=dependencies.authenticate(req.headers.authorization); if (!p.scopes.includes('jobs:read') || (req.method==='POST'&&!p.scopes.includes('jobs:create'))) throw new PartnerError(403,'FORBIDDEN'); if(!dependencies.ready()) throw new PartnerError(503,'STORAGE_UNAVAILABLE'); res.locals.researchPartner=p; next() }
-  catch(e) { const error=e instanceof PartnerError?e:new PartnerError(503,'STORAGE_UNAVAILABLE'); res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false}) }
+  catch(e) { const error=e instanceof PartnerError||e instanceof CorrectionError?e:new PartnerError(503,'STORAGE_UNAVAILABLE'); res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false}) }
  })
  const handle=(create:boolean)=>async(req:Request,res:import('express').Response)=>{
   try {
@@ -80,21 +81,25 @@ export function createPartnerResearchRouter(service=jobs, dependencies={ ready:h
     try {review=acceptanceView(await acceptance.get(job.transaction,'partner:'+hash([p.tenantId,p.applicationId])))}
     catch {review={status:'UNAVAILABLE',tradeAuthorized:false}}
    }
-   if(job.correction && review?.status==='ACCEPTED') {
-    try {const c=await new ReceiptCorrections().get(job.transaction!);if(c.status!=='PUBLISHED'||c.issue!==job.correction.issue)review={status:'REVIEW_REQUIRED',tradeAuthorized:false}}
-    catch {review={status:'REVIEW_REQUIRED',tradeAuthorized:false}}
+   let displayedCorrection:unknown=job.correction??null
+   if(job.correction) {
+    try {
+     const c=await corrections.get(job.transaction!)
+     if(![c,...(c.previousRounds||[])].some(r=>r.issue===job.correction!.issue))throw new Error('unreconciled')
+     displayedCorrection={issue:c.issue,status:c.status,round:c.round??1,revisionHash:c.revisionHash??null,previousRounds:c.previousRounds??[]}
+    }catch {review={status:'REVIEW_REQUIRED',acceptanceAllowed:false,blockedReason:'CORRECTION_RECONCILIATION_REQUIRED',tradeAuthorized:false,followUpPrompts:['Show recorded correction request','Check correction status']}}
    }
    const result=paid?.response || null
    const quality=paid?publicDeliveryStatus(paid.status,paid.response):null
-   const state=quality?.deliveryStatus==='degraded'?'CORRECTION_REQUIRED':paid?.status==='completed'?'DELIVERED':paid?.status==='failed'?'CORRECTION_REQUIRED':job.transaction?(paid?'PROCESSING':'PAYMENT_RECOVERY_REQUIRED'):job.attemptId?'PAYMENT_RECOVERY_REQUIRED':'AWAITING_PAYMENT'
+   const state=review?.blockedReason==='CORRECTION_PENDING'||review?.status==='REVIEW_REQUIRED'?'CORRECTION_REQUIRED':quality?.deliveryStatus==='degraded'?'CORRECTION_REQUIRED':paid?.status==='completed'?'DELIVERED':paid?.status==='failed'?'CORRECTION_REQUIRED':job.transaction?(paid?'PROCESSING':'PAYMENT_RECOVERY_REQUIRED'):job.attemptId?'PAYMENT_RECOVERY_REQUIRED':'AWAITING_PAYMENT'
    res.json({ok:true,schemaVersion:'1.0.0',requestId:res.locals.requestId,jobId:job.id,status:state,request:job.request,fee:researchFee,transaction:job.transaction||null,paymentAttemptId:job.attemptId||null,result,
-    delivery:quality,acceptance:review,buyerGuidance:paid?{...paidDeliveryGuidance(paid.status,paid.response),...(review?.status==='ACCEPTED'?{followUpPrompts:review.followUpPrompts}:{})}:null,correction:job.correction||null,
+    delivery:quality,acceptance:review,buyerGuidance:paid?{...paidDeliveryGuidance(paid.status,paid.response),...(review?.followUpPrompts?{followUpPrompts:review.followUpPrompts}:{})}:null,correction:displayedCorrection,
     researchQuality:'Inspect result researchStatus and deliveryStatus; DELIVERED is not a guarantee of available AI research.',
     links:{acceptance:`/api/v1/research-jobs/${job.id}/acceptance`,status:`/api/v1/research-jobs/${job.id}`,payment:path,recovery:path+'/recover',correction:`/api/v1/research-jobs/${job.id}/correction`,delivery:job.transaction?`/api/a2mcp/polymarket-smart-trader/payment/${job.transaction}`:null},
     paymentHeaders:{'X-PolyDesk-Research-Job':job.id,Authorization:'Use the same partner bearer credential; never publish it.'},
     retryPayment:false,signingAuthorized:false,orderSubmitted:false,
-    nextActions:[{action:state==='AWAITING_PAYMENT'?'REVIEW_PAYMENT':state==='DELIVERED'?'SHOW_RESULTS':state==='CORRECTION_REQUIRED'?'REQUEST_CORRECTION':state==='PAYMENT_RECOVERY_REQUIRED'?'RECOVER_PAYMENT':'CHECK_STATUS',label:state==='AWAITING_PAYMENT'?'Review the PolyDesk fee and obtain payment approval':state==='DELIVERED'?'Read findings and original JSON before deciding':state==='CORRECTION_REQUIRED'?'Request correction under the existing payment; do not pay again':state==='PAYMENT_RECOVERY_REQUIRED'?'Reconcile the existing attempt; do not create a new payment':'Check the existing research job',authorizationRequired:state==='AWAITING_PAYMENT'}]})
-  }catch(e){const error=e instanceof PartnerError?e:new PartnerError(503,'STORAGE_UNAVAILABLE');res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false})}
+    nextActions:[{action:state==='AWAITING_PAYMENT'?'REVIEW_PAYMENT':state==='DELIVERED'?'SHOW_RESULTS':state==='CORRECTION_REQUIRED'?(job.correction||review?.correctionStatus==='REQUESTED'?'CHECK_CORRECTION':'REQUEST_CORRECTION'):state==='PAYMENT_RECOVERY_REQUIRED'?'RECOVER_PAYMENT':'CHECK_STATUS',label:state==='AWAITING_PAYMENT'?'Review the PolyDesk fee and obtain payment approval':state==='DELIVERED'?'Read findings and original JSON before deciding':state==='CORRECTION_REQUIRED'?(job.correction||review?.correctionStatus==='REQUESTED'?'Check the pending correction under the existing payment':'Request correction under the existing payment; do not pay again'):state==='PAYMENT_RECOVERY_REQUIRED'?'Reconcile the existing attempt; do not create a new payment':'Check the existing research job',authorizationRequired:state==='AWAITING_PAYMENT'}]})
+  }catch(e){const error=e instanceof PartnerError||e instanceof CorrectionError?e:new PartnerError(503,'STORAGE_UNAVAILABLE');res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false})}
  }
  router.post('/',handle(true));router.get('/:id',handle(false));
  router.all('/:id/acceptance',async(req,res)=>{
@@ -107,8 +112,8 @@ export function createPartnerResearchRouter(service=jobs, dependencies={ ready:h
    const paid=job.transaction?await dependencies.readPaid(job.transaction):undefined
    if(!paid||paid.schema!=='polydesk-smart-trader-paid-analysis-v1'||paid.payment.transaction.toLowerCase()!==job.transaction||paid.payment.amountAtomic!=='300000'||paid.payment.provider!=='CDP x402'||paid.requestHash!==job.requestHash||paid.payment.payer.toLowerCase()!==job.payer||paid.payment.network!=='Base') throw new PartnerError(409,'SETTLEMENT_BINDING_MISMATCH')
    if(job.correction) {
-    const correction=await new ReceiptCorrections().get(job.transaction!)
-    if(correction.status!=='PUBLISHED'||correction.issue!==job.correction.issue) throw new PartnerError(409,'PARTNER_CORRECTION_REQUIRES_RECONCILIATION')
+    const correction=await corrections.get(job.transaction!)
+    if(![correction,...(correction.previousRounds||[])].some(r=>r.issue===job.correction!.issue)) throw new PartnerError(409,'PARTNER_CORRECTION_REQUIRES_RECONCILIATION')
    }
    const actor='partner:'+hash([p.tenantId,p.applicationId])
    return res.json(acceptanceView(req.method==='GET'?await acceptance.get(job.transaction!,actor):await acceptance.accept(job.transaction!,req.body,actor)))
@@ -117,13 +122,16 @@ export function createPartnerResearchRouter(service=jobs, dependencies={ ready:h
  router.post('/:id/correction',async(req,res)=>{
   try {
    const b=req.body
-   if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>k!=='issue')||typeof b.issue!=='string'||!b.issue.trim()||b.issue.length>2000) throw new PartnerError(400,'INVALID_CORRECTION')
+   if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>!['issue','previousRevisionHash'].includes(k))||typeof b.issue!=='string'||!b.issue.trim()||b.issue.length>2000) throw new PartnerError(400,'INVALID_CORRECTION')
    const p=res.locals.researchPartner as Partner
    const job=await service.get(p,req.params.id)
    if(!job.transaction) throw new PartnerError(409,'PAYMENT_NOT_VERIFIED')
-   const correction=await service.correct(p,job.id,b.issue.trim())
-   res.status(202).json({ok:true,jobId:job.id,correction:correction.correction,retryPayment:false,refundStatus:'NOT_ISSUED',message:'Correction request recorded for operator review. No new payment or refund has been executed.'})
-  }catch(e){const error=e instanceof PartnerError?e:new PartnerError(503,'STORAGE_UNAVAILABLE');res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false})}
+   const paid=await dependencies.readPaid(job.transaction)
+   if(!paid||paid.schema!=='polydesk-smart-trader-paid-analysis-v1'||paid.payment.transaction.toLowerCase()!==job.transaction||paid.payment.amountAtomic!=='300000'||paid.payment.provider!=='CDP x402'||paid.requestHash!==job.requestHash||paid.payment.payer.toLowerCase()!==job.payer||paid.payment.network!=='Base')throw new PartnerError(409,'SETTLEMENT_BINDING_MISMATCH')
+   const canonical=await corrections.request(job.transaction,b.issue.trim(),b.previousRevisionHash)
+   const correction=await service.correct(p,job.id,b.issue.trim(),canonical.round??1)
+   res.status(202).json({ok:true,jobId:job.id,correction:{...correction.correction,status:canonical.status,revisionHash:canonical.revisionHash??null},followUpPrompts:canonical.status==='REQUESTED'?['Show original findings and correction history','Check correction status']:['Show corrected findings','Review corrected research'],retryPayment:false,refundStatus:'NOT_ISSUED',message:'Correction request recorded for operator review. No new payment or refund has been executed.'})
+  }catch(e){const error=e instanceof PartnerError||e instanceof CorrectionError?e:new PartnerError(503,'STORAGE_UNAVAILABLE');res.status(error.status).json({ok:false,error:{code:error.code},retryPayment:false})}
  });return router
 }
 
@@ -136,6 +144,6 @@ export function partnerResearchPaths() {
   '/research-jobs':{post:{operationId:'reservePartnerResearch',security,parameters:[{name:'Idempotency-Key',in:'header',required:true,schema:{type:'string',minLength:8,maxLength:128}}],requestBody:{required:true,content:{'application/json':{schema}}},responses}},
   '/research-jobs/{id}':{get:{operationId:'getPartnerResearch',security,parameters:[id],responses}},
   '/research-jobs/{id}/acceptance':{get:{operationId:'getResearchAcceptance',security,parameters:[id],responses},post:{operationId:'acceptResearch',security,parameters:[id],requestBody:{required:true,content:{'application/json':{schema:acceptanceInputSchema}}},responses}},
-  '/research-jobs/{id}/correction':{post:{operationId:'requestResearchCorrection',security,parameters:[id],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['issue'],additionalProperties:false,properties:{issue:{type:'string',minLength:1,maxLength:2000}}}}}},responses}},
+  '/research-jobs/{id}/correction':{post:{operationId:'requestResearchCorrection',security,parameters:[id],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:['issue'],additionalProperties:false,properties:{issue:{type:'string',minLength:1,maxLength:2000},previousRevisionHash:{type:['string','null'],pattern:'^[a-f0-9]{64}$'}}}}}},responses}},
  }
 }

@@ -17,7 +17,7 @@ test('concurrent requests and publication create one immutable correction and pr
  const restarted=new ReceiptCorrections(h.store,async()=>h.paid)
  assert.deepEqual(await restarted.publish(tx,hash,addendum),a)
  await assert.rejects(restarted.publish(tx,hash,{...addendum,summary:'replacement'}),code('REVISION_IMMUTABLE'))
- await assert.rejects(restarted.request(tx,'different issue'),code('CORRECTION_CONFLICT'))
+ await assert.rejects(restarted.request(tx,'different issue'),code('CURRENT_REVISION_REQUIRED'))
 })
 test('wrong receipt, original hash drift and authorization escalation fail closed',async()=>{
  const h=setup();await h.service.request(tx,'Stale evidence')
@@ -36,4 +36,25 @@ test('operator key is mandatory and public transaction possession cannot publish
  await h.service.request(tx,'defect');await h.service.publish(tx,hash,addendum)
  const r=await(await fetch(url)).json() as any;assert.equal(r.correction.originalResult,undefined);assert.equal(r.tradeAuthorized,false);assert.equal(r.additionalPaymentRequired,false)
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()))}
+})
+
+
+test('two correction rounds preserve v1 hashes, immutable history and reject stale publication',async()=>{
+ const h=setup(),original=structuredClone(h.paid)
+ await h.service.request(tx,'First defect');const first=await h.service.publish(tx,hash,addendum)
+ // Legacy records have no round/history. They remain readable and upgrade without rehashing.
+ await h.store.mutate('polydesk:receipt-correction:'+tx,(c:any)=>{delete c.round;return c})
+ const requests=await Promise.all(Array.from({length:8},()=>h.service.request(tx,'Second defect',first.revisionHash)))
+ assert.ok(requests.every(r=>r.round===2));assert.equal(requests[0].previousRounds?.[0].revisionHash,first.revisionHash)
+ await assert.rejects(h.service.publish(tx,hash,addendum),code('CURRENT_ROUND_REQUIRED'))
+ await assert.rejects(h.service.publish(tx,hash,addendum,1),code('CURRENT_ROUND_REQUIRED'))
+ await assert.rejects(h.service.request(tx,'Third defect',first.revisionHash),code('CORRECTION_PENDING'))
+ const second=await h.service.publish(tx,hash,{...addendum,summary:'Second corrected evidence'},2)
+ assert.notEqual(second.revisionHash,first.revisionHash);assert.equal(second.previousRounds?.length,1)
+ assert.deepEqual(second.previousRounds?.[0].addendum,first.addendum);assert.deepEqual(h.paid,original)
+ assert.deepEqual(await new ReceiptCorrections(h.store,async()=>h.paid).publish(tx,hash,{...addendum,summary:'Second corrected evidence'},2),second)
+ await assert.rejects(h.service.request(tx,'First defect'),code('CORRECTION_ALREADY_RECORDED'))
+ await assert.rejects(h.service.request(tx,'Third defect',first.revisionHash),code('CURRENT_REVISION_REQUIRED'))
+ const reopened=await h.service.request(tx,'Second defect',second.revisionHash)
+ assert.equal(reopened.round,3);assert.equal(reopened.previousRounds?.length,2)
 })

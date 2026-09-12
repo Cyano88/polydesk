@@ -1,3 +1,5 @@
+import {ReceiptCorrections} from '../api/receipt-correction.js'
+import {ReceiptAcceptance} from '../api/research-acceptance.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
@@ -39,7 +41,7 @@ test('correction is retained under original settlement without creating a paymen
  await assert.rejects(jobs.correct(p,job.id,'Missing evidence'),code('PAYMENT_NOT_VERIFIED'))
  await jobs.bind(p,job.id,input,attempt,tx,payer)
  const first=await jobs.correct(p,job.id,'Missing evidence')
- const replay=await jobs.correct(p,job.id,'Repeated request')
+ const replay=await jobs.correct(p,job.id,'Missing evidence')
  assert.deepEqual(replay,first);assert.equal(replay.transaction,tx)
  assert.equal(replay.correction?.status,'REQUESTED')
 })
@@ -48,9 +50,11 @@ test('HTTP delivery preserves original JSON, flags degraded research and records
  const jobs=new PartnerResearch(store()),job=await jobs.create(p,'http-research-key',input)
  const app=express();app.use(express.json())
  const response={action:'ANALYZE',decision:{evidence:{researchStatus:'UNAVAILABLE'},decision:'ESCALATE'}}
- const paid={schema:'polydesk-smart-trader-paid-analysis-v1',status:'completed',requestHash:job.requestHash,payment:{provider:'CDP x402',amountAtomic:'300000',network:'Base',transaction:tx,payer},response} as any
+ const paid={schema:'polydesk-smart-trader-paid-analysis-v1',status:'completed',analysisHash:'d'.repeat(64),requestHash:job.requestHash,payment:{provider:'CDP x402',amountAtomic:'300000',network:'Base',transaction:tx,payer},response} as any
+ const correctionRows=new Map();const correctionStore={read:async(k:string)=>correctionRows.get(k),mutate:async(k:string,f:any)=>{const c=f(correctionRows.get(k));correctionRows.set(k,c);return c}}
+ const corrections=new ReceiptCorrections(correctionStore,async()=>paid),acceptance=new ReceiptAcceptance(correctionStore,corrections)
  let reads=0,missingPaid=false
- app.use('/research',createPartnerResearchRouter(jobs,{ready:()=>true,authenticate:h=>{if(h!=='Bearer test')throw new PartnerError(401,'AUTH_REQUIRED');return p},readPaid:async()=>{reads++;return missingPaid?undefined:paid}}))
+ app.use('/research',createPartnerResearchRouter(jobs,{ready:()=>true,authenticate:h=>{if(h!=='Bearer test')throw new PartnerError(401,'AUTH_REQUIRED');return p},readPaid:async()=>{reads++;return missingPaid?undefined:paid}},acceptance,corrections))
  const server=app.listen(0,'127.0.0.1');await once(server,'listening')
  const base='http://127.0.0.1:'+ (server.address() as any).port+'/research/'+job.id
  try {

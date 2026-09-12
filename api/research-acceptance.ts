@@ -43,9 +43,11 @@ export class ReceiptAcceptance {
   async get(tx: string, actor = 'operator') {
     const {paid, correction, resultHash} = await this.target(tx)
     const acceptance = await this.store.read(this.key(tx, actor))
-    const current = Boolean(acceptance && acceptance.originalAnalysisHash === paid.analysisHash && acceptance.originalResultHash === resultHash
+    const researchAvailable=(paid.response as {decision?:{evidence?:{researchStatus?:string}}}).decision?.evidence?.researchStatus==='AVAILABLE'
+    const blockedReason=correction?.status==='REQUESTED'?'CORRECTION_PENDING':!researchAvailable?'AVAILABLE_RESEARCH_REQUIRED':null
+    const current = Boolean(!blockedReason && acceptance && acceptance.originalAnalysisHash === paid.analysisHash && acceptance.originalResultHash === resultHash
       && acceptance.revisionHash === (correction?.revisionHash ?? null) && correction?.status !== 'REQUESTED')
-    return {status: current ? 'ACCEPTED' : acceptance ? 'REVIEW_REQUIRED' : 'NOT_ACCEPTED', acceptance: acceptance ?? null}
+    return {status: current ? 'ACCEPTED' : acceptance ? 'REVIEW_REQUIRED' : 'NOT_ACCEPTED', acceptance: acceptance ?? null, blockedReason, acceptanceAllowed:!blockedReason, correctionStatus:correction?.status??null, correctionRound:correction?.round??(correction?1:null)}
   }
   async accept(tx: string, raw: unknown, actor = 'operator') {
     const b = input(raw), {paid, correction, resultHash} = await this.target(tx)
@@ -66,10 +68,10 @@ export class ReceiptAcceptance {
 }
 export function acceptanceView(result: Awaited<ReturnType<ReceiptAcceptance['get']>>) {
   const {actor: _actor, previousAcceptances: _history, ...acceptance} = result.acceptance ?? {actor:undefined,previousAcceptances:undefined}
-  return {ok:true, status:result.status, acceptance:result.acceptance ? acceptance : null, additionalPaymentRequired:false,
+  return {ok:true, status:result.status, acceptanceAllowed:result.acceptanceAllowed, blockedReason:result.blockedReason, correctionStatus:result.correctionStatus, correctionRound:result.correctionRound, acceptance:result.acceptance ? acceptance : null, additionalPaymentRequired:false,
     tradeAuthorized:false, orderSubmitted:false, paymentStatus:'settled',
     reviewMeaning:'Acknowledges this research and its disclosed limitations. Does not release escrow, approve an order or change the original report.',
-    followUpPrompts:result.status === 'ACCEPTED' ? ['Show accepted research and correction', 'Check whether a fresh trade preview is available', 'Decline this trade', 'Analyze another market (review any new fee first)']
+    followUpPrompts:result.blockedReason==='CORRECTION_PENDING' ? ['Show original findings and correction history','Check correction status'] : result.blockedReason ? ['Show delivery issue','Request research recovery under the existing payment','Describe a specific defect'] : result.status === 'ACCEPTED' ? ['Show accepted research and correction', 'Check whether a fresh trade preview is available', 'Decline this trade', 'Analyze another market (review any new fee first)']
       : ['Show results', 'Show correction and remaining gaps', 'Accept this research with its disclosed limitations', 'Describe a specific defect'],
   }
 }

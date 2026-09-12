@@ -1930,7 +1930,7 @@ export async function polymarketSmartTraderPaymentStatusHandler(req: Request, re
     acceptanceUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/acceptance`,
     correctionUrl: `/api/a2mcp/polymarket-smart-trader/payment/${transaction.toLowerCase()}/correction`,
     acceptance,
-    buyerGuidance: {...paidDeliveryGuidance(record.status, record.response), ...(acceptance?.status === 'ACCEPTED' ? {followUpPrompts:acceptance.followUpPrompts} : {})},
+    buyerGuidance: {...paidDeliveryGuidance(record.status, record.response), ...(acceptance?.followUpPrompts ? {followUpPrompts:acceptance.followUpPrompts} : {})},
     decisionId: record.decisionId || null,
     analysisHash: record.analysisHash || null,
     decisionUrl: record.decisionId

@@ -64,8 +64,19 @@ For a partner-bound job, use `GET /api/v1/research-jobs/{id}/acceptance` with th
 {"action":"ACCEPT_RESEARCH","originalAnalysisHash":"<64-character hash from delivery>","revisionHash":null,"acknowledgeLimitations":true}
 ```
 
-If a correction is published, use its exact `revisionHash` instead of null. Do not invent hashes or acknowledge limitations for the buyer. The receipt must match the job's request, payer, network and payment amount. A partner correction request requires operator reconciliation with the published receipt correction before acceptance. Unavailable AI and pending corrections block acceptance.
+If a correction is published, use its exact `revisionHash` instead of null. Do not invent hashes or acknowledge limitations for the buyer. The receipt must match the job's request, payer, network and payment amount. Partner correction requests are linked directly to the original receipt; publishing the corrected findings remains an operator action. Legacy requests without a receipt link still require reconciliation. Unavailable AI and pending corrections block acceptance.
 
 Public marketplace receipts expose `GET /api/a2mcp/polymarket-smart-trader/payment/{transaction}/acceptance`. POST on this receipt route requires the PolyDesk operator credential and explicit buyer acceptance; possession of a public transaction hash grants no write access. Never request or expose the operator key to buyers. Partner acceptance is scoped to its application and is queried through the partner route.
 
 Acceptance is durable and version-specific; it preserves prior acceptance events and the original report. It does not refund, release escrow or authorize trading: Base x402 payment is already settled. After acceptance, offer: **Show accepted findings**, **Check whether a fresh trade preview is available**, **Decline this trade**, or **Analyze another market (review any new fee first)**. A research ESCALATE result does not become trade approval through acceptance. Execution still needs fresh eligibility, balance, gas and fee checks, an exact preview and separate buyer approval. No public v1 trade-submission endpoint or MCP transport is enabled.
+
+
+## Additional correction rounds (no new payment)
+
+Submit the first issue with `POST /api/v1/research-jobs/{id}/correction` and `{"issue":"specific defect"}`. The receipt correction is created before the partner acknowledgement, so retry the identical request after an interrupted response.
+
+After a published correction, a new round must include `previousRevisionHash` equal to the latest published hash. This also allows reopening the same issue when the fix did not resolve it. Preserve the exact issue and hash when retrying. A different issue while a round is pending returns `CORRECTION_PENDING`; it is not silently discarded. An old round cannot replace the current one.
+
+The operator receipt route accepts `REQUEST` with `issue` and optional `previousRevisionHash`. `PUBLISH` takes `originalAnalysisHash`, `addendum`, and `round`; round is required after round 1. Read the current correction before publishing. `previousRounds` retains all earlier published addenda and their original hashes. Existing v1 records without a round are round 1 and retain their hashes.
+
+Use `acceptanceAllowed`, `blockedReason`, `correctionStatus`, and returned follow-up prompts to guide the buyer. Pending corrections block acceptance and direct the buyer to check correction status. Unavailable research directs them to the delivery issue or existing-payment recovery. After publication, show the corrected findings and limitations, then request explicit acceptance of the new revision hash. Acceptance of an earlier revision never accepts a later one. No correction request, publication or acceptance initiates a payment, refund or trade.

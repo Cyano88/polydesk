@@ -67,3 +67,45 @@ test('public receipt cannot authorize acceptance and partner route checks tenant
   assert.equal((await post('/jobs/'+job.id+'/acceptance','partner')).status,409)
  }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()))}
 })
+
+test('partner HTTP correction rounds invalidate acceptance and present only eligible buyer prompts',async()=>{
+ const h=setup(),jobs=new PartnerResearch(h.store),partner:any={tenantId:'rounds',applicationId:'app',scopes:['jobs:read','jobs:create']}
+ const request={action:'ANALYZE',marketId:'0x'+'12'.repeat(32),outcome:'Yes',side:'BUY'}
+ const job=await jobs.create(partner,'rounds-test-key',request);await jobs.bind(partner,job.id,request,'d'.repeat(64),tx,payer);h.paid.requestHash=job.requestHash
+ const original=structuredClone(h.paid),app=express();app.use(express.json())
+ app.use('/jobs',createPartnerResearchRouter(jobs,{ready:()=>true,readPaid:async()=>h.paid,authenticate:()=>partner},h.service,h.corrections))
+ const server=app.listen(0,'127.0.0.1');await once(server,'listening');const url='http://127.0.0.1:'+(server.address() as any).port+'/jobs/'+job.id
+ const post=(path:string,b:unknown)=>fetch(url+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+ try{
+  assert.equal((await post('/correction',{issue:'First defect'})).status,202)
+  const one=await h.corrections.publish(tx,hash,addendum)
+  assert.equal((await post('/acceptance',{...body,revisionHash:one.revisionHash})).status,200)
+  assert.equal((await post('/correction',{issue:'Second defect'})).status,409)
+  const requests=await Promise.all(Array.from({length:5},()=>post('/correction',{issue:'Second defect',previousRevisionHash:one.revisionHash})))
+  assert.ok(requests.every(r=>r.status===202))
+  const pending=await(await fetch(url)).json() as any
+  assert.equal(pending.status,'CORRECTION_REQUIRED');assert.equal(pending.correction.round,2)
+  assert.equal(pending.acceptance.acceptanceAllowed,false);assert.equal(pending.nextActions[0].action,'CHECK_CORRECTION')
+  assert.ok(!pending.buyerGuidance.followUpPrompts.some((v:string)=>/^Accept|preview/i.test(v)))
+  assert.equal((await post('/acceptance',{...body,revisionHash:one.revisionHash})).status,409)
+  const two=await h.corrections.publish(tx,hash,{...addendum,summary:'Second fix'},2)
+  assert.equal((await post('/acceptance',{...body,revisionHash:one.revisionHash})).status,409)
+  const accepted=await(await post('/acceptance',{...body,revisionHash:two.revisionHash})).json() as any
+  assert.equal(accepted.status,'ACCEPTED');assert.equal(accepted.tradeAuthorized,false)
+  const done=await(await fetch(url)).json() as any
+  assert.equal(done.correction.status,'PUBLISHED');assert.equal(done.acceptance.status,'ACCEPTED')
+  assert.equal(done.correction.previousRounds[0].revisionHash,one.revisionHash)
+  assert.ok(done.buyerGuidance.followUpPrompts.includes('Decline this trade'));assert.deepEqual(h.paid,original)
+ }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()))}
+})
+
+test('unavailable research and pending corrections never offer acceptance',async()=>{
+ const h=setup();h.paid.response.decision.evidence.researchStatus='UNAVAILABLE'
+ const {acceptanceView}=await import('../api/research-acceptance.js')
+ const unavailable=acceptanceView(await h.service.get(tx))
+ assert.equal(unavailable.acceptanceAllowed,false);assert.equal(unavailable.blockedReason,'AVAILABLE_RESEARCH_REQUIRED')
+ assert.ok(!unavailable.followUpPrompts.some(v=>v.startsWith('Accept')))
+ await h.corrections.request(tx,'AI failure')
+ const pending=acceptanceView(await h.service.get(tx))
+ assert.equal(pending.blockedReason,'CORRECTION_PENDING');assert.deepEqual(pending.followUpPrompts,['Show original findings and correction history','Check correction status'])
+})
