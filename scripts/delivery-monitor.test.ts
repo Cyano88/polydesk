@@ -72,3 +72,21 @@ test('recovery attempt failure creates a durable incident while later records st
  assert.equal(incidents.length,2);assert.ok(incidents.every(i=>i.reasons.includes('RECOVERY_ATTEMPT_FAILED')))
  assert.ok(!JSON.stringify(incidents).includes('private error'))
 })
+
+test('legacy report recognition requires bound identifiers, matching proof references and findings',async()=>{
+ const {researchDeliveryClassification}=await import('../api/delivery-monitor.js')
+ const r=record(99),proof={storageUri:'0g://mainnet/0x'+'1'.repeat(64),contentHash:'0x'+'2'.repeat(64),storageRoot:'0x'+'1'.repeat(64),storageTxHash:'0x'+'3'.repeat(64)}
+ r.response={ok:true,schema:'polydesk-smart-market-trader-v1',action:'ANALYZE',decision:{decisionId:r.decisionId,analysisHash:r.analysisHash,evidence:{zeroScoutId:'legacy-provider',zeroScoutProof:proof,tradeStance:'INSUFFICIENT'}},evidence:{zeroScout:{id:'legacy-provider',proof,summary:'Historical findings with disclosed gaps.'}}}
+ r.deliveryAttemptCount=6
+ assert.equal(researchDeliveryClassification(r),'LEGACY_REPORT_PRESENT');assert.deepEqual(deliveryFailureReasons(r,now,false),[])
+ const h=fixture();await h.service.observe(r,['RESEARCH_STATUS_UNKNOWN','RECOVERY_EXHAUSTED'],now);await h.service.observe(r,[],now+1,true)
+ assert.equal((await h.service.list()).incidents[0].resolutionBasis,'LEGACY_FORMAT_RECOGNIZED')
+ for(const mutate of [(x:any)=>{x.response.evidence.zeroScout.summary=''},(x:any)=>{x.analysisHash='changed'},(x:any)=>{x.response.evidence.zeroScout.proof.contentHash='0x'+'9'.repeat(64)},(x:any)=>{x.response.decision.evidence.researchStatus='INVALID'}]){
+  const copy=JSON.parse(JSON.stringify(r));mutate(copy);assert.equal(researchDeliveryClassification(copy),'UNKNOWN')
+ }
+ const failed=structuredClone(r);failed.response.evidence.zeroScout.summary='ZeroScout could not obtain a model-backed directional assessment. Market data may still be reviewed.'
+ assert.equal(researchDeliveryClassification(failed),'UNAVAILABLE');assert.ok(deliveryFailureReasons(failed,now,false).includes('RESEARCH_UNAVAILABLE'))
+ const flags=structuredClone(r);flags.response.decision.riskFlags=['All available 0G direct-trade model routes were unavailable or returned unusable output.']
+ assert.equal(researchDeliveryClassification(flags),'UNAVAILABLE')
+ assert.equal(researchDeliveryClassification(record(100)),'AVAILABLE')
+})

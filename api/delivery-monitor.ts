@@ -12,16 +12,33 @@ export interface MonitorStore {
  mutate<T>(key:string,fn:(value:T|undefined)=>T):Promise<T>;
  page<T>(prefix:string,after:string,limit:number):Promise<Array<{key:string;value:T}>>;
 }
-export type Incident={schema:'polydesk-delivery-incident-v1';id:string;transaction:string;status:'OPEN'|'ACKNOWLEDGED'|'RESOLVED';reasons:string[];openedAt:string;lastObservedAt:string;resolvedAt?:string;acknowledgedAt?:string;episode:number;version:number}
+export type Incident={schema:'polydesk-delivery-incident-v1';id:string;transaction:string;status:'OPEN'|'ACKNOWLEDGED'|'RESOLVED';reasons:string[];openedAt:string;lastObservedAt:string;resolvedAt?:string;resolutionBasis?:'LEGACY_FORMAT_RECOGNIZED'|'DELIVERED_RESEARCH_OBSERVED';acknowledgedAt?:string;episode:number;version:number}
 type Heartbeat={cursor:string;lastStartedAt?:string;lastSuccessAt?:string;lastFailureAt?:string;lastFailureCode?:string;lastCycleCompletedAt?:string;scanned?:number;eligible?:number;recovered?:number;recoveryFailures?:number;recoveryAttempts?:number}
 const idFor=(tx:string)=>createHash('sha256').update(tx.toLowerCase()).digest('hex')
+const object=(value:unknown):Record<string,unknown> => value!==null&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}
+/** Operator classification only: never upgrades an immutable report or buyer authority. */
+export function researchDeliveryClassification(record:SmartTraderPaidAnalysisRecord):'AVAILABLE'|'UNAVAILABLE'|'LEGACY_REPORT_PRESENT'|'UNKNOWN' {
+ const response=object(record.response),decision=object(response.decision),evidence=object(decision.evidence)
+ if(Object.hasOwn(evidence,'researchStatus'))return evidence.researchStatus==='AVAILABLE'?'AVAILABLE':evidence.researchStatus==='UNAVAILABLE'?'UNAVAILABLE':'UNKNOWN'
+ if(record.status!=='completed'||response.schema!=='polydesk-smart-market-trader-v1'||response.action!=='ANALYZE'||response.ok!==true)return 'UNKNOWN'
+ const provider=object(object(response.evidence).zeroScout)
+ const flags=[...(Array.isArray(decision.riskFlags)?decision.riskFlags:[]),...(Array.isArray(provider.riskFlags)?provider.riskFlags:[])]
+ if((typeof provider.summary==='string'&&provider.summary.startsWith('ZeroScout could not obtain a model-backed directional assessment.'))
+  ||flags.includes('All available 0G direct-trade model routes were unavailable or returned unusable output.'))return 'UNAVAILABLE'
+ const proof=object(evidence.zeroScoutProof),providerProof=object(provider.proof)
+ const validProof=['contentHash','storageRoot','storageTxHash'].every(k=>typeof proof[k]==='string'&&/^0x[a-fA-F0-9]{64}$/.test(proof[k] as string)&&proof[k]===providerProof[k])
+  &&typeof proof.storageUri==='string'&&/^0g:\/\/mainnet\/0x[a-fA-F0-9]{64}$/.test(proof.storageUri)&&proof.storageUri===providerProof.storageUri
+ const bound=Boolean(record.analysisHash&&record.decisionId&&record.analysisHash===decision.analysisHash&&record.decisionId===decision.decisionId)
+ return bound&&validProof&&typeof provider.id==='string'&&provider.id.length>0&&provider.id===evidence.zeroScoutId
+  &&typeof provider.summary==='string'&&provider.summary.trim().length>0
+  &&['SUPPORT','OPPOSE','INSUFFICIENT'].includes(String(evidence.tradeStance))?'LEGACY_REPORT_PRESENT':'UNKNOWN'
+}
 export function deliveryFailureReasons(record:SmartTraderPaidAnalysisRecord,now:number,eligible:boolean) {
- const evidence=record.response?.decision as {evidence?:{researchStatus?:string}}|undefined
- const research=evidence?.evidence?.researchStatus
+ const research=researchDeliveryClassification(record)
  const reasons:string[]=[]
  if(research==='UNAVAILABLE')reasons.push('RESEARCH_UNAVAILABLE')
  if(record.status==='failed')reasons.push('DELIVERY_FAILED')
- if(record.status==='completed'&&!['AVAILABLE','UNAVAILABLE'].includes(research||''))reasons.push('RESEARCH_STATUS_UNKNOWN')
+ if(record.status==='completed'&&research==='UNKNOWN')reasons.push('RESEARCH_STATUS_UNKNOWN')
  if(record.status==='completed'&&(eligible||hasMissingZeroScoutProofDelivery(record.response)))reasons.push('INCOMPLETE_DELIVERY')
  if(['settled','running'].includes(record.status)) {
   const settled=Date.parse(record.settledAt)
@@ -37,7 +54,7 @@ export class DeliveryMonitor {
   const transaction=record.payment.transaction.toLowerCase(),id=idFor(transaction),key=INCIDENT+id,at=new Date(now).toISOString()
   if(!reasons.length&&!await this.store.read<Incident>(key))return
   await this.store.mutate<Incident>(key,old=>{
-   if(!reasons.length){if(!old)throw Error('INCIDENT_NOT_FOUND');return healthy&&old.status!=='RESOLVED'?{...old,status:'RESOLVED',resolvedAt:at,lastObservedAt:at,version:old.version+1}:old}
+   if(!reasons.length){if(!old)throw Error('INCIDENT_NOT_FOUND');return healthy&&old.status!=='RESOLVED'?{...old,status:'RESOLVED',resolvedAt:at,resolutionBasis:researchDeliveryClassification(record)==='LEGACY_REPORT_PRESENT'?'LEGACY_FORMAT_RECOGNIZED':'DELIVERED_RESEARCH_OBSERVED',lastObservedAt:at,version:old.version+1}:old}
    if(old?.reasons.includes('RECOVERY_ATTEMPT_FAILED')&&!reasons.includes('RECOVERY_ATTEMPT_FAILED'))reasons=[...reasons,'RECOVERY_ATTEMPT_FAILED'].sort()
    const changed=Boolean(old&&(old.status==='RESOLVED'||JSON.stringify(old.reasons)!==JSON.stringify(reasons)))
    return {schema:'polydesk-delivery-incident-v1',id,transaction,status:!old||changed?'OPEN':old.status,reasons,
