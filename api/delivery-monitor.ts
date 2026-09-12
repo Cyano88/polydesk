@@ -1,3 +1,4 @@
+import { DeliveryFailureEmail } from './delivery-failure-email.js'
 import { createHash } from 'node:crypto'
 import { Router } from 'express'
 import { CorrectionError, correctionOperator } from './receipt-correction.js'
@@ -53,7 +54,7 @@ export class DeliveryMonitor {
  async observe(record:SmartTraderPaidAnalysisRecord,reasons:string[],now:number,healthy=false) {
   const transaction=record.payment.transaction.toLowerCase(),id=idFor(transaction),key=INCIDENT+id,at=new Date(now).toISOString()
   if(!reasons.length&&!await this.store.read<Incident>(key))return
-  await this.store.mutate<Incident>(key,old=>{
+  const incident=await this.store.mutate<Incident>(key,old=>{
    if(!reasons.length){if(!old)throw Error('INCIDENT_NOT_FOUND');return healthy&&old.status!=='RESOLVED'?{...old,status:'RESOLVED',resolvedAt:at,resolutionBasis:researchDeliveryClassification(record)==='LEGACY_REPORT_PRESENT'?'LEGACY_FORMAT_RECOGNIZED':'DELIVERED_RESEARCH_OBSERVED',lastObservedAt:at,version:old.version+1}:old}
    if(old?.reasons.includes('RECOVERY_ATTEMPT_FAILED')&&!reasons.includes('RECOVERY_ATTEMPT_FAILED'))reasons=[...reasons,'RECOVERY_ATTEMPT_FAILED'].sort()
    const changed=Boolean(old&&(old.status==='RESOLVED'||JSON.stringify(old.reasons)!==JSON.stringify(reasons)))
@@ -61,6 +62,7 @@ export class DeliveryMonitor {
     openedAt:!old||old.status==='RESOLVED'?at:old.openedAt,lastObservedAt:at,episode:(old?.episode??0)+(!old||old.status==='RESOLVED'?1:0),
     version:(old?.version??0)+(!old||changed?1:0),...(!changed&&old?.acknowledgedAt?{acknowledgedAt:old.acknowledgedAt}:{})}
   })
+  await new DeliveryFailureEmail(this.store).notify(incident)
  }
  async sweep(options:{eligible:(r:SmartTraderPaidAnalysisRecord,n:number)=>boolean;recover:(r:SmartTraderPaidAnalysisRecord)=>Promise<unknown>;now?:()=>number}) {
   const now=options.now??Date.now,started=new Date(now()).toISOString()
@@ -91,9 +93,9 @@ export class DeliveryMonitor {
  async status(now=Date.now()) {
   const heartbeat=await this.store.read<Heartbeat>(HEARTBEAT)
   const interval=Math.max(30000,Number(process.env.SMART_TRADER_RECOVERY_INTERVAL_MS)||60000)
-  return {heartbeat:heartbeat??null,workerStatus:!heartbeat?'NOT_OBSERVED':heartbeat.lastFailureCode?'FAILED':!heartbeat.lastSuccessAt||now-Date.parse(heartbeat.lastSuccessAt)>Math.max(180000,interval*3)?'STALE':'HEALTHY',notificationDelivery:'DISABLED',paymentRequired:false}
+  return {heartbeat:heartbeat??null,workerStatus:!heartbeat?'NOT_OBSERVED':heartbeat.lastFailureCode?'FAILED':!heartbeat.lastSuccessAt||now-Date.parse(heartbeat.lastSuccessAt)>Math.max(180000,interval*3)?'STALE':'HEALTHY',...await new DeliveryFailureEmail(this.store).status(),paymentRequired:false}
  }
- async list(after=''){const rows=await this.store.page<Incident>(INCIDENT,after,100);return {incidents:rows.map(r=>r.value),nextCursor:rows.length===100?rows.at(-1)!.key:null}}
+ async list(after=''){const rows=await this.store.page<Incident>(INCIDENT,after,100);return {incidents:await Promise.all(rows.map(async r=>({...r.value,emailNotification:await new DeliveryFailureEmail(this.store).receipt(r.value)}))),nextCursor:rows.length===100?rows.at(-1)!.key:null}}
  async acknowledge(id:string,version:number) {
   if(!/^[a-f0-9]{64}$/.test(id)||!Number.isSafeInteger(version)||version<1)throw new CorrectionError(400,'INVALID_INCIDENT')
   return this.store.mutate<Incident>(INCIDENT+id,c=>{
