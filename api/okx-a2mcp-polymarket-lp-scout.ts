@@ -11,6 +11,7 @@ import {
 import type { PaymentPayload, PaymentRequirements } from '@okxweb3/x402-core/types'
 import { registerExactEvmScheme } from '@okxweb3/x402-evm/exact/server'
 import { recordDeliveredOkxCall } from './okx-rewards.js'
+import { runLpPaidJob, LpPaidJobError } from './lp-scout-paid-job.js'
 import { scoutResponse } from './x402-polymarket-scout.js'
 
 const OKX_XLAYER_NETWORK = 'eip155:196'
@@ -222,67 +223,88 @@ export default async function okxA2mcpPolymarketLpScoutHandler(req: Request, res
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
   try {
-    const httpServer = await getOkxHttpServer(req)
     const adapter = adapterForRequest(req)
     const context: HTTPRequestContext = {
       adapter,
       path: routePath(req),
       method: req.method,
     }
-    const paymentResult = await httpServer.processHTTPRequest(context)
-    if (paymentResult.type === 'payment-error') return sendInstructions(res, paymentResult.response)
-    if (paymentResult.type === 'no-payment-required') {
-      return res.status(500).json({ ok: false, error: 'OKX x402 route is not protected' })
+    const paymentHeader = getHeader(req, 'payment-signature') || getHeader(req, 'x-payment')
+    if (!paymentHeader) {
+      const httpServer = await getOkxHttpServer(req)
+      const result = await httpServer.processHTTPRequest(context)
+      if (result.type === 'payment-error') return sendInstructions(res, result.response)
+      throw new Error('OKX x402 route is not protected')
     }
+    const reply = await runLpPaidJob({
+      paymentHeader,
+      request: { method: req.method, path: routePath(req), query: req.query, body: req.body,
+        buyerAgent: getHeader(req, 'x-buyer-agent'), agentSlug: getHeader(req, 'x-agent-slug') },
+      settle: async () => {
+        const httpServer = await getOkxHttpServer(req)
+        const paymentResult = await httpServer.processHTTPRequest(context)
+        if (paymentResult.type === 'payment-error') throw new LpPaidJobError(paymentResult.response.status, 'LP_PAYMENT_VERIFICATION_FAILED')
+        if (paymentResult.type === 'no-payment-required') {
+          throw new Error('OKX x402 route is not protected')
+        }
 
-    const settlement = await httpServer.processSettlement(
-      paymentResult.paymentPayload,
-      paymentResult.paymentRequirements,
-      paymentResult.declaredExtensions,
-      { request: context },
-    )
-    if (!settlement.success) return sendInstructions(res, settlement.response)
+        const settlement = await httpServer.processSettlement(
+          paymentResult.paymentPayload,
+          paymentResult.paymentRequirements,
+          paymentResult.declaredExtensions,
+          { request: context },
+        )
+        if (!settlement.success) throw new LpPaidJobError(503, 'LP_SETTLEMENT_RECONCILIATION_REQUIRED')
 
-    const paymentRequirements = paymentResult.paymentRequirements as PaymentRequirements
-    const paidReq = req as Request & {
-      payment?: {
-        verified: boolean
-        payer: string
-        amount: string
-        network: string
-        transaction?: string
-        asset?: string
-        provider?: string
-        kind?: 'okx_agent_payments_x402'
-        seller?: string
-        serviceUrl?: string
-      }
-    }
-    paidReq.payment = {
-      verified: true,
-      payer: settlement.payer || payerFromPayload(paymentResult.paymentPayload),
-      amount: settlement.amount || paymentRequirements.amount,
-      network: 'X Layer',
-      transaction: settlement.transaction,
-      asset: 'USDT',
-      provider: 'OKX Agent Payments Protocol',
-      kind: 'okx_agent_payments_x402',
-      seller: paymentRequirements.payTo,
-      serviceUrl: '/api/a2mcp/okx/polymarket-lp-scout',
-    }
+        const paymentRequirements = paymentResult.paymentRequirements as PaymentRequirements
+        const paidReq = req as Request & {
+          payment?: {
+            verified: boolean
+            payer: string
+            amount: string
+            network: string
+            transaction?: string
+            asset?: string
+            provider?: string
+            kind?: 'okx_agent_payments_x402'
+            seller?: string
+            serviceUrl?: string
+          }
+        }
+        paidReq.payment = {
+          verified: true,
+          payer: settlement.payer || payerFromPayload(paymentResult.paymentPayload),
+          amount: settlement.amount || paymentRequirements.amount,
+          network: 'X Layer',
+          transaction: settlement.transaction,
+          asset: 'USDT',
+          provider: 'OKX Agent Payments Protocol',
+          kind: 'okx_agent_payments_x402',
+          seller: paymentRequirements.payTo,
+          serviceUrl: '/api/a2mcp/okx/polymarket-lp-scout',
+        }
 
+        return { payment: paidReq.payment as unknown as Record<string, unknown>, headers: settlement.headers }
+      },
+      deliver: async saved => {
+        const paidReq = req as Parameters<typeof scoutResponse>[0]
+        paidReq.payment = saved.payment as unknown as NonNullable<typeof paidReq.payment>
+        return { status: 200, headers: saved.headers, body: await scoutResponse(paidReq) }
+      },
+    })
     res.once('finish', () => {
       if (res.statusCode < 200 || res.statusCode >= 300) return
       void recordDeliveredOkxCall({
-        payer: paidReq.payment?.payer,
-        transaction: paidReq.payment?.transaction,
-        amountAtomic: paidReq.payment?.amount,
+        payer: (reply.body as { payment?: { payer?: string } }).payment?.payer,
+        transaction: (reply.body as { payment?: { transaction?: string } }).payment?.transaction,
+        amountAtomic: (reply.body as { payment?: { amountAtomic?: string } }).payment?.amountAtomic,
         servicePath: '/api/a2mcp/okx/polymarket-lp-scout',
       }).catch(error => console.warn('[okx-rewards] could not record delivered call:', error instanceof Error ? error.message : String(error)))
     })
-    for (const [key, value] of Object.entries(settlement.headers)) res.setHeader(key, value)
-    return res.json(await scoutResponse(paidReq))
+    for (const [key, value] of Object.entries(reply.headers)) res.setHeader(key, value)
+    return res.status(reply.status).json(reply.body)
   } catch (err) {
+    if (err instanceof LpPaidJobError) return res.status(err.status).json({ ok: false, error: err.code, jobId: err.jobId, nextAction: 'Keep the original payment receipt. Ask PolyDesk to check this job; do not make another payment.', tradeAuthorized: false })
     const message = err instanceof Error ? err.message : 'OKX A2MCP x402 route unavailable'
     const status = /OKX_X402_|OKX API|private key|RPC/i.test(message) ? 503 : 500
     return res.status(status).json({ ok: false, error: message })

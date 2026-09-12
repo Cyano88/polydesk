@@ -66,12 +66,18 @@ type PolymarketBookLevel = {
 }
 
 type PolymarketBookResponse = {
+  asset_id?: string
+  market?: string
+  timestamp?: string | number
   bids?: PolymarketBookLevel[]
   asks?: PolymarketBookLevel[]
   tick_size?: string | number
 }
 
 type PolymarketBookSummary = {
+  bookVerified?: boolean
+  bookTimestamp?: string
+  bookError?: string
   bestBid?: number
   bestAsk?: number
   midpoint?: number
@@ -116,6 +122,9 @@ type PolymarketLpOpportunity = {
   tickSize?: string
   suggestedYesBid?: number
   suggestedNoBid?: number
+  bookVerified?: boolean
+  bookTimestamp?: string
+  bookError?: string
   eligible?: boolean
   sourceUrl?: string
   executionPlan?: string[]
@@ -602,16 +611,24 @@ function readBookPrice(level: PolymarketBookLevel) {
   return normalizeProbability(parsed)
 }
 
-async function fetchPolymarketBook(tokenId: string): Promise<PolymarketBookSummary> {
-  const data = await fetchPolymarketJson(`https://clob.polymarket.com/book?token_id=${encodeURIComponent(tokenId)}`) as PolymarketBookResponse | null
-  if (!data) return {}
+export function validateScoutBook(data: PolymarketBookResponse | null, tokenId: string, conditionId: string, now = Date.now()): PolymarketBookSummary {
+  const fail = (bookError: string): PolymarketBookSummary => ({ bookVerified: false, bookError })
+  if (!data || typeof data !== 'object') return fail('BOOK_UNAVAILABLE')
+  if (!tokenId || !conditionId || data.asset_id !== tokenId || typeof data.market !== 'string' || data.market.toLowerCase() !== conditionId.toLowerCase()) return fail('BOOK_IDENTITY_MISMATCH')
+  const raw = Number(data.timestamp)
+  const timestamp = raw < 100000000000 ? raw * 1000 : raw
+  if (!Number.isFinite(timestamp) || timestamp <= 0 || now - timestamp > 120000 || timestamp - now > 5000) return fail('BOOK_TIMESTAMP_INVALID_OR_STALE')
+  if (!Array.isArray(data.bids) || !Array.isArray(data.asks)) return fail('BOOK_LEVELS_INVALID')
+  const validNumber = (v: unknown) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v))
+  if ([...data.bids, ...data.asks].some(level => !level || !validNumber(level.price) || Number(level.price) <= 0 || Number(level.price) >= 1 || !validNumber(level.size) || Number(level.size) <= 0)) return fail('BOOK_LEVELS_INVALID')
+  if (!validNumber(data.tick_size) || Number(data.tick_size) <= 0 || Number(data.tick_size) >= 1) return fail('BOOK_TICK_INVALID')
   const bidLevels = (data.bids ?? []).map(level => ({ price: readBookPrice(level), size: readNumber(level as Record<string, unknown>, ['size']) }))
   const askLevels = (data.asks ?? []).map(level => ({ price: readBookPrice(level), size: readNumber(level as Record<string, unknown>, ['size']) }))
   const bidPrices = bidLevels.map(level => level.price).filter((price): price is number => typeof price === 'number')
   const askPrices = askLevels.map(level => level.price).filter((price): price is number => typeof price === 'number')
   const bestBid = bidPrices.length ? Math.max(...bidPrices) : undefined
   const bestAsk = askPrices.length ? Math.min(...askPrices) : undefined
-  const spread = typeof bestBid === 'number' && typeof bestAsk === 'number' ? Math.max(0, bestAsk - bestBid) : undefined
+  const spread = typeof bestBid === 'number' && typeof bestAsk === 'number' ? bestAsk - bestBid : undefined
   const midpoint = typeof bestBid === 'number' && typeof bestAsk === 'number' ? (bestBid + bestAsk) / 2 : bestBid ?? bestAsk
   const bidDepth = bidLevels.reduce((sum, level) => sum + (level.size ?? 0), 0)
   const askDepth = askLevels.reduce((sum, level) => sum + (level.size ?? 0), 0)
@@ -620,7 +637,11 @@ async function fetchPolymarketBook(tokenId: string): Promise<PolymarketBookSumma
       ? bidLevels.reduce((sum, level) => sum + (typeof level.price === 'number' && typeof bestBid === 'number' && bestBid - level.price <= 0.02 ? level.size ?? 0 : 0), 0)
         + askLevels.reduce((sum, level) => sum + (typeof level.price === 'number' && typeof bestAsk === 'number' && level.price - bestAsk <= 0.02 ? level.size ?? 0 : 0), 0)
       : undefined
+  if (![bidDepth, askDepth, depthAtTwoCents].every(v => typeof v === 'number' && Number.isFinite(v))) return fail('BOOK_DEPTH_INVALID')
+  if (typeof spread !== 'number' || spread <= 0) return { bookVerified: false, bookError: 'BOOK_CROSSED_OR_EMPTY' }
   return {
+    bookVerified: true,
+    bookTimestamp: new Date(timestamp).toISOString(),
     bestBid,
     bestAsk,
     midpoint,
@@ -630,6 +651,11 @@ async function fetchPolymarketBook(tokenId: string): Promise<PolymarketBookSumma
     depthAtTwoCents,
     tickSize: normalizedTickSize(data.tick_size),
   }
+}
+
+async function fetchPolymarketBook(tokenId: string, conditionId: string): Promise<PolymarketBookSummary> {
+  const data = await fetchPolymarketJson(`https://clob.polymarket.com/book?token_id=${encodeURIComponent(tokenId)}`) as PolymarketBookResponse | null
+  return validateScoutBook(data, tokenId, conditionId)
 }
 
 function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportunity {
@@ -692,6 +718,7 @@ function baseLpOpportunity(market: PolymarketRewardMarket): PolymarketLpOpportun
 }
 
 function buildExecutionPlan(opportunity: PolymarketLpOpportunity, budget?: string) {
+  if (!opportunity.bookVerified || opportunity.eligible !== true || !opportunity.rewardPoolVerified) return ['Review the disclosed evidence gaps. Do not prepare an order from this candidate.']
   const budgetText = budget ? `Use ${budget} only as a cap. Start with a small maker quote first, not the full amount.` : 'Start with a small maker quote first; add more only if the book still looks stable.'
   const spreadText = typeof opportunity.spread === 'number'
     ? `Current spread is ${(opportunity.spread * 100).toFixed(1)}c. Quote inside that spread and avoid market orders.`
@@ -704,6 +731,7 @@ function buildExecutionPlan(opportunity: PolymarketLpOpportunity, budget?: strin
     ? `Human quote guide: try YES near ${opportunity.suggestedYesBid.toFixed(quoteDigits)} or NO near ${opportunity.suggestedNoBid?.toFixed(quoteDigits) ?? 'n/a'}, then refresh before the next quote.`
     : 'Do not quote until midpoint and bid/ask are available.'
   return [
+    'Research only: review these indicative prices, then request a fresh trade preview with fee and balance checks. Execution requires separate buyer approval.',
     budgetText,
     spreadText,
     depthText,
@@ -717,14 +745,14 @@ async function analyzePolymarketLpMarket(market: PolymarketRewardMarket): Promis
   const provisionalOpportunity = baseLpOpportunity(market)
   const [verifiedMarket, provisionalBook] = await Promise.all([
     fetchVerifiedRewardMarket(conditionId).catch(() => undefined),
-    provisionalOpportunity.tokenId ? fetchPolymarketBook(provisionalOpportunity.tokenId).catch(() => ({})) : Promise.resolve({}),
+    provisionalOpportunity.tokenId ? fetchPolymarketBook(provisionalOpportunity.tokenId, conditionId).catch(() => ({})) : Promise.resolve({}),
   ])
   const currentMarket = verifiedMarket ? mergeVerifiedRewardMarket(market, verifiedMarket) : market
   const opportunity = baseLpOpportunity(currentMarket)
-  const book: PolymarketBookSummary = opportunity.tokenId && opportunity.tokenId !== provisionalOpportunity.tokenId
-    ? await fetchPolymarketBook(opportunity.tokenId).catch(() => ({}))
+  const book: PolymarketBookSummary = opportunity.tokenId && (opportunity.tokenId !== provisionalOpportunity.tokenId || opportunity.conditionId !== provisionalOpportunity.conditionId)
+    ? await fetchPolymarketBook(opportunity.tokenId, opportunity.conditionId || '').catch(() => ({}))
     : provisionalBook
-  const midpoint = book.midpoint ?? normalizeProbability(readNumber(currentMarket, ['last_trade_price', 'lastPrice', 'price', 'midpoint']))
+  const midpoint = book.midpoint
   const spread = book.spread
   const offset = Math.min(0.02, Math.max(0.005, (opportunity.maxSpread ?? 0.03) * 0.35))
   const tickSize = book.tickSize ?? '0.01'
@@ -854,7 +882,7 @@ function formatOpportunitySignal(opportunity: ReturnType<typeof serializeOpportu
   return `${prefix}: ${opportunity.title.slice(0, 82)} | market pool/day ${reward} USDC | spread ${spread}${depth}${days} | risk ${opportunity.lpExecutionRisk}`
 }
 
-function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: string, dailyTarget?: string) {
+function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: string, dailyTarget?: string, passed = false) {
   const estimatedRewardCapitalUsdc = estimateTwoSidedRewardCapitalUsdc(opportunity.minSize, opportunity.suggestedYesBid, opportunity.suggestedNoBid)
   const targetMetrics = lpRewardTargetMetrics({
     dailyPoolUsdc: opportunity.dailyReward,
@@ -886,12 +914,16 @@ function serializeOpportunity(opportunity: PolymarketLpOpportunity, budget?: str
     tickSize: opportunity.tickSize,
     suggestedYesBid: rounded(opportunity.suggestedYesBid),
     suggestedNoBid: rounded(opportunity.suggestedNoBid),
+    bookVerified: opportunity.bookVerified === true,
+    bookTimestamp: opportunity.bookTimestamp,
+    bookError: opportunity.bookError || (opportunity.bookVerified ? undefined : 'BOOK_UNAVAILABLE'),
     eligible: opportunity.eligible,
     lpExecutionRisk: opportunity.lpExecutionRisk,
     outcomeRisk: opportunity.outcomeRisk,
     score: rounded(opportunity.score, 2),
     scoutReason: opportunity.scoutReason,
-    executionPlan: buildExecutionPlan(opportunity, budget),
+    safetyScreenPassed: passed,
+    executionPlan: passed ? buildExecutionPlan(opportunity, budget) : ['This candidate failed the safety screen. Review the findings or choose another market; do not prepare an order.'],
     footballContext: opportunity.footballContext,
   }
 }
@@ -910,6 +942,9 @@ function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
     bestAsk: rounded(opportunity.bestAsk),
     midpoint: rounded(opportunity.midpoint),
     oneDayPriceChange: rounded(opportunity.oneDayPriceChange),
+    bookVerified: opportunity.bookVerified === true,
+    bookTimestamp: opportunity.bookTimestamp,
+    bookError: opportunity.bookError || (opportunity.bookVerified ? undefined : 'BOOK_UNAVAILABLE'),
     eligible: opportunity.eligible,
     lpExecutionRisk: opportunity.lpExecutionRisk,
     score: rounded(opportunity.score, 2),
@@ -919,6 +954,7 @@ function serializeCandidateAudit(opportunity: PolymarketLpOpportunity) {
 }
 
 function passesScoutSafety(mode: ScoutMode, opportunity: PolymarketLpOpportunity) {
+  if (!opportunity.bookVerified) return false
   if (!opportunity.rewardPoolVerified || !opportunity.dailyReward || opportunity.dailyReward <= 0) return false
   if (mode !== 'football') return isConservativeCandidate(opportunity)
   const confirmedSpread = typeof opportunity.spread === 'number' && opportunity.spread <= Math.min(opportunity.maxSpread ?? 0.03, 0.025)
@@ -967,7 +1003,9 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
         'No paid pick was forced. Current markets failed the safety screen for time left, spread, depth, headline risk, or tradable midpoint.',
       ],
       opportunities: [],
-      nextAction: 'Wait for a cleaner setup. Re-run LP Scout later before committing USDC.',
+      eligibilityStatus: 'NO_CANDIDATE_PASSED',
+      candidateAudit: { scanned: analyzed.length, conservativePassed: 0, rejectedCandidates: analyzed.slice(0, 8).map(serializeCandidateAudit) },
+      nextAction: 'Review the rejected candidates and evidence gaps. Describe any delivery defect for operator review under the existing payment before requesting new research.',
       disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
       source: 'Polymarket Gamma markets/events plus CLOB rewards and order book APIs',
       request: { mode, context, budget },
@@ -993,7 +1031,7 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
   const opportunities = await enrichLpOpportunitiesWithContext(
     ranked
       .slice(0, opportunityLimit)
-      .map(opportunity => serializeOpportunity(opportunity, budget, dailyTarget)),
+      .map(opportunity => serializeOpportunity(opportunity, budget, dailyTarget, passesScoutSafety(mode, opportunity))),
   )
 
   const themeText = mode === 'news' && context ? ` for "${context}"` : ''
@@ -1019,7 +1057,8 @@ export async function buildLiveScout(options: Partial<ScoutOptions> = {}) {
       reviewedCandidates: ranked.slice(0, 12).map(serializeCandidateAudit),
       rejectedCandidates: rejected,
     },
-    nextAction: 'Human action only: open the market, confirm the live book still matches this scout, then place a small maker quote inside the spread. Do not use market orders.',
+    nextAction: conservative.length ? 'Show the findings and evidence gaps for buyer review. Request a fresh trade preview only if the buyer chooses to proceed; execution requires separate approval.' : 'The requested market failed the safety screen. Review the evidence gaps or choose another market; do not prepare an order from this report.',
+    eligibilityStatus: conservative.length ? 'CANDIDATES_PASSED' : 'NO_CANDIDATE_PASSED',
     disclaimer: 'Educational LP research for human review only. Not financial advice and not an automated trading instruction.',
     source: mode === 'football'
       ? 'Verified football provider context plus Polymarket Gamma markets/events and CLOB order book APIs'
@@ -1033,9 +1072,10 @@ export async function scoutResponse(req: PaidRequest) {
   const paymentDisplay = describeScoutPayment(payment)
   const amount = paymentDisplay.amount
   const scout = await buildLiveScout({
-    mode: normalizeScoutMode(req.query.scoutMode),
-    context: cleanContext(req.query.context),
-    budget: cleanContext(req.query.budget),
+    mode: normalizeScoutMode(req.query.scoutMode ?? req.body?.scoutMode),
+    context: cleanContext(req.query.context ?? req.body?.context),
+    budget: cleanContext(req.query.budget ?? req.body?.budget),
+    dailyTarget: cleanContext(req.query.dailyTarget ?? req.body?.dailyTarget),
   })
   const activity = payment ? await recordPaidScout(req, scout, amount) : undefined
   const receiptUrl = activity?.receiptUrl
@@ -1047,13 +1087,14 @@ export async function scoutResponse(req: PaidRequest) {
     service: 'PolyDesk x402 Polymarket LP Scout',
     serviceId: 'polymarket-lp-scout',
     protocol: 'A2MCP x402',
-    paid: true,
+    paid: payment?.verified === true,
     buyerAgent: activity?.agentSlug,
     sellerAgent: 'polydesk',
     payment: payment
       ? {
           payer: payment.payer,
           amount,
+          amountAtomic: payment.amount,
           network: payment.network,
           transaction: payment.transaction,
         }
@@ -1076,7 +1117,11 @@ export async function scoutResponse(req: PaidRequest) {
       proofUrl: undefined,
     },
     agentHandoff: {
-      recommendedMessage: 'View LP Scout result',
+      recommendedMessage: 'Show results and evidence gaps',
+      followUpPrompts: ['Show results and evidence gaps', 'Show receipt', 'Describe a delivery defect for operator review under this payment'],
+      afterReviewPrompt: 'Would you like a fresh trade preview, or decline and analyze another market?',
+      tradeAuthorized: false,
+      correctionMode: 'operator_review',
       reportUrl: reportUrl ? absoluteUrl(req, reportUrl) : undefined,
       receiptUrl,
       note: 'The LP Scout result is delivered after payment. ZeroScout / 0G proof is archived in the background and appears on the report when ready.',
