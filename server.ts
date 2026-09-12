@@ -1,3 +1,4 @@
+import { createDeliveryIncidentRouter } from './api/delivery-monitor.js'
 import { createReceiptAcceptanceRouter } from './api/research-acceptance.js'
 import { createResearchRecoveryHandler } from './api/research-recovery.js'
 import { createReceiptCorrectionRouter } from './api/receipt-correction.js'
@@ -195,6 +196,7 @@ app.post('/api/a2mcp/polymarket-smart-trader', strictLimiter, okxA2mcpStandardSe
 app.get('/api/polymarket/discover', readLimiter, polymarketDiscoverHandler)
 app.post('/api/x402/base/polymarket-smart-trader', strictLimiter, baseAgenticMarketSmartTraderHandler)
 app.post('/api/x402/base/polymarket-smart-trader/recover', strictLimiter, basePaymentRecoveryHandler)
+app.use('/api/operator/delivery-incidents', strictLimiter, createDeliveryIncidentRouter())
 app.get('/api/a2mcp/polymarket-smart-trader/decision/:decisionId', readLimiter, polymarketSmartTraderDecisionHandler)
 app.use('/api/a2mcp/polymarket-smart-trader/payment/:transaction/acceptance', strictLimiter, createReceiptAcceptanceRouter())
 app.use('/api/a2mcp/polymarket-smart-trader/payment/:transaction/correction', strictLimiter, createReceiptCorrectionRouter())

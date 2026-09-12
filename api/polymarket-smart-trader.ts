@@ -1,3 +1,4 @@
+import { DeliveryMonitor } from './delivery-monitor.js'
 import { assessResearchSources, structuredBtcSnapshot } from './research-quality.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { publicDeliveryStatus, paidDeliveryGuidance } from './smart-trader-delivery-status.js'
@@ -6,7 +7,7 @@ import { isAddress } from 'viem'
 import { independentExecutionDescriptor } from './polymarket-independent-policy.js'
 import { agentReviewHandoff, hasUnavailableReviewHandoff } from './polymarket-agent-review.js'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
-import { hasRenderDurableStore, listDurableJsonByPrefix, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
+import { hasRenderDurableStore, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
 import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
@@ -16,7 +17,6 @@ const REQUEST_TIMEOUT_MS = 10_000
 const PAYMENT_PREFLIGHT_TIMEOUT_MS = 4_000
 const DECISION_TTL_MS = 15 * 60_000
 const DELIVERY_RUNNING_STALE_MS = 10 * 60_000
-const DELIVERY_ALERT_AGE_MS = 5 * 60_000
 const PAID_ANALYSIS_PREFIX = 'polydesk:smart-trader:paid-analysis:'
 const SCORE_LABEL = 'risk-adjusted-opportunity-screening-not-profit-forecast' as const
 
@@ -1756,34 +1756,12 @@ export async function recoverPendingSmartTraderDeliveries(
   now = Date.now(),
 ) {
   if (!hasRenderDurableStore()) return { scanned: 0, eligible: 0, recovered: 0 }
-  const records = await listDurableJsonByPrefix<SmartTraderPaidAnalysisRecord>(PAID_ANALYSIS_PREFIX, 100)
-  const eligible = records.filter(record => (
-    record?.schema === 'polydesk-smart-trader-paid-analysis-v1'
-    && shouldRecoverSmartTraderDelivery(record, now)
-  )).slice(0, 4)
-  let recovered = 0
-  for (const record of eligible) {
-    const settledAt = Date.parse(record.settledAt)
-    if (Number.isFinite(settledAt) && now - settledAt >= DELIVERY_ALERT_AGE_MS) {
-      console.warn('[smart-trader] overdue paid delivery recovery', {
-        transaction: record.payment.transaction,
-        status: record.status,
-        ageMs: now - settledAt,
-        attemptCount: smartTraderDeliveryAttemptCount(record),
-        maximumAttempts: smartTraderMaxDeliveryAttempts(record),
-      })
-    }
-    try {
-      await executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer, dependencies)
-      recovered += 1
-    } catch (error) {
-      console.error('[smart-trader] durable paid delivery recovery failed', {
-        transaction: record.payment.transaction,
-        error: clean(error instanceof Error ? error.message : 'unknown delivery error'),
-      })
-    }
-  }
-  return { scanned: records.length, eligible: eligible.length, recovered }
+  const wallStartedAt = Date.now()
+  return new DeliveryMonitor().sweep({
+    eligible: shouldRecoverSmartTraderDelivery,
+    recover: record => executeSettledSmartTraderDelivery(record.payment.transaction, record.payment.payer, dependencies),
+    now: () => now + Date.now() - wallStartedAt,
+  })
 }
 
 export function startSmartTraderDeliveryWorker() {

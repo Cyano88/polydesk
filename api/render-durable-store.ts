@@ -123,3 +123,14 @@ export async function memoryDatabaseQuery(sql: string, values: unknown[] = []) {
   await ensureMemorySchema()
   return requirePool().query(sql, values)
 }
+/** Stable key pagination: completed rows cannot permanently hide newer work. */
+export async function pageDurableJsonByPrefix<T>(prefix: string, after = '', limit = 100): Promise<Array<{key:string;value:T}>> {
+  await ensureSchema()
+  const boundedLimit = Math.max(1, Math.min(100, Math.floor(limit)))
+  const result = await requirePool().query(
+    `select store_key, value from render_durable_kv
+     where left(store_key, length($1)) = $1 and store_key > $2
+     order by store_key asc limit $3`, [prefix, after, boundedLimit],
+  )
+  return result.rows.map(row => ({key:row.store_key, value:row.value as T}))
+}
