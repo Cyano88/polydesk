@@ -39,3 +39,10 @@ export function lpScoutEvidenceView(original: Row) {
     rejectedCandidates: rejected,
   }
 }
+
+export function lpVerificationStatus(completed: boolean, failed: boolean, queuedResult: Record<string, unknown> = {}) {
+  if (completed) return { reportStatus: 'verified', aiStatus: 'complete' }
+  // Older timeout handlers wrote queued+retryable even though their promise ended.
+  if (failed || queuedResult.retryable === true || queuedResult.upstreamCompletionUnknown === true) return { reportStatus: 'needs_retry', aiStatus: 'needs_attention' }
+  return { reportStatus: 'finalizing', aiStatus: 'pending' }
+}

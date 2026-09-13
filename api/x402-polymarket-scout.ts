@@ -274,26 +274,27 @@ async function recordPaidScout(req: PaidRequest, scout: Awaited<ReturnType<typeo
     }).catch(async err => {
       const detail = publicErrorMessage(err)
       const transient = isTransientZeroScoutError(err)
-      console.warn(transient ? '[x402-polymarket-scout] ZeroScout LP preparation still pending:' : '[x402-polymarket-scout] ZeroScout LP preparation failed:', detail)
+      console.warn(transient ? '[x402-polymarket-scout] ZeroScout LP preparation needs reconciliation:' : '[x402-polymarket-scout] ZeroScout LP preparation failed:', detail)
       await appendAgentActivity({
         agentSlug,
-        type: transient ? 'scout_verification_queued' : 'scout_verification_failed',
-        title: transient ? 'ZeroScout verification continuing' : 'ZeroScout verification needs retry',
+        type: 'scout_verification_failed',
+        title: 'ZeroScout verification needs reconciliation',
         direction: 'system',
         network: 'ZeroScout / 0G',
         wallet: proof.payer,
         serviceUrl,
         detail: transient
-          ? 'ZeroScout is still preparing the verified LP Scout brief. Payment is saved and no additional x402 payment is required.'
+          ? 'The ZeroScout request ended without a saved result. Check the prior provider request before retrying. Payment is saved; no automatic retry is running.'
           : detail,
         result: {
           sourceActivityId: result.id,
           receiptActivityId: paidActivity?.id,
           receiptUrl: req.payment?.receiptUrl,
           proofHash: proof.proofHash,
-          status: transient ? 'queued' : 'failed',
-          error: transient ? undefined : detail,
-          retryable: transient || undefined,
+          status: 'needs_reconciliation',
+          error: detail,
+          upstreamCompletionUnknown: transient,
+          retryable: false,
         },
       }).catch(activityErr => {
         console.warn('[x402-polymarket-scout] failed to record ZeroScout failure:', publicErrorMessage(activityErr))

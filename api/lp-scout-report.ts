@@ -1,4 +1,4 @@
-import { lpScoutEvidenceView } from './lp-scout-report-evidence.js'
+import { lpScoutEvidenceView, lpVerificationStatus } from './lp-scout-report-evidence.js'
 import type { Request, Response } from 'express'
 import { findAgentActivity, listAgentActivity } from './agent-activity.js'
 import { authorizedLpScoutReceipt } from './lp-scout-access.js'
@@ -119,6 +119,7 @@ export default async function handler(req: Request, res: Response) {
     const scoutResult = asObject(scout.result)
     const zeroScoutActions = Array.isArray(zeroScout.recommendedActions) ? zeroScout.recommendedActions : []
     const zeroScoutRisks = Array.isArray(zeroScout.riskFlags) ? zeroScout.riskFlags : []
+    const verification = lpVerificationStatus(Boolean(zeroScout.summary || zeroScout.suggestedAnswer), Boolean(failed), asObject(queued?.result))
 
     return res.json({
       ok: true,
@@ -127,13 +128,13 @@ export default async function handler(req: Request, res: Response) {
         agentSlug: scout.agentSlug,
         title: scout.title || 'PolyDesk LP Scout report',
         createdAt: scout.createdAt,
-        status: zeroScout.summary || zeroScout.suggestedAnswer ? 'verified' : failed ? 'needs_retry' : 'finalizing',
+        status: verification.reportStatus,
         detail: scout.detail,
         summary: zeroScout.suggestedAnswer || zeroScout.summary || scout.detail || 'LP Scout report is saved.',
         signals: Array.isArray(zeroScout.signals) && zeroScout.signals.length ? zeroScout.signals : Array.isArray(scoutResult.signals) ? scoutResult.signals : [],
         originalScout: scoutResult,
         evidence: lpScoutEvidenceView(scoutResult),
-        aiVerification: { status: zeroScout.summary || zeroScout.suggestedAnswer ? 'complete' : failed ? 'needs_attention' : 'pending', note: 'Archiving a receipt or report does not mean AI verification has completed.' },
+        aiVerification: { status: verification.aiStatus, note: verification.aiStatus === 'needs_attention' ? 'The prior verification attempt ended without a saved result. Check the existing provider request before retrying; no automatic retry is running and no new payment is required.' : 'Archiving a receipt or report does not mean AI verification has completed.' },
         recommendedActions: zeroScoutActions.length ? zeroScoutActions : scoutFallbackActions({ result: scoutResult }),
         riskFlags: zeroScoutRisks.length ? zeroScoutRisks : scoutFallbackRiskFlags({ result: scoutResult }),
         safetyBoundaries: Array.isArray(zeroScout.safetyBoundaries) ? zeroScout.safetyBoundaries : [],
