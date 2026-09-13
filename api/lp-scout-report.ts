@@ -1,3 +1,4 @@
+import { lpScoutEvidenceView } from './lp-scout-report-evidence.js'
 import type { Request, Response } from 'express'
 import { findAgentActivity, listAgentActivity } from './agent-activity.js'
 import { authorizedLpScoutReceipt } from './lp-scout-access.js'
@@ -129,7 +130,10 @@ export default async function handler(req: Request, res: Response) {
         status: zeroScout.summary || zeroScout.suggestedAnswer ? 'verified' : failed ? 'needs_retry' : 'finalizing',
         detail: scout.detail,
         summary: zeroScout.suggestedAnswer || zeroScout.summary || scout.detail || 'LP Scout report is saved.',
-        signals: Array.isArray(zeroScout.signals) ? zeroScout.signals : [],
+        signals: Array.isArray(zeroScout.signals) && zeroScout.signals.length ? zeroScout.signals : Array.isArray(scoutResult.signals) ? scoutResult.signals : [],
+        originalScout: scoutResult,
+        evidence: lpScoutEvidenceView(scoutResult),
+        aiVerification: { status: zeroScout.summary || zeroScout.suggestedAnswer ? 'complete' : failed ? 'needs_attention' : 'pending', note: 'Archiving a receipt or report does not mean AI verification has completed.' },
         recommendedActions: zeroScoutActions.length ? zeroScoutActions : scoutFallbackActions({ result: scoutResult }),
         riskFlags: zeroScoutRisks.length ? zeroScoutRisks : scoutFallbackRiskFlags({ result: scoutResult }),
         safetyBoundaries: Array.isArray(zeroScout.safetyBoundaries) ? zeroScout.safetyBoundaries : [],

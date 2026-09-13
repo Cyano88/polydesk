@@ -13,6 +13,17 @@ type ReportResponse = {
     createdAt: number
     status: 'verified' | 'finalizing' | 'needs_retry' | string
     summary?: string
+    evidence?: {
+      presentationVersion: string
+      originalReportHash: string
+      originalPreserved: boolean
+      scope: { scanned?: number; passed?: number; disclosedRejections: number; undisclosedRejections?: number; note: string; limitation?: string }
+      eligibilityExplanation: string
+      evidenceTiming: string
+      rejectedCandidates: Array<{ title?: string; marketUrl?: string; bookTimestamp?: string; rewardSpreadEligible?: boolean; safetyScreenPassed: boolean; observedRejectionReasons: string[] }>
+    }
+    aiVerification?: { status: string; note: string }
+    originalScout?: Record<string, unknown>
     signals?: string[]
     recommendedActions?: string[]
     riskFlags?: string[]
@@ -89,6 +100,9 @@ function reportText(report: NonNullable<ReportResponse['report']>) {
     'PolyDesk LP Scout Report',
     '',
     clean(report.summary),
+    report.evidence ? `${report.evidence.scope.note} ${report.evidence.scope.limitation || ''}\n${report.evidence.eligibilityExplanation}\n${report.evidence.evidenceTiming}` : '',
+    ...(report.evidence?.rejectedCandidates || []).map(row => `${row.title}: ${row.observedRejectionReasons.join(' ')} Reward-spread eligibility: ${row.rewardSpreadEligible === undefined ? 'unknown' : row.rewardSpreadEligible ? 'yes' : 'no'}; full safety screen: failed.`),
+    report.aiVerification ? `AI verification: ${report.aiVerification.status}. ${report.aiVerification.note}` : '',
     '',
     report.recommendedActions?.length ? `Action checklist:\n${report.recommendedActions.map((item, index) => `${index + 1}. ${clean(item)}`).join('\n')}` : '',
     report.riskFlags?.length ? `Risk flags:\n${report.riskFlags.map((item, index) => `${index + 1}. ${clean(item)}`).join('\n')}` : '',
@@ -249,7 +263,37 @@ export default function LPScoutReport() {
               <div className="rounded-xl bg-gray-50 p-4 dark:bg-black/20">
                 <p className="text-xs font-semibold uppercase text-gray-400">Brief</p>
                 <p className="mt-2 text-sm leading-6 text-gray-800 dark:text-gray-100">{clean(report.summary)}</p>
+                {!!report.signals?.length && <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-300">{report.signals.map((signal, index) => <li key={index}>{clean(signal)}</li>)}</ul>}
               </div>
+
+              {report.evidence && (
+                <section className="space-y-3 rounded-xl border border-gray-100 p-4 dark:border-white/10">
+                  <h2 className="text-sm font-semibold">Saved screening evidence</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{report.evidence.scope.note}</p>
+                  {report.evidence.scope.limitation && <p className="text-sm text-amber-700 dark:text-amber-300">{report.evidence.scope.limitation}</p>}
+                  <p className="text-xs text-gray-500">{report.evidence.eligibilityExplanation}</p>
+                  <p className="text-xs text-gray-500">{report.evidence.evidenceTiming}</p>
+                  {report.evidence.rejectedCandidates.map((candidate, index) => (
+                    <div key={index} className="rounded-lg bg-gray-50 p-3 dark:bg-black/20">
+                      <p className="text-sm font-semibold">{candidate.title || `Candidate ${index + 1}`} - rejected</p>
+                      <p className="mt-1 text-sm">{candidate.observedRejectionReasons.join(' ')}</p>
+                      <p className="mt-1 text-xs text-gray-500">Reward-spread eligibility: {candidate.rewardSpreadEligible === undefined ? 'unknown' : candidate.rewardSpreadEligible ? 'yes' : 'no'}. Full safety screen: failed.</p>
+                      {candidate.bookTimestamp && <p className="mt-1 text-xs text-gray-500">Book observed: {candidate.bookTimestamp}</p>}
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-500">Presentation corrected from saved evidence. The original delivery and payment remain unchanged.</p>
+                  <details className="text-xs">
+                    <summary className="cursor-pointer">Original delivered research JSON</summary>
+                    <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-3 dark:bg-black/20">{JSON.stringify(report.originalScout, null, 2)}</pre>
+                  </details>
+                </section>
+              )}
+              {report.aiVerification && (
+                <section className="rounded-xl bg-gray-50 p-4 text-sm dark:bg-black/20">
+                  <p className="font-semibold">AI verification: {report.aiVerification.status === 'complete' ? 'complete' : report.aiVerification.status === 'pending' ? 'pending' : 'needs attention'}</p>
+                  <p className="mt-1 text-gray-500">{report.aiVerification.note}</p>
+                </section>
+              )}
 
               {!!report.marketLinks?.length && (
                 <div>
