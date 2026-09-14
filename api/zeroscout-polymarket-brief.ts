@@ -357,7 +357,9 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
     includeClaudeReview: options.includeClaudeReview !== false,
     includeOpenAiReview: options.includeOpenAiReview !== false,
   }
-  const result = await callZeroScoutIntelligence(payload, { requireProof: true })
+  // LP compute is capped at 90s; reserve another 90s for proof storage/response.
+  // Never replay compute automatically after ambiguous completion.
+  const result = await callZeroScoutIntelligence(payload, { requireProof: true, timeoutMs: 180_000, retryAttempts: 0 })
 
   await appendAgentActivity({
     agentSlug,
