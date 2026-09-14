@@ -132,6 +132,12 @@ export default async function handler(req: Request, res: Response) {
         detail: scout.detail,
         summary: zeroScout.suggestedAnswer || zeroScout.summary || scout.detail || 'LP Scout report is saved.',
         signals: Array.isArray(zeroScout.signals) && zeroScout.signals.length ? zeroScout.signals : Array.isArray(scoutResult.signals) ? scoutResult.signals : [],
+        verificationHistory: activity.filter(item => item.type === 'scout_returned' && item.result?.sourceActivityId === scout.id && item.result?.zeroscout).map(item => ({
+          activityId: item.id, createdAt: item.createdAt,
+          correctionOfActivityId: item.result?.correctionOfActivityId,
+          correctionVersion: item.result?.correctionVersion,
+          result: item.result?.zeroscout,
+        })),
         originalScout: scoutResult,
         evidence: lpScoutEvidenceView(scoutResult),
         aiVerification: { status: verification.aiStatus, note: verification.aiStatus === 'needs_attention' ? 'The prior verification attempt ended without a saved result. Check the existing provider request before retrying; no automatic retry is running and no new payment is required.' : 'Archiving a receipt or report does not mean AI verification has completed.' },

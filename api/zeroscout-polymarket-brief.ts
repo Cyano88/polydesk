@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express'
 import crypto from 'node:crypto'
+import { lpScoutEvidenceView } from './lp-scout-report-evidence.js'
+import { lpCorrectionPlan } from './lp-scout-correction.js'
 import { appendAgentActivity, findAgentActivity, listAgentActivity, normalizeActivitySlug, type AgentActivity } from './agent-activity.js'
 import { callZeroScoutIntelligence } from './zeroscout-intelligence.js'
 
@@ -13,13 +15,34 @@ function cleanText(value: unknown, fallback = '') {
   return text ? text.slice(0, 1200) : fallback
 }
 
-function safeScout(value: unknown) {
+export function safeScout(value: unknown) {
   if (!value || typeof value !== 'object') return {}
   const scout = value as Record<string, unknown>
   const opportunities = Array.isArray(scout.opportunities)
     ? scout.opportunities.slice(0, 10).map(item => sanitizeOpportunity(item))
     : []
+  const evidence = lpScoutEvidenceView(scout)
+  const audit = scout.candidateAudit && typeof scout.candidateAudit === 'object' ? scout.candidateAudit as Record<string, unknown> : undefined
+  const rejected = evidence.rejectedCandidates
+  const reviewed = Array.isArray(audit?.reviewedCandidates) ? audit.reviewedCandidates : []
+  // Fail before compute rather than silently drop evidence from a paid report.
+  if (rejected.length > 20 || reviewed.length > 20) throw new Error('LP evidence exceeds the supported correction size; operator review required.')
   return {
+    candidateAudit: audit ? {
+      scanned: evidence.scope.scanned,
+      conservativePassed: evidence.scope.passed,
+      rejectedCandidates: rejected.map(row => ({
+        ...sanitizeOpportunity(row),
+        rewardSpreadEligible: row.rewardSpreadEligible,
+        safetyScreenPassed: false,
+        observedRejectionReasons: row.observedRejectionReasons,
+      })),
+      reviewedCandidates: reviewed.map(sanitizeOpportunity),
+    } : undefined,
+    evidenceScope: evidence.scope,
+    eligibilityExplanation: evidence.eligibilityExplanation,
+    evidenceTiming: evidence.evidenceTiming,
+    originalReportHash: evidence.originalReportHash,
     summary: cleanText(scout.summary),
     signals: Array.isArray(scout.signals) ? scout.signals.slice(0, 6).map(item => cleanText(item)).filter(Boolean) : [],
     highlights: Array.isArray(scout.highlights) ? scout.highlights.slice(0, 6).map(item => cleanText(item)).filter(Boolean) : [],
@@ -50,7 +73,12 @@ function sanitizeOpportunity(value: unknown) {
     depthAtTwoCents: finiteNumber(item.depthAtTwoCents),
     suggestedYesBid: finiteNumber(item.suggestedYesBid),
     suggestedNoBid: finiteNumber(item.suggestedNoBid),
-    eligible: typeof item.eligible === 'boolean' ? item.eligible : undefined,
+    rewardSpreadEligible: typeof item.rewardSpreadEligible === 'boolean' ? item.rewardSpreadEligible : typeof item.eligible === 'boolean' ? item.eligible : undefined,
+    midpoint: finiteNumber(item.midpoint),
+    bookTimestamp: typeof item.bookTimestamp === 'number' ? finiteNumber(item.bookTimestamp) : cleanText(item.bookTimestamp),
+    bookVerified: typeof item.bookVerified === 'boolean' ? item.bookVerified : undefined,
+    rewardPoolVerified: typeof item.rewardPoolVerified === 'boolean' ? item.rewardPoolVerified : undefined,
+    oneDayPriceChange: finiteNumber(item.oneDayPriceChange),
     lpExecutionRisk: cleanText(item.lpExecutionRisk),
     outcomeRisk: cleanText(item.outcomeRisk),
     score: finiteNumber(item.score),
@@ -251,6 +279,8 @@ function topOpportunitySummary(scout: ReturnType<typeof safeScout>) {
 }
 
 type ZeroScoutBriefOptions = {
+  correctionOfActivityId?: string
+  receiptActivityId?: string
   includeClaudeReview?: boolean
   includeOpenAiReview?: boolean
 }
@@ -272,6 +302,9 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
   }
 
   const activity = await listAgentActivity(agentSlug, 80)
+  const correction = options.correctionOfActivityId
+    ? lpCorrectionPlan(scoutActivity, activity, options.correctionOfActivityId, options.receiptActivityId)
+    : undefined
   const paidScout = await recoverAttachedPaidScoutProof(scoutActivity, activity)
   if (!paidScout?.proof?.proofHash) {
     const error = new Error('No matching x402 payment proof was found for this LP Scout result.') as Error & { status?: number }
@@ -283,6 +316,7 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
     item.type === 'scout_returned'
     && item.result?.zeroscout
     && item.result?.sourceActivityId === scoutActivity.id
+    && (!correction || item.result?.correctionKey === correction.correctionKey)
   ))
   if (existing?.result?.zeroscout) return { result: existing.result.zeroscout, existed: true }
 
@@ -299,10 +333,12 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
       'Use only the supplied scout data, x402 payment proof, and market/order-book fields. Do not invent live odds, balances, fills, outcomes, or guarantees.',
       'Compare the selected opportunities against scout.candidateAudit.reviewedCandidates and scout.candidateAudit.rejectedCandidates when present. Confirm whether the selected shortlist is stronger, or explain why a runner-up is safer.',
       'Produce a concise operator brief that explains why the candidate was selected, what must be rechecked on Polymarket before quoting, what can go wrong, and what a cautious human next step is.',
+      'Describe a limited historical scan, not an exhaustive survey. State retained and missing rejection counts. Reward-spread eligibility does not mean the full safety screen passed. Do not claim independent payment verification from supplied metadata.',
       'The output must be educational research only. It must not be financial advice, automated trading instruction, or a promise of rewards.',
     ].join(' '),
     outputStyle: 'agent-handoff-operator-brief',
     data: {
+      correction,
       request: {
         mode: request.mode,
         context: request.context,
@@ -331,7 +367,7 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
         userMessage: 'View LP Scout result',
         expectedBehavior: [
           'If ZeroScout proof is ready, Agent Hash should deliver the verified LP Scout result immediately.',
-          'If proof is not attached yet, Agent Hash should show the saved paid scout result and explain that 0G is being archived in the background.',
+          'Show saved findings before buyer review. If verification failed or ended, state that plainly; do not claim a background retry is running.',
           'Agent Hash must never ask the user to pay again for the same saved scout activity.',
         ],
       },
@@ -373,6 +409,7 @@ async function generateZeroScoutPolymarketBriefOnce(agentSlugInput: unknown, act
       sourceActivityId: scoutActivity.id,
       receiptActivityId: paidScout.id,
       x402ProofHash: paidScout.proof.proofHash,
+      ...(correction ?? {}),
       zeroscout: result,
     } as Record<string, unknown>,
   })
@@ -403,6 +440,8 @@ export default async function zeroScoutPolymarketBriefHandler(req: Request, res:
 
   try {
     const generated = await generateZeroScoutPolymarketBrief(req.body?.agentSlug, req.body?.activityId, {
+      correctionOfActivityId: req.body?.correctionOfActivityId,
+      receiptActivityId: req.body?.receiptActivityId,
       includeClaudeReview: req.body?.includeClaudeReview !== false,
       includeOpenAiReview: req.body?.includeOpenAiReview !== false,
     })

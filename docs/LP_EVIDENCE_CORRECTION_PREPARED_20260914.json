@@ -1,0 +1,23 @@
+{
+  "preparedAt": "2026-09-14T04:57:14.444Z",
+  "status": "prepared_local_not_deployed_not_executed",
+  "sourceActivity": "c8754d17-d1d5-4081-a190-0e347aa17d84",
+  "receiptActivity": "d3278bce-b1c6-424e-aae6-e71582460986",
+  "correctionOfActivity": "20c8eadf-3ce8-4d10-8b7e-3848d8244046",
+  "priorAiResult": "q51t0URj-o",
+  "additionalBuyerPayment": 0,
+  "priorReportsPreserved": true,
+  "scanned": 80,
+  "passed": 0,
+  "retainedRejections": 8,
+  "missingRejections": 72,
+  "serializedScoutCharacters": 7410,
+  "normalResearchSchemasChanged": false,
+  "testsPassed": 15,
+  "providerCompatibilitySmokePassed": true,
+  "providerGeneralResearchSmokePassed": true,
+  "providerBuildPassed": true,
+  "polyDeskTypecheckPassed": true,
+  "limitation": "Historical evidence only; 72 per-market rejection records were never retained and cannot be reconstructed by this correction.",
+  "nextPrompt": "Deploy the LP evidence fix, then run one correction under the existing payment."
+}
