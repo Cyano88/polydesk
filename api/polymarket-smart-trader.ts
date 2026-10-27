@@ -625,7 +625,14 @@ const liveDependencies: SmartTraderDependencies = {
   underlyingData: structuredBtcSnapshot,
   research: async context => {
     try { return await createComputeResearch()(context) }
-    catch { console.warn('[smart-trader] 0G research unavailable'); return null }
+    catch (error) {
+      const failure = error as { code?: unknown; status?: unknown }
+      const code = typeof failure?.code === 'string' && /^COMPUTE_(TIMEOUT|CONNECTION|HTTP|RESPONSE|SCHEMA)$/.test(failure.code)
+        ? failure.code : 'COMPUTE_UNAVAILABLE'
+      console.warn('[smart-trader] 0G research unavailable', { code,
+        status: typeof failure?.status === 'number' && Number.isInteger(failure.status) ? failure.status : undefined })
+      return null
+    }
   },
   sportsNews: async query => {
     const feed = await getPolyWorldcupNewsFeed({ team: query })

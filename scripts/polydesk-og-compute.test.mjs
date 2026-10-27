@@ -41,6 +41,26 @@ test('configuration and schema fail closed',()=>{
   assert.throws(()=>validateComputeReport(report(),'SELL'));
 });
 
+test('failure diagnostics distinguish causes without exposing provider data or retrying',async()=>{
+  const cases=[
+    [async()=>{throw Error('secret-key and private evidence');},'COMPUTE_CONNECTION',undefined],
+    [async()=>{throw new DOMException('secret endpoint','TimeoutError');},'COMPUTE_TIMEOUT',undefined],
+    [async()=>new Response('secret provider body',{status:429}),'COMPUTE_HTTP',429],
+    [async()=>Response.json({choices:[]}),'COMPUTE_RESPONSE',200],
+    [async()=>Response.json(response({choices:[{finish_reason:'stop',message:{content:'{}'}}]})),'COMPUTE_SCHEMA',200],
+  ];
+  for(const [fetchImpl,code,status] of cases){
+    let calls=0;
+    const research=createComputeResearch({env,fetchImpl:async(...args)=>{calls++;return fetchImpl(...args);}});
+    await assert.rejects(research({side:'BUY'}),error=>{
+      assert.equal(error.code,code);assert.equal(error.status,status);assert.equal(error.cause,undefined);
+      assert.doesNotMatch(JSON.stringify(error)+error.message,/secret|private evidence/);
+      return true;
+    });
+    assert.equal(calls,1);
+  }
+});
+
 test('ordinary direct 0G preserves research schema without inventing a TEE flag or stored proof',async()=>{
   let calls=0;
   const research=createComputeResearch({env,fetchImpl:async(url,options)=>{
