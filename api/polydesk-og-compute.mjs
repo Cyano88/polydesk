@@ -30,6 +30,11 @@ async function boundedJson(response){
 }
 export function createComputeResearch({env=process.env,fetchImpl=fetch,requireAttestation=false}={}){
   const config=readComputeConfig(env);
+  // GLM-5.3 always reasons; disabling thinking is unsupported and its default is max.
+  // Match both the OpenAI field and vLLM template setting without raising token limits.
+  const reasoning=config.model==='glm-5.3'
+    ?{reasoning_effort:'low',chat_template_kwargs:{reasoning_effort:'low'}}
+    :{chat_template_kwargs:{enable_thinking:false}};
 
   const transport=fetchImpl;
   return async context=>{
@@ -46,7 +51,7 @@ export function createComputeResearch({env=process.env,fetchImpl=fetch,requireAt
       const response=await transport(config.baseUrl+'/chat/completions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(60000),
         headers:{Authorization:'Bearer '+config.apiKey,'Content-Type':'application/json','X-0G-Provider-Trust-Mode':'private'},
         body:JSON.stringify({model:config.model,messages:[{role:'system',content:system},{role:'user',content:serialized}],
-          stream:false,chat_template_kwargs:{enable_thinking:false},max_tokens:3000,response_format:{type:'json_object'},verify_tee:true})});
+          stream:false,...reasoning,max_tokens:3000,response_format:{type:'json_object'},verify_tee:true})});
       status=response.status;
       if(!response.ok){stage='http';await response.body?.cancel();throw Error('Compute request failed');}
       stage='response';

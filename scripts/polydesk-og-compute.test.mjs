@@ -12,7 +12,7 @@ test('direct compute minimizes context, enforces private routing, and never inve
     calls++;assert.equal(url,'https://router-api.0g.ai/v1/chat/completions');assert.equal(options.redirect,'error');
     assert.equal(options.headers['X-0G-Provider-Trust-Mode'],'private');
     const body=JSON.parse(options.body);assert.equal(body.verify_tee,true);assert.equal(body.stream,false);
-    assert.equal(body.model,'glm-5.3');assert.equal(body.max_tokens,3000);assert.deepEqual(body.response_format,{type:'json_object'});
+    assert.equal(body.model,'glm-5.3');assert.equal(body.reasoning_effort,'low');assert.deepEqual(body.chat_template_kwargs,{reasoning_effort:'low'});assert.equal(body.max_tokens,3000);assert.deepEqual(body.response_format,{type:'json_object'});
     const sent=JSON.parse(body.messages[1].content);assert.deepEqual(sent,{side:'BUY',market:{title:'Fixture'}});
     return Response.json(response());
   }});
