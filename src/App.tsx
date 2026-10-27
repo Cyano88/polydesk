@@ -7,6 +7,7 @@ const Integrations = lazy(() => import('./pages/Integrations'))
 const LPScoutReport = lazy(() => import('./pages/LPScoutReport'))
 const LPScoutContinuation = lazy(() => import('./pages/LPScoutContinuation'))
 const Opportunity = lazy(() => import('./pages/Opportunity'))
+const DocsVeilDesk = lazy(() => import('./pages/docs/DocsVeilDesk'))
 const DocsLayout = lazy(() => import('./pages/docs/DocsLayout'))
 const DocsOverview = lazy(() => import('./pages/docs/DocsOverview'))
 const DocsPlatforms = lazy(() => import('./pages/docs/DocsPlatforms'))
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/opportunity/:slug" element={<Opportunity />} />
         <Route path="/docs" element={<DocsLayout />}>
           <Route index element={<DocsOverview />} />
+          <Route path="veildesk" element={<DocsVeilDesk />} />
           <Route path="platforms" element={<DocsPlatforms />} />
           <Route path="okx-ai" element={<DocsOkxAI />} />
         </Route>

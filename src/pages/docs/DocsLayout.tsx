@@ -15,6 +15,7 @@ const sections = [
   {
     label: 'Agent services',
     links: [
+      { label: 'VeilDesk previews', path: '/docs/veildesk' },
       { label: 'OKX.AI services', path: '/docs/okx-ai' },
     ],
   },

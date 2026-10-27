@@ -1,3 +1,5 @@
+import { veildeskPreviewRouter } from './api/veildesk-preview.js'
+import { veildeskDiscovery, veildeskValidate } from './api/veildesk.js'
 import { createDeliveryIncidentRouter } from './api/delivery-monitor.js'
 import { createReceiptAcceptanceRouter } from './api/research-acceptance.js'
 import { createResearchRecoveryHandler } from './api/research-recovery.js'
@@ -186,6 +188,9 @@ if (process.env.POLYDESK_MARKET_CONTEXT_ENABLED === 'true') {
 app.post('/api/paylink-bank-send', strictLimiter, paylinkBankSendHandler)
 app.post('/api/hashpaylink/polymarket-funding', fundingCheckoutLimiter, hashPayLinkPolymarketFundingHandler)
 app.get('/api/hashpaylink/polymarket-funding', readLimiter, hashPayLinkPolymarketFundingHandler)
+app.use('/api/veildesk/previews', strictLimiter, veildeskPreviewRouter())
+app.get('/api/veildesk', readLimiter, veildeskDiscovery)
+app.post('/api/veildesk/validate', strictLimiter, veildeskValidate)
 app.get('/api/a2mcp/services', readLimiter, a2mcpServicesHandler)
 app.use('/api/v1', readLimiter, createPublicApiRouter())
 app.get('/.well-known/polydesk.json', readLimiter, a2mcpServicesHandler)
