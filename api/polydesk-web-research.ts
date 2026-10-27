@@ -195,8 +195,13 @@ function rankRoleCandidates(candidates: RankedCandidate[], role: ResearchQueryRo
   });
 }
 
+export function configuredSearchKey(env=process.env): string | undefined {
+  // Accept the existing setup during migration; no ZeroScout HTTP call is involved.
+  return [env.POLYDESK_SEARCH_API_KEY,env.TAVILY_API_KEY,env.ZEROSCOUT_GENERAL_SEARCH_API_KEY]
+    .map(value=>value?.trim()).find(Boolean);
+}
 export function polyDeskGeneralResearchConfigured(env=process.env): boolean {
-  return Boolean(env.POLYDESK_SEARCH_API_KEY?.trim());
+  return Boolean(configuredSearchKey(env));
 }
 
 export async function fetchPolyDeskGeneralResearch(
@@ -204,7 +209,7 @@ export async function fetchPolyDeskGeneralResearch(
   {env=process.env,fetchImpl=fetch,now=Date.now}:{env?:NodeJS.ProcessEnv;fetchImpl?:typeof fetch;now?:()=>number}={},
 ): Promise<PolyDeskGeneralResearchResult> {
   const input=polyDeskGeneralResearchRequestSchema.parse(raw);
-  const apiKey=env.POLYDESK_SEARCH_API_KEY?.trim();
+  const apiKey=configuredSearchKey(env);
   if(!apiKey)throw new Error('PolyDesk search key is not configured');  const cacheKey = [
     createHash('sha256').update(apiKey).digest('hex'),
     input.market.conditionId.toLowerCase(),

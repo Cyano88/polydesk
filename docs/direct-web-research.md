@@ -2,7 +2,7 @@
 
 Ordinary market research now calls Tavily directly for cited web evidence, then sends screened excerpts to the existing direct 0G research adapter. ZeroScout is not called. Retrieval/excerpt logic is adapted from the project's former ZeroScout service; the existing result shape is preserved.
 
-Set POLYDESK_SEARCH_API_KEY on the PolyDesk Render service to a Tavily API key. This is separate from POLYDESK_0G_API_KEY. Do not put either key in frontend variables or chat. No new library installation is required.
+Reuse the existing Tavily key. The adapter accepts POLYDESK_SEARCH_API_KEY, TAVILY_API_KEY or the original ZEROSCOUT_GENERAL_SEARCH_API_KEY (in that priority order); no new key is required. The value must be available to the PolyDesk Render service, not only to the former ZeroScout host. This is separate from POLYDESK_0G_API_KEY. Do not put either key in frontend variables or chat. No new library installation is required.
 
 Each uncached research lookup makes three bounded searches: resolution authority, current evidence and contradictory evidence. Deterministic queries avoid an extra paid model call. Advanced search uses up to five results per query. The in-memory cache lasts ten minutes, is capped at 256 entries, and is scoped by a credential hash. No automatic retries. Tavily sees public market search terms; wallet, payment and trade-side fields are not included in search bodies. This retrieval path is not enabled for VeilDesk's private worker.
 

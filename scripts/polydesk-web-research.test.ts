@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {fetchPolyDeskGeneralResearch} from '../api/polydesk-web-research.js'
+import {fetchPolyDeskGeneralResearch,configuredSearchKey} from '../api/polydesk-web-research.js'
 import {assessResearchSources} from '../api/research-quality.js'
 const now=Date.parse('2026-10-27T12:00:00Z')
 const request={schema:'zeroscout.polydesk-general-research.request' as const,schemaVersion:'1.0.0' as const,
@@ -51,4 +51,10 @@ test('upstream errors are not echoed, oversized bodies and invalid URLs fail clo
   assert.equal(calls,3,'one call per planned query; no retries')
   await assert.rejects(fetchPolyDeskGeneralResearch(request,{env:{POLYDESK_SEARCH_API_KEY:'oversize'},fetchImpl:(async()=>new Response('x'.repeat(1000001))) as typeof fetch}),/too large/)
   await assert.rejects(fetchPolyDeskGeneralResearch(request,{env:{POLYDESK_SEARCH_API_KEY:'invalid'},fetchImpl:(async()=>Response.json({results:[{url:'javascript:alert(1)',content:'bad'}]})) as typeof fetch}))
+})
+test('existing Tavily and ZeroScout search key names are accepted without a new credential',()=>{
+  assert.equal(configuredSearchKey({TAVILY_API_KEY:' existing-tavily '}),'existing-tavily')
+  assert.equal(configuredSearchKey({ZEROSCOUT_GENERAL_SEARCH_API_KEY:'existing-search'}),'existing-search')
+  assert.equal(configuredSearchKey({POLYDESK_SEARCH_API_KEY:'preferred',TAVILY_API_KEY:'old'}),'preferred')
+  assert.equal(configuredSearchKey({POLYDESK_SEARCH_API_KEY:' ',ZEROSCOUT_GENERAL_SEARCH_API_KEY:'existing'}),'existing')
 })
