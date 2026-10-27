@@ -1,0 +1,9 @@
+# PolyDesk as a VeilDesk provider
+
+VeilDesk authenticates peers, encrypts request/response transport, binds authorization to a service request, verifies shielded settlement and prevents replay. PolyDesk is the chosen service provider: it decrypts the authorized research request and owns market lookup, source retrieval and inference. Neither VeilDesk nor its relay needs a 0G key or provider attestation.
+
+Buyer disclosure version: polydesk-provider-disclosure-v2. PolyDesk can see the request and report. Public market search terms go to its data/source services (including Tavily); selected evidence goes to its configured inference provider (currently 0G). VeilDesk does not guarantee anonymous activity, provider blindness, independently verified private inference, or downstream non-retention. Network endpoints, timing and volume can reveal metadata. Trade execution always requires separate authorization. Old private-router disclosure acceptance must not be silently reused for this contract.
+
+The provider entrypoint is scripts/veildesk-provider-worker.ts. It loads the compatible VeilDesk runtime using VEILDESK_RUNTIME_DIRECTORY and the provider configuration using VEILDESK_PROVIDER_CONFIG. Existing provider identity, enrolled buyers, persistent state and verified testnet wallet configuration remain required. Research is invoked only behind VeilDesk's settlement gate. An UNAVAILABLE report is rejected and requires reconciliation rather than being delivered as a completed purchase.
+
+Shipping the adapter does not enable paid research. Do not advertise or activate paid fulfillment until a cloud recipient wallet passes readiness checks and a real shielded acceptance payment is verified and bound to its request. The existing validation-only relay/provider deployment remains separate from this worker entrypoint.
