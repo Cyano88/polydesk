@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express'
 import { correctionOperator, CorrectionError } from './receipt-correction.js'
 import { readPaidResearchRecord, isRemediableDegradedResearch, validServicePayment, recoveryScopeExpired, executeSettledSmartTraderDelivery } from './polymarket-smart-trader.js'
-import { preflightZeroScoutIntelligenceAccess } from './zeroscout-intelligence.js'
+import { preflightCompute } from './polydesk-og-compute.mjs'
 
 export function createResearchRecoveryHandler(deps = {
   authorize: correctionOperator,
   read: readPaidResearchRecord,
-  ready: () => preflightZeroScoutIntelligenceAccess({ analysisType: 'polydesk-smart-market-research', proofClass: 'polydesk_smart_market_research' }),
+  ready: () => preflightCompute(),
   execute: executeSettledSmartTraderDelivery,
 }) {
   return async (req: Request, res: Response) => {

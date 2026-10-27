@@ -1,3 +1,4 @@
+import {createComputeResearch,readComputeConfig,preflightCompute} from './polydesk-og-compute.mjs'
 import { DeliveryMonitor } from './delivery-monitor.js'
 import { assessResearchSources, structuredBtcSnapshot } from './research-quality.js'
 import { createHash, randomBytes } from 'node:crypto'
@@ -8,7 +9,7 @@ import { independentExecutionDescriptor } from './polymarket-independent-policy.
 import { agentReviewHandoff, hasUnavailableReviewHandoff } from './polymarket-agent-review.js'
 import { getPolyWorldcupNewsFeed } from './poly-worldcup-news.js'
 import { hasRenderDurableStore, mutateDurableJson, readDurableJson, writeDurableJson } from './render-durable-store.js'
-import { callZeroScoutIntelligence, getZeroScoutGeneralResearch, hasZeroScoutProof, preflightZeroScoutIntelligenceAccess, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
+import { hasZeroScoutProof, type ZeroScoutIntelligenceResult } from './zeroscout-intelligence.js'
 
 const GAMMA_ORIGIN = 'https://gamma-api.polymarket.com'
 const CLOB_ORIGIN = 'https://clob.polymarket.com'
@@ -619,31 +620,11 @@ const liveDependencies: SmartTraderDependencies = {
   },
   fetchSmartMoney: liveSmartMoney,
   trustedSmartMoneyWallets: configuredSmartMoneyWallets,
-  researchReady: () => preflightZeroScoutIntelligenceAccess({
-    analysisType: 'polydesk-smart-market-research',
-    proofClass: 'polydesk_smart_market_research',
-  }),
+  researchReady: () => preflightCompute(),
   underlyingData: structuredBtcSnapshot,
   research: async context => {
-    try {
-      return await callZeroScoutIntelligence({
-        partner: 'polydesk',
-        productType: 'polymarket-direct-trading',
-        analysisType: 'polydesk-smart-market-research',
-        proofClass: 'polydesk_smart_market_research',
-        objective: 'Assess the supplied Polymarket market using only the supplied public market data and cited research. Separate facts from inference, provide thesis and counter-thesis, flag resolution ambiguity and missing data, and do not guarantee profit. This is pre-trade research: wallet access, typed confirmation, signing, and fills are later execution gates, not research evidence.',
-        outputStyle: 'Concise evidence brief with timestamped sources, risk flags, thesis, counter-thesis, confidence, and data gaps.',
-        data: context,
-        includeClaudeReview: true,
-        includeOpenAiReview: true,
-      }, { requireProof: true, timeoutMs: 150_000, retryAttempts: 0 })
-    } catch (error) {
-      console.warn('[smart-trader] ZeroScout research unavailable', {
-        status: typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : undefined,
-        error: clean(error instanceof Error ? error.message : 'unknown ZeroScout error'),
-      })
-      return null
-    }
+    try { return await createComputeResearch()(context) }
+    catch { console.warn('[smart-trader] 0G research unavailable'); return null }
   },
   sportsNews: async query => {
     const feed = await getPolyWorldcupNewsFeed({ team: query })
@@ -655,24 +636,8 @@ const liveDependencies: SmartTraderDependencies = {
       publishedAt: article.publishedAt,
     }))
   },
-  generalNews: async (query, market, trade) => {
-    const articles = await getZeroScoutGeneralResearch(query, {
-      conditionId: market.conditionId,
-      question: market.question || market.title || query,
-      description: market.description || undefined,
-      resolutionRules: market.description || market.question || market.title || query,
-      resolutionSource: market.resolutionSource || undefined,
-    }, trade)
-    return articles.slice(0, 8).map(article => ({
-      title: article.title,
-      description: article.description,
-      source: article.source,
-      url: article.url,
-      publishedAt: article.publishedAt,
-      retrievedAt: article.retrievedAt,
-      evidenceRole: article.evidenceRole,
-    }))
-  },
+  // Direct inference is not a web-search service. Never fabricate retrieved articles.
+  generalNews: async () => [],
   now: () => Date.now(),
   saveDecision: decision => writeDurableJson(`polydesk:smart-trader:decision:${decision.decisionId}`, decision),
   readDecision: async decisionId => (await readDurableJson<SmartTraderDecisionReceipt>(`polydesk:smart-trader:decision:${decisionId}`)) || null,
@@ -680,9 +645,15 @@ const liveDependencies: SmartTraderDependencies = {
 }
 
 export function polymarketSmartTraderReady() {
-  return hasRenderDurableStore()
-    && Boolean(clean(process.env.ZEROSCOUT_API_URL, 500))
-    && Boolean(clean(process.env.ZEROSCOUT_INTEGRATION_SECRET, 500))
+  try { readComputeConfig(); return hasRenderDurableStore() } catch { return false }
+}
+
+// Research-only integration: replaces every ZeroScout callback. Existing paid trade flows retain their own dependencies.
+export function createTaskResearchDependencies(research: SmartTraderDependencies['research']): SmartTraderDependencies {
+  return {...liveDependencies, research, researchReady: async () => {},
+    sportsNews: async () => [], generalNews: async () => [],
+    saveDecision: async () => {throw new Error('Research cannot persist an execution entitlement')},
+    readDecision: async () => null};
 }
 
 export async function preflightPolymarketSmartTraderProviders(
@@ -741,18 +712,18 @@ export async function checkPolymarketSmartTraderOperational() {
   const now = Date.now()
   if (operationalReadinessCache && now - operationalReadinessCache.checkedAt < 15_000) return operationalReadinessCache.ok
   try {
-    const base = clean(process.env.ZEROSCOUT_API_URL, 500).replace(/\/+$/, '')
+    const base = readComputeConfig().baseUrl
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5_000)
     let responses: globalThis.Response[]
     try {
-      const [, zeroScoutResponse, gammaResponse, clobResponse] = await Promise.all([
+      const [, computeResponse, gammaResponse, clobResponse] = await Promise.all([
         readDurableJson('__polydesk:smart-trader:readiness__'),
-        fetch(`${base}/api/health`, { headers: { accept: 'application/json' }, signal: controller.signal }),
+        fetch(`${base}/models`, { headers: { accept: 'application/json' }, signal: controller.signal }),
         fetch(`${GAMMA_ORIGIN}/markets?limit=1&active=true&closed=false`, { headers: { accept: 'application/json' }, signal: controller.signal }),
         fetch(`${CLOB_ORIGIN}/time`, { headers: { accept: 'application/json' }, signal: controller.signal }),
       ])
-      responses = [zeroScoutResponse, gammaResponse, clobResponse]
+      responses = [computeResponse, gammaResponse, clobResponse]
     } finally {
       clearTimeout(timeout)
     }
@@ -1608,6 +1579,8 @@ export async function runPolymarketSmartTrader(
         newsLane,
         zeroScout: research ? {
           id: research.id,
+          aiProvider: research.aiProvider || null,
+          proofMetadata: research.proofMetadata || null,
           researchStatus: researchUnavailable ? 'UNAVAILABLE' : 'AVAILABLE',
           modelBacked: !researchUnavailable,
           summary: researchUnavailable ? null : research.summary,

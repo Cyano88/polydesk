@@ -1259,3 +1259,18 @@ test('ANALYZE exposes source screening and structured snapshot while withholding
  assert.equal(result.data.evidence.sourceQuality.assessments[0].reason,'OLDER_THAN_SEVEN_DAYS')
  assert.equal(result.data.evidence.retrievedNews.length,1)
 })
+
+test('direct 0G schema remains available research without fabricated archive or execution approval',async()=>{
+  const base=dependencies()
+  const result=await runPolymarketTaskResearch({marketId:conditionId,outcome:'Yes',side:'BUY'},dependencies({
+    research:async context=>({...await base.research(context),aiProvider:'0g-compute-router',proof:undefined,
+      proofMetadata:{kind:'compute-response',routerTeeVerified:false,independentVerification:false,archived:false}}),
+  }))
+  assert.equal(result.ok,true)
+  if(!result.ok)return
+  assert.equal(result.data.researchStatus,'AVAILABLE')
+  assert.equal(result.data.evidence.zeroScout?.aiProvider,'0g-compute-router')
+  assert.equal(result.data.evidence.zeroScout?.proof,null)
+  assert.equal(result.data.evidence.zeroScout?.proofMetadata?.archived,false)
+  assert.ok(result.data.blockers.some(value=>value.includes('proof')))
+})
