@@ -1,3 +1,4 @@
+import {fetchPolyDeskGeneralResearch} from './polydesk-web-research.js'
 import {createComputeResearch,readComputeConfig,preflightCompute} from './polydesk-og-compute.mjs'
 import { DeliveryMonitor } from './delivery-monitor.js'
 import { assessResearchSources, structuredBtcSnapshot } from './research-quality.js'
@@ -636,8 +637,12 @@ const liveDependencies: SmartTraderDependencies = {
       publishedAt: article.publishedAt,
     }))
   },
-  // Direct inference is not a web-search service. Never fabricate retrieved articles.
-  generalNews: async () => [],
+  generalNews: async (query, market, trade) => (await fetchPolyDeskGeneralResearch({
+    schema:'zeroscout.polydesk-general-research.request',schemaVersion:'1.0.0',query,
+    market:{conditionId:market.conditionId,question:market.question||market.title||query,
+      description:market.description||undefined,resolutionRules:market.description||market.question||market.title||query,
+      resolutionSource:market.resolutionSource||undefined},...trade,
+  })).articles,
   now: () => Date.now(),
   saveDecision: decision => writeDurableJson(`polydesk:smart-trader:decision:${decision.decisionId}`, decision),
   readDecision: async decisionId => (await readDurableJson<SmartTraderDecisionReceipt>(`polydesk:smart-trader:decision:${decisionId}`)) || null,
