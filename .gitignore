@@ -1,4 +1,5 @@
 node_modules/
+.veildesk-runtime/
 .sibyl-runtime/
 __pycache__/
 dist/
