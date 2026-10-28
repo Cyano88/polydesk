@@ -1,11 +1,11 @@
-import {readFile,mkdtemp,writeFile} from 'node:fs/promises'
+﻿import {readFile,mkdtemp,writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 import {pathToFileURL} from 'node:url'
 import {execFileSync} from 'node:child_process'
 process.umask(0o077)
 const runtime=resolve('.veildesk-runtime')
-const revision='5f548a80d77410bf4ebbd23bc59589217bb1adef'
+const revision='2dd3c860cbcf6d93b9df5f30d952b3d2c962f58d'
 if(process.platform!=='linux'||Number(process.versions.node.split('.')[0])<24)throw Error('Provider requires Linux and Node 24')
 const actual=execFileSync('git',['rev-parse','HEAD'],{cwd:runtime,encoding:'utf8'}).trim()
 if(actual!==revision||execFileSync('git',['status','--porcelain'],{cwd:runtime,encoding:'utf8'}).trim())throw Error('Unverified VeilDesk runtime')
@@ -22,3 +22,4 @@ process.env.VEILDESK_PROVIDER_CONFIG=file
 process.env.VEILDESK_RUNTIME_DIRECTORY=runtime
 console.log('PolyDesk research worker starting with pinned VeilDesk transport; trade execution disabled.')
 await import('./veildesk-provider-worker.js')
+
