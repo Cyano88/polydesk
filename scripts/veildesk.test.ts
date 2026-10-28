@@ -8,6 +8,9 @@ import { spawn } from 'node:child_process'
 import { veildeskDiscovery, veildeskValidate } from '../api/veildesk.js'
 
 test('preview never advertises research or payment readiness', () => {
+  assert.equal(veildeskManifest.scope, 'polydesk_public_discovery_and_validation')
+  assert.equal(veildeskManifest.paidResearchPilot.publicPaidEndpoint, false)
+  assert.equal(veildeskManifest.paidResearchPilot.executionAuthorized, false)
   assert.equal(veildeskManifest.marketplace.listed, false)
   assert.ok(veildeskManifest.unavailable.includes('zcash_settlement'))
   assert.ok(veildeskManifest.unavailable.includes('research_submission'))

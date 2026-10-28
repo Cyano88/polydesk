@@ -79,3 +79,83 @@ Deployment verification on 2026-10-27: the HTTP boundary tests passed against th
 live Render relay/provider with the dedicated `polydesk-app` identity, including
 verified result contents, cross-user denial and exact replay. Authentication in
 that test was injected; a real user sign-in remains a separate acceptance step.
+
+## Full integration scope (28 October 2026)
+
+PolyDesk is the service provider: a buyer agent requests research from PolyDesk.
+PolyDesk owns retrieval, 0G inference and report generation. VeilDesk owns private
+coordination, authenticated invoice binding, receipt verification and encrypted
+delivery. Neither service purchase nor research authorizes a trade.
+
+| Interface | Implemented scope | Access |
+| --- | --- | --- |
+| PolyDesk discovery / downloadable skill | Discovery and envelope structure validation | Public; no research or payment submission |
+| PolyDesk preview HTTP API | Bounded unpaid mandates | Privy bearer, enabled API, ownership checks |
+| PolyDesk `scripts/veildesk-mcp.ts` | `veildesk_capabilities` only | Local stdio |
+| VeilDesk `scripts/mcp-server.mjs` | Capabilities, submit preview, get preview | Local stdio, enrolled preview client; paid capabilities refused |
+| VeilDesk paid research SDK | Invoice, settlement verification, encrypted report retrieval | Restricted enrolled pilot buyer; private configuration and durable state |
+| PolyDesk provider worker | Internal research adapter and delivery | Operator configuration; not a public purchase route |
+
+The preview SDK pin above applies only to the vendored preview import graph.
+The deployed paid provider runtime is separately pinned to
+`2dd3c860cbcf6d93b9df5f30d952b3d2c962f58d`; this documentation change does not
+upgrade it. `scripts/veildesk-render-worker.ts` launches the pinned runtime and
+PolyDesk research adapter with durable `/var/data` state. The public PolyDesk
+preview API uses its own `/var/sibyl` mount. Do not mix their identities or state.
+
+### Paid research purchase contract
+
+Use standalone VeilDesk `createPaidResearchClient({ config, stateDirectory })`,
+not the vendored preview SDK. Operator enrollment authenticates/pins the provider
+keys, buyer identity, relay and network, with an explicit payment ceiling. The
+capability is `polydesk.research.mainnet-paid.v1`.
+
+```json
+{
+  "id": "<new UUID>",
+  "expiresAt": 0,
+  "request": {
+    "schema": "veildesk.service-request.v1",
+    "service": "polydesk.market-research.v1",
+    "input": {"marketId": "<market identifier>", "outcome": "<outcome>", "side": "BUY"},
+    "disclosure": "polydesk-provider-disclosure-v2",
+    "executionAuthorized": false
+  }
+}
+```
+
+Use exactly these fields and a future millisecond expiry within one hour. BUY or
+SELL is the research perspective, not trading permission. Submit the purchase,
+retrieve and authenticate its invoice, separately authorize any wallet action,
+then retrieve and authenticate/decrypt the completed report. `submitPaymentHint`
+provides an existing transaction reference; it does not broadcast a payment.
+Wallet preparation/broadcast remain separately authorized operator operations.
+Never publish enrollment secrets, payment memos, wallet keys or client state.
+
+The provider adapter (`api/veildesk-research-service.mjs`) validates input and
+requires the PolyDesk report schema, AVAILABLE research, and both
+`orderAuthorized` and `orderSubmitted` false. PolyDesk's retrieval and 0G
+configuration stays with PolyDesk. No independent compute attestation is claimed.
+
+### Mainnet acceptance evidence
+
+On 28 October 2026, one controlled mainnet service purchase completed: 0.0002 ZEC
+service payment plus 0.0001 ZEC fee, four receipt confirmations, and an authenticated
+11,784-byte research report. Repeated retrieval returned the identical report.
+No trade was submitted. Wallet freshness checks delayed completion to approximately
+23 minutes after broadcast. This is recorded operator acceptance evidence, not an
+independent audit or a public cryptographic proof of a private transaction.
+
+Wallet/indexer observations are trusted. Providers see authorized requests. IP
+addresses and timing can remain visible; public market trades stay public.
+The public demo's encryption lab runs both endpoints locally in the visitor's tab;
+it does not invoke the paid service or make a payment.
+
+- [Public demo](https://veildesk-relay.onrender.com/)
+- [Raw video](https://veildesk-relay.onrender.com/demo.mp4)
+- [Pilot record](https://github.com/Cyano88/veildesk/blob/main/docs/mainnet-research-pilot-2026-10-28.md)
+- [Integrator/judge guide](https://github.com/Cyano88/veildesk/blob/main/docs/judge-guide.md)
+
+VeilDesk is not yet listed on OKX AI. Broader enrollment, service adapters and
+marketplace ZEC payment eligibility remain planned. Do not reuse unrelated
+PolyDesk marketplace service IDs for this flow or claim infrastructure partnerships.

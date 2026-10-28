@@ -71,6 +71,10 @@ export default function DocsOverview() {
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/okx-ai">Continue to the OKX.AI service guide</Link></p>
         <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/integrations">Review products and integration boundaries</Link></p>
       </Section>
+      <Section title="Private agent services with VeilDesk">
+        <p>A buyer agent can request PolyDesk research through VeilDesk's separately enrolled paid SDK. VeilDesk handles authenticated coordination, encrypted delivery and request-bound shielded ZEC receipt verification. PolyDesk owns research. Trade execution always requires separate authorization.</p>
+        <p><Link className="font-medium text-blue-700 hover:underline dark:text-blue-400" to="/docs/veildesk">Explore VeilDesk interfaces, the mainnet pilot and integration boundaries</Link></p>
+      </Section>
     </article>
   )
 }
