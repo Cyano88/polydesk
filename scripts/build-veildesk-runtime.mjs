@@ -1,8 +1,8 @@
-﻿import {execFileSync} from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import {mkdirSync,existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 // Operator-controlled immutable dependency. Never selected by a buyer request.
-export const revision='2dd3c860cbcf6d93b9df5f30d952b3d2c962f58d';
+export const revision='9c55226ba7a2f9789a6e169e87557ee12551dcf1';
 const directory=resolve('.veildesk-runtime');
 mkdirSync(directory,{recursive:true});
 const git=args=>execFileSync('git',args,{cwd:directory,stdio:['ignore','pipe','pipe']}).toString().trim();
